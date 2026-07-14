@@ -64,16 +64,11 @@ export function useLeads(filters: Filters = {}): UseLeadsResult {
 
     fetchAll()
 
-    const channel = supabase
-      .channel(`leads-${Date.now()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, () => {
-        if (!cancelled) fetchAll()
-      })
-      .subscribe()
+    const timer = setInterval(() => { if (!cancelled) fetchAll() }, 60000)
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      clearInterval(timer)
     }
   }, [filters.marca, filters.dataInicio, filters.dataFim])
 

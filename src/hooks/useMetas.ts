@@ -64,16 +64,11 @@ export function useMetas(filters: Filters = {}): UseMetasResult {
 
     fetchAll()
 
-    const channel = supabase
-      .channel(`metas-${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'metas' }, () => {
-        if (!cancelled) fetchAll()
-      })
-      .subscribe()
+    const timer = setInterval(() => { if (!cancelled) fetchAll() }, 60000)
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      clearInterval(timer)
     }
   }, [filters.marca, filters.mes, filters.metrica])
 

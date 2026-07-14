@@ -65,7 +65,7 @@ export function useLeads(filters: Filters = {}): UseLeadsResult {
     fetchAll()
 
     const channel = supabase
-      .channel('leads-changes')
+      .channel(`leads-${Date.now()}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, () => {
         if (!cancelled) fetchAll()
       })

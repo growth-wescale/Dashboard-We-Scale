@@ -65,7 +65,7 @@ export function useMetas(filters: Filters = {}): UseMetasResult {
     fetchAll()
 
     const channel = supabase
-      .channel('metas-changes')
+      .channel(`metas-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'metas' }, () => {
         if (!cancelled) fetchAll()
       })

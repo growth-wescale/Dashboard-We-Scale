@@ -1,0 +1,117 @@
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@500,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ---- Base We Scale ---- */
+  --ws-vinho-a: #540247;
+  --ws-vinho-b: #7E0E70;
+  --ws-verde: #2ABCB5;
+
+  --ws-bg: #F8F9FB;
+  --ws-surface: #FFFFFF;
+  --ws-border: #E9EDF2;
+  --ws-border-strong: #CAD3E0;
+
+  --ws-text-primary: #33032D;
+  --ws-text-secondary: #7C6B78;
+  --ws-text-on-dark: #FFFFFF;
+  --ws-text-on-dark-muted: rgba(255,255,255,0.66);
+
+  /* ---- Semantic farol (FIXED — never themed per-brand) ---- */
+  --status-positivo: #2ABCB5;
+  --status-atencao: #F2A93B;
+  --status-risco: #E0506B;
+  --status-positivo-bg: #E4F6F5;
+  --status-atencao-bg: #FDF1DE;
+  --status-risco-bg: #FBE7EB;
+
+  /* ---- Active theme (default = We Scale) ---- */
+  --brand-accent: var(--ws-verde);
+  --brand-accent-2: var(--ws-vinho-b);
+  --brand-dark: var(--ws-vinho-a);
+  --brand-accent-contrast: #FFFFFF;
+
+  /* ---- Typography ---- */
+  --font-display: 'Clash Display', 'Public Sans', system-ui, sans-serif;
+  --font-body: 'Public Sans', system-ui, -apple-system, sans-serif;
+
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  --fs-page-title: 30px;
+  --fs-section: 21px;
+  --fs-metric: 38px;
+  --fs-metric-sm: 26px;
+  --fs-label: 13px;
+  --fs-body: 14px;
+  --fs-button: 14px;
+  --fs-caption: 12px;
+
+  --lh-tight: 1.1;
+  --lh-heading: 1.2;
+  --lh-body: 1.5;
+
+  --tracking-button: 0.02em;
+  --tracking-label: 0.04em;
+
+  /* ---- Spacing ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* ---- Radius ---- */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 1px 3px rgba(51,3,45,0.08);
+  --shadow-md: 0 4px 16px rgba(51,3,45,0.08);
+  --shadow-lg: 0 12px 32px rgba(51,3,45,0.12);
+
+  /* ---- Layout ---- */
+  --container-max: 1440px;
+  --container-pad: 32px;
+  --container-pad-mobile: 24px;
+  --grid-cols: 12;
+  --grid-gap: 24px;
+  --sidebar-w: 248px;
+}
+
+/* ---- Per-brand themes ---- */
+[data-brand="oral-unic"]  { --brand-accent: #7F0C72; --brand-accent-2: #19D3C5; --brand-dark: #540247; --brand-accent-contrast: #FFFFFF; }
+[data-brand="inpot"]      { --brand-accent: #C6D32D; --brand-accent-2: #0B3120; --brand-dark: #0B3120; --brand-accent-contrast: #0B3120; }
+[data-brand="eletrovias"] { --brand-accent: #ED6D3A; --brand-accent-2: #4EB055; --brand-dark: #ED6D3A; --brand-accent-contrast: #FFFFFF; }
+[data-brand="liso-laser"] { --brand-accent: #FF6643; --brand-accent-2: #005EBF; --brand-dark: #6E1D61; --brand-accent-contrast: #FFFFFF; }
+[data-brand="b2case"]     { --brand-accent: #0169F2; --brand-accent-2: #00FF23; --brand-dark: #040492; --brand-accent-contrast: #FFFFFF; }
+[data-brand="viva"]       { --brand-accent: #FF0069; --brand-accent-2: #23B4E6; --brand-dark: #141414; --brand-accent-contrast: #FFFFFF; }
+
+/* ---- Base resets ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  font-weight: var(--fw-light);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ws-text-primary);
+  background: var(--ws-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: var(--ws-vinho-b); text-decoration: none; }
+a:hover { color: var(--ws-vinho-a); text-decoration: underline; }
+
+::selection {
+  background: color-mix(in srgb, var(--brand-accent) 28%, transparent);
+  color: var(--ws-text-primary);
+}

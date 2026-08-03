@@ -12,11 +12,12 @@ interface MetricCardProps {
   accent?: boolean
   style?: CSSProperties
   children?: ReactNode
+  onClick?: () => void
 }
 
 export function MetricCard({
   label, value, unit, delta, deltaSuffix = '%', deltaLabel,
-  description, invertDelta = false, accent = true, style, children,
+  description, invertDelta = false, accent = true, style, children, onClick,
 }: MetricCardProps) {
   const hasDelta = delta != null
   const up = hasDelta && delta! >= 0
@@ -24,7 +25,7 @@ export function MetricCard({
   const deltaColor = !hasDelta ? 'inherit' : good ? 'var(--status-positivo)' : 'var(--status-risco)'
 
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: 'var(--ws-surface)',
       border: '1px solid var(--ws-border)',
       borderRadius: 'var(--radius-md)',
@@ -33,8 +34,13 @@ export function MetricCard({
       display: 'flex',
       flexDirection: 'column',
       gap: 10,
+      cursor: onClick ? 'pointer' : undefined,
+      transition: onClick ? 'border-color .15s, box-shadow .15s' : undefined,
       ...style,
-    }}>
+    }}
+    onMouseEnter={onClick ? (e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--brand-accent)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 0 1px var(--brand-accent)' } : undefined}
+    onMouseLeave={onClick ? (e) => { (e.currentTarget as HTMLDivElement).style.borderColor = ''; (e.currentTarget as HTMLDivElement).style.boxShadow = '' } : undefined}
+    >
       <div style={{
         fontFamily: 'var(--font-body)',
         fontWeight: 500,
@@ -63,7 +69,7 @@ export function MetricCard({
             color: deltaColor,
           }}>
             <span style={{ fontSize: 11 }}>{up ? '▲' : '▼'}</span>
-            {Math.abs(delta!)}{deltaSuffix}
+            {Math.abs(delta!).toFixed(1)}{deltaSuffix}
             {deltaLabel && <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 400, marginLeft: 2 }}>{deltaLabel}</span>}
           </span>
         )}

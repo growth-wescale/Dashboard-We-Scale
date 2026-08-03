@@ -26,8 +26,8 @@ export function useCrmFunil(filters: Filters = {}): UseCrmFunilResult {
   useEffect(() => {
     let cancelled = false
 
-    async function fetchAll() {
-      setLoading(true)
+    async function fetchAll(showLoading = true) {
+      if (showLoading) setLoading(true)
       setError(null)
 
       const allRows: CrmFunilRaw[] = []
@@ -67,7 +67,14 @@ export function useCrmFunil(filters: Filters = {}): UseCrmFunilResult {
     }
 
     fetchAll()
-    return () => { cancelled = true }
+
+    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
+    window.addEventListener('dashboard:refresh', handleRefresh)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('dashboard:refresh', handleRefresh)
+    }
   }, [
     filters.marca,
     filters.pipeline,

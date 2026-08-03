@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Lead, Marca } from '@/lib/types'
 
-interface Filters {
-  marca?: Marca
-  dataInicio?: string   // ISO date
-  dataFim?: string
+export interface CrmHistoricoRow {
+  snapshot_date: string
+  marca: string | null
+  deal_id: string
+  etapa_categoria: string | null
+  deal_status: string | null
 }
 
-interface UseLeadsResult {
-  data: Lead[]
+interface UseCrmHistoricoResult {
+  data: CrmHistoricoRow[]
   loading: boolean
   error: string | null
 }
 
 const PAGE_SIZE = 1000
 
-export function useLeads(filters: Filters = {}): UseLeadsResult {
-  const [data, setData] = useState<Lead[]>([])
+export function useCrmHistorico(dataInicio: string): UseCrmHistoricoResult {
+  const [data, setData] = useState<CrmHistoricoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -28,29 +29,23 @@ export function useLeads(filters: Filters = {}): UseLeadsResult {
       if (showLoading) setLoading(true)
       setError(null)
 
-      const allRows: Lead[] = []
+      const allRows: CrmHistoricoRow[] = []
       let page = 0
 
       while (true) {
         const from = page * PAGE_SIZE
-        const to = from + PAGE_SIZE - 1
+        const to   = from + PAGE_SIZE - 1
 
-        let q = supabase
-          .from('leads')
-          .select('*')
-          .order('dia', { ascending: false })
+        const { data: rows, error: err } = await supabase
+          .from('crm_funil_historico')
+          .select('snapshot_date, marca, deal_id, etapa_categoria, deal_status')
+          .gte('snapshot_date', dataInicio)
           .range(from, to)
-
-        if (filters.marca)      q = q.eq('marca', filters.marca)
-        if (filters.dataInicio) q = q.gte('dia', filters.dataInicio)
-        if (filters.dataFim)    q = q.lte('dia', filters.dataFim)
-
-        const { data: rows, error: err } = await q
 
         if (cancelled) return
         if (err) { setError(err.message); setLoading(false); return }
 
-        allRows.push(...((rows ?? []) as Lead[]))
+        allRows.push(...((rows ?? []) as CrmHistoricoRow[]))
 
         if (!rows || rows.length < PAGE_SIZE) break
         page++
@@ -66,14 +61,12 @@ export function useLeads(filters: Filters = {}): UseLeadsResult {
 
     const handleRefresh = () => { if (!cancelled) fetchAll(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 60000)
 
     return () => {
       cancelled = true
-      clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [filters.marca, filters.dataInicio, filters.dataFim])
+  }, [dataInicio])
 
   return { data, loading, error }
 }

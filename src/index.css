@@ -115,3 +115,8 @@ a:hover { color: var(--ws-vinho-a); text-decoration: underline; }
   background: color-mix(in srgb, var(--brand-accent) 28%, transparent);
   color: var(--ws-text-primary);
 }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

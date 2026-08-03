@@ -1,38 +1,19 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useMediaData } from '@/hooks/useMediaData'
-import { useCrmFunil } from '@/hooks/useCrmFunil'
+import { useVendasFunil } from '@/hooks/useVendasFunil'
+import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useLeads } from '@/hooks/useLeads'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { MARCAS, MARCA_COR } from '@/lib/types'
-import type { Marca, Lead } from '@/lib/types'
+import type { Marca } from '@/lib/types'
+import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import {
   COPA_DATA_INICIO, COPA_DIAS_MES, COPA_MES_LABEL,
-  COPA_CUSTO, COPA_QUALIDADE_BASELINE, COPA_CAPITAL_QUALIFICADO,
+  COPA_CUSTO, COPA_SQL_TAXA_BASELINE,
   COPA_VOLUME_MARCAS, COPA_VOLUME_META, COPA_LEADS_TREND,
   COPA_BUDGET,
 } from '@/constants/copab2b'
 
-const isLeadMql = (r: { dados_extras: Record<string, unknown> | null }) => {
-  const lt = r.dados_extras?.['lead_type']
-  return typeof lt === 'string' && lt.toUpperCase() === 'MQL'
-}
-
-function deduplicateLeads(leads: Lead[]): Lead[] {
-  const seen = new Set<string>()
-  return leads.filter(r => {
-    const key = (r.email && r.email !== '') ? r.email : (r.telefone && r.telefone !== '') ? r.telefone : null
-    if (key === null) return true
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
-// ── Date helpers ──────────────────────────────────────────────────────────
-const hoje     = new Date()
-const diaAtual = hoje.getFullYear() === 2026 && hoje.getMonth() === 6 ? hoje.getDate() : 13
-const dataFim  = `2026-07-${String(diaAtual).padStart(2, '0')}`
-const pctMes   = diaAtual / COPA_DIAS_MES
 
 // ── Status helpers ────────────────────────────────────────────────────────
 type Status = 'positivo' | 'atencao' | 'risco'
@@ -44,10 +25,11 @@ function custoStatus(cpmql: number | null, meta: number, baseline: number): Stat
   return 'risco'
 }
 
-function qualStatus(pct: number | null, baseline: number): Status {
-  if (pct === null) return 'atencao'
-  if (pct >= baseline)        return 'positivo'
-  if (pct >= baseline * 0.90) return 'atencao'
+function qualStatus(rate: number | null, baseline: number): Status {
+  if (rate === null) return 'atencao'
+  if (baseline === 0) return rate > 0 ? 'positivo' : 'atencao'
+  if (rate >= baseline)        return 'positivo'
+  if (rate >= baseline * 0.80) return 'atencao'
   return 'risco'
 }
 
@@ -71,6 +53,8 @@ const STC: Record<Status, string> = {
 }
 
 
+// Etapas que mapeiam para SQL (stage-based, independente de won/lost)
+
 const fmt = (n: number) => n.toLocaleString('pt-BR')
 const fmtR = (n: number) => `R$ ${fmt(Math.round(n))}`
 
@@ -84,11 +68,18 @@ function FarolDot({ status }: { status: Status }) {
   )
 }
 
-function MiniBar({ pct, status }: { pct: number; status: Status }) {
+function MiniBar({ pct, status, goalPct }: { pct: number; status: Status; goalPct?: number }) {
   const w = Math.min(100, Math.max(0, pct))
   return (
-    <div style={{ height: 5, background: 'var(--ws-bg)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
       <div style={{ height: '100%', width: `${w}%`, background: STC[status], borderRadius: 'var(--radius-pill)', transition: 'width .3s' }} />
+      {goalPct !== undefined && (
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: `${Math.min(99, Math.max(1, goalPct))}%`,
+          width: 2, background: 'rgba(255,255,255,0.55)',
+        }} />
+      )}
     </div>
   )
 }
@@ -165,11 +156,24 @@ const CARD = {
 
 // ── Main component ────────────────────────────────────────────────────────
 export function MetaCopaB2B() {
-  const mediaJul = useMediaData({ dataInicio: COPA_DATA_INICIO, dataFim })
-  const crmJul   = useCrmFunil({ dataInicio: COPA_DATA_INICIO, dataFim })
-  const leadsJul = useLeads({ dataInicio: COPA_DATA_INICIO, dataFim })
+  const [filterFonte, setFilterFonte] = useState('__all__')
 
-  const loading = mediaJul.loading || crmJul.loading || leadsJul.loading
+  const { diaAtual, dataFim, pctMes } = useMemo(() => {
+    const d = new Date()
+    const dia = d.getFullYear() === 2026 && d.getMonth() === 6 ? d.getDate() : 13
+    return { diaAtual: dia, dataFim: `2026-07-${String(dia).padStart(2, '0')}`, pctMes: dia / COPA_DIAS_MES }
+  }, [])
+
+  const mediaJul     = useMediaData({ dataInicio: COPA_DATA_INICIO, dataFim })
+  const crmJulRaw    = useVendasFunil({ dataInicio: COPA_DATA_INICIO, dataFim })
+  const leadsJul     = useLeads({ dataInicio: COPA_DATA_INICIO, dataFim })
+
+  const loading = mediaJul.loading || crmJulRaw.loading || leadsJul.loading
+  const error   = mediaJul.error ?? crmJulRaw.error ?? leadsJul.error
+
+  const crmJulData = useMemo(() =>
+    filterFonte === '__all__' ? crmJulRaw.data : crmJulRaw.data.filter(r => mapFonte(r.fonte) === filterFonte),
+    [crmJulRaw.data, filterFonte])
 
   // ── Computed per brand ─────────────────────────────────────────────────
   const stats = useMemo(() =>
@@ -181,19 +185,24 @@ export function MetaCopaB2B() {
       const cpmql       = mqlCount > 0 ? spendTotal / mqlCount : null
       const { meta: custMeta, baseline: custBase } = COPA_CUSTO[marca]
       const cSt         = custoStatus(cpmql, custMeta, custBase)
+      // barra de atingimento: progresso de baseline → meta (maior = melhor)
+      const atingimentoPct = (cpmql !== null && custBase > custMeta)
+        ? Math.min(100, Math.max(0, (custBase - cpmql) / (custBase - custMeta) * 100))
+        : 0
+      const projMql = diaAtual > 0 ? Math.round((mqlCount / diaAtual) * COPA_DIAS_MES) : 0
 
-      // QUALIDADE
-      const whitelist       = COPA_CAPITAL_QUALIFICADO[marca]
-      const comCapital      = leadsM.filter(r => {
-        const c = r.dados_extras?.['capital'] as string | null | undefined
-        return c != null && c !== ''
-      })
-      const qualificados    = comCapital.filter(r =>
-        whitelist.includes(r.dados_extras?.['capital'] as string)
-      )
-      const pctQual         = comCapital.length > 0 ? (qualificados.length / comCapital.length) * 100 : null
-      const qualBase        = COPA_QUALIDADE_BASELINE[marca]
-      const qSt             = qualStatus(pctQual, qualBase)
+      // QUALIDADE — taxa de conversão MQL → SQL
+      const sqlCount   = crmJulData.filter(r => r.marca === marca && inPeriod(r.data_sql, COPA_DATA_INICIO, dataFim)).length
+      const totalAtivo = crmJulData.filter(r =>
+        r.marca === marca && r.status_atual === 'Em andamento'
+      ).length
+      const taxaSql    = mqlCount > 0 ? (sqlCount / mqlCount) * 100 : null
+      const sqlBase    = COPA_SQL_TAXA_BASELINE[marca]
+      const hasQualBase = sqlBase > 0
+      const qSt        = qualStatus(taxaSql, sqlBase)
+      const qualBarPct = hasQualBase && taxaSql !== null
+        ? Math.min(100, (taxaSql / sqlBase) * 100)
+        : (taxaSql !== null ? Math.min(100, taxaSql * 2.5) : 0)
 
       // INVESTIMENTO
       const spendGoogle = mediaJul.data.filter(r => r.marca === marca && r.canal === 'google').reduce((s, r) => s + r.spend_brl, 0)
@@ -208,12 +217,12 @@ export function MetaCopaB2B() {
       const iSt         = paceStatus(paceT)
 
       return {
-        marca, spendTotal, mqlCount, cpmql, custMeta, custBase, cSt,
-        pctQual, qualBase, qSt, comCapital: comCapital.length, qualificados: qualificados.length,
+        marca, spendTotal, mqlCount, cpmql, custMeta, custBase, cSt, atingimentoPct, projMql,
+        sqlCount, totalAtivo, taxaSql, sqlBase, hasQualBase, qSt, qualBarPct,
         spendGoogle, spendMeta, budget, paceG, paceM, paceT, iSt,
       }
     }),
-    [mediaJul.data, crmJul.data, leadsJul.data])
+    [mediaJul.data, crmJulData, leadsJul.data])
 
   const volumeStats = useMemo(() =>
     COPA_VOLUME_MARCAS.map(marca => {
@@ -234,16 +243,36 @@ export function MetaCopaB2B() {
     )
   }
 
+  if (error) {
+    return (
+      <div style={{ padding: 'var(--container-pad)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+        <span style={{ color: 'var(--status-risco)', fontSize: 14 }}>Erro ao carregar dados: {error}</span>
+      </div>
+    )
+  }
+
   return (
     <div style={{ padding: 'var(--container-pad)' }}>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-page-title)', color: 'var(--ws-text-primary)', lineHeight: 'var(--lh-heading)' }}>
-          Meta Copa B2B
-        </h1>
-        <p style={{ color: 'var(--ws-text-secondary)', fontSize: 13, marginTop: 3 }}>
-          {COPA_MES_LABEL} · Dia {diaAtual}/{COPA_DIAS_MES} · {Math.round(pctMes * 100)}% do mês decorrido
-        </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-page-title)', color: 'var(--ws-text-primary)', lineHeight: 'var(--lh-heading)' }}>
+              Acompanhamento Meta
+            </h1>
+            <p style={{ color: 'var(--ws-text-secondary)', fontSize: 13, marginTop: 3 }}>
+              {COPA_MES_LABEL} · Dia {diaAtual}/{COPA_DIAS_MES} · {Math.round(pctMes * 100)}% do mês decorrido
+            </p>
+          </div>
+          <select
+            value={filterFonte}
+            onChange={e => setFilterFonte(e.target.value)}
+            style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 20, fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none', alignSelf: 'center' }}
+          >
+            <option value="__all__">Todas as fontes</option>
+            {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* ── 1. CUSTO ────────────────────────────────────────────────────── */}
@@ -265,8 +294,13 @@ export function MetaCopaB2B() {
               <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 2 }}>
                 meta ≤ {fmtR(b.custMeta)}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>
                 base {fmtR(b.custBase)}
+              </div>
+              <MiniBar pct={b.atingimentoPct} status={b.cSt} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginTop: 2, marginBottom: 8 }}>
+                <span style={{ color: STC[b.cSt], fontWeight: 600 }}>{b.atingimentoPct.toFixed(0)}% atingido</span>
+                <span style={{ color: 'var(--ws-text-secondary)' }}>proj. {b.projMql} MQLs</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', borderTop: '1px solid var(--ws-border)', paddingTop: 8 }}>
                 {b.mqlCount} MQLs · {fmtR(b.spendTotal)} inv.
@@ -279,8 +313,8 @@ export function MetaCopaB2B() {
       {/* ── 2. QUALIDADE ─────────────────────────────────────────────────── */}
       <Section
         numero="2"
-        titulo="QUALIDADE — % capital qualificado"
-        descricao="Leads de julho com capital ≥ faixa mínima da marca"
+        titulo="QUALIDADE — taxa MQL → SQL"
+        descricao="Conversão MQL→SQL no CRM jul/26 vs. baseline mai/26"
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 }}>
           {stats.map(b => (
@@ -288,20 +322,33 @@ export function MetaCopaB2B() {
               <BrandLabel marca={b.marca} />
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, color: 'var(--ws-text-primary)' }}>
-                  {b.pctQual !== null ? `${b.pctQual.toFixed(1)}%` : '—'}
+                  {b.taxaSql !== null ? `${b.taxaSql.toFixed(1)}%` : '—'}
                 </span>
                 <FarolDot status={b.qSt} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 10 }}>
-                base {b.qualBase.toFixed(1)}%
-                {b.pctQual !== null && (
-                  <span style={{ marginLeft: 6, fontWeight: 700, color: b.pctQual >= b.qualBase ? STC.positivo : STC.risco }}>
-                    {b.pctQual >= b.qualBase ? '▲' : '▼'} {Math.abs(b.pctQual - b.qualBase).toFixed(1)} pp
-                  </span>
+              <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>
+                {b.hasQualBase ? (
+                  <>
+                    base mai {b.sqlBase.toFixed(1)}%
+                    {b.taxaSql !== null && (
+                      <span style={{ marginLeft: 6, fontWeight: 700, color: b.taxaSql >= b.sqlBase ? STC.positivo : STC.risco }}>
+                        {b.taxaSql >= b.sqlBase ? '▲' : '▼'} {Math.abs(b.taxaSql - b.sqlBase).toFixed(1)} pp
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span style={{ color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>sem baseline mai/26</span>
                 )}
               </div>
+              <MiniBar pct={b.qualBarPct} status={b.qSt} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginTop: 2, marginBottom: 8 }}>
+                <span style={{ color: STC[b.qSt], fontWeight: 600 }}>
+                  {b.hasQualBase ? `${b.qualBarPct.toFixed(0)}% da base` : `${b.taxaSql !== null ? b.taxaSql.toFixed(1) : '0.0'}% taxa jul`}
+                </span>
+                <span style={{ color: 'var(--ws-text-secondary)' }}>{b.sqlCount} SQLs</span>
+              </div>
               <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', borderTop: '1px solid var(--ws-border)', paddingTop: 8 }}>
-                {b.qualificados} de {b.comCapital} leads
+                {b.sqlCount} SQL · {b.totalAtivo} ativos (SQL+MQL)
               </div>
             </div>
           ))}

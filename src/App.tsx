@@ -5,6 +5,10 @@ import { AppLayout } from '@/components/AppLayout'
 import { VisaoGeral } from '@/pages/VisaoGeral'
 import { SaudeDaMarca } from '@/pages/SaudeDaMarca'
 import { MetaCopaB2B } from '@/pages/MetaCopaB2B'
+import { Cadencias } from '@/pages/Cadencias'
+import { SopMarketing } from '@/pages/SopMarketing'
+import { FunilVendas } from '@/pages/FunilVendas'
+import { AnaliseObjecoes } from '@/pages/AnaliseObjecoes'
 
 export default function App() {
   return (
@@ -17,10 +21,14 @@ export default function App() {
             <PrivateRoute>
               <AppLayout>
                 <Routes>
-                  <Route path="/"         element={<VisaoGeral />} />
-                  <Route path="/marca"    element={<SaudeDaMarca />} />
-                  <Route path="/copa-b2b" element={<MetaCopaB2B />} />
-                  <Route path="*"         element={<Navigate to="/" replace />} />
+                  <Route path="/"              element={<VisaoGeral />} />
+                  <Route path="/marca"         element={<SaudeDaMarca />} />
+                  <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
+                  <Route path="/cadencias"     element={<Cadencias />} />
+                  <Route path="/sop-marketing" element={<SopMarketing />} />
+                  <Route path="/funil-vendas"      element={<FunilVendas />} />
+                  <Route path="/analise-objecoes" element={<AnaliseObjecoes />} />
+                  <Route path="*"                 element={<Navigate to="/" replace />} />
                 </Routes>
               </AppLayout>
             </PrivateRoute>

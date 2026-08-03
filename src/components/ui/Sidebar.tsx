@@ -24,11 +24,12 @@ interface SidebarProps {
   onSelectSub?: (key: string) => void
   footer?: ReactNode
   style?: CSSProperties
+  open?: boolean
 }
 
 export function Sidebar({
   wordmark = 'We Scale', brandTag, items = [],
-  active, onSelect, activeSub, onSelectSub, footer, style,
+  active, onSelect, activeSub, onSelectSub, footer, style, open = true,
 }: SidebarProps) {
   return (
     <nav style={{
@@ -44,6 +45,8 @@ export function Sidebar({
       left: 0,
       height: '100vh',
       overflow: 'hidden',
+      transform: open ? 'translateX(0)' : 'translateX(-100%)',
+      transition: 'transform 0.2s ease',
       ...style,
     }}>
       {/* diagonal signature texture */}

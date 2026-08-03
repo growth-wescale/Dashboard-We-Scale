@@ -24,8 +24,8 @@ export function useMetas(filters: Filters = {}): UseMetasResult {
   useEffect(() => {
     let cancelled = false
 
-    async function fetchAll() {
-      setLoading(true)
+    async function fetchAll(showLoading = true) {
+      if (showLoading) setLoading(true)
       setError(null)
 
       const allRows: Meta[] = []
@@ -64,11 +64,14 @@ export function useMetas(filters: Filters = {}): UseMetasResult {
 
     fetchAll()
 
-    const timer = setInterval(() => { if (!cancelled) fetchAll() }, 60000)
+    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
+    window.addEventListener('dashboard:refresh', handleRefresh)
+    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 60000)
 
     return () => {
       cancelled = true
       clearInterval(timer)
+      window.removeEventListener('dashboard:refresh', handleRefresh)
     }
   }, [filters.marca, filters.mes, filters.metrica])
 

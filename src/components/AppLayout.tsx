@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, Bell, LogOut } from 'lucide-react'
+import { LayoutDashboard, Activity, Trophy, ListChecks, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp } from 'lucide-react'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
@@ -30,6 +30,11 @@ const BRANDS_SUB = [
   { key: 'viva',       label: 'Viva',       dot: '#FF0069' },
 ]
 
+const VENDAS_SUB = [
+  { key: 'funil-vendas',      label: 'Funil de Vendas' },
+  { key: 'analise-objecoes',  label: 'Análise de Objeções' },
+]
+
 const NAV_ITEMS = [
   {
     key: 'geral',
@@ -44,15 +49,39 @@ const NAV_ITEMS = [
   },
   {
     key: 'copa',
-    label: 'Meta Copa B2B',
+    label: 'Acompanhamento Meta',
     icon: <Trophy size={16} />,
+  },
+  {
+    key: 'cadencias',
+    label: 'Cadências',
+    icon: <ListChecks size={16} />,
+  },
+  {
+    key: 'sop',
+    label: 'S&OP Marketing',
+    icon: <PresentationIcon size={16} />,
+  },
+  {
+    key: 'vendas',
+    label: 'Vendas',
+    icon: <TrendingUp size={16} />,
+    subItems: VENDAS_SUB,
   },
 ]
 
 function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/copa-b2b')) return 'copa'
+  if (pathname.startsWith('/cadencias')) return 'cadencias'
+  if (pathname.startsWith('/sop-marketing')) return 'sop'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/analise-objecoes')) return 'vendas'
   return 'geral'
+}
+
+function getVendasActiveSub(pathname: string): string {
+  if (pathname.startsWith('/analise-objecoes')) return 'analise-objecoes'
+  return 'funil-vendas'
 }
 
 // ── Layout ─────────────────────────────────────────────────────────────────
@@ -64,19 +93,46 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const [activeBrand, setActiveBrand] = useState<string>('oral-unic')
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('sidebarOpen') !== 'false' } catch { return true }
+  })
+  const [syncing, setSyncing] = useState(false)
+
+  const handleSync = useCallback(() => {
+    if (syncing) return
+    setSyncing(true)
+    window.dispatchEvent(new Event('dashboard:refresh'))
+    setTimeout(() => setSyncing(false), 2000)
+  }, [syncing])
+
+  function toggleSidebar() {
+    setSidebarOpen(v => {
+      const next = !v
+      try { localStorage.setItem('sidebarOpen', String(next)) } catch {}
+      return next
+    })
+  }
 
   const activeKey = getActiveKey(location.pathname)
   const isSaude = activeKey === 'saude'
+  const isVendas = activeKey === 'vendas'
 
   function handleNav(key: string) {
     if (key === 'geral') navigate('/')
     else if (key === 'saude') navigate('/marca')
     else if (key === 'copa') navigate('/copa-b2b')
+    else if (key === 'cadencias') navigate('/cadencias')
+    else if (key === 'sop') navigate('/sop-marketing')
+    else if (key === 'vendas') navigate('/funil-vendas')
   }
 
   function handleSubNav(key: string) {
-    setActiveBrand(key)
-    navigate('/marca')
+    if (key === 'funil-vendas') navigate('/funil-vendas')
+    else if (key === 'analise-objecoes') navigate('/analise-objecoes')
+    else {
+      setActiveBrand(key)
+      navigate('/marca')
+    }
   }
 
   async function handleSignOut() {
@@ -121,13 +177,23 @@ export function AppLayout({ children }: AppLayoutProps) {
           items={NAV_ITEMS}
           active={activeKey}
           onSelect={handleNav}
-          activeSub={isSaude ? activeBrand : null}
+          activeSub={isSaude ? activeBrand : isVendas ? getVendasActiveSub(location.pathname) : null}
           onSelectSub={handleSubNav}
           footer={footer}
+          open={sidebarOpen}
         />
 
         {/* Content wrapper */}
-        <div style={{ marginLeft: 'var(--sidebar-w)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <div style={{
+          marginLeft: sidebarOpen ? 'var(--sidebar-w)' : 0,
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
+          minWidth: 0,
+          transition: 'margin-left 0.2s ease',
+          overflow: 'hidden',
+        }}>
           {/* Topbar */}
           <header style={{
             height: 56,
@@ -135,13 +201,38 @@ export function AppLayout({ children }: AppLayoutProps) {
             borderBottom: '1px solid var(--ws-border)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
             gap: 12,
             padding: '0 24px',
             position: 'sticky',
             top: 0,
             zIndex: 10,
           }}>
+            <button
+              onClick={toggleSidebar}
+              title={sidebarOpen ? 'Ocultar menu' : 'Mostrar menu'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8, flexShrink: 0 }}
+            >
+              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+            </button>
+            <div style={{ flex: 1 }} />
+            <button
+              onClick={handleSync}
+              title="Sincronizar dados"
+              style={{
+                background: 'none', border: 'none', cursor: syncing ? 'default' : 'pointer',
+                color: syncing ? 'var(--brand-accent)' : 'var(--ws-text-secondary)',
+                display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8,
+                opacity: syncing ? 0.6 : 1,
+                transition: 'opacity 0.2s',
+              }}
+            >
+              <RefreshCw
+                size={18}
+                style={{
+                  animation: syncing ? 'spin 0.8s linear infinite' : 'none',
+                }}
+              />
+            </button>
             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
               <Bell size={18} />
             </button>
@@ -163,7 +254,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </header>
 
-          <main style={{ flex: 1 }}>
+          <main style={{ flex: 1, minWidth: 0 }}>
             {children}
           </main>
         </div>

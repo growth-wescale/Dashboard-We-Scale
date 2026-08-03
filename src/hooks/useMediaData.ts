@@ -25,8 +25,8 @@ export function useMediaData(filters: Filters = {}): UseMediaDataResult {
   useEffect(() => {
     let cancelled = false
 
-    async function fetchAll() {
-      setLoading(true)
+    async function fetchAll(showLoading = true) {
+      if (showLoading) setLoading(true)
       setError(null)
 
       const allRows: MediaDailyRaw[] = []
@@ -65,7 +65,16 @@ export function useMediaData(filters: Filters = {}): UseMediaDataResult {
     }
 
     fetchAll()
-    return () => { cancelled = true }
+
+    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
+    window.addEventListener('dashboard:refresh', handleRefresh)
+    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 60000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('dashboard:refresh', handleRefresh)
+    }
   }, [filters.marca, filters.canal, filters.dataInicio, filters.dataFim])
 
   return { data, loading, error }

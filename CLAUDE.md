@@ -55,7 +55,7 @@ Os 3 workflows **ativos** foram criados via API no n8n da We Scale:
 | Workflow | ID no We Scale n8n |
 |---|---|
 | Meta Ads → media_daily_raw | `44gfr8W9f0T61l1Q` |
-| RD CRM → crm_funil_raw | `jUYN5lv8pPp4pC6U` |
+| ~~RD CRM → crm_funil_raw~~ | ~~`jUYN5lv8pPp4pC6U`~~ (descontinuado 04/ago — funil agora vem do banco de vendas) |
 | Google Ads → media_daily_raw | `jBRaeio8Vm6gIhuw` |
 
 Todos criados como **inativos** (precisam de credenciais antes de ativar).
@@ -81,7 +81,7 @@ Antes de ativar os workflows, reconectar no painel:
 
 ### Workflows originais na Reccon (manter até migração confirmada)
 - `1CEMDCFbCV5w7YhE` — Meta Ads (ativo, roda 1x/hora)
-- `ZxQkRS17ZAEGWVxW` — RD CRM (ativo, roda a cada 30min)
+- ~~`ZxQkRS17ZAEGWVxW`~~ — RD CRM → crm_funil_raw (**descontinuado 04/ago** — pode desativar; funil migrou para banco de vendas)
 - `ZkujY5ZJpCTlvjam` — Google Ads (ativo, roda 1x/hora)
 
-Não desativar na Reccon até os da We Scale estarem ativos e confirmados funcionando.
+Não desativar Meta e Google na Reccon até os da We Scale estarem ativos e confirmados funcionando.

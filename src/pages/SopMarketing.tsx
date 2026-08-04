@@ -536,6 +536,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mqlMeta    = metas.find(m => m.metrica === 'mql')?.valor_meta ?? 0
   const mqlMetaPct = mqlMeta > 0 ? Math.round((mtdMql / mqlMeta) * 100) : null
 
+  const investMeta    = Number(metas.find(m => m.metrica === 'investimento')?.valor_meta ?? 0)
+  const investMetaPct = investMeta > 0 ? Math.round((mtdInvest / investMeta) * 100) : null
+
   interface KpiCard {
     label: string; value: string
     semAnt: { txt: string; col: string }
@@ -793,6 +796,37 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           <div style={{ height: 240, flexShrink: 0 }}>
             <MtdBarChart items={mtdItems} accent={acc} />
           </div>
+          {investMetaPct !== null && (
+            <div style={{
+              marginTop: 10, flexShrink: 0,
+              background: '#F8FAFC', border: '1px solid #e2e8f0', borderRadius: 6,
+              padding: '8px 10px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: '#94a3b8', textTransform: 'uppercase' }}>
+                  Investimento
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtBRL(mtdInvest)} <span style={{ color: '#94a3b8', fontWeight: 500 }}>/ {fmtBRL(investMeta)}</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.min(investMetaPct, 100)}%`, height: '100%', borderRadius: 2,
+                    background: investMetaPct >= 85 ? '#2ABCB5' : investMetaPct >= 60 ? '#F2A93B' : '#E0506B',
+                    transition: 'width .5s',
+                  }} />
+                </div>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, minWidth: 38, textAlign: 'right',
+                  color: investMetaPct >= 85 ? '#2ABCB5' : investMetaPct >= 60 ? '#F2A93B' : '#E0506B',
+                }}>
+                  {investMetaPct}%
+                </span>
+              </div>
+            </div>
+          )}
           {mqlMetaPct !== null && (
             <div style={{ marginTop: 10, flexShrink: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginBottom: 4 }}>

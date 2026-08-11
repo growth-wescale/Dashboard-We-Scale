@@ -1,6 +1,14 @@
 import { useState, useMemo } from 'react'
 import { X } from 'lucide-react'
 import type { Lead } from '@/lib/types'
+import { fmtBR } from '@/lib/dateUtils'
+
+function fmtDia(dia: string | null | undefined): string {
+  if (!dia) return '—'
+  // dia vem como 'YYYY-MM-DD' (col do banco); se vier ISO completo, trunca
+  const iso = dia.slice(0, 10)
+  return fmtBR(iso)
+}
 
 const CAPITAL_LABELS: Record<string, string> = {
   acima_200k:  'Acima de R$200k',
@@ -159,7 +167,7 @@ export function MqlDrawer({ open, onClose, leads }: MqlDrawerProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Nome', 'E-mail', 'Marca', 'Capital', 'Campanha', 'Anúncio'].map(h => (
+                {['Data', 'Nome', 'E-mail', 'Marca', 'Capital', 'Campanha', 'Anúncio'].map(h => (
                   <th key={h} style={{
                     padding: '10px 16px', textAlign: 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -171,7 +179,7 @@ export function MqlDrawer({ open, onClose, leads }: MqlDrawerProps) {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum MQL encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -180,6 +188,9 @@ export function MqlDrawer({ open, onClose, leads }: MqlDrawerProps) {
                   background: i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--ws-border) 20%, transparent)',
                   borderBottom: '1px solid var(--ws-border)',
                 }}>
+                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtDia(lead.dia)}
+                  </td>
                   <td style={{ padding: '10px 16px', fontWeight: 500, color: 'var(--ws-text-primary)', whiteSpace: 'nowrap' }}>
                     {cell(lead.nome)}
                   </td>

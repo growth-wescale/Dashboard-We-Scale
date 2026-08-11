@@ -8,7 +8,9 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
 import type { Lead, Marca } from '@/lib/types'
-import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
+import { InverseFunnel } from '@/components/ui/InverseFunnel'
+import { getMetaVendas } from '@/constants/metasVendas'
+import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -190,14 +192,14 @@ function fmtBRLshort(v: number) {
 
 // For CP metrics: lower is better → invert color
 function deltaLabel(cur: number, prev: number, lowerIsBetter = false) {
-  if (prev === 0 && cur === 0) return { txt: '—', col: '#94a3b8' }
-  if (prev === 0) return { txt: `+${cur}`, col: '#2ABCB5' }
+  if (prev === 0 && cur === 0) return { txt: '—', col: 'var(--ws-text-secondary)' }
+  if (prev === 0) return { txt: `+${cur}`, col: 'var(--status-positivo)' }
   const p = ((cur - prev) / prev) * 100
   const up = p >= 0
   const positive = lowerIsBetter ? !up : up
   return {
     txt: `${up ? '▲' : '▼'} ${Math.abs(p).toFixed(0)}%`,
-    col: positive ? '#2ABCB5' : '#E0506B',
+    col: positive ? 'var(--status-positivo)' : 'var(--status-risco)',
   }
 }
 
@@ -242,7 +244,7 @@ function WeeklyBarChart({ values, labels, accent }: { values: number[]; labels: 
             {v > 0 && (
               <text x={x + barW / 2} y={y - 4} textAnchor="middle"
                 fontSize={isLast ? 14 : 11} fontWeight={isLast ? 700 : 500}
-                fill={isLast ? accent : '#64748b'}>{v}</text>
+                fill={isLast ? accent : 'var(--ws-text-secondary)'}>{v}</text>
             )}
             <text x={x + barW / 2} y={VH - 2} textAnchor="middle" fontSize={8} fill="#94a3b8">
               {labels[i]}
@@ -367,8 +369,8 @@ function SopWaterfallFunnel({ stages, accent }: { stages: FunnelStage[]; accent:
             borderRight: '1px solid #e2e8f0',
             borderTop:   '1px solid #e2e8f0',
           }}>
-            <div style={{ fontSize: 10, color: '#94a3b8', lineHeight: 1.25 }}>{s.label}</div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#1e293b', marginTop: 2 }}>{s.count}</div>
+            <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', lineHeight: 1.25 }}>{s.label}</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ws-text-primary)', marginTop: 2 }}>{s.count}</div>
           </div>
         ))}
       </div>
@@ -391,7 +393,7 @@ function SopWaterfallFunnel({ stages, accent }: { stages: FunnelStage[]; accent:
             <div key={`lbl-${i}`} style={{
               position: 'absolute', left: `${cx(i)}%`, top: `${topPct}%`,
               transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700,
-              color: inside ? '#fff' : '#1e293b', whiteSpace: 'nowrap', pointerEvents: 'none',
+              color: inside ? '#fff' : 'var(--ws-text-primary)', whiteSpace: 'nowrap', pointerEvents: 'none',
             }}>
               {v}
             </div>
@@ -403,7 +405,7 @@ function SopWaterfallFunnel({ stages, accent }: { stages: FunnelStage[]; accent:
             <div key={i} style={{
               position: 'absolute', left: `${(i + 1) * colW}%`, top: '50%',
               transform: 'translate(-50%,-50%)',
-              background: '#64748b', color: '#fff', fontSize: 9.5, fontWeight: 700,
+              background: 'var(--ws-text-secondary)', color: '#fff', fontSize: 9.5, fontWeight: 700,
               padding: '2px 5px', borderRadius: 3, whiteSpace: 'nowrap',
             }}>
               {(conv * 100).toFixed(1)}%
@@ -427,9 +429,9 @@ function SopWaterfallFunnel({ stages, accent }: { stages: FunnelStage[]; accent:
             }}>
               {!last && (
                 <>
-                  <div style={{ textAlign: 'center', color: '#E0506B', fontSize: 11, lineHeight: 1, paddingTop: 4 }}>▼</div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>{loss}</div>
-                  <div style={{ fontSize: 10, color: '#E0506B', fontWeight: 600 }}>{lossPct.toFixed(1)}%</div>
+                  <div style={{ textAlign: 'center', color: 'var(--status-risco)', fontSize: 11, lineHeight: 1, paddingTop: 4 }}>▼</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ws-text-primary)' }}>{loss}</div>
+                  <div style={{ fontSize: 10, color: 'var(--status-risco)', fontWeight: 600 }}>{lossPct.toFixed(1)}%</div>
                 </>
               )}
             </div>
@@ -456,14 +458,58 @@ interface SopSlideProps {
 function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, closedMonthLabel }: SopSlideProps) {
   const acc = slide.accent
   const [filterFonte, setFilterFonte] = useState('__all__')
+  const [funilPeriod, setFunilPeriod] = useState<'semana' | 'mes'>('mes')
+  const [funilUnit, setFunilUnit] = useState<'one' | 'target'>('target')
+  const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
+
+  // Compare range dinâmico (dropdown de mês). Default = mês anterior.
+  // Sempre MTD: recorta pelo dia de hoje (ou último dia do mês, o que for menor),
+  // independente do toggle Julho fechado — assim o gráfico compara os mesmos
+  // dias iniciais de cada mês.
+  const compareRange = useMemo(() => {
+    const curKey = dates.monthStart.slice(0, 7)
+    const [curY, curM] = curKey.split('-').map(Number)
+    const defaultPrevM = curM === 1 ? 12 : curM - 1
+    const defaultPrevY = curM === 1 ? curY - 1 : curY
+    const key = compareMonthKey ?? `${defaultPrevY}-${String(defaultPrevM).padStart(2, '0')}`
+    const [y, m] = key.split('-').map(Number)
+    const start = isoDate(new Date(y, m - 1, 1))
+    const lastDayOfMonth = new Date(y, m, 0).getDate()
+    const todayDay = new Date().getDate()
+    const day = Math.min(todayDay, lastDayOfMonth)
+    const end = isoDate(new Date(y, m - 1, day))
+    const label = shortMonth(y, m - 1)
+    return { start, end, label, key }
+  }, [compareMonthKey, dates])
+
+  // Opções para o dropdown: últimos 12 meses, excluindo o mês corrente
+  const monthOptions = useMemo(() => {
+    const opts: { key: string; label: string }[] = []
+    const [curY, curM] = dates.monthStart.slice(0, 7).split('-').map(Number)
+    for (let i = 1; i <= 12; i++) {
+      let m = curM - i, y = curY
+      while (m <= 0) { m += 12; y -= 1 }
+      const key = `${y}-${String(m).padStart(2, '0')}`
+      const label = `${shortMonth(y, m - 1)} ${String(y).slice(-2)}`
+      opts.push({ key, label })
+    }
+    return opts
+  }, [dates.monthStart])
 
   // ── Data hooks ───────────────────────────────────────────────────────────────
-  const { data: allMedia }     = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const { data: prevMedia }    = useMediaData({ marca: slide.marca, dataInicio: dates.mtdPrevStart,   dataFim: dates.mtdPrevEnd })
+  // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
+  // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
+  const isOdontoLegacy = slide.marca === 'Odonto Scale'
+  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
+  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
+  const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
+  const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: compareRange.start,   dataFim: compareRange.end })
+  const allMedia  = isOdontoLegacy ? mediaAllOdl.data  : mediaAllStd.data
+  const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
   const { data: allLeads }     = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const { data: prevLeads }    = useLeads({ marca: slide.marca, dataInicio: dates.mtdPrevStart,   dataFim: dates.mtdPrevEnd })
+  const { data: prevLeads }    = useLeads({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
   const { data: rawCrmCur }    = useVendasFunil({ marca: slide.marca, dataInicio: dates.mtdCurStart,    dataFim: dates.mtdCurEnd })
-  const { data: rawCrmPrev }   = useVendasFunil({ marca: slide.marca, dataInicio: dates.mtdPrevStart,   dataFim: dates.mtdPrevEnd })
+  const { data: rawCrmPrev }   = useVendasFunil({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
   const { data: rawCrmWeek }   = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[4].start, dataFim: dates.weeks[4].end })
   const { data: rawCrmPrior }  = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[3].start, dataFim: dates.weeks[3].end })
   const { data: rawCrmAll }    = useVendasFunil({ marca: slide.marca })
@@ -518,7 +564,38 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mtdPrevLeadsCnt = mtdPrevLeads.length
 
   const funnelMtd  = useMemo(() => buildFunnel(crmCur, dates.mtdCurStart, dates.mtdCurEnd), [crmCur, dates.mtdCurStart, dates.mtdCurEnd])
-  const funnelMtdP = useMemo(() => buildFunnel(crmPrev, dates.mtdPrevStart, dates.mtdPrevEnd), [crmPrev, dates.mtdPrevStart, dates.mtdPrevEnd])
+  const funnelMtdP = useMemo(() => buildFunnel(crmPrev, compareRange.start, compareRange.end), [crmPrev, compareRange.start, compareRange.end])
+
+  // ── Chart-specific: sempre MTD-vs-MTD (mesmo em modo Julho fechado) ──────────
+  // Recorta o lado "atual" até o dia de hoje (ou último dia do mês, o que for menor),
+  // pra que o gráfico compare os mesmos N dias iniciais de cada mês.
+  const chartCurEnd = useMemo(() => {
+    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
+    const lastDay = new Date(y, m, 0).getDate()
+    const today = new Date().getDate()
+    return isoDate(new Date(y, m - 1, Math.min(today, lastDay)))
+  }, [dates.monthStart])
+
+  const chartCurLeads = useMemo(
+    () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= dates.mtdCurStart && l.dia <= chartCurEnd))),
+    [allLeads, dates.mtdCurStart, chartCurEnd, filterLeads],
+  )
+  const chartPrevLeads = useMemo(
+    () => filterLeads(deduplicateLeads(prevLeads.filter(l => l.dia >= compareRange.start && l.dia <= compareRange.end))),
+    [prevLeads, compareRange.start, compareRange.end, filterLeads],
+  )
+
+  const chartCurMql  = chartCurLeads.filter(isLeadMql).length
+  const chartPrevMql = chartPrevLeads.filter(isLeadMql).length
+
+  const chartFunnelCur  = useMemo(
+    () => buildFunnel(crmCur, dates.mtdCurStart, chartCurEnd),
+    [crmCur, dates.mtdCurStart, chartCurEnd],
+  )
+  const chartFunnelPrev = useMemo(
+    () => buildFunnel(crmPrev, compareRange.start, compareRange.end),
+    [crmPrev, compareRange.start, compareRange.end],
+  )
 
   const mtdCPMQL  = mtdMql > 0 ? mtdInvest / mtdMql : 0
   const mtdPrevCPMQL = mtdPrevMql > 0 ? mtdPrevInvest / mtdPrevMql : 0
@@ -590,11 +667,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     },
   ]
 
-  // ── MTD chart items ──────────────────────────────────────────────────────────
+  // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
   const mtdItems: MtdItem[] = [
-    { label: 'MQL', cur: mtdMql,       prev: mtdPrevMql },
-    { label: 'SQL', cur: funnelMtd.sql, prev: funnelMtdP.sql },
-    { label: 'SAL', cur: funnelMtd.sal, prev: funnelMtdP.sal },
+    { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
+    { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
+    { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
   ]
 
   // ── MQLs por faixa de capital de investimento ────────────────────────────────
@@ -616,8 +693,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       }
       return acc
     }
-    const cur  = collect(mtdLeads)
-    const prev = collect(mtdPrevLeads)
+    const cur  = collect(chartCurLeads)
+    const prev = collect(chartPrevLeads)
     const keys = new Set<string>([...cur.keys(), ...prev.keys()])
     const rows: { label: string; sort: number; cur: number; prev: number }[] = []
     keys.forEach(k => {
@@ -626,7 +703,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     })
     rows.sort((a, b) => a.sort - b.sort)
     return rows.map(({ label, cur: c, prev: p }) => ({ label, cur: c, prev: p }))
-  }, [mtdLeads, mtdPrevLeads])
+  }, [chartCurLeads, chartPrevLeads])
 
   // ── Funnel stages ─────────────────────────────────────────────────────────────
   const funnelStages: FunnelStage[] = [
@@ -640,7 +717,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div style={{
-      height: exportHeight != null ? exportHeight : '100vh', background: '#F0F2F5',
+      height: exportHeight != null ? exportHeight : '100vh', background: 'var(--ws-bg)',
       fontFamily: 'var(--font-body)',
       display: 'flex', flexDirection: 'column',
       padding: '20px 36px 16px', gap: 16,
@@ -655,14 +732,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               {slide.label}
             </span>
             {slide.subLabel && (
-              <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>— {slide.subLabel}</span>
+              <span style={{ fontSize: 13, color: 'var(--ws-text-secondary)', fontWeight: 500 }}>— {slide.subLabel}</span>
             )}
           </div>
-          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
             {dates.recentWeekLabel} · visão executiva de performance e CRM
           </div>
         </div>
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>{slideIndex + 1}/{total}</span>
+        <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
         <div style={{
           display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 12,
           overflow: 'hidden', background: '#fff',
@@ -680,7 +757,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                   padding: '4px 10px', border: 'none', cursor: 'pointer',
                   fontSize: 11, fontWeight: 700, outline: 'none',
                   background: on ? acc : 'transparent',
-                  color: on ? '#fff' : '#64748b',
+                  color: on ? '#fff' : 'var(--ws-text-secondary)',
                 }}
               >
                 {opt.label}
@@ -691,7 +768,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         <select
           value={filterFonte}
           onChange={e => setFilterFonte(e.target.value)}
-          style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, background: '#fff', color: '#475569', cursor: 'pointer', outline: 'none' }}
+          style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
         >
           <option value="__all__">Todas as fontes</option>
           {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
@@ -715,7 +792,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           }}>
             Semana · {dates.recentWeekLabel}
           </div>
-          <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+          <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
           {kpiCards.map(card => (
@@ -723,18 +800,18 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
               padding: '14px 20px 12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.09em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
                 {card.label}
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#1e293b', lineHeight: 1.1, marginBottom: 6 }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1, marginBottom: 6 }}>
                 {card.value}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div style={{ fontSize: 12, color: card.semAnt.col, lineHeight: 1.3 }}>
-                  {card.semAnt.txt} <span style={{ color: '#94a3b8' }}>sem ant</span>
+                  {card.semAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>sem ant</span>
                 </div>
                 <div style={{ fontSize: 12, color: card.mtdAnt.col, lineHeight: 1.3 }}>
-                  {card.mtdAnt.txt} <span style={{ color: '#94a3b8' }}>{dates.antShort}</span>
+                  {card.mtdAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>vs {compareRange.label}</span>
                 </div>
               </div>
             </div>
@@ -750,11 +827,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             background: '#2ABCB514', border: '1px solid #2ABCB538',
             borderRadius: 4, padding: '2px 9px',
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
-            color: '#2ABCB5', textTransform: 'uppercase', whiteSpace: 'nowrap',
+            color: 'var(--status-positivo)', textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
             Mês · {dates.mtdLabel}
           </div>
-          <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+          <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
 
         {/* Grid: 3 cols (MTD) | 2 cols equal (fechado) */}
@@ -778,7 +855,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             />
           </div>
           <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
               CP-MQL
             </div>
             <div style={{ height: 110 }}>
@@ -790,8 +867,23 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
         {/* Col 2: MTD comparativo */}
         <div style={{ ...cardStyle, overflowY: 'auto' }}>
-          <div style={{ marginBottom: 6 }}>
-            <div style={colTitle(acc)}>{dates.mtdPrevLabel} vs {dates.mtdLabel} {dates.monthSuffix}</div>
+          <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={colTitle(acc)}>{compareRange.label} MTD vs {dates.mtdLabel} MTD</div>
+            <select
+              value={compareRange.key}
+              onChange={e => setCompareMonthKey(e.target.value)}
+              style={{
+                appearance: 'none', padding: '3px 8px', border: '1px solid #e2e8f0',
+                borderRadius: 8, fontSize: 10, background: '#fff',
+                color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none',
+                fontWeight: 600,
+              }}
+              title="Mês comparativo"
+            >
+              {monthOptions.map(o => (
+                <option key={o.key} value={o.key}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div style={{ height: 240, flexShrink: 0 }}>
             <MtdBarChart items={mtdItems} accent={acc} />
@@ -799,28 +891,28 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           {investMetaPct !== null && (
             <div style={{
               marginTop: 10, flexShrink: 0,
-              background: '#F8FAFC', border: '1px solid #e2e8f0', borderRadius: 6,
+              background: 'var(--ws-bg)', border: '1px solid #e2e8f0', borderRadius: 6,
               padding: '8px 10px',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: '#94a3b8', textTransform: 'uppercase' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase' }}>
                   Investimento
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', fontVariantNumeric: 'tabular-nums' }}>
-                  {fmtBRL(mtdInvest)} <span style={{ color: '#94a3b8', fontWeight: 500 }}>/ {fmtBRL(investMeta)}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtBRL(mtdInvest)} <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 500 }}>/ {fmtBRL(investMeta)}</span>
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <div style={{ flex: 1, height: 4, background: '#e2e8f0', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: 4, background: 'var(--ws-border)', borderRadius: 2, overflow: 'hidden' }}>
                   <div style={{
                     width: `${Math.min(investMetaPct, 100)}%`, height: '100%', borderRadius: 2,
-                    background: investMetaPct >= 85 ? '#2ABCB5' : investMetaPct >= 60 ? '#F2A93B' : '#E0506B',
+                    background: investMetaPct >= 85 ? 'var(--status-positivo)' : investMetaPct >= 60 ? 'var(--status-atencao)' : 'var(--status-risco)',
                     transition: 'width .5s',
                   }} />
                 </div>
                 <span style={{
                   fontSize: 10, fontWeight: 700, minWidth: 38, textAlign: 'right',
-                  color: investMetaPct >= 85 ? '#2ABCB5' : investMetaPct >= 60 ? '#F2A93B' : '#E0506B',
+                  color: investMetaPct >= 85 ? 'var(--status-positivo)' : investMetaPct >= 60 ? 'var(--status-atencao)' : 'var(--status-risco)',
                 }}>
                   {investMetaPct}%
                 </span>
@@ -829,16 +921,16 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           )}
           {mqlMetaPct !== null && (
             <div style={{ marginTop: 10, flexShrink: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ws-text-secondary)', marginBottom: 4 }}>
                 <span>Meta MQL: {mqlMeta}</span>
-                <span style={{ fontWeight: 700, color: mqlMetaPct >= 85 ? '#2ABCB5' : mqlMetaPct >= 60 ? '#F2A93B' : '#E0506B' }}>
+                <span style={{ fontWeight: 700, color: mqlMetaPct >= 85 ? 'var(--status-positivo)' : mqlMetaPct >= 60 ? 'var(--status-atencao)' : 'var(--status-risco)' }}>
                   {mqlMetaPct}% atingido
                 </span>
               </div>
-              <div style={{ height: 4, background: '#e2e8f0', borderRadius: 2 }}>
+              <div style={{ height: 4, background: 'var(--ws-border)', borderRadius: 2 }}>
                 <div style={{
                   width: `${Math.min(mqlMetaPct, 100)}%`, height: '100%', borderRadius: 2,
-                  background: mqlMetaPct >= 85 ? '#2ABCB5' : mqlMetaPct >= 60 ? '#F2A93B' : '#E0506B',
+                  background: mqlMetaPct >= 85 ? 'var(--status-positivo)' : mqlMetaPct >= 60 ? 'var(--status-atencao)' : 'var(--status-risco)',
                   transition: 'width .5s',
                 }} />
               </div>
@@ -846,17 +938,17 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           )}
           {mqlByCapital.length > 0 && (
             <div style={{ marginTop: 12, flexShrink: 0 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6 }}>
                 MQLs por capital de investimento
               </div>
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 40px 40px',
                 gap: 8, padding: '0 8px', marginBottom: 4,
                 fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
-                color: '#94a3b8', textTransform: 'uppercase',
+                color: 'var(--ws-text-secondary)', textTransform: 'uppercase',
               }}>
                 <span></span>
-                <span style={{ textAlign: 'right' }}>{dates.mtdPrevLabel}</span>
+                <span style={{ textAlign: 'right' }}>{compareRange.label}</span>
                 <span style={{ textAlign: 'right' }}>{dates.mtdLabel}</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -864,14 +956,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                   <div key={row.label} style={{
                     display: 'grid', gridTemplateColumns: '1fr 40px 40px',
                     gap: 8, alignItems: 'baseline',
-                    padding: '4px 8px', background: '#F8FAFC',
+                    padding: '4px 8px', background: 'var(--ws-bg)',
                     borderRadius: 4, fontSize: 11,
                   }}>
-                    <span style={{ color: '#475569' }}>{row.label}</span>
-                    <span style={{ textAlign: 'right', color: row.prev > 0 ? '#64748b' : '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ color: 'var(--ws-text-primary)' }}>{row.label}</span>
+                    <span style={{ textAlign: 'right', color: row.prev > 0 ? 'var(--ws-text-secondary)' : '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>
                       {row.prev}
                     </span>
-                    <span style={{ textAlign: 'right', fontWeight: 700, color: row.cur > 0 ? '#1e293b' : '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ textAlign: 'right', fontWeight: 700, color: row.cur > 0 ? 'var(--ws-text-primary)' : '#cbd5e1', fontVariantNumeric: 'tabular-nums' }}>
                       {row.cur}
                     </span>
                   </div>
@@ -881,18 +973,66 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           )}
         </div>
 
-        {/* Col 3: Distribuição por etapa e aging */}
-        <div style={{ ...cardStyle, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
-          <div style={{ marginBottom: 4, flexShrink: 0 }}>
-            <div style={colTitle(acc)}>Distribuição por etapa e aging</div>
-          </div>
-          <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
-            <BubbleMatrix
-              crmData={rawCrmCur}
-              crmAllData={rawCrmAll}
-            />
-          </div>
-        </div>
+        {/* Col 3: Funil inverso vs meta do período */}
+        {(() => {
+          const mesKey = dates.monthStart.slice(0, 7)
+          const metaMes = getMetaVendas(slide.marca, mesKey)
+          const [yStr, mStr] = mesKey.split('-')
+          const diasNoMes = new Date(Number(yStr), Number(mStr), 0).getDate()
+          const dayNum = Number(dates.mtdCurEnd.slice(-2))
+          const pctMes = dates.isClosed ? 1 : Math.max(0.01, dayNum / diasNoMes)
+
+          // Ajustes por período (semana = weeks[4], meta / 4, pct = 1 pois é semana completa)
+          const isSemana = funilPeriod === 'semana'
+          const actualData = isSemana ? rawCrmWeek : rawCrmCur
+          const metaPeriodo = metaMes == null
+            ? null
+            : isSemana ? metaMes / 4 : metaMes
+          const pctPeriod = isSemana ? 1 : pctMes
+          const periodLabel = isSemana ? 'semana' : 'mês'
+
+          return (
+            <div style={{ ...cardStyle, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
+              <div style={{
+                marginBottom: 6, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
+              }}>
+                <div style={colTitle(acc)}>Funil inverso</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <ToggleGroup
+                    accent={acc}
+                    value={funilPeriod}
+                    onChange={v => setFunilPeriod(v as 'semana' | 'mes')}
+                    options={[
+                      { key: 'semana', label: 'Semana' },
+                      { key: 'mes',    label: 'Mês' },
+                    ]}
+                  />
+                  <ToggleGroup
+                    accent={acc}
+                    value={funilUnit}
+                    onChange={v => setFunilUnit(v as 'one' | 'target')}
+                    options={[
+                      { key: 'one',    label: '1 venda' },
+                      { key: 'target', label: 'Meta' },
+                    ]}
+                  />
+                </div>
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
+                <InverseFunnel
+                  histData={rawCrmAll}
+                  actualData={actualData}
+                  meta={metaPeriodo}
+                  pctPeriod={pctPeriod}
+                  unit={funilUnit}
+                  periodLabel={periodLabel}
+                  accent={acc}
+                />
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
         {/* ── Horizontal Waterfall Funnel ── */}
@@ -919,7 +1059,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
 const navBtnStyle: React.CSSProperties = {
   background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
-  color: '#64748b', cursor: 'pointer', padding: 0, flexShrink: 0,
+  color: 'var(--ws-text-secondary)', cursor: 'pointer', padding: 0, flexShrink: 0,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   width: 24, height: 24,
 }
@@ -932,6 +1072,40 @@ const cardStyle: React.CSSProperties = {
 
 function colTitle(accent: string): React.CSSProperties {
   return { fontSize: 14, fontWeight: 700, color: accent, marginBottom: 2, letterSpacing: '-0.01em' }
+}
+
+interface ToggleGroupProps {
+  value: string
+  onChange: (v: string) => void
+  options: { key: string; label: string }[]
+  accent: string
+}
+function ToggleGroup({ value, onChange, options, accent }: ToggleGroupProps) {
+  return (
+    <div style={{
+      display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 8,
+      overflow: 'hidden', background: '#fff',
+    }}>
+      {options.map(opt => {
+        const on = value === opt.key
+        return (
+          <button
+            key={opt.key}
+            onClick={() => onChange(opt.key)}
+            style={{
+              padding: '3px 9px', border: 'none', cursor: 'pointer',
+              fontSize: 10, fontWeight: 700, outline: 'none',
+              background: on ? accent : 'transparent',
+              color: on ? '#fff' : 'var(--ws-text-secondary)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 // ── SopMarketing ───────────────────────────────────────────────────────────────
@@ -1001,7 +1175,7 @@ export function SopMarketing() {
         useCORS: true,
         allowTaint: true,
         logging: false,
-        backgroundColor: '#F0F2F5',
+        backgroundColor: 'var(--ws-bg)',
         width: 1920,
         height: 1080,
       })
@@ -1018,7 +1192,7 @@ export function SopMarketing() {
   const slide = SLIDES[activeSlide]
 
   return (
-    <div ref={containerRef} style={{ height: '100vh', background: '#F0F2F5', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ height: '100vh', background: 'var(--ws-bg)', overflow: 'hidden' }}>
 
       {/* ── Hidden export container ── */}
       {isPdfExporting && (
@@ -1095,7 +1269,7 @@ export function SopMarketing() {
           display: 'flex', alignItems: 'center', gap: 5,
           background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(6px)',
           border: '1px solid #e2e8f0', borderRadius: 20, cursor: 'pointer',
-          padding: '5px 12px', fontSize: 11, fontWeight: 600, color: '#475569',
+          padding: '5px 12px', fontSize: 11, fontWeight: 600, color: 'var(--ws-text-primary)',
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           opacity: isPdfExporting ? 0.6 : 1,
         }}>

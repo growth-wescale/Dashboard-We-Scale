@@ -7,59 +7,18 @@ import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { useLeads } from '@/hooks/useLeads'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { inPeriod } from '@/lib/vendasUtils'
-import type { Marca } from '@/lib/types'
+import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
+import { nf, pct, moneyBig } from '@/lib/format'
+import { currentMonthRange, monthLabelLong as monthLabel, fmtBR, daysInMonth, dayOfMonth } from '@/lib/dateUtils'
 import { SCard, KTile } from '@/components/ui/v2'
 
-// ─── Brand config (reusa o padrão do FunilVendas) ──────────────────────────
-
-interface BrandDef { key: string; label: string; marca: Marca | undefined }
-const BRANDS: BrandDef[] = [
-  { key: 'overview',    label: 'Consolidado', marca: undefined },
-  { key: 'oral-unic',   label: 'Oral Unic',              marca: 'Oral Unic' },
-  { key: 'odonto-scale',label: 'Odonto Scale',           marca: 'Odonto Scale' },
-  { key: 'inpot',       label: 'Inpot',                  marca: 'Inpot' },
-  { key: 'eletrovias',  label: 'Eletrovias',             marca: 'Eletrovias' },
-  { key: 'liso-laser',  label: 'Lisô Laser',             marca: 'Lisô Laser' },
-  { key: 'b2case',      label: 'B2Case',                 marca: 'B2Case' },
-  { key: 'viva',        label: 'Viva',                   marca: 'Viva' },
-]
+const BRANDS = BRANDS_WITH_OVERVIEW
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
 const SDR_ACCENT    = '#EFA94A' // laranja
 const CLOSER_ACCENT = '#2ABCB5' // teal
 const GARGALO       = '#E4585B' // vermelho suave
-
-// ─── Formatters ──────────────────────────────────────────────────────────
-
-function nf(n: number) { return Math.round(n).toLocaleString('pt-BR') }
-function pct(x: number, digits = 1) { return `${x.toFixed(digits)}%` }
-function moneyBig(n: number) {
-  if (n >= 1_000_000) return 'R$ ' + (n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'M'
-  if (n >= 1_000)     return 'R$ ' + (n / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'
-  return 'R$ ' + Math.round(n).toLocaleString('pt-BR')
-}
-
-// ─── Date helpers ──────────────────────────────────────────────────────────
-
-function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
-function currentMonthRange() {
-  const t = new Date()
-  return { start: `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-01`, end: isoDate(t) }
-}
-function monthLabel(iso: string) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-    .replace(/^\w/, c => c.toUpperCase())
-}
-function daysInMonth(iso: string) {
-  const [y, m] = iso.split('-').map(Number)
-  return new Date(y, m, 0).getDate()
-}
-function dayOfMonth(iso: string) { return Number(iso.slice(-2)) }
-function fmtBR(iso: string) {
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
-}
 
 // ─── Deal helpers ──────────────────────────────────────────────────────────
 

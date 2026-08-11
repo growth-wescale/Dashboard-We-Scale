@@ -7,33 +7,15 @@ import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import type { Lead } from '@/lib/types'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo, type CategoriaMotivo } from '@/constants/motivosPerda'
-import type { Marca } from '@/lib/types'
+import { BRANDS_WITH_OVERVIEW, BRAND_ACCENT } from '@/constants/brands'
+import { nf, pct } from '@/lib/format'
+import { currentMonthRange, fmtBR, monthLabelLong as monthLabel } from '@/lib/dateUtils'
 import { SCard, KTile } from '@/components/ui/v2'
 
 // ─── Brand config ──────────────────────────────────────────────────────────
 
-interface BrandDef { key: string; label: string; marca: Marca | undefined }
-const BRANDS: BrandDef[] = [
-  { key: 'overview',    label: 'Consolidado', marca: undefined },
-  { key: 'oral-unic',   label: 'Oral Unic',              marca: 'Oral Unic' },
-  { key: 'odonto-scale',label: 'Odonto Scale',           marca: 'Odonto Scale' },
-  { key: 'inpot',       label: 'Inpot',                  marca: 'Inpot' },
-  { key: 'eletrovias',  label: 'Eletrovias',             marca: 'Eletrovias' },
-  { key: 'liso-laser',  label: 'Lisô Laser',             marca: 'Lisô Laser' },
-  { key: 'b2case',      label: 'B2Case',                 marca: 'B2Case' },
-  { key: 'viva',        label: 'Viva',                   marca: 'Viva' },
-]
-
-// Cores por marca (mesmo padrão do resto do dashboard)
-const BRAND_COLOR: Record<string, string> = {
-  'Oral Unic': '#7F0C72',
-  'Inpot':     '#C6D32D',
-  'Eletrovias':'#ED6D3A',
-  'Lisô Laser':'#FF6643',
-  'B2Case':    '#0169F2',
-  'Viva':      '#FF0069',
-  'Odonto Scale': '#0ea5e9',
-}
+const BRANDS = BRANDS_WITH_OVERVIEW
+const BRAND_COLOR = BRAND_ACCENT
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
@@ -41,26 +23,6 @@ const DARK_ACCENT = '#3D0F3D'  // roxo escuro (header)
 const TEAL        = '#2ABCB5'
 const RED         = '#E4585B'
 const AMBER       = '#F3B34B'
-
-// ─── Formatters ──────────────────────────────────────────────────────────
-
-function nf(n: number) { return Math.round(n).toLocaleString('pt-BR') }
-function pct(x: number, d = 1) { return `${x.toFixed(d)}%` }
-function fmtBR(iso: string) {
-  const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`
-}
-function monthLabel(iso: string) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-    .replace(/^\w/, c => c.toUpperCase())
-}
-
-// ─── Date helpers ─────────────────────────────────────────────────────────
-
-function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
-function currentMonthRange() {
-  const t = new Date()
-  return { start: `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-01`, end: isoDate(t) }
-}
 
 // ─── Cálculos ─────────────────────────────────────────────────────────────
 

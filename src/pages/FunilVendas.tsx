@@ -11,52 +11,16 @@ import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
-import type { Marca } from '@/lib/types'
+import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
+import { nf, money, moneyK } from '@/lib/format'
+import { isoDate, currentMonthRange, shortMonth } from '@/lib/dateUtils'
 
-// ─── Brand config ──────────────────────────────────────────────────────────────
-
-interface BrandDef { key: string; label: string; marca: Marca | undefined; accent: string; dark: string }
-
-const BRANDS: BrandDef[] = [
-  { key: 'overview',    label: 'Consolidado', marca: undefined,       accent: '#2ABCB5', dark: '#1A847F' },
-  { key: 'oral-unic',   label: 'Oral Unic',              marca: 'Oral Unic',     accent: '#7F0C72', dark: '#540247' },
-  { key: 'odonto-scale',label: 'Odonto Scale',           marca: 'Odonto Scale',  accent: '#0EA5E9', dark: '#075985' },
-  { key: 'inpot',       label: 'Inpot',                  marca: 'Inpot',         accent: '#C6D32D', dark: '#0B3120' },
-  { key: 'eletrovias',  label: 'Eletrovias',             marca: 'Eletrovias',    accent: '#ED6D3A', dark: '#4E2800' },
-  { key: 'liso-laser',  label: 'Lisô Laser',             marca: 'Lisô Laser',    accent: '#FF6643', dark: '#6E1D61' },
-  { key: 'b2case',      label: 'B2Case',                 marca: 'B2Case',        accent: '#0169F2', dark: '#040492' },
-  { key: 'viva',        label: 'Viva',                   marca: 'Viva',          accent: '#FF0069', dark: '#141414' },
-]
-
-// ─── Formatters ────────────────────────────────────────────────────────────────
-
-function nf(n: number): string { return Math.round(n).toLocaleString('pt-BR') }
-function money(n: number): string { return 'R$ ' + Math.round(n).toLocaleString('pt-BR') }
-function moneyK(n: number): string {
-  if (n >= 1_000_000) return 'R$ ' + (n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + 'M'
-  if (n >= 1_000)     return 'R$ ' + (n / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'
-  return 'R$ ' + Math.round(n).toLocaleString('pt-BR')
-}
-
-// ─── Date helpers ──────────────────────────────────────────────────────────────
-
-function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
-
-function currentMonthRange() {
-  const today = new Date()
-  const y = today.getFullYear(), m = today.getMonth()
-  return { start: `${y}-${String(m + 1).padStart(2, '0')}-01`, end: isoDate(today) }
-}
+const BRANDS = BRANDS_WITH_OVERVIEW
 
 function prevMonthRange(start: string, end: string) {
   const s = new Date(start + 'T12:00:00'), e = new Date(end + 'T12:00:00')
   s.setMonth(s.getMonth() - 1); e.setMonth(e.getMonth() - 1)
   return { start: isoDate(s), end: isoDate(e) }
-}
-
-function shortMonth(iso: string) {
-  return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long' })
-    .replace(/^\w/, c => c.toUpperCase())
 }
 
 // ─── Data helpers ──────────────────────────────────────────────────────────────

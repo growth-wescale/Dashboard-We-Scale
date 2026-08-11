@@ -842,7 +842,7 @@ export function VisaoGeral() {
 
   const isConsolidated = !brand || brand === 'overview'
   const brandObj       = brands.find((b) => b.key === brand)
-  const scopeLabel     = isConsolidated ? 'Consolidado · 6 marcas' : (brandObj?.label ?? brand)
+  const scopeLabel     = isConsolidated ? 'Consolidado' : (brandObj?.label ?? brand)
   const rootProps      = isConsolidated ? {} : { 'data-brand': brand }
 
   const curSeries   = useMemo(() => buildSeries(mediaCur,   leadsCur,   crmCur,   brand, range.start,      days), [mediaCur,   leadsCur,   crmCur,   brand, range.start,      days])

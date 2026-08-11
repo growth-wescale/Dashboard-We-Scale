@@ -101,18 +101,10 @@ export function useVendasFunil(filters: Filters = {}): UseVendasFunilResult {
   useEffect(() => {
     let cancelled = false
 
-    async function run() {
-      setLoading(true)
-      setError(null)
-      const { rows, error: err } = await fetchVendasRows(filters)
-      if (cancelled) return
-      if (err) { setError(err); setLoading(false); return }
-      if (!cancelled) { setData(rows); setLoading(false) }
-    }
+    // Single source of truth — fetchAll com showLoading no primeiro fetch, silent nos demais
+    fetchAll(true).catch(() => {})
 
-    run()
-
-    const handleRefresh = () => { fetchAll(false) }
+    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
     const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 60000)
 
@@ -121,7 +113,7 @@ export function useVendasFunil(filters: Filters = {}): UseVendasFunilResult {
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [filters.marca, filters.dataInicio, filters.dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchAll])
 
   return { data, loading, error }
 }

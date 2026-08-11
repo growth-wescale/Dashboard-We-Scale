@@ -18,7 +18,7 @@ import type { Marca } from '@/lib/types'
 interface BrandDef { key: string; label: string; marca: Marca | undefined; accent: string; dark: string }
 
 const BRANDS: BrandDef[] = [
-  { key: 'overview',    label: 'Consolidado · 7 marcas', marca: undefined,       accent: '#2ABCB5', dark: '#1A847F' },
+  { key: 'overview',    label: 'Consolidado', marca: undefined,       accent: '#2ABCB5', dark: '#1A847F' },
   { key: 'oral-unic',   label: 'Oral Unic',              marca: 'Oral Unic',     accent: '#7F0C72', dark: '#540247' },
   { key: 'odonto-scale',label: 'Odonto Scale',           marca: 'Odonto Scale',  accent: '#0EA5E9', dark: '#075985' },
   { key: 'inpot',       label: 'Inpot',                  marca: 'Inpot',         accent: '#C6D32D', dark: '#0B3120' },
@@ -273,7 +273,7 @@ export function FunilVendas() {
   const brandDef = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
   const marca = brandDef.marca
   const { accent, dark } = brandDef
-  const scopeLabel = brandKey === 'overview' ? 'Consolidado · 7 marcas' : brandDef.label
+  const scopeLabel = brandKey === 'overview' ? 'Consolidado' : brandDef.label
 
   const prev = useMemo(() => prevMonthRange(range.start, range.end), [range.start, range.end])
   const curMonthLabel = shortMonth(range.start)

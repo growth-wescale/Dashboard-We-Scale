@@ -529,7 +529,13 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   }, [slide.filterFranquia])
 
   const filterMedia = useCallback(<T extends { campanha?: string | null }>(media: T[]) => {
-    if (slide.filterFranquia) return media.filter(r => !(r.campanha ?? '').toUpperCase().includes('LEGACY'))
+    if (slide.filterFranquia) {
+      // Franquia OU = campanhas SEM prefixo [LEGACY] (Comunidade) / [CMD] (Comunidade) / [ODL] (Odonto Legacy)
+      return media.filter(r => {
+        const c = (r.campanha ?? '').toUpperCase()
+        return !c.includes('[LEGACY]') && !c.includes('LEGACY]') && !c.includes('[CMD]') && !c.includes('[ODL]')
+      })
+    }
     return media
   }, [slide.filterFranquia])
 

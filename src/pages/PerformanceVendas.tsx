@@ -14,7 +14,7 @@ import { SCard, KTile } from '@/components/ui/v2'
 
 interface BrandDef { key: string; label: string; marca: Marca | undefined }
 const BRANDS: BrandDef[] = [
-  { key: 'overview',    label: 'Consolidado · 7 marcas', marca: undefined },
+  { key: 'overview',    label: 'Consolidado', marca: undefined },
   { key: 'oral-unic',   label: 'Oral Unic',              marca: 'Oral Unic' },
   { key: 'odonto-scale',label: 'Odonto Scale',           marca: 'Odonto Scale' },
   { key: 'inpot',       label: 'Inpot',                  marca: 'Inpot' },

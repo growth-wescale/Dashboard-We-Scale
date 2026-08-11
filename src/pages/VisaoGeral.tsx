@@ -17,6 +17,7 @@ import { useAllBrandsMqlPacing } from '@/hooks/useMqlPacing'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel } from '@/lib/dateUtils'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
+import { getMetaVendas } from '@/constants/metasVendas'
 import { PacingCard, MiniCard } from '@/pages/Pacing'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
@@ -41,6 +42,7 @@ type BrandRow = {
   cpmql: number; cpsql: number; invest: number
   meta: number; status: 'positivo' | 'atencao' | 'risco'
   sqlPerdido: number; valorTotal: number
+  vendas: number; metaVenda: number | null; atingPct: number | null
 }
 
 type Scope = {
@@ -92,7 +94,16 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
   }
 }
 
-function computeBrands(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], metas: Meta[], di: string, df: string): BrandRow[] {
+function computeBrands(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], _metas: Meta[], di: string, df: string): BrandRow[] {
+  // Meta de vendas do mês (chave YYYY-MM do início do período)
+  const mesKey = di.slice(0, 7)
+  // Proporção do mês decorrido dentro do período — se período cobre o mês inteiro, é 100%
+  const [yy, mm] = mesKey.split('-').map(Number)
+  const diasNoMes = new Date(yy, mm, 0).getDate()
+  const dayEnd = Number(df.slice(-2))
+  const isSameMonthEnd = df.slice(0, 7) === mesKey
+  const pctPeriodo = isSameMonthEnd ? Math.min(1, dayEnd / diasNoMes) : 1
+
   return BRAND_DEFS.map(def => {
     const marca = SLUG_TO_MARCA[def.key]
     const mRows = media.filter(r => r.marca === marca)
@@ -105,12 +116,27 @@ function computeBrands(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketin
     const sql    = cRows.filter(r => inPeriod(r.data_sql, di, df)).length
     const cpmql  = mql > 0 ? Math.round(invest / mql) : 0
     const cpsql  = sql > 0 ? Math.round(invest / sql) : 0
-    const metaMql = metas.find(m => m.marca === marca && m.metrica === 'mql')?.valor_meta ?? 0
-    const metaPct = metaMql > 0 ? Math.round((mql / metaMql) * 100) : 0
-    const status: BrandRow['status'] = metaPct >= 90 ? 'positivo' : metaPct >= 70 ? 'atencao' : 'risco'
     const sqlPerdido = cRows.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_sal, di, df)).length
     const valorTotal = cRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
-    return { ...def, leads, mql, sql, cpmql, cpsql, invest: Math.round(invest), meta: metaPct, status, sqlPerdido, valorTotal }
+
+    // Vendas realizadas (deals Ganhos com data_venda dentro do período)
+    const vendas = cRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length
+    const metaVenda = getMetaVendas(marca, mesKey)
+    const atingPct = metaVenda && metaVenda > 0 ? (vendas / metaVenda) * 100 : null
+
+    // Farol de atingimento — ratio compara vs pace esperado do período
+    let status: BrandRow['status'] = 'atencao'
+    if (atingPct !== null && metaVenda !== null && metaVenda > 0) {
+      const ratio = (vendas / metaVenda) / Math.max(pctPeriodo, 0.01)
+      status = ratio >= 1 ? 'positivo' : ratio >= 0.7 ? 'atencao' : 'risco'
+    }
+
+    return {
+      ...def, leads, mql, sql, cpmql, cpsql, invest: Math.round(invest),
+      meta: atingPct !== null ? Math.round(atingPct) : 0,
+      status, sqlPerdido, valorTotal,
+      vendas, metaVenda, atingPct,
+    }
   })
 }
 
@@ -191,12 +217,13 @@ const moneyK = (n: number) => n >= 1000
 // ─── Shared local primitives ──────────────────────────────────────────────────
 function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 16, boxShadow: 'var(--shadow-sm)', padding: 20, ...style }}>
+    <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: 20, ...style }}>
       {children}
     </div>
   )
 }
 
+// Segmented iOS-style: trilho rebaixado (--r-fill), thumb com sombra de controle no ativo.
 function Segmented({ options, value, onChange, size = 'md' }: {
   options: { value: string; label: string }[]
   value: string
@@ -206,15 +233,16 @@ function Segmented({ options, value, onChange, size = 'md' }: {
   const pad = size === 'sm' ? '5px 12px' : '6px 14px'
   const fs  = size === 'sm' ? 12 : 13
   return (
-    <div style={{ display: 'inline-flex', background: 'var(--ws-surface)', border: '1px solid var(--ws-border-strong)', borderRadius: 999, padding: 3 }}>
+    <div style={{ display: 'inline-flex', background: 'var(--r-fill, rgba(51,3,45,0.055))', borderRadius: 999, padding: 3, gap: 2 }}>
       {options.map((o) => {
         const on = o.value === value
         return (
           <button key={o.value} onClick={() => onChange(o.value)}
-            style={{ border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: fs, padding: pad, borderRadius: 999,
-              background: on ? 'var(--brand-accent)' : 'transparent',
-              color: on ? 'var(--brand-accent-contrast)' : 'var(--ws-text-secondary)',
-              transition: 'all .15s ease', whiteSpace: 'nowrap' }}>
+            style={{ border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 500, fontSize: fs, padding: pad, borderRadius: 999,
+              background: on ? 'var(--r-seg-thumb, var(--brand-accent))' : 'transparent',
+              color: on ? 'var(--r-seg-thumb-text, var(--brand-accent-contrast))' : 'var(--ws-text-secondary)',
+              boxShadow: on ? 'var(--r-control, none)' : 'none',
+              transition: 'background 180ms var(--r-ease, ease), color 180ms var(--r-ease, ease)', whiteSpace: 'nowrap' }}>
             {o.label}
           </button>
         )
@@ -281,7 +309,7 @@ function StatusTable({ brands, selected, onSelect, periodLabel }: {
             <tr style={{ textAlign: 'left', color: 'var(--ws-text-secondary)', fontSize: 11.5, fontWeight: 500 }}>
               <th style={{ padding: '8px 20px', fontWeight: 500 }}>Marca</th>
               {cols.map((c) => <th key={c.k} style={{ padding: '8px 10px', fontWeight: 500, textAlign: 'right' }}>{c.h}</th>)}
-              <th style={{ padding: '8px 20px', fontWeight: 500, textAlign: 'right' }}>Atingimento</th>
+              <th style={{ padding: '8px 20px', fontWeight: 500, textAlign: 'right' }}>Vendas / Meta</th>
             </tr>
           </thead>
           <tbody>
@@ -306,7 +334,16 @@ function StatusTable({ brands, selected, onSelect, periodLabel }: {
                     </td>
                   ))}
                   <td style={{ padding: '13px 20px', textAlign: 'right' }}>
-                    <StatusPill status={b.status} value={b.meta + '%'} size="sm" />
+                    {b.metaVenda === null ? (
+                      <span style={{ color: 'var(--ws-text-secondary)', fontSize: 12, fontStyle: 'italic' }}>sem meta</span>
+                    ) : (
+                      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, fontSize: 13, color: 'var(--ws-text-primary)' }}>
+                          {b.vendas} / {b.metaVenda}
+                        </span>
+                        <StatusPill status={b.status} value={`${b.meta}%`} size="sm" />
+                      </div>
+                    )}
                   </td>
                 </tr>
               )

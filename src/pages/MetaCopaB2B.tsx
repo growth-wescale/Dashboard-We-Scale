@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
@@ -8,10 +8,10 @@ import { MARCAS, MARCA_COR } from '@/lib/types'
 import type { Marca } from '@/lib/types'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import {
-  COPA_DATA_INICIO, COPA_DIAS_MES, COPA_MES_LABEL,
-  COPA_CUSTO, COPA_SQL_TAXA_BASELINE,
-  COPA_VOLUME_MARCAS, COPA_VOLUME_META, COPA_LEADS_TREND,
-  COPA_BUDGET,
+  COPA_MESES,
+  COPA_MESES_ORDENADOS,
+  getMesCorrente,
+  type CopaMesConfig,
 } from '@/constants/copab2b'
 
 
@@ -52,8 +52,6 @@ const STC: Record<Status, string> = {
   risco:    'var(--status-risco)',
 }
 
-
-// Etapas que mapeiam para SQL (stage-based, independente de won/lost)
 
 const fmt = (n: number) => n.toLocaleString('pt-BR')
 const fmtR = (n: number) => `R$ ${fmt(Math.round(n))}`
@@ -158,46 +156,62 @@ const CARD = {
 export function MetaCopaB2B() {
   const [filterFonte, setFilterFonte] = useState('__all__')
 
-  const { diaAtual, dataFim, pctMes } = useMemo(() => {
-    const d = new Date()
-    const dia = d.getFullYear() === 2026 && d.getMonth() === 6 ? d.getDate() : 13
-    return { diaAtual: dia, dataFim: `2026-07-${String(dia).padStart(2, '0')}`, pctMes: dia / COPA_DIAS_MES }
+  // Mês selecionado (padrão = mês corrente)
+  const [mesKey, setMesKey] = useState<string>(() => getMesCorrente().key)
+  const mes: CopaMesConfig = COPA_MESES[mesKey] ?? getMesCorrente()
+
+  // "Agora" — recomputado a cada 5min para atualizar após meia-noite
+  const [now, setNow] = useState<Date>(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 5 * 60 * 1000)
+    return () => clearInterval(t)
   }, [])
 
-  const mediaJul     = useMediaData({ dataInicio: COPA_DATA_INICIO, dataFim })
-  const crmJulRaw    = useVendasFunil({ dataInicio: COPA_DATA_INICIO, dataFim })
-  const leadsJul     = useLeads({ dataInicio: COPA_DATA_INICIO, dataFim })
+  const { diaAtual, dataFimEfetivo, pctMes } = useMemo(() => {
+    if (mes.fechado) {
+      return { diaAtual: mes.diasMes, dataFimEfetivo: mes.dataFim, pctMes: 1 }
+    }
+    const isMesAtual =
+      now.getFullYear() === Number(mes.key.slice(0, 4)) &&
+      now.getMonth() + 1 === Number(mes.key.slice(5, 7))
+    const dia = isMesAtual ? Math.min(now.getDate(), mes.diasMes) : mes.diasMes
+    const dataFimEfetivo = `${mes.key}-${String(dia).padStart(2, '0')}`
+    return { diaAtual: dia, dataFimEfetivo, pctMes: dia / mes.diasMes }
+  }, [mes, now])
 
-  const loading = mediaJul.loading || crmJulRaw.loading || leadsJul.loading
-  const error   = mediaJul.error ?? crmJulRaw.error ?? leadsJul.error
+  const mediaMes  = useMediaData({ dataInicio: mes.dataInicio, dataFim: dataFimEfetivo })
+  const crmMesRaw = useVendasFunil({ dataInicio: mes.dataInicio, dataFim: dataFimEfetivo })
+  const leadsMes  = useLeads({ dataInicio: mes.dataInicio, dataFim: dataFimEfetivo })
 
-  const crmJulData = useMemo(() =>
-    filterFonte === '__all__' ? crmJulRaw.data : crmJulRaw.data.filter(r => mapFonte(r.fonte) === filterFonte),
-    [crmJulRaw.data, filterFonte])
+  const loading = mediaMes.loading || crmMesRaw.loading || leadsMes.loading
+  const error   = mediaMes.error ?? crmMesRaw.error ?? leadsMes.error
+
+  const crmMesData = useMemo(() =>
+    filterFonte === '__all__' ? crmMesRaw.data : crmMesRaw.data.filter(r => mapFonte(r.fonte) === filterFonte),
+    [crmMesRaw.data, filterFonte])
 
   // ── Computed per brand ─────────────────────────────────────────────────
   const stats = useMemo(() =>
     MARCAS.map(marca => {
       // CUSTO
-      const spendTotal  = mediaJul.data.filter(r => r.marca === marca).reduce((s, r) => s + r.spend_brl, 0)
-      const leadsM      = deduplicateLeads(leadsJul.data.filter(r => r.marca === marca))
+      const spendTotal  = mediaMes.data.filter(r => r.marca === marca).reduce((s, r) => s + r.spend_brl, 0)
+      const leadsM      = deduplicateLeads(leadsMes.data.filter(r => r.marca === marca))
       const mqlCount    = leadsM.filter(isLeadMql).length
       const cpmql       = mqlCount > 0 ? spendTotal / mqlCount : null
-      const { meta: custMeta, baseline: custBase } = COPA_CUSTO[marca]
+      const { meta: custMeta, baseline: custBase } = mes.custo[marca]
       const cSt         = custoStatus(cpmql, custMeta, custBase)
-      // barra de atingimento: progresso de baseline → meta (maior = melhor)
       const atingimentoPct = (cpmql !== null && custBase > custMeta)
         ? Math.min(100, Math.max(0, (custBase - cpmql) / (custBase - custMeta) * 100))
         : 0
-      const projMql = diaAtual > 0 ? Math.round((mqlCount / diaAtual) * COPA_DIAS_MES) : 0
+      const projMql = diaAtual > 0 ? Math.round((mqlCount / diaAtual) * mes.diasMes) : 0
 
       // QUALIDADE — taxa de conversão MQL → SQL
-      const sqlCount   = crmJulData.filter(r => r.marca === marca && inPeriod(r.data_sql, COPA_DATA_INICIO, dataFim)).length
-      const totalAtivo = crmJulData.filter(r =>
+      const sqlCount   = crmMesData.filter(r => r.marca === marca && inPeriod(r.data_sql, mes.dataInicio, dataFimEfetivo)).length
+      const totalAtivo = crmMesData.filter(r =>
         r.marca === marca && r.status_atual === 'Em andamento'
       ).length
       const taxaSql    = mqlCount > 0 ? (sqlCount / mqlCount) * 100 : null
-      const sqlBase    = COPA_SQL_TAXA_BASELINE[marca]
+      const sqlBase    = mes.sqlBaseline[marca]
       const hasQualBase = sqlBase > 0
       const qSt        = qualStatus(taxaSql, sqlBase)
       const qualBarPct = hasQualBase && taxaSql !== null
@@ -205,9 +219,9 @@ export function MetaCopaB2B() {
         : (taxaSql !== null ? Math.min(100, taxaSql * 2.5) : 0)
 
       // INVESTIMENTO
-      const spendGoogle = mediaJul.data.filter(r => r.marca === marca && r.canal === 'google').reduce((s, r) => s + r.spend_brl, 0)
-      const spendMeta   = mediaJul.data.filter(r => r.marca === marca && r.canal === 'meta').reduce((s, r) => s + r.spend_brl, 0)
-      const budget      = COPA_BUDGET[marca]
+      const spendGoogle = mediaMes.data.filter(r => r.marca === marca && r.canal === 'google').reduce((s, r) => s + r.spend_brl, 0)
+      const spendMeta   = mediaMes.data.filter(r => r.marca === marca && r.canal === 'meta').reduce((s, r) => s + r.spend_brl, 0)
+      const budget      = mes.budget[marca]
       const expG        = budget.google * pctMes
       const expM        = budget.meta   * pctMes
       const paceG       = expG > 0 ? spendGoogle / expG : null
@@ -222,18 +236,18 @@ export function MetaCopaB2B() {
         spendGoogle, spendMeta, budget, paceG, paceM, paceT, iSt,
       }
     }),
-    [mediaJul.data, crmJulData, leadsJul.data])
+    [mediaMes.data, crmMesData, leadsMes.data, mes, diaAtual, dataFimEfetivo, pctMes])
 
   const volumeStats = useMemo(() =>
-    COPA_VOLUME_MARCAS.map(marca => {
-      const mqlCount = deduplicateLeads(leadsJul.data.filter(r => r.marca === marca)).filter(isLeadMql).length
-      const meta     = COPA_VOLUME_META[marca]!
-      const proj     = diaAtual > 0 ? Math.round((mqlCount / diaAtual) * COPA_DIAS_MES) : 0
+    mes.volumeMarcas.map(marca => {
+      const mqlCount = deduplicateLeads(leadsMes.data.filter(r => r.marca === marca)).filter(isLeadMql).length
+      const meta     = mes.volumeMeta[marca]!
+      const proj     = diaAtual > 0 ? Math.round((mqlCount / diaAtual) * mes.diasMes) : 0
       const vSt      = volStatus(proj, meta)
-      const trend    = COPA_LEADS_TREND[marca] ?? []
+      const trend    = mes.leadsTrend[marca] ?? []
       return { marca, mqlCount, meta, proj, vSt, trend }
     }),
-    [leadsJul.data])
+    [leadsMes.data, mes, diaAtual])
 
   if (loading) {
     return (
@@ -261,17 +275,47 @@ export function MetaCopaB2B() {
               Acompanhamento Meta
             </h1>
             <p style={{ color: 'var(--ws-text-secondary)', fontSize: 13, marginTop: 3 }}>
-              {COPA_MES_LABEL} · Dia {diaAtual}/{COPA_DIAS_MES} · {Math.round(pctMes * 100)}% do mês decorrido
+              {mes.label} · Dia {diaAtual}/{mes.diasMes} · {Math.round(pctMes * 100)}% do mês
+              {mes.fechado && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>(fechado)</span>}
+              {!mes.fechado && <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--brand-accent)', fontWeight: 600 }}>· ao vivo (atualiza a cada 60s)</span>}
             </p>
           </div>
-          <select
-            value={filterFonte}
-            onChange={e => setFilterFonte(e.target.value)}
-            style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 20, fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none', alignSelf: 'center' }}
-          >
-            <option value="__all__">Todas as fontes</option>
-            {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
+          <div style={{ display: 'flex', gap: 10, alignSelf: 'center', flexWrap: 'wrap' }}>
+            {/* Toggle mês */}
+            <div style={{ display: 'flex', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', background: 'var(--ws-surface)', overflow: 'hidden' }}>
+              {COPA_MESES_ORDENADOS.map(m => {
+                const active = m.key === mesKey
+                return (
+                  <button
+                    key={m.key}
+                    onClick={() => setMesKey(m.key)}
+                    style={{
+                      appearance: 'none',
+                      padding: '7px 14px',
+                      border: 'none',
+                      background: active ? 'var(--brand-accent)' : 'transparent',
+                      color: active ? 'var(--brand-accent-contrast)' : 'var(--ws-text-secondary)',
+                      fontSize: 13,
+                      fontWeight: active ? 700 : 500,
+                      fontFamily: 'var(--font-body)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {m.label.replace(' 2026', '')}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Filtro fonte */}
+            <select
+              value={filterFonte}
+              onChange={e => setFilterFonte(e.target.value)}
+              style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none' }}
+            >
+              <option value="__all__">Todas as fontes</option>
+              {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -279,7 +323,7 @@ export function MetaCopaB2B() {
       <Section
         numero="1"
         titulo="CUSTO — CP-MQL"
-        descricao="Custo por MQL de julho ≤ baseline Jan–Jun × 0,85"
+        descricao={`Custo por MQL de ${mes.label} ≤ baseline × 0,85 (−15%)`}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 }}>
           {stats.map(b => (
@@ -314,7 +358,7 @@ export function MetaCopaB2B() {
       <Section
         numero="2"
         titulo="QUALIDADE — taxa MQL → SQL"
-        descricao="Conversão MQL→SQL no CRM jul/26 vs. baseline mai/26"
+        descricao="Conversão MQL→SQL no CRM vs. baseline mai/26"
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 }}>
           {stats.map(b => (
@@ -343,7 +387,7 @@ export function MetaCopaB2B() {
               <MiniBar pct={b.qualBarPct} status={b.qSt} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginTop: 2, marginBottom: 8 }}>
                 <span style={{ color: STC[b.qSt], fontWeight: 600 }}>
-                  {b.hasQualBase ? `${b.qualBarPct.toFixed(0)}% da base` : `${b.taxaSql !== null ? b.taxaSql.toFixed(1) : '0.0'}% taxa jul`}
+                  {b.hasQualBase ? `${b.qualBarPct.toFixed(0)}% da base` : `${b.taxaSql !== null ? b.taxaSql.toFixed(1) : '0.0'}% taxa`}
                 </span>
                 <span style={{ color: 'var(--ws-text-secondary)' }}>{b.sqlCount} SQLs</span>
               </div>
@@ -359,7 +403,7 @@ export function MetaCopaB2B() {
       <Section
         numero="3"
         titulo="VOLUME — MQL digital"
-        descricao="Lisô Laser ≥ 25 · Viva ≥ 35 · Oral Unic ≥ 65 MQLs em julho"
+        descricao={mes.volumeMarcas.map(m => `${m} ≥ ${mes.volumeMeta[m]}`).join(' · ') + ` MQLs em ${mes.label}`}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {volumeStats.map(v => {
@@ -376,12 +420,12 @@ export function MetaCopaB2B() {
                     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 36, color: 'var(--ws-text-primary)', lineHeight: 1 }}>
                       {v.mqlCount}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>MQLs jul/26</div>
+                    <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>MQLs {mes.label.toLowerCase()}</div>
                   </div>
                   <div style={{ paddingBottom: 4 }}>
                     <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>meta <strong style={{ color: 'var(--ws-text-primary)' }}>{v.meta}</strong></div>
                     <div style={{ fontSize: 12, color: STC[v.vSt], fontWeight: 700 }}>
-                      proj. {v.proj} até 31/jul
+                      proj. {v.proj} até fim
                     </div>
                   </div>
                 </div>
@@ -409,7 +453,7 @@ export function MetaCopaB2B() {
       <Section
         numero="4"
         titulo="INVESTIMENTO — pace de budget"
-        descricao={`Budget de mídia paga jul/26 · ${Math.round(pctMes * 100)}% do mês decorrido`}
+        descricao={`Budget de mídia paga ${mes.label} · ${Math.round(pctMes * 100)}% do mês${mes.budgetSplit ? '' : ' · budget unificado'}`}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
           {stats.map(b => {
@@ -427,33 +471,65 @@ export function MetaCopaB2B() {
                   <StatusPill status={b.iSt} value={b.paceT !== null ? `${Math.round(b.paceT * 100)}% ritmo` : '—'} size="sm" />
                 </div>
 
-                {/* Google */}
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                    <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 600 }}>Google</span>
-                    <span style={{ color: 'var(--ws-text-primary)' }}>
-                      {fmtR(b.spendGoogle)} <span style={{ color: 'var(--ws-text-secondary)' }}>/ {fmtR(b.budget.google)}</span>
-                    </span>
-                  </div>
-                  <MiniBar pct={pctG} status={gSt} />
-                  <div style={{ fontSize: 10, color: STC[gSt], fontWeight: 600, marginTop: 2 }}>
-                    {pctG.toFixed(0)}% do budget
-                  </div>
-                </div>
+                {mes.budgetSplit ? (
+                  <>
+                    {/* Google */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                        <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 600 }}>Google</span>
+                        <span style={{ color: 'var(--ws-text-primary)' }}>
+                          {fmtR(b.spendGoogle)} <span style={{ color: 'var(--ws-text-secondary)' }}>/ {fmtR(b.budget.google)}</span>
+                        </span>
+                      </div>
+                      <MiniBar pct={pctG} status={gSt} />
+                      <div style={{ fontSize: 10, color: STC[gSt], fontWeight: 600, marginTop: 2 }}>
+                        {pctG.toFixed(0)}% do budget
+                      </div>
+                    </div>
 
-                {/* Meta Ads */}
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                    <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 600 }}>Meta Ads</span>
-                    <span style={{ color: 'var(--ws-text-primary)' }}>
-                      {fmtR(b.spendMeta)} <span style={{ color: 'var(--ws-text-secondary)' }}>/ {fmtR(b.budget.meta)}</span>
-                    </span>
-                  </div>
-                  <MiniBar pct={pctM} status={mSt} />
-                  <div style={{ fontSize: 10, color: STC[mSt], fontWeight: 600, marginTop: 2 }}>
-                    {pctM.toFixed(0)}% do budget
-                  </div>
-                </div>
+                    {/* Meta Ads */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                        <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 600 }}>Meta Ads</span>
+                        <span style={{ color: 'var(--ws-text-primary)' }}>
+                          {fmtR(b.spendMeta)} <span style={{ color: 'var(--ws-text-secondary)' }}>/ {fmtR(b.budget.meta)}</span>
+                        </span>
+                      </div>
+                      <MiniBar pct={pctM} status={mSt} />
+                      <div style={{ fontSize: 10, color: STC[mSt], fontWeight: 600, marginTop: 2 }}>
+                        {pctM.toFixed(0)}% do budget
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Barra única — pace total */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                        <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 600 }}>Budget total</span>
+                        <span style={{ color: 'var(--ws-text-primary)' }}>
+                          {fmtR(b.spendTotal)} <span style={{ color: 'var(--ws-text-secondary)' }}>/ {fmtR(budgetTot)}</span>
+                        </span>
+                      </div>
+                      <MiniBar pct={pctTot} status={b.iSt} goalPct={pctMes * 100} />
+                      <div style={{ fontSize: 10, color: STC[b.iSt], fontWeight: 600, marginTop: 2 }}>
+                        {pctTot.toFixed(0)}% do budget · linha branca = meta do mês
+                      </div>
+                    </div>
+
+                    {/* Split informativo (só realizado) */}
+                    <div style={{ display: 'flex', gap: 12, fontSize: 11, marginBottom: 10, padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: 'var(--ws-text-secondary)', fontSize: 10 }}>Google (realizado)</div>
+                        <div style={{ color: 'var(--ws-text-primary)', fontWeight: 600 }}>{fmtR(b.spendGoogle)}</div>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: 'var(--ws-text-secondary)', fontSize: 10 }}>Meta Ads (realizado)</div>
+                        <div style={{ color: 'var(--ws-text-primary)', fontWeight: 600 }}>{fmtR(b.spendMeta)}</div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Total */}
                 <div style={{

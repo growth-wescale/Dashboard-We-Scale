@@ -717,23 +717,26 @@ function InpSubTabs({ value, onChange, accent }: { value: InpSubView; onChange: 
 }
 
 // ── SimpleTable ───────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface Col { k: string; h: string; num?: boolean; fmt?: (v: any) => string; render?: (r: any) => ReactNode }
 
-function SimpleTable({ columns, rows, keyField }: { columns:Col[]; rows:any[]; keyField:string }) {
-  const [sort, setSort] = useState({ k: columns.find((c)=>c.num)?.k || columns[0].k, dir:-1 })
-  const sorted = [...rows].sort((a,b) => {
-    const va=a[sort.k], vb=b[sort.k]
-    if (typeof va==='number') return (va-vb)*sort.dir
-    return String(va).localeCompare(String(vb))*sort.dir
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function SimpleTable({ columns, rows, keyField }: { columns: Col[]; rows: any[]; keyField: string }) {
+  const [sort, setSort] = useState({ k: columns.find(c => c.num)?.k || columns[0].k, dir: -1 })
+  const sorted = [...rows].sort((a, b) => {
+    const va = a[sort.k], vb = b[sort.k]
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sort.dir
+    return String(va).localeCompare(String(vb)) * sort.dir
   })
   const sortCol = columns.find(c => c.k === sort.k)
   const isNumSorted = !!(sortCol?.num && sorted.length > 0 && typeof sorted[0]?.[sort.k] === 'number')
-  const vals = isNumSorted ? sorted.map(r => r[sort.k] as number) : []
+  const vals = isNumSorted ? sorted.map(r => Number(r[sort.k] ?? 0)) : []
   const vMax = vals.length ? Math.max(...vals) : 1
   const vMin = vals.length ? Math.min(...vals) : 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rowHeat = (r: any) => {
     if (!isNumSorted || vMax === vMin) return 0
-    const t = (r[sort.k] as number - vMin) / (vMax - vMin)
+    const t = (Number(r[sort.k] ?? 0) - vMin) / (vMax - vMin)
     return sort.dir === -1 ? t : 1 - t
   }
   return (

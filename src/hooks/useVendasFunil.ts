@@ -66,6 +66,8 @@ async function fetchVendasRows(filters: Filters): Promise<{ rows: VwMarketingFun
     } else {
       q = q.in('funil', ['SDR', 'Closer', 'Prospecção Ativa', 'Odonto Scale'])
       if (filters.marca) q = q.eq('marca', filters.marca)
+      // No consolidado, ignora deals sem marca (67 nulls + 12 vazios detectados na auditoria)
+      else q = q.not('marca', 'is', null).neq('marca', '')
     }
     // Excluir deals de teste (nome_negociacao contendo 'teste' — filtro client-side sem tocar na base)
     q = q.or('nome_negociacao.is.null,nome_negociacao.not.ilike.%teste%')

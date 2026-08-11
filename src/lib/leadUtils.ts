@@ -10,6 +10,11 @@ export function isLeadMql(r: { dados_extras: Record<string, unknown> | null }): 
 export function deduplicateLeads(leads: Lead[]): Lead[] {
   const seen = new Set<string>()
   return leads.filter(r => {
+    // Leads marcados como participantes de evento (dados_extras.evento preenchido)
+    // burlam o dedupe — mesmo email/telefone deve contar de novo como interação nova.
+    const evento = r.dados_extras?.['evento']
+    if (typeof evento === 'string' && evento.trim() !== '') return true
+
     const key = (r.email && r.email !== '') ? r.email
       : (r.telefone && r.telefone !== '') ? r.telefone
       : null

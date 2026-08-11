@@ -18,20 +18,23 @@ import { SLUG_TO_MARCA, monthLabel } from '@/lib/dateUtils'
 import { getCreativeAsset } from '@/lib/creativeAssets'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
+import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
+import { isMediaLegacy, isMediaOdontoLegacy, isMediaFranquia, isPausedStrategy } from '@/lib/oralUnicMapping'
+import { isMediaEventoInpot, isMediaFranquiaInpot, isLeadEventoInpot, isCrmEventoInpot } from '@/lib/inpotMapping'
+import { EsteiraOralUnic } from '@/pages/EsteiraOralUnic'
 
 // ── Oral Unic frentes ────────────────────────────────────────────────────────
-type OuSubView = 'geral' | 'franquia' | 'iscas' | 'odonto_scale' | 'compra_direta'
-
-const OU_ISCAS_FORMS = ['oralunic_diagnostico', 'oralunic_planilha_processos', 'oralunic_guia_vazamento', 'oralunic_newsletter']
-
-const OU_ISCAS_LABELS: Record<string, string> = {
-  'oralunic_diagnostico':        'Diagnóstico',
-  'oralunic_planilha_processos': 'Planilha de Processos',
-  'oralunic_guia_vazamento':     'Guia de Vazamento',
-  'oralunic_newsletter':         'Newsletter',
+type OuSubView = 'geral' | 'franquia' | 'legacy' | 'odonto_legacy' | 'esteira'
+type InpSubView = 'geral' | 'franquia' | 'evento'
+function pausedStrategyLabel(campanha: string | null, conjunto: string | null): string {
+  const c = (campanha ?? '').toUpperCase()
+  const s = (conjunto ?? '').toUpperCase().trim()
+  if (c.includes('COMPRA DIRETA') || c.includes('HOTMART')) return 'Compra Direta (Hotmart)'
+  if (c.includes('[LEGACY]') && s.startsWith('ISCA')) return 'Iscas de conteúdo'
+  return 'Descontinuada'
 }
 
 // ── Brand definitions (static info only) ─────────────────────────────────────
@@ -647,10 +650,11 @@ const SM_TABS = [
 
 const CH_COLORS = ['var(--brand-accent)','var(--brand-accent-2)','var(--status-atencao)','color-mix(in srgb, var(--brand-dark) 52%, var(--ws-border-strong))']
 
-function SMTabs({ value, onChange }: { value:string; onChange:(k:string)=>void }) {
+function SMTabs({ value, onChange, hide }: { value:string; onChange:(k:string)=>void; hide?: string[] }) {
+  const tabs = hide?.length ? SM_TABS.filter(t => !hide.includes(t.key)) : SM_TABS
   return (
     <div style={{ display:'flex', gap:4, borderBottom:'1px solid var(--ws-border)', marginBottom:24, overflowX:'auto' }}>
-      {SM_TABS.map((t) => {
+      {tabs.map((t) => {
         const on=t.key===value
         return <button key={t.key} onClick={()=>onChange(t.key)} style={{ border:'none', background:'transparent', cursor:'pointer', fontFamily:'var(--font-body)', fontWeight:600, fontSize:14, padding:'10px 16px', color:on?'var(--brand-accent)':'var(--ws-text-secondary)', whiteSpace:'nowrap', borderBottom:`2.5px solid ${on?'var(--brand-accent)':'transparent'}`, marginBottom:-1 }}>{t.label}</button>
       })}
@@ -661,9 +665,15 @@ function SMTabs({ value, onChange }: { value:string; onChange:(k:string)=>void }
 const OU_SUB_TABS: { key: OuSubView; label: string }[] = [
   { key: 'geral',         label: 'Visão Geral' },
   { key: 'franquia',      label: 'Franquia' },
-  { key: 'iscas',         label: 'Iscas' },
-  { key: 'odonto_scale',  label: 'Odonto Scale' },
-  { key: 'compra_direta', label: 'Compra Direta' },
+  { key: 'legacy',        label: 'Comunidade' },
+  { key: 'odonto_legacy', label: 'Odonto Legacy' },
+  { key: 'esteira',       label: 'Esteira' },
+]
+
+const INP_SUB_TABS: { key: InpSubView; label: string }[] = [
+  { key: 'geral',    label: 'Visão Geral' },
+  { key: 'franquia', label: 'Franquia' },
+  { key: 'evento',   label: 'Evento' },
 ]
 
 function OuSubTabs({ value, onChange, accent }: { value: OuSubView; onChange: (k: OuSubView) => void; accent: string }) {
@@ -671,6 +681,26 @@ function OuSubTabs({ value, onChange, accent }: { value: OuSubView; onChange: (k
     <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '8px 14px', background: `color-mix(in srgb, ${accent} 7%, var(--ws-surface))`, border: `1px solid color-mix(in srgb, ${accent} 22%, var(--ws-border))`, borderRadius: 12, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ fontSize: 11.5, color: accent, fontWeight: 700, letterSpacing: '0.06em', marginRight: 4, whiteSpace: 'nowrap' }}>FRENTE</span>
       {OU_SUB_TABS.map(t => {
+        const on = t.key === value
+        return (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            style={{ border: on ? `1px solid ${accent}` : '1px solid transparent', borderRadius: 999, padding: '5px 14px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 12.5, background: on ? accent : 'transparent', color: on ? '#fff' : 'var(--ws-text-secondary)', transition: 'background 0.15s, color 0.15s', whiteSpace: 'nowrap' }}
+          >
+            {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function InpSubTabs({ value, onChange, accent }: { value: InpSubView; onChange: (k: InpSubView) => void; accent: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '8px 14px', background: `color-mix(in srgb, ${accent} 7%, var(--ws-surface))`, border: `1px solid color-mix(in srgb, ${accent} 22%, var(--ws-border))`, borderRadius: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11.5, color: accent, fontWeight: 700, letterSpacing: '0.06em', marginRight: 4, whiteSpace: 'nowrap' }}>FRENTE</span>
+      {INP_SUB_TABS.map(t => {
         const on = t.key === value
         return (
           <button
@@ -1747,7 +1777,8 @@ function DeltaChip({ delta, label, invert = false }: { delta: number | null; lab
   )
 }
 
-function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFunnel, onMqlClick, mqlLeads, crmData, crmAllData, di, df }: { b: BrandData; bCompare: BrandData | null; compareLabel: string; compareEnabled: boolean; channels: ReturnType<typeof buildChannels>; acqFunnel: ReturnType<typeof buildAcqFunnel>; onMqlClick?: () => void; mqlLeads: Lead[]; crmData: VwMarketingFunil[]; crmAllData: VwMarketingFunil[]; di: string; df: string }) {
+interface PausedData { rows: MediaDailyRaw[]; spend: number; impr: number; clicks: number; campanhas: string[] }
+function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFunnel, onMqlClick, mqlLeads, crmData, crmAllData, di, df, mediaData, leadsData, pausedData }: { b: BrandData; bCompare: BrandData | null; compareLabel: string; compareEnabled: boolean; channels: ReturnType<typeof buildChannels>; acqFunnel: ReturnType<typeof buildAcqFunnel>; onMqlClick?: () => void; mqlLeads: Lead[]; crmData: VwMarketingFunil[]; crmAllData: VwMarketingFunil[]; di: string; df: string; mediaData: MediaDailyRaw[]; leadsData: Lead[]; pausedData?: PausedData }) {
   const [channelDrawer, setChannelDrawer] = useState<{ open: boolean; leads: Lead[] }>({ open: false, leads: [] })
   const funnelData=acqFunnel.stages.map((s)=>({ ...s, fmt:fmtK }))
   const losses = useMemo(() => computeFunnelLosses(crmData, di, df), [crmData, di, df])
@@ -1817,6 +1848,39 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
         <MetricCard style={{ '--fs-metric':'26px' } as any} label="Conv. MQL→SQL" value={b.mql > 0 ? Math.round(b.sql / b.mql * 100) : 0} unit="%" accent={false} delta={compareEnabled ? dConv : null} deltaLabel={compareEnabled ? deltaLbl : undefined} />
       </div>
 
+      {pausedData && pausedData.spend > 0 && (
+        <div style={{ marginBottom:24, padding:'14px 18px', background:'color-mix(in srgb, var(--status-atencao) 8%, var(--ws-surface))', border:'1px dashed color-mix(in srgb, var(--status-atencao) 40%, var(--ws-border))', borderRadius:12 }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:14, flexWrap:'wrap' }}>
+            <div style={{ fontSize:22 }}>⏸️</div>
+            <div style={{ flex:1, minWidth:220 }}>
+              <div style={{ fontFamily:'var(--font-display)', fontSize:15, fontWeight:600, color:'var(--ws-text-primary)' }}>
+                Estratégias descontinuadas
+              </div>
+              <div style={{ fontSize:12.5, color:'var(--ws-text-secondary)', marginTop:2 }}>
+                Gasto residual de campanhas pausadas no período — não somado nas frentes ativas
+              </div>
+              <div style={{ marginTop:6, fontSize:12, color:'var(--ws-text-secondary)' }}>
+                {pausedData.campanhas.join(' · ')}
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:20, flexWrap:'wrap' }}>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:11, color:'var(--ws-text-secondary)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Gasto</div>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:20, fontVariantNumeric:'tabular-nums', color:'var(--ws-text-primary)' }}>{money(pausedData.spend)}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:11, color:'var(--ws-text-secondary)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Impressões</div>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:500, fontSize:16, fontVariantNumeric:'tabular-nums', color:'var(--ws-text-secondary)' }}>{fmtK(pausedData.impr)}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:11, color:'var(--ws-text-secondary)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Cliques</div>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:500, fontSize:16, fontVariantNumeric:'tabular-nums', color:'var(--ws-text-secondary)' }}>{fmt(pausedData.clicks)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, marginBottom:24 }}>
         <SCard>
           <CardTitle title="Funil de aquisição" sub="Do clique em mídia ao lead qualificado" />
@@ -1871,413 +1935,17 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
       </div>
 
       <ChannelShare channels={channels} onMqlClick={handleChannelMqlClick} />
-      <MqlDrawer open={channelDrawer.open} onClose={() => setChannelDrawer(d => ({ ...d, open: false }))} leads={channelDrawer.leads} />
-    </div>
-  )
-}
 
-// ── OuIscasView ───────────────────────────────────────────────────────────────
-function OuIscasView({ allLeads, mediaData, accent }: { allLeads: Lead[]; mediaData: MediaDailyRaw[]; accent: string }) {
-  const iscaLeads = useMemo(() => deduplicateLeads(allLeads).filter(l => OU_ISCAS_FORMS.includes(l.formulario ?? '')), [allLeads])
-  const legacyMedia = useMemo(() => mediaData.filter(r => (r.campanha ?? '').toUpperCase().includes('LEGACY')), [mediaData])
-
-  const byType = OU_ISCAS_FORMS.map(form => ({
-    form,
-    label: OU_ISCAS_LABELS[form] ?? form,
-    count: iscaLeads.filter(l => l.formulario === form).length,
-  }))
-  const total = byType.reduce((s, t) => s + t.count, 0)
-  const legacySpend = legacyMedia.reduce((s, r) => s + r.spend_brl, 0)
-  const legacyLeads = legacyMedia.reduce((s, r) => s + r.leads, 0)
-  const maxCount = Math.max(1, ...byType.map(t => t.count))
-
-  const emptyLeads = total === 0
-  const emptyMedia = legacyMedia.length === 0
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-        {/* Leads por tipo de isca */}
-        <SCard>
-          <CardTitle title="Volume por tipo de isca" sub="Leads captados no período por lead magnet" />
-          {emptyLeads ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', gap: 10, textAlign: 'center' }}>
-              <div style={{ fontSize: 36 }}>🧲</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)' }}>Nenhum lead de isca ainda</div>
-              <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', lineHeight: 1.6, maxWidth: 340 }}>
-                Os workflows de captação estão ativos. Os primeiros leads aparecerão aqui conforme chegarem.
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {byType.map(t => {
-                const pct = maxCount > 0 ? (t.count / maxCount) * 100 : 0
-                const share = total > 0 ? ((t.count / total) * 100).toFixed(0) : '0'
-                return (
-                  <div key={t.form}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
-                      <span style={{ fontWeight: 500 }}>{t.label}</span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>
-                        <b style={{ color: 'var(--ws-text-primary)' }}>{t.count}</b> leads · {share}%
-                      </span>
-                    </div>
-                    <div style={{ height: 28, background: 'var(--ws-bg)', borderRadius: 7, overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.max(pct, t.count > 0 ? 4 : 0)}%`, height: '100%', background: accent, borderRadius: 7, opacity: 0.72, transition: 'width 0.3s' }} />
-                    </div>
-                  </div>
-                )
-              })}
-              <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--ws-border)', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-                Total: <b style={{ color: 'var(--ws-text-primary)' }}>{total} leads</b> de iscas no período
-              </div>
-            </div>
-          )}
-        </SCard>
-
-        {/* Verba LEGACY */}
-        <SCard>
-          <CardTitle title="Investimento em iscas" sub="Campanhas LEGACY-CAPTAÇÃO no período" />
-          {emptyMedia ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', gap: 10, textAlign: 'center' }}>
-              <div style={{ fontSize: 36 }}>📊</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)' }}>Sem verba de iscas no período</div>
-              <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', lineHeight: 1.6, maxWidth: 340 }}>
-                Nenhuma campanha com "[LEGACY]" encontrada nos dados de mídia do período selecionado.
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ background: `color-mix(in srgb, ${accent} 8%, var(--ws-surface))`, border: `1px solid color-mix(in srgb, ${accent} 22%, var(--ws-border))`, borderRadius: 12, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Investimento</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, marginTop: 4 }}>{money(legacySpend)}</div>
-                </div>
-                <div style={{ background: `color-mix(in srgb, ${accent} 8%, var(--ws-surface))`, border: `1px solid color-mix(in srgb, ${accent} 22%, var(--ws-border))`, borderRadius: 12, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Leads (mídia)</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, marginTop: 4 }}>{fmt(legacyLeads)}</div>
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 8, fontWeight: 500 }}>Campanhas LEGACY ativas</div>
-                {Array.from(new Set(legacyMedia.map(r => r.campanha ?? '(sem campanha)'))).map(name => {
-                  const rows = legacyMedia.filter(r => (r.campanha ?? '(sem campanha)') === name)
-                  const spend = rows.reduce((s, r) => s + r.spend_brl, 0)
-                  return (
-                    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--ws-border)', fontSize: 12.5 }}>
-                      <span style={{ color: 'var(--ws-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '65%' }} title={name}>{name}</span>
-                      <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{money(spend)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </SCard>
-      </div>
-
-      {/* Summary KPI strip */}
-      {!emptyLeads && (
-        <SCard>
-          <CardTitle title="Resumo das iscas" sub="Performance agregada de lead magnets" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            <KTile label="Total de leads" value={fmt(total)} />
-            <KTile label="Investimento LEGACY" value={legacySpend > 0 ? money(legacySpend) : '—'} />
-            <KTile label="CP-Lead (iscas)" value={total > 0 && legacySpend > 0 ? money(legacySpend / total) : '—'} />
-            <KTile label="Isca principal" value={byType.reduce((a, b) => b.count > a.count ? b : a, byType[0])?.label ?? '—'} />
-          </div>
-        </SCard>
-      )}
-    </div>
-  )
-}
-
-// ── OuOdontoScaleView ─────────────────────────────────────────────────────────
-const OS_CAPITAL_ORDER = [
-  'Até R$ 30 mil',
-  'R$ 30 mil a R$ 80 mil',
-  'R$ 80 mil a R$ 200 mil',
-  'Acima de R$ 200 mil',
-]
-const OS_ROLE_ORDER = [
-  'Sou dono(a) e atendo',
-  'Sou dono(a), não atendo',
-  'Gestor(a)',
-  'Sócio(a) administrador',
-]
-
-function OuOdontoScaleView({ dataInicio, dataFim, accent }: {
-  dataInicio: string; dataFim: string; accent: string
-}) {
-  const { data: crmCur, loading: crmLoading } = useVendasFunil({ marca: 'Odonto Scale', dataInicio, dataFim })
-  const { data: crmAll } = useVendasFunil({ marca: 'Odonto Scale' })
-  const { data: mediaRows, loading: mediaLoading } = useMediaData({ marca: 'Odonto Scale', dataInicio, dataFim })
-  const { data: osLeadsRaw } = useLeads({ marca: 'Odonto Scale', dataInicio, dataFim })
-  const [investHovered, setInvestHovered] = useState(false)
-  const investRef = useRef<HTMLDivElement>(null)
-
-  const odontoLeads   = useMemo(() => deduplicateLeads(osLeadsRaw), [osLeadsRaw])
-  const activeCur     = useMemo(() => crmCur.filter(r => r.status_atual !== 'Excluído'), [crmCur])
-  const ganhosCur     = activeCur.filter(r => r.status_atual === 'Ganho').length
-  const perdidosCur   = activeCur.filter(r => r.status_atual === 'Perdido').length
-  const valorFechado  = activeCur.filter(r => r.status_atual === 'Ganho').reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
-  const pipelineAberto = useMemo(() => crmAll.filter(r => r.status_atual === 'Em andamento').length, [crmAll])
-
-  const totalLeads    = odontoLeads.length
-  const mqlLeadsCount = odontoLeads.filter(isLeadMql).length
-
-  // Media split by canal
-  const metaSpend        = mediaRows.filter(r => r.canal === 'meta').reduce((s, r) => s + (r.spend_brl ?? 0), 0)
-  const googleSpend      = mediaRows.filter(r => r.canal === 'google').reduce((s, r) => s + (r.spend_brl ?? 0), 0)
-  const mediaSpend       = metaSpend + googleSpend
-  const mediaImpressions = mediaRows.reduce((s, r) => s + (r.impressoes ?? 0), 0)
-  const mediaClicks      = mediaRows.reduce((s, r) => s + (r.cliques_link ?? 0), 0)
-  const mediaLpv         = mediaRows.reduce((s, r) => s + (r.lpv ?? 0), 0)
-
-  const funnelDiag = activeCur.filter(r => inPeriod(r.data_diagnostico, dataInicio, dataFim)).length
-  const funnelSal  = activeCur.filter(r => inPeriod(r.data_sal, dataInicio, dataFim)).length
-  const funnelFech = activeCur.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, dataInicio, dataFim)).length
-
-  // Breakdowns from dados_extras
-  const byCapital = OS_CAPITAL_ORDER.map(label => ({
-    label,
-    count: odontoLeads.filter(l => (l.dados_extras?.capital_disponivel as string | undefined) === label).length,
-  }))
-  const byRole = OS_ROLE_ORDER.map(label => ({
-    label,
-    count: odontoLeads.filter(l => (l.dados_extras?.papel as string | undefined) === label).length,
-  }))
-  const bySource = [
-    { label: 'Meta Ads',   count: odontoLeads.filter(l => ['facebook','instagram','fb'].some(s => (l.utm_source ?? '').toLowerCase().includes(s))).length },
-    { label: 'Google Ads', count: odontoLeads.filter(l => ['google','adwords'].some(s => (l.utm_source ?? '').toLowerCase().includes(s))).length },
-  ]
-
-  // Campaign breakdown
-  const byCampaign = useMemo(() => {
-    const map = new Map<string, { spend: number; impressoes: number; cliques: number; leads: number }>()
-    for (const r of mediaRows) {
-      const key = r.campanha ?? '(sem campanha)'
-      const cur = map.get(key) ?? { spend: 0, impressoes: 0, cliques: 0, leads: 0 }
-      cur.spend      += r.spend_brl ?? 0
-      cur.impressoes += r.impressoes ?? 0
-      cur.cliques    += r.cliques_link ?? 0
-      cur.leads      += r.leads ?? 0
-      map.set(key, cur)
-    }
-    return [...map.entries()]
-      .map(([campanha, v]) => ({ campanha, ...v, cpl: v.leads > 0 ? v.spend / v.leads : 0 }))
-      .sort((a, b) => b.spend - a.spend)
-  }, [mediaRows])
-
-  const fmtBRL = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-
-  const loading = crmLoading || mediaLoading
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, opacity: loading ? 0.7 : 1, transition: 'opacity .2s' }}>
-
-      {/* ── KPI strip unificado ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr 1fr', gap: 14 }}>
-        {/* Investimento com tooltip de canal */}
-        <div
-          ref={investRef}
-          style={{ position: 'relative', background: `color-mix(in srgb, ${accent} 6%, var(--ws-surface))`, border: `1px solid color-mix(in srgb, ${accent} 20%, var(--ws-border))`, borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--shadow-sm)', cursor: 'default' }}
-          onMouseEnter={() => setInvestHovered(true)}
-          onMouseLeave={() => setInvestHovered(false)}
-        >
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Investimento</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: accent }}>{fmtBRL(mediaSpend)}</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>Meta + Google · hover</div>
-          {investHovered && (
-            <div style={{
-              position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 30,
-              background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
-              borderRadius: 10, padding: '10px 14px', boxShadow: '0 4px 20px rgba(0,0,0,.25)',
-              minWidth: 180, pointerEvents: 'none',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ws-text-secondary)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Por canal</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 13 }}>
-                  <span style={{ color: '#1877F2', fontWeight: 600 }}>Meta Ads</span>
-                  <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(metaSpend)}</b>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, fontSize: 13 }}>
-                  <span style={{ color: '#EA4335', fontWeight: 600 }}>Google Ads</span>
-                  <b style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtBRL(googleSpend)}</b>
-                </div>
-                {mediaSpend > 0 && (
-                  <div style={{ marginTop: 4, paddingTop: 6, borderTop: '1px solid var(--ws-border)', display: 'flex', gap: 4, flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${(metaSpend / mediaSpend) * 100}%`, background: '#1877F2' }} />
-                      <div style={{ flex: 1, background: '#EA4335' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ws-text-secondary)' }}>
-                      <span>{Math.round((metaSpend / mediaSpend) * 100)}% Meta</span>
-                      <span>{Math.round((googleSpend / mediaSpend) * 100)}% Google</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Leads do formulário */}
-        <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Leads</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{totalLeads}</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>{totalLeads > 0 && mediaSpend > 0 ? fmtBRL(mediaSpend / totalLeads) + ' CPL' : '—'}</div>
-        </div>
-        {/* Pipeline aberto */}
-        <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Pipeline aberto</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{pipelineAberto}</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>todos os deals ativos hoje</div>
-        </div>
-        {/* Entradas no período */}
-        <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Entradas</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{activeCur.length}</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>deals criados no período</div>
-        </div>
-        {/* Ganhos */}
-        <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Ganhos</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: ganhosCur > 0 ? 'var(--status-positivo)' : undefined }}>{ganhosCur}</div>
-          <div style={{ fontSize: 11, color: 'var(--status-positivo)', marginTop: 2 }}>{valorFechado > 0 ? fmtBRL(valorFechado) : <span style={{ color: 'var(--ws-text-secondary)' }}>—</span>}</div>
-        </div>
-        {/* Perdidos */}
-        <div style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 12, padding: '14px 16px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Perdidos</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 26, marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{perdidosCur}</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>{activeCur.length > 0 ? Math.round(perdidosCur / activeCur.length * 100) : 0}% das entradas</div>
-        </div>
-      </div>
-
-      {/* ── Funil completo + aging ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 24 }}>
-        <SCard>
-          <CardTitle title="Funil de aquisição" sub="Do clique em mídia ao fechamento" />
-          <MiniFunnel stages={[
-            { label: 'Impressões',  value: mediaImpressions },
-            { label: 'Cliques',     value: mediaClicks },
-            ...(mediaLpv > 0 ? [{ label: 'LPV', value: mediaLpv }] : []),
-            { label: 'Leads',       value: totalLeads },
-            { label: 'MQL',         value: mqlLeadsCount },
-            { label: 'Diagnóstico', value: funnelDiag },
-            { label: 'SAL',         value: funnelSal },
-            { label: 'Fechado',     value: funnelFech },
-          ]} />
-        </SCard>
-
-        <SCard>
-          <CardTitle title="Aging" sub="Deals abertos por etapa" />
-          <BubbleMatrix crmData={crmCur} crmAllData={crmAll} />
-        </SCard>
-      </div>
-
-      {/* ── Leads breakdown ── */}
-      <SCard>
-          <CardTitle title="Leads — Odonto Scale" sub="Perfil por capital disponível e papel" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Capital disponível</div>
-              {byCapital.map(t => {
-                const maxC = Math.max(1, ...byCapital.map(x => x.count))
-                return (
-                  <div key={t.label} style={{ marginBottom: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 2 }}>
-                      <span style={{ color: 'var(--ws-text-secondary)' }}>{t.label}</span>
-                      <b style={{ color: 'var(--ws-text-primary)' }}>{t.count}</b>
-                    </div>
-                    <div style={{ height: 18, background: 'var(--ws-bg)', borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{ width: `${(t.count / maxC) * 100}%`, height: '100%', background: accent, opacity: 0.65, borderRadius: 4 }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Papel</div>
-              {byRole.filter(t => t.count > 0).length > 0
-                ? byRole.filter(t => t.count > 0).map(t => (
-                    <div key={t.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid var(--ws-border)', fontSize: 12.5 }}>
-                      <span style={{ color: 'var(--ws-text-secondary)' }}>{t.label}</span>
-                      <b>{t.count}</b>
-                    </div>
-                  ))
-                : <div style={{ fontSize: 12.5, color: 'var(--ws-text-secondary)' }}>Sem dados no período.</div>
-              }
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {bySource.map(s => (
-                <div key={s.label} style={{ flex: 1, background: 'var(--ws-bg)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{s.count}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+      <SCard style={{ marginTop:24 }}>
+        <CardTitle
+          title="Evolução temporal"
+          sub="Compare até 7 métricas de mídia e funil ao longo do tempo"
+        />
+        <MetricSeriesChart media={mediaData} leads={leadsData} />
       </SCard>
 
-      {/* ── Campaign table ── */}
-      {byCampaign.length > 0 && (
-        <SCard>
-          <CardTitle title="Campanhas — Odonto Scale" sub="Consolidado por campanha no período" />
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--ws-border)' }}>
-                  {['Campanha', 'Investimento', 'Impressões', 'Cliques', 'Leads', 'CPL'].map(h => (
-                    <th key={h} style={{ textAlign: h === 'Campanha' ? 'left' : 'right', padding: '6px 10px', fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {byCampaign.map((row, i) => (
-                  <tr key={row.campanha} style={{ borderTop: i > 0 ? '1px solid var(--ws-border)' : undefined }}>
-                    <td style={{ padding: '7px 10px', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.campanha}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>R$ {row.spend.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.impressoes.toLocaleString('pt-BR')}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.cliques.toLocaleString('pt-BR')}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{row.leads}</td>
-                    <td style={{ padding: '7px 10px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: row.cpl > 0 ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)' }}>{row.cpl > 0 ? `R$ ${row.cpl.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SCard>
-      )}
+      <MqlDrawer open={channelDrawer.open} onClose={() => setChannelDrawer(d => ({ ...d, open: false }))} leads={channelDrawer.leads} />
     </div>
-  )
-}
-
-// ── OuCompraDiretaView ────────────────────────────────────────────────────────
-function OuCompraDiretaView({ accent }: { accent: string }) {
-  return (
-    <SCard>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center', gap: 14 }}>
-        <div style={{ width: 72, height: 72, borderRadius: '50%', background: `color-mix(in srgb, ${accent} 12%, var(--ws-bg))`, border: `1px solid color-mix(in srgb, ${accent} 30%, var(--ws-border))`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>
-          🛒
-        </div>
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: 'var(--ws-text-primary)', marginBottom: 8 }}>
-            Compra Direta — Hotmart
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', lineHeight: 1.7, maxWidth: 480 }}>
-            O workflow de sincronização de vendas Hotmart está ativo no n8n da We Scale, mas ainda não há dados registrados.
-            Assim que as primeiras vendas forem processadas, as métricas de receita, ticket médio e volume de compras aparecerão aqui.
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
-          {['Receita total', 'Vendas', 'Ticket médio', 'Taxa de reembolso'].map(label => (
-            <div key={label} style={{ background: 'var(--ws-bg)', border: '1px solid var(--ws-border)', borderRadius: 10, padding: '12px 18px', fontSize: 12.5, color: 'var(--ws-text-secondary)', minWidth: 110, textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ws-text-primary)', marginBottom: 4 }}>—</div>
-              <div>{label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </SCard>
   )
 }
 
@@ -2288,11 +1956,13 @@ export function SaudeDaMarca() {
   const [range, setRange] = useState(makeMtd)
   const [filterFonte, setFilterFonte] = useState('__all__')
   const [ouSubView, setOuSubView] = useState<OuSubView>('geral')
+  const [inpSubView, setInpSubView] = useState<InpSubView>('geral')
 
   const isOralUnic = activeBrand === 'oral-unic'
+  const isInpot    = activeBrand === 'inpot'
 
   // Reset sub-view when brand changes
-  useEffect(() => { setOuSubView('geral') }, [activeBrand])
+  useEffect(() => { setOuSubView('geral'); setInpSubView('geral') }, [activeBrand])
 
   const [compareState, setCompareState] = useState<{ enabled: boolean; compareRange: DateRange | null }>({ enabled: false, compareRange: null })
   const effectiveCompareRange = useMemo<DateRange>(
@@ -2318,43 +1988,81 @@ export function SaudeDaMarca() {
   const { data: crmCompareRaw }   = useVendasFunil({ marca, dataInicio: cmpInicio, dataFim: cmpFim })
   const { data: leadsCompareRaw } = useLeads({ marca, dataInicio: cmpInicio, dataFim: cmpFim })
 
-  const crmData    = useMemo(() => filterFonte === '__all__' ? crmRaw    : crmRaw.filter(r => mapFonte(r.fonte) === filterFonte),    [crmRaw,    filterFonte])
-  const crmAllData = useMemo(() => filterFonte === '__all__' ? crmAllRaw : crmAllRaw.filter(r => mapFonte(r.fonte) === filterFonte), [crmAllRaw, filterFonte])
-  const crmCompare = useMemo(() => filterFonte === '__all__' ? crmCompareRaw : crmCompareRaw.filter(r => mapFonte(r.fonte) === filterFonte), [crmCompareRaw, filterFonte])
+  // Dados adicionais Odonto Scale — usados pela sub-view Odonto Legacy do Oral Unic
+  // (leads/CRM continuam sob marca 'Odonto Scale' no banco de vendas; mídia histórica também)
+  const { data: osLeadsRaw }        = useLeads({ marca: 'Odonto Scale', dataInicio, dataFim })
+  const { data: osLeadsCompareRaw } = useLeads({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim })
+  const { data: osCrmRaw }          = useVendasFunil({ marca: 'Odonto Scale', dataInicio, dataFim })
+  const { data: osCrmAllRaw }       = useVendasFunil({ marca: 'Odonto Scale' })
+  const { data: osCrmCompareRaw }   = useVendasFunil({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim })
+  const { data: osMediaRaw }        = useMediaData({ marca: 'Odonto Scale', dataInicio, dataFim })
+  const { data: osMediaCompareRaw } = useMediaData({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim })
+
+  const isOdontoLegacy = isOralUnic && ouSubView === 'odonto_legacy'
+
+  const crmData    = useMemo(() => {
+    let base = isOdontoLegacy ? osCrmRaw : crmRaw
+    if (isInpot && inpSubView === 'evento')   base = base.filter(isCrmEventoInpot)
+    if (isInpot && inpSubView === 'franquia') base = base.filter(r => !isCrmEventoInpot(r))
+    return filterFonte === '__all__' ? base : base.filter(r => mapFonte(r.fonte) === filterFonte)
+  }, [crmRaw, osCrmRaw, isOdontoLegacy, isInpot, inpSubView, filterFonte])
+  const crmAllData = useMemo(() => {
+    let base = isOdontoLegacy ? osCrmAllRaw : crmAllRaw
+    if (isInpot && inpSubView === 'evento')   base = base.filter(isCrmEventoInpot)
+    if (isInpot && inpSubView === 'franquia') base = base.filter(r => !isCrmEventoInpot(r))
+    return filterFonte === '__all__' ? base : base.filter(r => mapFonte(r.fonte) === filterFonte)
+  }, [crmAllRaw, osCrmAllRaw, isOdontoLegacy, isInpot, inpSubView, filterFonte])
+  const crmCompare = useMemo(() => {
+    let base = isOdontoLegacy ? osCrmCompareRaw : crmCompareRaw
+    if (isInpot && inpSubView === 'evento')   base = base.filter(isCrmEventoInpot)
+    if (isInpot && inpSubView === 'franquia') base = base.filter(r => !isCrmEventoInpot(r))
+    return filterFonte === '__all__' ? base : base.filter(r => mapFonte(r.fonte) === filterFonte)
+  }, [crmCompareRaw, osCrmCompareRaw, isOdontoLegacy, isInpot, inpSubView, filterFonte])
 
   // Filtered data per Oral Unic sub-view
   const activeLeadsData = useMemo(() => {
+    if (isInpot && inpSubView === 'evento')   return leadsData.filter(isLeadEventoInpot)
+    if (isInpot && inpSubView === 'franquia') return leadsData.filter(l => !isLeadEventoInpot(l))
     if (!isOralUnic || ouSubView === 'geral') return leadsData
-    if (ouSubView === 'franquia') return leadsData.filter(l => l.formulario === 'oralunic_multistep')
-    if (ouSubView === 'iscas')         return leadsData.filter(l => OU_ISCAS_FORMS.includes(l.formulario ?? ''))
-    if (ouSubView === 'odonto_scale')  return leadsData.filter(l => l.formulario === 'odontoscale_multistep')
+    if (ouSubView === 'franquia')      return leadsData.filter(l => l.formulario === 'oralunic_multistep')
+    if (ouSubView === 'legacy')        return leadsData.filter(l => l.formulario === 'comunidade_multistep')
+    if (ouSubView === 'odonto_legacy') return osLeadsRaw
     return leadsData
-  }, [leadsData, isOralUnic, ouSubView])
+  }, [leadsData, osLeadsRaw, isOralUnic, ouSubView, isInpot, inpSubView])
 
 
   const activeMediaData = useMemo(() => {
-    if (!isOralUnic || ouSubView === 'geral') return mediaData
-    if (ouSubView === 'franquia') return mediaData.filter(r => !(r.campanha ?? '').toUpperCase().includes('LEGACY'))
-    if (ouSubView === 'iscas')         return mediaData.filter(r => (r.campanha ?? '').toUpperCase().includes('LEGACY'))
-    if (ouSubView === 'odonto_scale')  return []
-    return []
-  }, [mediaData, isOralUnic, ouSubView])
+    // Estratégias pausadas (Hotmart, iscas) são sempre excluídas dos totais das frentes
+    const active = isOralUnic ? mediaData.filter(r => !isPausedStrategy(r.campanha, r.conjunto)) : mediaData
+    if (isInpot && inpSubView === 'evento')   return active.filter(r => isMediaEventoInpot(r.campanha))
+    if (isInpot && inpSubView === 'franquia') return active.filter(r => isMediaFranquiaInpot(r.campanha))
+    if (!isOralUnic || ouSubView === 'geral') return active
+    if (ouSubView === 'franquia')      return active.filter(r => isMediaFranquia(r.campanha))
+    if (ouSubView === 'legacy')        return active.filter(r => isMediaLegacy(r.campanha))
+    if (ouSubView === 'odonto_legacy') return [...active.filter(r => isMediaOdontoLegacy(r.campanha)), ...osMediaRaw]
+    return active
+  }, [mediaData, osMediaRaw, isOralUnic, ouSubView, isInpot, inpSubView])
 
   const compareLeadsData = useMemo(() => {
+    if (isInpot && inpSubView === 'evento')   return leadsCompareRaw.filter(isLeadEventoInpot)
+    if (isInpot && inpSubView === 'franquia') return leadsCompareRaw.filter(l => !isLeadEventoInpot(l))
     if (!isOralUnic || ouSubView === 'geral') return leadsCompareRaw
-    if (ouSubView === 'franquia') return leadsCompareRaw.filter(l => l.formulario === 'oralunic_multistep')
-    if (ouSubView === 'iscas')         return leadsCompareRaw.filter(l => OU_ISCAS_FORMS.includes(l.formulario ?? ''))
-    if (ouSubView === 'odonto_scale')  return leadsCompareRaw.filter(l => l.formulario === 'odontoscale_multistep')
+    if (ouSubView === 'franquia')      return leadsCompareRaw.filter(l => l.formulario === 'oralunic_multistep')
+    if (ouSubView === 'legacy')        return leadsCompareRaw.filter(l => l.formulario === 'comunidade_multistep')
+    if (ouSubView === 'odonto_legacy') return osLeadsCompareRaw
     return leadsCompareRaw
-  }, [leadsCompareRaw, isOralUnic, ouSubView])
+  }, [leadsCompareRaw, osLeadsCompareRaw, isOralUnic, ouSubView, isInpot, inpSubView])
 
   const compareMediaData = useMemo(() => {
-    if (!isOralUnic || ouSubView === 'geral') return mediaCompareRaw
-    if (ouSubView === 'franquia') return mediaCompareRaw.filter(r => !(r.campanha ?? '').toUpperCase().includes('LEGACY'))
-    if (ouSubView === 'iscas')         return mediaCompareRaw.filter(r => (r.campanha ?? '').toUpperCase().includes('LEGACY'))
-    if (ouSubView === 'odonto_scale')  return []
-    return []
-  }, [mediaCompareRaw, isOralUnic, ouSubView])
+    const active = isOralUnic ? mediaCompareRaw.filter(r => !isPausedStrategy(r.campanha, r.conjunto)) : mediaCompareRaw
+    if (isInpot && inpSubView === 'evento')   return active.filter(r => isMediaEventoInpot(r.campanha))
+    if (isInpot && inpSubView === 'franquia') return active.filter(r => isMediaFranquiaInpot(r.campanha))
+    if (!isOralUnic || ouSubView === 'geral') return active
+    if (ouSubView === 'franquia')      return active.filter(r => isMediaFranquia(r.campanha))
+    if (ouSubView === 'legacy')        return active.filter(r => isMediaLegacy(r.campanha))
+    if (ouSubView === 'odonto_legacy') return [...active.filter(r => isMediaOdontoLegacy(r.campanha)), ...osMediaCompareRaw]
+    return active
+  }, [mediaCompareRaw, osMediaCompareRaw, isOralUnic, ouSubView, isInpot, inpSubView])
 
   const [mqlDrawerOpen, setMqlDrawerOpen] = useState(false)
 
@@ -2382,37 +2090,54 @@ export function SaudeDaMarca() {
     return `${range.start} – ${range.end}`
   }, [range])
 
-  // Special OU views bypass the standard tab rendering
-  const isOuSpecialView = isOralUnic && (ouSubView === 'iscas' || ouSubView === 'odonto_scale' || ouSubView === 'compra_direta')
+  // Estratégias pausadas (Compra Direta Hotmart, Iscas de conteúdo) — mostradas separadamente na Visão Geral
+  const pausedData = useMemo(() => {
+    if (!isOralUnic) return { rows: [] as MediaDailyRaw[], spend: 0, impr: 0, clicks: 0, campanhas: [] as string[] }
+    const rows = mediaData.filter(r => isPausedStrategy(r.campanha, r.conjunto))
+    const spend = rows.reduce((s, r) => s + (r.spend_brl || 0), 0)
+    const impr = rows.reduce((s, r) => s + (r.impressoes || 0), 0)
+    const clicks = rows.reduce((s, r) => s + (r.cliques_link || 0), 0)
+    const campanhas = [...new Set(rows.map(r => pausedStrategyLabel(r.campanha, r.conjunto)))]
+    return { rows, spend, impr, clicks, campanhas }
+  }, [mediaData, isOralUnic])
+
+  // Tabs escondidas: Comunidade e Odonto Legacy não têm Social/Radar (apenas frentes com estrutura completa)
+  const hiddenTabs = isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy') ? ['social', 'radar'] : []
+  // Sub-view "special": bypassa as tabs SM_TABS e renderiza um componente próprio (ex.: Esteira)
+  const isOuSpecialView = isOralUnic && ouSubView === 'esteira'
+
+  // Auto-reset da tab quando entra em sub-view com tabs restritas e a tab atual foi escondida
+  useEffect(() => {
+    if (hiddenTabs.includes(view)) setView('overview')
+  }, [hiddenTabs, view])
 
   const body = (() => {
-    if (isOralUnic && ouSubView === 'iscas')         return <OuIscasView allLeads={leadsData} mediaData={mediaData} accent={def.accent} />
-    if (isOralUnic && ouSubView === 'odonto_scale')  return <OuOdontoScaleView dataInicio={dataInicio} dataFim={dataFim} accent={def.accent} />
-    if (isOralUnic && ouSubView === 'compra_direta') return <OuCompraDiretaView accent={def.accent} />
+    if (isOuSpecialView) return <EsteiraOralUnic embedded />
     switch (view) {
       case 'campanhas': return <SaudeCampanhas b={b} campaigns={campaigns} daily={daily} dataInicio={dataInicio} mqlLeads={mqlLeads} />
       case 'conjuntos': return <SaudeConjuntos b={b} campaigns={campaigns} />
       case 'anuncios':  return <SaudeAnuncios  b={b} campaigns={campaigns} />
       case 'social':    return <SaudeSocial    social={social} />
       case 'radar':     return <SaudeRadar     b={b} />
-      default:          return <SMOverview     b={b} bCompare={bCompare} compareLabel={compareLabel} compareEnabled={compareState.enabled} channels={channels} acqFunnel={acqFunnel} onMqlClick={() => setMqlDrawerOpen(true)} mqlLeads={mqlLeads} crmData={crmData} crmAllData={crmAllData} di={dataInicio} df={dataFim} />
+      default:          return <SMOverview     b={b} bCompare={bCompare} compareLabel={compareLabel} compareEnabled={compareState.enabled} channels={channels} acqFunnel={acqFunnel} onMqlClick={() => setMqlDrawerOpen(true)} mqlLeads={mqlLeads} crmData={crmData} crmAllData={crmAllData} di={dataInicio} df={dataFim} mediaData={activeMediaData} leadsData={activeLeadsData} pausedData={pausedData} />
     }
   })()
 
   const ouSubLabel = isOralUnic && ouSubView !== 'geral' ? ` · ${OU_SUB_TABS.find(t => t.key === ouSubView)?.label}` : ''
+  const inpSubLabel = isInpot && inpSubView !== 'geral' ? ` · ${INP_SUB_TABS.find(t => t.key === inpSubView)?.label}` : ''
 
   return (
     <div style={{ padding: 'var(--container-pad)' }}>
       <PageTop
         title={b.label}
-        subtitle={`Saúde da marca${ouSubLabel} · ${isOuSpecialView ? OU_SUB_TABS.find(t => t.key === ouSubView)?.label : SM_TABS.find(t => t.key === view)?.label ?? 'Visão Geral'} · ${periodLabel}`}
+        subtitle={`Saúde da marca${ouSubLabel}${inpSubLabel} · ${isOuSpecialView ? OU_SUB_TABS.find(t => t.key === ouSubView)?.label : SM_TABS.find(t => t.key === view)?.label ?? 'Visão Geral'} · ${periodLabel}`}
         badge={<StatusPill status={b.status} value={b.meta + '%'} label="da meta" />}
         actions={
           <>
             <select
               value={filterFonte}
               onChange={e => setFilterFonte(e.target.value)}
-              style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 20, fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none' }}
+              style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none' }}
             >
               <option value="__all__">Todas as fontes</option>
               {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
@@ -2430,7 +2155,8 @@ export function SaudeDaMarca() {
         }
       />
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
-      {!isOuSpecialView && <SMTabs value={view} onChange={setView} />}
+      {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
+      {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}
       <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
         {body}
       </div>

@@ -153,6 +153,8 @@ export interface PendenciaGlobal {
 }
 
 // === CONSTANTES ===
+// Marcas Marketing (sem Odonto Scale, que existe só como funil de vendas).
+// Fonte única: src/constants/brands.ts
 export const MARCAS: Marca[] = [
   'Oral Unic',
   'Inpot',
@@ -161,13 +163,3 @@ export const MARCAS: Marca[] = [
   'B2Case',
   'Viva',
 ]
-
-export const MARCA_COR: Record<Marca, string> = {
-  'Oral Unic':    '#3b82f6',
-  'Odonto Scale': '#0ea5e9',
-  'Inpot':        '#10b981',
-  'Lisô Laser':   '#8b5cf6',
-  'Viva':         '#059669',
-  'Eletrovias':   '#f59e0b',
-  'B2Case':       '#6366f1',
-}

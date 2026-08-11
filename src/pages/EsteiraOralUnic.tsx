@@ -4,25 +4,20 @@ import { useMediaData } from '@/hooks/useMediaData'
 import type { MediaDailyRaw } from '@/lib/types'
 import { PageTop } from '@/components/ui/PageTop'
 import { Badge } from '@/components/ui/Badge'
+import { isMediaLegacy, isMediaOdontoLegacy } from '@/lib/oralUnicMapping'
+import { currentMonthRange } from '@/lib/dateUtils'
+import { nf as fmt, money, pct as pctBase } from '@/lib/format'
 
-// ── período (MTD default) ─────────────────────────────────────────────────────
-function makeMtd(): { start: string; end: string } {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const start = `${y}-${m}-01`
-  const end   = now.toISOString().slice(0, 10)
-  return { start, end }
-}
+const makeMtd = currentMonthRange
+const pct = (n: number) => pctBase(n, 2)
 
 // ── classificação de frente por prefixo no nome da campanha ───────────────────
+// Reusa a fonte única em src/lib/oralUnicMapping.ts em vez de reimplementar inline
 type Frente = 'ODL' | 'OUF' | 'LEGACY'
 
 function frenteOf(campanha: string | null): Frente {
-  const c = (campanha ?? '').toUpperCase().trim()
-  // Comunidade — prefixos [LEGACY] (histórico) e [CMD] (novo)
-  if (c.includes('[LEGACY]') || c.includes('[LEGACY') || c.includes('LEGACY]') || c.includes('[CMD]')) return 'LEGACY'
-  if (c.includes('[ODL]') || c.startsWith('OS ') || c.startsWith('[OS]') || c.startsWith('OS-') || c.startsWith('OS_')) return 'ODL'
+  if (isMediaLegacy(campanha)) return 'LEGACY'
+  if (isMediaOdontoLegacy(campanha)) return 'ODL'
   return 'OUF'
 }
 
@@ -32,11 +27,6 @@ const FRENTE_META: Record<Frente, { label: string; description: string; color: s
   LEGACY: { label: 'Comunidade',               description: 'Captação de cadastro e diagnóstico',   color: '#22C6A1' },
 }
 const FRENTE_ORDER: Frente[] = ['OUF', 'ODL', 'LEGACY']
-
-// ── formatters ────────────────────────────────────────────────────────────────
-const money = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR')
-const fmt = (n: number) => Math.round(n).toLocaleString('pt-BR')
-const pct = (n: number) => n.toFixed(2) + '%'
 
 // ── métricas agregadas ────────────────────────────────────────────────────────
 interface Metrics {

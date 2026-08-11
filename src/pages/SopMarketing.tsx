@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { SOP_CLOSED_MONTH_KEY, SOP_CLOSED_MONTH_LABEL } from '@/constants/sopConfig'
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucide-react'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
@@ -1122,8 +1123,10 @@ export function SopMarketing() {
   const [isPdfExporting, setIsPdfExporting] = useState(false)
   const [pdfProgress, setPdfProgress] = useState('')
   const [monthMode, setMonthMode] = useState<'current' | 'closed'>('current')
-  const CLOSED_MONTH_KEY = '2026-07'
-  const CLOSED_MONTH_LABEL = 'Julho'
+  // Mês fechado atual — atualizar quando fechar novo mês.
+  // TODO: mover pra src/constants/sopConfig.ts junto com outras configs do S&OP
+  const CLOSED_MONTH_KEY = SOP_CLOSED_MONTH_KEY
+  const CLOSED_MONTH_LABEL = SOP_CLOSED_MONTH_LABEL
   const containerRef = useRef<HTMLDivElement>(null)
   const exportSlideRefs = useRef<(HTMLDivElement | null)[]>([])
   const dates = useMemo(

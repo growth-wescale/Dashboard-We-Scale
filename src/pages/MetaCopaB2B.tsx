@@ -4,8 +4,9 @@ import { useVendasFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useLeads } from '@/hooks/useLeads'
 import { StatusPill } from '@/components/ui/StatusPill'
-import { MARCAS, MARCA_COR } from '@/lib/types'
+import { MARCAS } from '@/lib/types'
 import type { Marca } from '@/lib/types'
+import { BRAND_ACCENT as MARCA_COR } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import {
   COPA_MESES,

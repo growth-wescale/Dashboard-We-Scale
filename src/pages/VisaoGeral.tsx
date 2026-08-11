@@ -16,6 +16,8 @@ import { useMetas } from '@/hooks/useMetas'
 import { useAllBrandsMqlPacing } from '@/hooks/useMqlPacing'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel } from '@/lib/dateUtils'
+import { nf, money, moneyK } from '@/lib/format'
+import { BRAND_LIST_MARKETING } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { getMetaVendas } from '@/constants/metasVendas'
 import { PacingCard, MiniCard } from '@/pages/Pacing'
@@ -24,14 +26,7 @@ import { CompareControl } from '@/components/ui/CompareControl'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
-const BRAND_DEFS = [
-  { key: 'oral-unic',  label: 'Oral Unic',  accent: '#7F0C72' },
-  { key: 'inpot',      label: 'Inpot',      accent: '#C6D32D' },
-  { key: 'eletrovias', label: 'Eletrovias', accent: '#ED6D3A' },
-  { key: 'liso-laser', label: 'Lisô Laser', accent: '#FF6643' },
-  { key: 'b2case',     label: 'B2Case',     accent: '#0169F2' },
-  { key: 'viva',       label: 'Viva',       accent: '#FF0069' },
-]
+const BRAND_DEFS = BRAND_LIST_MARKETING.map(b => ({ key: b.key, label: b.label, accent: b.accent }))
 
 const VALID_MARCAS = new Set<string>(Object.values(SLUG_TO_MARCA))
 
@@ -206,13 +201,6 @@ function getPrevNthMtdDates(refStart: string, n: number, days: number): { start:
   const d = Math.min(days, maxDay)
   return { start: `${y}-${ms}-01`, end: `${y}-${ms}-${String(d).padStart(2, '0')}` }
 }
-
-// ─── Formatters ───────────────────────────────────────────────────────────────
-const nf    = (n: number) => Math.round(n).toLocaleString('pt-BR')
-const money = (n: number) => 'R$ ' + Math.round(n).toLocaleString('pt-BR')
-const moneyK = (n: number) => n >= 1000
-  ? 'R$ ' + (n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil'
-  : 'R$ ' + Math.round(n).toLocaleString('pt-BR')
 
 // ─── Shared local primitives ──────────────────────────────────────────────────
 function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {

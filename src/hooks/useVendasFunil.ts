@@ -59,14 +59,13 @@ async function fetchVendasRows(filters: Filters): Promise<{ rows: VwMarketingFun
       .order('data_criacao_negociacao', { ascending: false })
       .range(from, to)
 
-    // Exclude Prospecção Ativa from all queries
-    q = q.neq('funil', 'Prospecção Ativa')
-
+    // Allowlist rigoroso alinhado ao app de referência (P7)
+    // Filtro de funil só se marca não é Odonto Scale (que já sobrepõe abaixo)
     if (filters.marca === 'Odonto Scale') {
-      // OS lives in funil='Odonto Scale', not in marca column
       q = q.eq('funil', 'Odonto Scale')
-    } else if (filters.marca) {
-      q = q.eq('marca', filters.marca)
+    } else {
+      q = q.in('funil', ['SDR', 'Closer', 'Prospecção Ativa', 'Odonto Scale'])
+      if (filters.marca) q = q.eq('marca', filters.marca)
     }
 
     if (filters.dataInicio) q = q.or(

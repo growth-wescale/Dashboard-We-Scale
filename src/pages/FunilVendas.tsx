@@ -5,6 +5,7 @@ import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
+import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
@@ -17,13 +18,14 @@ import type { Marca } from '@/lib/types'
 interface BrandDef { key: string; label: string; marca: Marca | undefined; accent: string; dark: string }
 
 const BRANDS: BrandDef[] = [
-  { key: 'overview',   label: 'Consolidado · 6 marcas', marca: undefined,       accent: '#2ABCB5', dark: '#1A847F' },
-  { key: 'oral-unic',  label: 'Oral Unic',              marca: 'Oral Unic',     accent: '#7F0C72', dark: '#540247' },
-  { key: 'inpot',      label: 'Inpot',                  marca: 'Inpot',         accent: '#C6D32D', dark: '#0B3120' },
-  { key: 'eletrovias', label: 'Eletrovias',             marca: 'Eletrovias',    accent: '#ED6D3A', dark: '#4E2800' },
-  { key: 'liso-laser', label: 'Lisô Laser',             marca: 'Lisô Laser',    accent: '#FF6643', dark: '#6E1D61' },
-  { key: 'b2case',     label: 'B2Case',                 marca: 'B2Case',        accent: '#0169F2', dark: '#040492' },
-  { key: 'viva',       label: 'Viva',                   marca: 'Viva',          accent: '#FF0069', dark: '#141414' },
+  { key: 'overview',    label: 'Consolidado · 7 marcas', marca: undefined,       accent: '#2ABCB5', dark: '#1A847F' },
+  { key: 'oral-unic',   label: 'Oral Unic',              marca: 'Oral Unic',     accent: '#7F0C72', dark: '#540247' },
+  { key: 'odonto-scale',label: 'Odonto Scale',           marca: 'Odonto Scale',  accent: '#0EA5E9', dark: '#075985' },
+  { key: 'inpot',       label: 'Inpot',                  marca: 'Inpot',         accent: '#C6D32D', dark: '#0B3120' },
+  { key: 'eletrovias',  label: 'Eletrovias',             marca: 'Eletrovias',    accent: '#ED6D3A', dark: '#4E2800' },
+  { key: 'liso-laser',  label: 'Lisô Laser',             marca: 'Lisô Laser',    accent: '#FF6643', dark: '#6E1D61' },
+  { key: 'b2case',      label: 'B2Case',                 marca: 'B2Case',        accent: '#0169F2', dark: '#040492' },
+  { key: 'viva',        label: 'Viva',                   marca: 'Viva',          accent: '#FF0069', dark: '#141414' },
 ]
 
 // ─── Formatters ────────────────────────────────────────────────────────────────
@@ -241,7 +243,7 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (k: string)
         onChange={e => onChange(e.target.value)}
         style={{
           appearance: 'none', paddingLeft: 28, paddingRight: 28, paddingTop: 7, paddingBottom: 7,
-          border: '1px solid var(--ws-border)', borderRadius: 20, fontSize: 13,
+          border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', fontSize: 13,
           background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer',
           fontFamily: 'var(--font-body)', outline: 'none',
         }}
@@ -265,12 +267,13 @@ export function FunilVendas() {
   const [brandKey, setBrandKey] = useState('overview')
   const [range, setRange] = useState(currentMonthRange)
   const [filterFonte, setFilterFonte] = useState('__all__')
-  const [showNotice, setShowNotice] = useState(true)
+  const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
+  const { notice } = useDashboardNotice()
 
   const brandDef = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
   const marca = brandDef.marca
   const { accent, dark } = brandDef
-  const scopeLabel = brandKey === 'overview' ? 'Consolidado · 6 marcas' : brandDef.label
+  const scopeLabel = brandKey === 'overview' ? 'Consolidado · 7 marcas' : brandDef.label
 
   const prev = useMemo(() => prevMonthRange(range.start, range.end), [range.start, range.end])
   const curMonthLabel = shortMonth(range.start)
@@ -416,12 +419,12 @@ export function FunilVendas() {
             <select
               value={filterFonte}
               onChange={e => setFilterFonte(e.target.value)}
-              style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 20, fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none' }}
+              style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none' }}
             >
               <option value="__all__">Todas as fontes</option>
               {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--ws-border)', borderRadius: 20, padding: '4px 12px', background: 'var(--ws-surface)', fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', padding: '4px 12px', background: 'var(--ws-surface)', fontSize: 13 }}>
               <span style={{ color: 'var(--ws-text-secondary)' }}>Mês</span>
               <input type="date" value={range.start}
                 onChange={e => setRange(r => ({ ...r, start: e.target.value }))}
@@ -431,29 +434,34 @@ export function FunilVendas() {
                 onChange={e => setRange(r => ({ ...r, end: e.target.value }))}
                 style={{ border: 'none', background: 'transparent', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }} />
             </div>
-            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 8, background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
               <Download size={14} /> Exportar
             </button>
           </>
         }
       />
 
-      {/* ── Data notice ──────────────────────────────────────────────────────── */}
-      {showNotice && (
+      {/* ── Data notice (dinâmico via dashboard_notices) ─────────────────────── */}
+      {notice && notice.mostrar_banner && notice.id !== dismissedNoticeId && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 12,
-          background: 'color-mix(in srgb, #F2A93B 10%, var(--ws-surface))',
-          border: '1px solid color-mix(in srgb, #F2A93B 35%, transparent)',
+          background: notice.cor_fundo
+            ? `color-mix(in srgb, ${notice.cor_fundo} 12%, var(--ws-surface))`
+            : 'color-mix(in srgb, #F2A93B 10%, var(--ws-surface))',
+          border: `1px solid ${notice.cor_fundo
+            ? `color-mix(in srgb, ${notice.cor_fundo} 40%, transparent)`
+            : 'color-mix(in srgb, #F2A93B 35%, transparent)'}`,
           borderRadius: 'var(--radius-md)',
           padding: '12px 16px',
           marginBottom: 20,
         }}>
-          <Info size={16} style={{ color: '#F2A93B', flexShrink: 0, marginTop: 1 }} />
+          <Info size={16} style={{ color: notice.cor_fundo ?? 'var(--status-atencao)', flexShrink: 0, marginTop: 1 }} />
           <div style={{ flex: 1, fontSize: 13, color: 'var(--ws-text-primary)', lineHeight: 1.5 }}>
-            <b>Dados em revisão.</b> A base de vendas foi recém integrada e pode apresentar discrepâncias temporárias nos valores exibidos. Estamos validando os registros históricos.
+            {notice.titulo && <><b>{notice.titulo}.</b>{' '}</>}
+            {notice.mensagem}
           </div>
           <button
-            onClick={() => setShowNotice(false)}
+            onClick={() => setDismissedNoticeId(notice.id)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', padding: 2, display: 'flex', flexShrink: 0 }}
           >
             <X size={15} />

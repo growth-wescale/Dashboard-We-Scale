@@ -4,6 +4,7 @@ import { LayoutDashboard, Activity, Trophy, ListChecks, PresentationIcon, Bell, 
 import { Sidebar } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
+import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -31,8 +32,10 @@ const BRANDS_SUB = [
 ]
 
 const VENDAS_SUB = [
-  { key: 'funil-vendas',      label: 'Funil de Vendas' },
-  { key: 'analise-objecoes',  label: 'Análise de Objeções' },
+  { key: 'funil-vendas',        label: 'Funil de Vendas' },
+  { key: 'performance-vendas',  label: 'Performance Detalhada' },
+  { key: 'analise-perda',       label: 'Análise de Perda' },
+  { key: 'analise-objecoes',    label: 'Análise de Objeções' },
 ]
 
 const NAV_ITEMS = [
@@ -75,12 +78,14 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/copa-b2b')) return 'copa'
   if (pathname.startsWith('/cadencias')) return 'cadencias'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/analise-objecoes')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes')) return 'vendas'
   return 'geral'
 }
 
 function getVendasActiveSub(pathname: string): string {
-  if (pathname.startsWith('/analise-objecoes')) return 'analise-objecoes'
+  if (pathname.startsWith('/analise-objecoes'))   return 'analise-objecoes'
+  if (pathname.startsWith('/analise-perda'))      return 'analise-perda'
+  if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
   return 'funil-vendas'
 }
 
@@ -128,6 +133,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   function handleSubNav(key: string) {
     if (key === 'funil-vendas') navigate('/funil-vendas')
+    else if (key === 'performance-vendas') navigate('/performance-vendas')
+    else if (key === 'analise-perda') navigate('/analise-perda')
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
     else {
       setActiveBrand(key)
@@ -174,6 +181,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {...(isSaude ? { 'data-brand': activeBrand } : {})}
       >
         <Sidebar
+          variant="glass"
           items={NAV_ITEMS}
           active={activeKey}
           onSelect={handleNav}
@@ -183,9 +191,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           open={sidebarOpen}
         />
 
-        {/* Content wrapper */}
+        {/* Content wrapper — 12px extra pra folga da sidebar flutuante glass */}
         <div style={{
-          marginLeft: sidebarOpen ? 'var(--sidebar-w)' : 0,
+          marginLeft: sidebarOpen ? 'calc(var(--sidebar-w) + 12px)' : 0,
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
@@ -233,6 +241,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 }}
               />
             </button>
+            <ThemeToggle />
             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
               <Bell size={18} />
             </button>

@@ -69,8 +69,9 @@ async function fetchVendasRows(filters: Filters): Promise<{ rows: VwMarketingFun
       // No consolidado, ignora deals sem marca (67 nulls + 12 vazios detectados na auditoria)
       else q = q.not('marca', 'is', null).neq('marca', '')
     }
-    // Excluir deals de teste (nome_negociacao contendo 'teste' — filtro client-side sem tocar na base)
-    q = q.or('nome_negociacao.is.null,nome_negociacao.not.ilike.%teste%')
+    // OBS: filtro por nome_negociacao NÃO pode ser aplicado aqui — coluna não existe em
+    // vw_marketing_funil (só em vw_funil_compat, que Performance/Perda usam). Aplicar filtro
+    // dessa coluna aqui quebra a query inteira e o funil fica vazio.
 
     if (filters.dataInicio) q = q.or(
       `data_criacao_negociacao.gte.${filters.dataInicio},data_sql.gte.${filters.dataInicio},data_diagnostico.gte.${filters.dataInicio},data_sal.gte.${filters.dataInicio},data_venda.gte.${filters.dataInicio}`,

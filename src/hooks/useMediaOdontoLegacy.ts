@@ -24,7 +24,16 @@ export function useMediaOdontoLegacy(filters: Filters = {}): Result {
 
   const data = useMemo(() => {
     const fromOralUnic = oralUnicAll.data.filter(r => isMediaOdontoLegacy(r.campanha))
-    return [...legacyOwnMarca.data, ...fromOralUnic]
+    // Dedupe por (dia, canal, campanha, conjunto, anuncio) — se uma mesma linha aparece
+    // nas duas fontes durante janela transicional, evita dobrar spend/leads.
+    const merged = [...legacyOwnMarca.data, ...fromOralUnic]
+    const seen = new Set<string>()
+    return merged.filter(r => {
+      const key = `${r.dia}|${r.canal}|${r.campanha ?? ''}|${r.conjunto ?? ''}|${r.anuncio ?? ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   }, [legacyOwnMarca.data, oralUnicAll.data])
 
   return {

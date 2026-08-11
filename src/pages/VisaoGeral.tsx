@@ -1,5 +1,5 @@
 /* Visão Geral — dados reais via Supabase */
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Filter, Download } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
@@ -77,6 +77,9 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
   const sql    = active.filter(r => inPeriod(r.data_sql, di, df)).length
   const sal    = active.filter(r => inPeriod(r.data_sal, di, df)).length
   const fech   = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length
+  // Regra: deal contado como "SQL perdido no período" se virou SQL DENTRO da janela
+  // e NÃO chegou a SAL na mesma janela. Se avançou pra SAL fora do range, não é
+  // "perdido no SQL" — permanece contado como SQL do período, mas não distorce KPI SAL.
   const sqlPerdido = active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_sal, di, df)).length
   const salPerdido = active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df)).length
   const valorTotal = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
@@ -757,12 +760,16 @@ export function VisaoGeral() {
   const { data: rawCrmPrev2, loading: l7 } = useVendasFunil({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
   const { data: rawCrmPrev3, loading: l8 } = useVendasFunil({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
   const { data: rawCrmCompare } = useVendasFunil({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
-  const applyFonte = (rows: typeof rawCrmCur) => filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte)
-  const crmCur     = useMemo(() => applyFonte(rawCrmCur),     [rawCrmCur,     filterFonte])   // eslint-disable-line react-hooks/exhaustive-deps
-  const crmPrev    = useMemo(() => applyFonte(rawCrmPrev),    [rawCrmPrev,    filterFonte])   // eslint-disable-line react-hooks/exhaustive-deps
-  const crmPrev2   = useMemo(() => applyFonte(rawCrmPrev2),   [rawCrmPrev2,   filterFonte])   // eslint-disable-line react-hooks/exhaustive-deps
-  const crmPrev3   = useMemo(() => applyFonte(rawCrmPrev3),   [rawCrmPrev3,   filterFonte])   // eslint-disable-line react-hooks/exhaustive-deps
-  const crmCompare = useMemo(() => applyFonte(rawCrmCompare), [rawCrmCompare, filterFonte])   // eslint-disable-line react-hooks/exhaustive-deps
+  // applyFonte tem que ser useCallback pra memoização dos 5 useMemo abaixo funcionar corretamente.
+  const applyFonte = useCallback(
+    (rows: typeof rawCrmCur) => filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
+    [filterFonte],
+  )
+  const crmCur     = useMemo(() => applyFonte(rawCrmCur),     [rawCrmCur,     applyFonte])
+  const crmPrev    = useMemo(() => applyFonte(rawCrmPrev),    [rawCrmPrev,    applyFonte])
+  const crmPrev2   = useMemo(() => applyFonte(rawCrmPrev2),   [rawCrmPrev2,   applyFonte])
+  const crmPrev3   = useMemo(() => applyFonte(rawCrmPrev3),   [rawCrmPrev3,   applyFonte])
+  const crmCompare = useMemo(() => applyFonte(rawCrmCompare), [rawCrmCompare, applyFonte])
   const { data: leadsCur,   loading: l9  } = useLeads({ dataInicio: range.start,      dataFim: range.end })
   const { data: leadsPrev,  loading: l10 } = useLeads({ dataInicio: prevDates.start,  dataFim: prevDates.end })
   const { data: leadsPrev2, loading: l11 } = useLeads({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })

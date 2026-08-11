@@ -815,11 +815,12 @@ function CampaignTable({ campaigns, on }: { campaigns:Campaign[]; on:Record<stri
   const [sort, setSort] = useState<{k:string;dir:number}>({ k:'spend', dir:-1 })
   const cols = CAMP_COLS.filter((c)=>on[c.k])
   const val = (row: any, k: string) => { const c=CAMP_COLS.find((x)=>x.k===k)!; return row[k]===undefined||row[k]===null?'—':c.fmt(row[k]) }
-  const sorted = [...campaigns].sort((a,b) => {
-    const va = (a as any)[sort.k] ?? 0, vb = (b as any)[sort.k] ?? 0
+  const kCamp = sort.k as keyof Campaign
+  const sorted = [...campaigns].sort((a, b) => {
+    const va = Number(a[kCamp] ?? 0), vb = Number(b[kCamp] ?? 0)
     return (va - vb) * sort.dir
   })
-  const campVals = sorted.map(c => ((c as any)[sort.k] ?? 0) as number)
+  const campVals = sorted.map(c => Number(c[kCamp] ?? 0))
   const cMax = campVals.length ? Math.max(...campVals) : 1
   const cMin = campVals.length ? Math.min(...campVals) : 0
   const campHeat = (v: number) => {
@@ -838,7 +839,7 @@ function CampaignTable({ campaigns, on }: { campaigns:Campaign[]; on:Record<stri
         </thead>
         <tbody>
           {sorted.map((cp)=>{
-            const heat = campHeat(((cp as any)[sort.k] ?? 0) as number)
+            const heat = campHeat(Number(cp[kCamp] ?? 0))
             const heatBg = `color-mix(in srgb, var(--brand-accent) ${Math.round(4 + heat * 22)}%, transparent)`
             const openC=exC[cp.id]
             return (
@@ -1099,22 +1100,28 @@ function CampMatrix({ campaigns, selectedId, onSelect }: { campaigns: Campaign[]
   )
 }
 
-const WINNER = [
+interface WinnerCfg { value: string; label: string; money?: boolean; low?: boolean; pct?: boolean }
+const WINNER: WinnerCfg[] = [
   { value:'cpmql', label:'CP-MQL', money:true, low:true },
   { value:'mql',   label:'MQL' },
   { value:'sql',   label:'SQL' },
   { value:'ctr',   label:'CTR',  pct:true },
-] as const
+]
 
 function TopCampaigns({ campaigns }: { campaigns:Campaign[] }) {
   const [metric, setMetric] = useState<string>('mql')
-  const cfg = WINNER.find((w)=>w.value===metric)!
-  const sorted = [...campaigns].sort((a,b)=>(cfg as any).low?a[metric as keyof Campaign] as any-( b[metric as keyof Campaign] as any):( b[metric as keyof Campaign] as any)-(a[metric as keyof Campaign] as any)).slice(0,5)
-  const max = Math.max(...sorted.map((c)=>c[metric as keyof Campaign] as number))
-  const fmtV = (v: number) => (cfg as any).money ? money(v) : (cfg as any).pct ? v+'%' : fmt(v)
+  const cfg = WINNER.find(w => w.value === metric)!
+  const key = metric as keyof Campaign
+  const sorted = [...campaigns].sort((a, b) => {
+    const av = Number(a[key] ?? 0)
+    const bv = Number(b[key] ?? 0)
+    return cfg.low ? av - bv : bv - av
+  }).slice(0, 5)
+  const max = Math.max(...sorted.map(c => Number(c[key] ?? 0)))
+  const fmtV = (v: number) => cfg.money ? money(v) : cfg.pct ? v + '%' : fmt(v)
   return (
     <SCard>
-      <CardTitle title="Top campanhas" sub={`Vencedor por ${cfg.label}${(cfg as any).low?' (menor é melhor)':''}`} right={<MetricPicker options={WINNER.map(w=>({value:w.value,label:w.label}))} value={metric} onChange={setMetric} />} />
+      <CardTitle title="Top campanhas" sub={`Vencedor por ${cfg.label}${cfg.low ? ' (menor é melhor)' : ''}`} right={<MetricPicker options={WINNER.map(w=>({value:w.value,label:w.label}))} value={metric} onChange={setMetric} />} />
       <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {sorted.map((c,i)=>(
           <div key={c.id} style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -1122,10 +1129,10 @@ function TopCampaigns({ campaigns }: { campaigns:Campaign[] }) {
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ display:'flex', justifyContent:'space-between', gap:8, marginBottom:4 }}>
                 <span style={{ fontSize:13, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.name}</span>
-                <span style={{ fontSize:13, fontWeight:700, color:i===0?'var(--brand-accent)':'var(--ws-text-primary)', fontVariantNumeric:'tabular-nums' }}>{fmtV(c[metric as keyof Campaign] as number)}</span>
+                <span style={{ fontSize:13, fontWeight:700, color:i===0?'var(--brand-accent)':'var(--ws-text-primary)', fontVariantNumeric:'tabular-nums' }}>{fmtV(Number(c[key] ?? 0))}</span>
               </div>
               <div style={{ height:8, borderRadius:999, background:'var(--ws-bg)', overflow:'hidden' }}>
-                <div style={{ width:((cfg as any).low?(Math.min(...sorted.map(s=>s[metric as keyof Campaign] as number))/(c[metric as keyof Campaign] as number))*100:(c[metric as keyof Campaign] as number)/max*100)+'%', height:'100%', background:i===0?'var(--brand-accent)':'color-mix(in srgb, var(--brand-accent) 45%, var(--ws-border-strong))' }} />
+                <div style={{ width:(cfg.low ? (Math.min(...sorted.map(s=>Number(s[key] ?? 0))) / Number(c[key] ?? 0)) * 100 : (Number(c[key] ?? 0) / max) * 100) + '%', height:'100%', background:i===0?'var(--brand-accent)':'color-mix(in srgb, var(--brand-accent) 45%, var(--ws-border-strong))' }} />
               </div>
             </div>
           </div>
@@ -1815,7 +1822,7 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
             </div>
           )}
         </div>
-        <MetricCard style={{ '--fs-metric':'26px' } as any} label="Leads" value={b.leads} delta={compareEnabled ? dLeads : null} deltaLabel={compareEnabled ? deltaLbl : undefined} />
+        <MetricCard style={{ '--fs-metric': '26px' } as CSSProperties & Record<'--fs-metric', string>} label="Leads" value={b.leads} delta={compareEnabled ? dLeads : null} deltaLabel={compareEnabled ? deltaLbl : undefined} />
         <div
           onClick={onMqlClick}
           onMouseEnter={onMqlClick ? e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--brand-accent)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 0 1px var(--brand-accent)' } : undefined}
@@ -1845,7 +1852,7 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
             <div style={{ fontSize:11.5, color:'var(--status-risco)', marginTop:4, opacity:0.85 }}>{fmt(losses.perdido.sql)} perdidos</div>
           )}
         </div>
-        <MetricCard style={{ '--fs-metric':'26px' } as any} label="Conv. MQL→SQL" value={b.mql > 0 ? Math.round(b.sql / b.mql * 100) : 0} unit="%" accent={false} delta={compareEnabled ? dConv : null} deltaLabel={compareEnabled ? deltaLbl : undefined} />
+        <MetricCard style={{ '--fs-metric': '26px' } as CSSProperties & Record<'--fs-metric', string>} label="Conv. MQL→SQL" value={b.mql > 0 ? Math.round(b.sql / b.mql * 100) : 0} unit="%" accent={false} delta={compareEnabled ? dConv : null} deltaLabel={compareEnabled ? deltaLbl : undefined} />
       </div>
 
       {pausedData && pausedData.spend > 0 && (

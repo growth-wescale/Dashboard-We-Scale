@@ -51,6 +51,8 @@ async function fetchPerdas(filters: Filters): Promise<{ rows: PerdaEvento[]; err
       // Exclui funis legados 'Oral Unic'/'Inpot' (marcas antigas usadas como nome de funil).
       // Não usamos allowlist rigoroso aqui pra não descartar perdas com nome_funil=null.
       .not('nome_funil', 'in', '("Oral Unic","Inpot")')
+      // Defensive: excluir eventos de perda cujo deal era teste (view já filtra, mas garantimos)
+      .or('nome_negociacao.is.null,nome_negociacao.not.ilike.%teste%')
 
     if (filters.marca) q = q.eq('marca', filters.marca)
     if (filters.dataInicio) q = q.gte('dia', filters.dataInicio)

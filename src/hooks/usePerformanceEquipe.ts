@@ -69,6 +69,8 @@ async function fetchRows(filters: Filters): Promise<{ rows: FunilCompatRow[]; er
       q = q.in('funil', ['SDR', 'Closer', 'Prospecção Ativa', 'Odonto Scale'])
       if (filters.marca) q = q.eq('marca', filters.marca)
     }
+    // Excluir deals de teste sem tocar na base
+    q = q.or('nome_negociacao.is.null,nome_negociacao.not.ilike.%teste%')
 
     if (filters.dataInicio) q = q.or(
       `data_criacao_negociacao.gte.${filters.dataInicio},data_agendamento_reuniao_sql.gte.${filters.dataInicio},data_reuniao_realizada.gte.${filters.dataInicio},data_sal.gte.${filters.dataInicio},data_venda.gte.${filters.dataInicio}`,

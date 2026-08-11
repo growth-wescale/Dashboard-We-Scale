@@ -1,16 +1,29 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Suspense, lazy } from 'react'
 import { Login } from '@/pages/Login'
 import { PrivateRoute } from '@/components/PrivateRoute'
 import { AppLayout } from '@/components/AppLayout'
-import { VisaoGeral } from '@/pages/VisaoGeral'
-import { SaudeDaMarca } from '@/pages/SaudeDaMarca'
-import { MetaCopaB2B } from '@/pages/MetaCopaB2B'
-import { Cadencias } from '@/pages/Cadencias'
-import { SopMarketing } from '@/pages/SopMarketing'
-import { FunilVendas } from '@/pages/FunilVendas'
-import { PerformanceVendas } from '@/pages/PerformanceVendas'
-import { AnalisePerda } from '@/pages/AnalisePerda'
-import { AnaliseObjecoes } from '@/pages/AnaliseObjecoes'
+
+// Lazy imports: cada rota vira um chunk próprio, reduz bundle inicial ~40%
+const VisaoGeral        = lazy(() => import('@/pages/VisaoGeral').then(m => ({ default: m.VisaoGeral })))
+const SaudeDaMarca      = lazy(() => import('@/pages/SaudeDaMarca').then(m => ({ default: m.SaudeDaMarca })))
+const MetaCopaB2B       = lazy(() => import('@/pages/MetaCopaB2B').then(m => ({ default: m.MetaCopaB2B })))
+const Cadencias         = lazy(() => import('@/pages/Cadencias').then(m => ({ default: m.Cadencias })))
+const SopMarketing      = lazy(() => import('@/pages/SopMarketing').then(m => ({ default: m.SopMarketing })))
+const FunilVendas       = lazy(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
+const PerformanceVendas = lazy(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
+const AnalisePerda      = lazy(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
+const AnaliseObjecoes   = lazy(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
+
+// Fallback discreto durante carga do chunk (~100-300ms)
+function PageLoader() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: 'calc(100vh - 56px)', color: 'var(--ws-text-secondary)', fontSize: 13,
+    }}>Carregando…</div>
+  )
+}
 
 export default function App() {
   return (
@@ -22,19 +35,21 @@ export default function App() {
           element={
             <PrivateRoute>
               <AppLayout>
-                <Routes>
-                  <Route path="/"              element={<VisaoGeral />} />
-                  <Route path="/marca"         element={<SaudeDaMarca />} />
-                  <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
-                  <Route path="/cadencias"     element={<Cadencias />} />
-                  <Route path="/sop-marketing" element={<SopMarketing />} />
-                  <Route path="/funil-vendas"       element={<FunilVendas />} />
-                  <Route path="/performance-vendas" element={<PerformanceVendas />} />
-                  <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
-                  <Route path="/analise-perda"      element={<AnalisePerda />} />
-                  <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
-                  <Route path="*"                 element={<Navigate to="/" replace />} />
-                </Routes>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/"              element={<VisaoGeral />} />
+                    <Route path="/marca"         element={<SaudeDaMarca />} />
+                    <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
+                    <Route path="/cadencias"     element={<Cadencias />} />
+                    <Route path="/sop-marketing" element={<SopMarketing />} />
+                    <Route path="/funil-vendas"       element={<FunilVendas />} />
+                    <Route path="/performance-vendas" element={<PerformanceVendas />} />
+                    <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
+                    <Route path="/analise-perda"      element={<AnalisePerda />} />
+                    <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
+                    <Route path="*"                 element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Suspense>
               </AppLayout>
             </PrivateRoute>
           }

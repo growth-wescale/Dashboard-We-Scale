@@ -9,12 +9,6 @@ export type Marca =
 
 export type Canal = 'meta' | 'google'
 
-export type Pipeline = 'closer' | 'sdr'
-
-export type EtapaCategoria = 'mql' | 'sql' | 'diagnostico' | 'sal' | 'fechado' | 'perdido'
-
-export type CanalCrm = 'meta' | 'google' | 'organico' | 'direto' | 'outros'
-
 export type Metrica =
   | 'investimento'
   | 'leads'
@@ -60,24 +54,6 @@ export interface Lead {
   dados_extras: Record<string, unknown> | null
   row_hash: string | null
   criado_em: string
-}
-
-// === FUNIL CRM ===
-export interface CrmFunilRaw {
-  id: string
-  marca: Marca
-  pipeline: Pipeline
-  deal_id: string
-  etapa_atual: string | null
-  etapa_categoria: EtapaCategoria | null
-  utm_source: string | null
-  utm_medium: string | null
-  utm_campaign: string | null
-  canal: CanalCrm | null
-  valor_proposta: number | null
-  capital_declarado: string | null
-  data_criacao: string | null
-  atualizado_em: string
 }
 
 // === METAS ===

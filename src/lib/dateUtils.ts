@@ -29,15 +29,6 @@ export function getMtdDates() {
   return { ...r, mes: r.start }
 }
 
-export function getPrevMonthDates(startDate: string) {
-  const [y, m] = startDate.split('-').map(Number)
-  const pm = m === 1 ? 12 : m - 1
-  const py = m === 1 ? y - 1 : y
-  const mStr = String(pm).padStart(2, '0')
-  const lastDay = new Date(py, pm, 0).getDate()
-  return { start: `${py}-${mStr}-01`, end: `${py}-${mStr}-${String(lastDay).padStart(2, '0')}` }
-}
-
 /** "Ago 2026". Formato curto (3 letras + ano). */
 export function monthLabel(startDate: string) {
   const [y, m] = startDate.split('-').map(Number)

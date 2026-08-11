@@ -1899,7 +1899,7 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
             title="Distribuição de leads por etapa e aging"
             sub="Quantidade de oportunidades abertas em cada etapa do funil"
           />
-          <BubbleMatrix crmData={crmData} crmAllData={crmAllData} />
+          <BubbleMatrix crmAllData={crmAllData} />
         </SCard>
       </div>
 

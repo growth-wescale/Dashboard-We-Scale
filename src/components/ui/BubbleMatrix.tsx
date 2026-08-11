@@ -58,16 +58,24 @@ function med(arr: number[]): number {
   return s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m]
 }
 
+// Retorna a data de ENTRADA na etapa atual do deal — ou null se não tiver essa data preenchida.
+// Antes fazia fallback pra data de etapas ANTERIORES (data_mql, data_sql, data_criacao_negociacao),
+// o que distorcia o aging: um deal 30 dias no Comitê aparecia como 60 dias "desde o SAL".
+// Fallback agora só usa uma etapa vizinha próxima; se ambas nulas, deixa null e o chamador
+// usa data_criacao_negociacao como último recurso.
 function stageDateStr(r: VwMarketingFunil, stage: string): string | null {
   const s = stage.toLowerCase()
-  if (s.includes('diagnós'))           return r.data_diagnostico ?? r.data_sql ?? r.data_mql ?? r.data_criacao_negociacao
-  if (s.includes('sal') || s.includes('oportunidade') || s.includes('comitê') || s.includes('pré contrato') || s.includes('pre contrato'))
-                                        return r.data_sal ?? r.data_sql ?? r.data_mql ?? r.data_criacao_negociacao
-  if (s.includes('documentação'))      return r.data_oportunidade ?? r.data_sal ?? r.data_criacao_negociacao
-  if (s.includes('reunião'))           return r.data_sql ?? r.data_mql ?? r.data_criacao_negociacao
-  if (s.includes('no show'))           return r.data_no_show ?? r.data_sql ?? r.data_mql ?? r.data_criacao_negociacao
-  if (s.includes('contato efetivo'))   return r.data_contato_efetivo ?? r.data_mql ?? r.data_criacao_negociacao
-  return r.data_tentando_contato ?? r.data_mql ?? r.data_criacao_negociacao
+  if (s.includes('diagnós'))           return r.data_diagnostico ?? null
+  if (s.includes('sal'))               return r.data_sal ?? null
+  // Comitê/Pré-Contrato/Documentação/Oportunidade não têm data própria na view atual —
+  // data_oportunidade é a mais próxima temporalmente, com data_sal como fallback próximo.
+  if (s.includes('oportunidade') || s.includes('comitê') || s.includes('pré contrato') ||
+      s.includes('pre contrato') || s.includes('documentação'))
+                                        return r.data_oportunidade ?? r.data_sal ?? null
+  if (s.includes('reunião'))           return r.data_sql ?? null
+  if (s.includes('no show'))           return r.data_no_show ?? null
+  if (s.includes('contato efetivo'))   return r.data_contato_efetivo ?? null
+  return r.data_tentando_contato ?? null
 }
 
 interface BubbleData {
@@ -83,7 +91,6 @@ interface BubbleData {
 }
 
 interface Props {
-  crmData: VwMarketingFunil[]
   crmAllData: VwMarketingFunil[]
 }
 

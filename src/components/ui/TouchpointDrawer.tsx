@@ -23,8 +23,8 @@ const STATUS_COLORS: Record<StatusExecucao, { bg: string; color: string }> = {
 interface TouchpointDrawerProps {
   tp: Touchpoint | null
   onClose: () => void
-  onStatusChange: (tpId: string, status: StatusExecucao) => Promise<void>
-  onCopyChange: (tpId: string, copy: string) => Promise<void>
+  onStatusChange: (tpId: string, status: StatusExecucao) => Promise<{ ok: boolean; error?: string } | void>
+  onCopyChange: (tpId: string, copy: string) => Promise<{ ok: boolean; error?: string } | void>
   fetchHistorico: (tpId: string) => Promise<StatusHistorico[]>
 }
 

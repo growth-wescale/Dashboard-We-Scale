@@ -181,12 +181,7 @@ export function MetricSeriesChart({ media, leads }: Props) {
     if (def.unit === 'int') {
       return buckets.reduce((s, b) => s + b.values[key], 0)
     }
-    // derived: recompute from aggregated totals across whole range for accuracy
-    const tot = buckets.reduce((s, b) => ({
-      spend:  s.spend  + (b.values.cpl * b.values.lead + b.values.cpmql * 0), // fallback below
-    }), { spend: 0 })
-    void tot
-    // simpler: compute from raw media & leads sums
+    // derived: compute from raw media & leads sums (agregado no range inteiro)
     let spend = 0, impressoes = 0, cliques = 0, lpv = 0
     for (const r of media) {
       spend      += r.spend_brl || 0

@@ -12,8 +12,8 @@ interface UseCadenciasResult {
   pendencias: PendenciaGlobal[]
   loading: boolean
   error: string | null
-  updateStatus: (tpId: string, novoStatus: StatusExecucao) => Promise<void>
-  updateCopy: (tpId: string, copyAtual: string) => Promise<void>
+  updateStatus: (tpId: string, novoStatus: StatusExecucao) => Promise<{ ok: boolean; error?: string }>
+  updateCopy: (tpId: string, copyAtual: string) => Promise<{ ok: boolean; error?: string }>
   fetchHistorico: (tpId: string) => Promise<StatusHistorico[]>
   reload: () => void
 }
@@ -68,16 +68,19 @@ export function useCadencias(): UseCadenciasResult {
     }
   }, [tick])
 
-  async function updateStatus(tpId: string, novoStatus: StatusExecucao) {
+  async function updateStatus(tpId: string, novoStatus: StatusExecucao): Promise<{ ok: boolean; error?: string }> {
     const tp = touchpoints.find(t => t.id === tpId)
-    if (!tp) return
+    if (!tp) return { ok: false, error: 'Touchpoint não encontrado' }
 
     const { error } = await supabase
       .from('touchpoints')
       .update({ status: novoStatus, atualizado_em: new Date().toISOString() })
       .eq('id', tpId)
 
-    if (error) { console.error(error); return }
+    if (error) {
+      setError(`Erro ao salvar status: ${error.message}`)
+      return { ok: false, error: error.message }
+    }
 
     await supabase.from('status_historico').insert({
       touchpoint_id: tpId,
@@ -88,19 +91,24 @@ export function useCadencias(): UseCadenciasResult {
     setTouchpoints(prev =>
       prev.map(t => t.id === tpId ? { ...t, status: novoStatus } : t)
     )
+    return { ok: true }
   }
 
-  async function updateCopy(tpId: string, copyAtual: string) {
+  async function updateCopy(tpId: string, copyAtual: string): Promise<{ ok: boolean; error?: string }> {
     const { error } = await supabase
       .from('touchpoints')
       .update({ copy_atual: copyAtual, atualizado_em: new Date().toISOString() })
       .eq('id', tpId)
 
-    if (error) { console.error(error); return }
+    if (error) {
+      setError(`Erro ao salvar copy: ${error.message}`)
+      return { ok: false, error: error.message }
+    }
 
     setTouchpoints(prev =>
       prev.map(t => t.id === tpId ? { ...t, copy_atual: copyAtual } : t)
     )
+    return { ok: true }
   }
 
   async function fetchHistorico(tpId: string): Promise<StatusHistorico[]> {

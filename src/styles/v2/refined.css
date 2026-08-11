@@ -1,0 +1,224 @@
+/* We Scale — Refined layer (V2)
+ *
+ * ADDITIVE. Nothing here removes or renames a V1 token: the `--r-*` scale is new,
+ * and the remap only happens inside [data-ui="refined"], so the original design
+ * stays byte-identical outside that scope (print material, V1 comparison).
+ *
+ * Language: minimalist / high-air. Surfaces float on shadow; o JOGO DE CORES é
+ * o da V1 (canvas #F8F9FB, tinta #33032D, rail vinho escuro, accent nos ativos).
+ */
+
+:root {
+  /* ---- UI font (interface) vs. brand font (wordmark / institutional) ---- */
+  --font-ui: var(--font-body);
+  --font-brand: 'Clash Display', 'Public Sans', system-ui, sans-serif;
+
+  /* ---- Neutral ramp — 7 steps, família fria da V1 (#E9EDF2 / #CAD3E0 / #9AA6B8) ---- */
+  --r-tint-1: #FBFCFD;
+  --r-tint-2: #F3F5F8;
+  --r-tint-3: #E9EDF2;
+  --r-tint-4: #CAD3E0;
+  --r-tint-5: #9AA6B8;
+  --r-tint-6: #6F7E93;
+  --r-tint-7: #45536B;
+
+  /* ---- Surfaces ---- */
+  --r-canvas: #F8F9FB;          /* V1 --ws-bg exato */
+  --r-surface: #FFFFFF;
+  --r-surface-tint: var(--r-tint-2);
+  --r-hairline: #E9EDF2;        /* V1 --ws-border exato */
+  --r-hairline-strong: #CAD3E0; /* V1 --ws-border-strong exato */
+
+  /* ---- Text ramp — 3 levels ---- */
+  --r-text-strong: #33032D;   /* V1 --ws-text-primary exato */
+  --r-text-med: #7C6B78;      /* V1 --ws-text-secondary exato */
+  --r-text-weak: #A69AA2;
+
+  /* ---- Elevation — three levels, tinted com a tinta V1 (#33032D), diffuse ---- */
+  --r-shadow-card:  0 1px 2px rgba(51,3,45,.05), 0 8px 24px rgba(51,3,45,.07);   /* @kind shadow */
+  --r-shadow-hover: 0 2px 6px rgba(51,3,45,.07), 0 16px 40px rgba(51,3,45,.11);
+  --r-shadow-modal: 0 8px 24px rgba(51,3,45,.12), 0 40px 88px rgba(51,3,45,.20);
+
+  /* Borda especular — luz no topo + hairline; dá o acabamento macio dos controles */
+  --r-rim: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(51,3,45,.05); /* @kind shadow */
+  --r-control: var(--r-rim), 0 1px 2px rgba(51,3,45,.05), 0 4px 12px rgba(51,3,45,.05);
+  --r-control-hover: var(--r-rim), 0 2px 6px rgba(51,3,45,.07), 0 10px 24px rgba(51,3,45,.09);
+
+  /* ---- Radius — scaled by container size ---- */
+  --r-radius-xs: 8px;
+  --r-radius-sm: 12px;   /* elements inside a card */
+  --r-radius-md: 20px;   /* card */
+  --r-radius-lg: 26px;   /* large panel, sidebar */
+  --r-radius-pill: 999px;
+
+  /* ---- Motion ---- */
+  --r-ease: cubic-bezier(0.32, 0.72, 0, 1); /* @kind other */
+  --r-dur: 260ms; /* @kind other */
+  --r-dur-fast: 140ms; /* @kind other */
+  /* Spring — gentle overshoot; visual arrival ~300ms, settle ~480ms (Apple response 0.4 corrigido: visualDuration, não duration) */
+  --r-spring: linear(0, 0.0036 1.1%, 0.0185 2.4%, 0.0663 4.7%, 0.1615 7.7%, 0.3018 11.3%, 0.5445 16.5%, 0.7809 21.8%, 0.9312 26.4%, 1.0164 31.4%, 1.0505 36.5%, 1.049 42.2%, 1.0258 49.3%, 1.0068 56%, 0.9967 63.4%, 0.9968 71.1%, 1.0002 82.8%, 1); /* @kind other */
+  --r-dur-spring: 480ms; /* @kind other */
+
+  /* ---- Glass — only where surfaces genuinely overlap; never glass over glass ---- */
+  --r-glass-bg: rgba(255, 255, 255, 0.68);
+  --r-glass-blur: blur(24px) saturate(1.5); /* @kind other */
+  --r-glass-blur-strong: blur(36px) saturate(1.6); /* @kind other */
+  --r-glass-sidebar: rgba(255, 255, 255, 0.52);
+  --r-glass-menu: rgba(255, 255, 255, 0.80);
+  --r-glass-edge: inset 0 1px 0 rgba(255,255,255,.60), inset 0 0 0 1px rgba(255,255,255,.25); /* @kind shadow */
+  --r-scrim: rgba(51, 3, 45, 0.28);
+
+  /* ---- Fills (Apple "fill" — recessed tracks, segmented controls) ---- */
+  --r-fill: rgba(51, 3, 45, 0.055);
+  --r-fill-strong: rgba(51, 3, 45, 0.10);
+  --r-seg-thumb: var(--brand-accent);              /* V1: estado ativo pinta em accent */
+  --r-seg-thumb-text: var(--brand-accent-contrast);
+
+  /* ---- Canvas glow — intensidade do gradiente tingido pela marca ativa ---- */
+  /* canvas V1 é chapado — sem glow de marca */
+  --r-glow-1: 0%; /* @kind other */
+  --r-glow-2: 0%; /* @kind other */
+
+  /* ---- Focus ---- */
+  --r-focus-ring: 0 0 0 4px color-mix(in srgb, var(--brand-accent) 22%, transparent);
+
+  /* ---- Sidebar re-skin tokens — default = V1 dark rail; [data-nav="glass"] os troca ---- */
+  --sb-bg: var(--brand-dark);
+  --sb-text: var(--ws-text-on-dark);
+  --sb-text-muted: var(--ws-text-on-dark-muted);
+  --sb-item-active-bg: rgba(255,255,255,0.14);
+  --sb-item-active-text: #fff;
+  --sb-item-active-shadow: 0 0 0 0 transparent; /* @kind shadow */
+  --sb-item-hover-bg: rgba(255,255,255,0.07);
+  --sb-badge-bg: rgba(255,255,255,0.16);
+  --sb-rule: rgba(255,255,255,0.16);
+  --sb-texture-opacity: 0.10; /* @kind other */
+}
+
+/* =====================================================================
+   REMAP — the V1 token names keep working, but resolve to refined values.
+   Applied by putting data-ui="refined" on <html> (or any ancestor).
+   ===================================================================== */
+[data-ui="refined"] {
+  --ws-bg: var(--r-canvas);
+  --ws-surface: var(--r-surface);
+  --ws-border: var(--r-hairline);
+  --ws-border-strong: var(--r-hairline-strong);
+  --ws-text-primary: var(--r-text-strong);
+  --ws-text-secondary: var(--r-text-med);
+
+  --radius-sm: var(--r-radius-sm);
+  --radius-md: var(--r-radius-md);
+  --radius-lg: var(--r-radius-lg);
+
+  --shadow-sm: var(--r-shadow-card);
+  --shadow-md: var(--r-shadow-hover);
+  --shadow-lg: var(--r-shadow-modal);
+
+  /* interface is one neutral sans; brand font only in the wordmark */
+  --font-title: var(--font-ui);
+  --font-display: var(--font-ui);
+
+  /* nothing bold — contrast comes from size, not weight */
+  --fw-metric: 400; /* @kind font */
+  --fw-title: 400; /* @kind font */
+  --fw-strong: 500; /* @kind font */
+  --fw-button: 500; /* @kind font */
+  --fw-wordmark: 500; /* @kind font */
+  --tracking-title: -0.024em;
+
+  --fs-page-title: 30px;
+  --fs-section: 20px;
+  --fs-metric: 32px;
+  --fs-metric-sm: 24px;
+
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabular figures for data, proportional for prose */
+[data-ui="refined"] p, [data-ui="refined"] .prose { font-variant-numeric: normal; }
+
+[data-ui="refined"] :focus-visible {
+  outline: none;
+  box-shadow: var(--r-focus-ring);
+}
+
+/* =====================================================================
+   DARK THEME — prepared, NOT applied. Opt in with data-theme="dark".
+   ===================================================================== */
+[data-ui="refined"][data-theme="dark"],
+[data-ui="refined"] [data-theme="dark"] {
+  --r-canvas: #161015;
+  --r-surface: #1F1720;
+  --r-surface-tint: #271E27;
+  --r-hairline: rgba(255, 255, 255, 0.07);
+  --r-hairline-strong: rgba(255, 255, 255, 0.13);
+  --r-text-strong: #F6F1F5;
+  --r-text-med: #B5A6B2;
+  --r-text-weak: #8A7A87;
+  --r-tint-2: #241C24;
+  --r-tint-3: #2E242D;
+  --r-tint-4: #3C2F3A;
+  --r-shadow-card:  0 1px 2px rgba(0,0,0,.35), 0 6px 20px rgba(0,0,0,.30);
+  --r-shadow-hover: 0 2px 6px rgba(0,0,0,.40), 0 14px 36px rgba(0,0,0,.38);
+  --r-shadow-modal: 0 8px 24px rgba(0,0,0,.45), 0 36px 80px rgba(0,0,0,.55);
+  --r-glass-bg: rgba(31, 23, 32, 0.72);
+  --r-scrim: rgba(0, 0, 0, 0.55);
+  --r-rim: inset 0 1px 0 rgba(255,255,255,.09), inset 0 0 0 1px rgba(255,255,255,.06); /* @kind shadow */
+  --r-control: var(--r-rim), 0 1px 2px rgba(0,0,0,.40), 0 4px 12px rgba(0,0,0,.35);
+  --r-control-hover: var(--r-rim), 0 2px 6px rgba(0,0,0,.45), 0 10px 24px rgba(0,0,0,.40);
+  --r-fill: rgba(255, 255, 255, 0.075);
+  --r-fill-strong: rgba(255, 255, 255, 0.13);
+  --r-seg-thumb: var(--brand-accent);
+  --r-glass-sidebar: rgba(26, 18, 25, 0.55);
+  --r-glass-menu: rgba(31, 23, 32, 0.80);
+  --r-glass-edge: inset 0 1px 0 rgba(255,255,255,.10), inset 0 0 0 1px rgba(255,255,255,.06); /* @kind shadow */
+  --r-glow-1: 0%; /* @kind other */
+  --r-glow-2: 0%; /* @kind other */
+}
+
+/* =====================================================================
+   APPLE / LIQUID GLASS (V2.1) — helpers usados pelos shells V2.
+   Vidro só em camada sobreposta (sidebar flutuante, scrim, menu);
+   cards continuam sólidos. Concentricidade: raio filho = raio pai − padding.
+   ===================================================================== */
+
+/* Canvas com glow da marca ativa — aplicar no elemento que carrega [data-brand] */
+[data-ui="refined"] .r-canvas-brand {
+  background:
+    radial-gradient(1100px 720px at 86% -12%, color-mix(in srgb, var(--brand-accent) var(--r-glow-1), transparent), transparent 62%),
+    radial-gradient(900px 700px at -10% 108%, color-mix(in srgb, var(--brand-accent) var(--r-glow-2), transparent), transparent 58%),
+    var(--r-canvas);
+}
+
+/* Rail de navegação flutuante — cores V1 (vinho escuro, defaults --sb-* do :root); só a geometria é nova */
+[data-nav="glass"] {
+  margin: 12px 0 12px 12px;
+  border-radius: var(--r-radius-lg);
+  box-shadow: var(--r-shadow-card);
+}
+
+/* Menus / popovers / sheets em vidro */
+[data-ui="refined"] .r-glass-menu {
+  background: var(--r-glass-menu);
+  -webkit-backdrop-filter: var(--r-glass-blur-strong);
+  backdrop-filter: var(--r-glass-blur-strong);
+  border-radius: var(--r-radius-md);
+  box-shadow: var(--r-glass-edge), var(--r-shadow-modal);
+}
+
+/* Press state háptico — todo controle responde ao toque */
+[data-ui="refined"] button { -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: no-preference) {
+  [data-ui="refined"] button:not(:disabled):active { transform: scale(0.97); }
+}
+
+/* Entradas com spring (interruptíveis por serem CSS animations em elementos recriáveis) */
+@keyframes r-sheet-in { from { transform: translateX(32px); opacity: 0; } }
+@keyframes r-pop-in { from { transform: scale(0.97); opacity: 0; } }
+@keyframes r-fade-in { from { opacity: 0; } }
+
+/* Reduce Motion: afrouxa em vez de remover — durações mínimas, sem deslocamento */
+@media (prefers-reduced-motion: reduce) {
+  [data-ui="refined"] * { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}

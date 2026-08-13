@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { GitCompare, X, ChevronDown } from 'lucide-react'
 import type { DateRange } from '@/lib/periodCompare'
 import { previousMonthSameRange, formatCompareLabel } from '@/lib/periodCompare'
+import { todayLocal } from '@/lib/dateUtils'
 
 interface CompareControlProps {
   baseRange: DateRange
@@ -9,8 +10,6 @@ interface CompareControlProps {
   compareRange: DateRange | null
   onChange: (state: { enabled: boolean; compareRange: DateRange | null }) => void
 }
-
-const TODAY = new Date().toISOString().slice(0, 10)
 
 export function CompareControl({ baseRange, enabled, compareRange, onChange }: CompareControlProps) {
   const [open, setOpen] = useState(false)
@@ -120,7 +119,7 @@ export function CompareControl({ baseRange, enabled, compareRange, onChange }: C
               type="date"
               value={effective.end}
               min={effective.start}
-              max={TODAY}
+              max={todayLocal()}
               onChange={e => setRange({ ...effective, end: e.target.value })}
               style={inputSt}
             />

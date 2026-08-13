@@ -14,6 +14,8 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { nf, money, moneyK } from '@/lib/format'
 import { isoDate, currentMonthRange, shortMonth } from '@/lib/dateUtils'
+import { downloadCsv } from '@/lib/csv'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 
 const BRANDS = BRANDS_WITH_OVERVIEW
 
@@ -243,7 +245,7 @@ export function FunilVendas() {
   const curMonthLabel = shortMonth(range.start)
 
   // ── Data ──────────────────────────────────────────────────────────────────────
-  const { data: rawCurRows, loading } = useVendasFunil({ marca, dataInicio: range.start, dataFim: range.end })
+  const { data: rawCurRows, loading, error: curError } = useVendasFunil({ marca, dataInicio: range.start, dataFim: range.end })
   const { data: rawPrevRows }         = useVendasFunil({ marca, dataInicio: prev.start, dataFim: prev.end })
   const { data: curMedia }            = useMediaData({ marca, dataInicio: range.start, dataFim: range.end })
   const { data: prevMedia }           = useMediaData({ marca, dataInicio: prev.start, dataFim: prev.end })
@@ -398,12 +400,22 @@ export function FunilVendas() {
                 onChange={e => setRange(r => ({ ...r, end: e.target.value }))}
                 style={{ border: 'none', background: 'transparent', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }} />
             </div>
-            <button style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+            <button
+              onClick={() => downloadCsv(
+                rawCurRows,
+                `funil-vendas-${marca ?? 'todas'}-${range.start}-${range.end}`,
+              )}
+              disabled={!rawCurRows.length}
+              title={!rawCurRows.length ? 'Sem dados no período' : 'Exportar deals do período em CSV'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: rawCurRows.length ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-body)', opacity: rawCurRows.length ? 1 : 0.5 }}
+            >
               <Download size={14} /> Exportar
             </button>
           </>
         }
       />
+
+      <QueryErrorBanner errors={[curError]} scope="Funil de Vendas" />
 
       {/* ── Data notice (dinâmico via dashboard_notices) ─────────────────────── */}
       {notice && notice.mostrar_banner && notice.id !== dismissedNoticeId && (

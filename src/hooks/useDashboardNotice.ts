@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { todayLocal } from '@/lib/dateUtils'
 
 // Aviso configurável exibido no topo das páginas de vendas.
 // Fonte: tabela dashboard_notices no banco de Expansão (policy pública de leitura).
@@ -38,7 +39,7 @@ async function fetchActive(): Promise<{ notice: DashboardNotice | null; error: s
     .limit(5)
 
   if (error) return { notice: null, error: error.message }
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   const rows = (data ?? []) as DashboardNotice[]
   const active = rows.find(r => isWithinRange(r, today)) ?? null
   return { notice: active, error: null }

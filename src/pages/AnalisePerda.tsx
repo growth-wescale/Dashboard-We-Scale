@@ -11,6 +11,8 @@ import { BRANDS_WITH_OVERVIEW, BRAND_ACCENT } from '@/constants/brands'
 import { nf, pct } from '@/lib/format'
 import { currentMonthRange, fmtBR, monthLabelLong as monthLabel } from '@/lib/dateUtils'
 import { SCard, KTile } from '@/components/ui/v2'
+import { downloadCsv } from '@/lib/csv'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 
 // ─── Brand config ──────────────────────────────────────────────────────────
 
@@ -284,8 +286,8 @@ export function AnalisePerda() {
   const [respTab, setRespTab] = useState<'todos' | 'SDR' | 'Closer'>('todos')
 
   const brand = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
-  const { data: perdas } = usePerdas({ marca: brand.marca, dataInicio: start, dataFim: end })
-  const { data: deals } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end })
+  const { data: perdas, error: perdasError } = usePerdas({ marca: brand.marca, dataInicio: start, dataFim: end })
+  const { data: deals, error: dealsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end })
   // MQLs vêm do banco Marketing (P1)
   const { data: rawLeads } = useLeads({ marca: brand.marca, dataInicio: start, dataFim: end })
   const leadsMql = useMemo(() => deduplicateLeads(rawLeads).filter(isLeadMql), [rawLeads])
@@ -370,16 +372,23 @@ export function AnalisePerda() {
               style={{ border: 'none', background: 'transparent', color: 'var(--ws-text-primary)', fontSize: 13 }} />
           </div>
 
-          <button style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 16px', borderRadius: 999,
-            border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
-            color: 'var(--ws-text-primary)', fontSize: 13, cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
-          }}>
+          <button
+            onClick={() => downloadCsv(perdas, `analise-perda-${brand.marca ?? 'todas'}-${start}-${end}`)}
+            disabled={!perdas.length}
+            title={!perdas.length ? 'Sem dados no período' : 'Exportar perdas em CSV'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '10px 16px', borderRadius: 999,
+              border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
+              color: 'var(--ws-text-primary)', fontSize: 13, cursor: perdas.length ? 'pointer' : 'not-allowed', boxShadow: 'var(--shadow-sm)',
+              opacity: perdas.length ? 1 : 0.5,
+            }}>
             <Download size={14} /> Exportar
           </button>
         </div>
       </div>
+
+      <QueryErrorBanner errors={[perdasError, dealsError]} scope="Análise de Perda" />
 
       {/* Card dark 3 KPIs ── */}
       <div style={{

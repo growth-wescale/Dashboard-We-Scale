@@ -10,9 +10,19 @@ export const SLUG_TO_MARCA: Record<string, Marca> = {
   'viva':         'Viva',
 }
 
-/** Data ISO (YYYY-MM-DD) do Date. */
+/** Data ISO (YYYY-MM-DD) do Date — em fuso LOCAL, não UTC.
+ *  toISOString().slice(0,10) converte para UTC e dá off-by-one perto da meia-noite.
+ */
 export function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** Hoje em ISO local (YYYY-MM-DD). Convém usar em vez de `new Date().toISOString().slice(0,10)`. */
+export function todayLocal(): string {
+  return isoDate(new Date())
 }
 
 /** { start: '2026-08-01', end: '2026-08-11' } — mês corrente do 1º ao hoje. */

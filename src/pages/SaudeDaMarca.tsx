@@ -14,11 +14,12 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { useLeads } from '@/hooks/useLeads'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
-import { SLUG_TO_MARCA, monthLabel } from '@/lib/dateUtils'
+import { SLUG_TO_MARCA, monthLabel, todayLocal, isoDate } from '@/lib/dateUtils'
 import { getCreativeAsset } from '@/lib/creativeAssets'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { TermosPanel } from '@/components/ui/TermosPanel'
 import { SocialPanel } from '@/components/ui/SocialPanel'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
@@ -451,14 +452,16 @@ function MetricPicker({ options, value, onChange, size='sm' }: { options:{value:
 }
 
 // ── PeriodPicker ──────────────────────────────────────────────────────────────
-const TODAY = new Date().toISOString().slice(0, 10)
+// TODAY vira uma função pra evitar congelamento em module scope (bug de virada de dia).
+const todayISO = () => todayLocal()
 
 function makeMtd(): { start: string; end: string } {
-  const [y, m] = TODAY.split('-').map(Number)
-  return { start: `${y}-${String(m).padStart(2, '0')}-01`, end: TODAY }
+  const t = todayISO()
+  const [y, m] = t.split('-').map(Number)
+  return { start: `${y}-${String(m).padStart(2, '0')}-01`, end: t }
 }
 function makePrevNthMonth(n: number): { start: string; end: string } {
-  const [y, m] = TODAY.split('-').map(Number)
+  const [y, m] = todayISO().split('-').map(Number)
   const total = (y * 12 + m - 1) - n
   const py = Math.floor(total / 12)
   const pm = (total % 12) + 1
@@ -468,7 +471,7 @@ function makePrevNthMonth(n: number): { start: string; end: string } {
 }
 function makeLastN(n: number): { start: string; end: string } {
   const d = new Date(); d.setDate(d.getDate() - (n - 1))
-  return { start: d.toISOString().slice(0, 10), end: TODAY }
+  return { start: isoDate(d), end: todayISO() }
 }
 
 const PRESETS = [
@@ -573,7 +576,7 @@ function PeriodPicker({ value, onChange }: { value: { start: string; end: string
             <div style={{ padding: '6px 14px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
               <input type="date" value={value.start} max={value.end} onChange={e => onChange({ ...value, start: e.target.value })} style={inputSt} />
               <span style={{ color: 'var(--ws-text-secondary)', fontSize: 12 }}>–</span>
-              <input type="date" value={value.end} min={value.start} max={TODAY} onChange={e => onChange({ ...value, end: e.target.value })} style={inputSt} />
+              <input type="date" value={value.end} min={value.start} max={todayISO()} onChange={e => onChange({ ...value, end: e.target.value })} style={inputSt} />
             </div>
           )}
         </div>
@@ -1802,11 +1805,11 @@ export function SaudeDaMarca() {
   const mes        = useMemo(() => `${range.start.slice(0, 7)}-01`, [range.start])
   const marca      = SLUG_TO_MARCA[activeBrand]
 
-  const { data: mediaData,   loading: mediaLoading  } = useMediaData({ marca, dataInicio, dataFim })
-  const { data: crmRaw,     loading: crmLoading    } = useVendasFunil({ marca, dataInicio, dataFim })
-  const { data: crmAllRaw }                           = useVendasFunil({ marca })
-  const { data: leadsData,  loading: leadsLoading  } = useLeads({ marca, dataInicio, dataFim })
-  const { data: metasData }                           = useMetas({ marca, mes })
+  const { data: mediaData,   loading: mediaLoading, error: mediaError  } = useMediaData({ marca, dataInicio, dataFim })
+  const { data: crmRaw,     loading: crmLoading,   error: crmError    } = useVendasFunil({ marca, dataInicio, dataFim })
+  const { data: crmAllRaw }                                              = useVendasFunil({ marca })
+  const { data: leadsData,  loading: leadsLoading, error: leadsError  } = useLeads({ marca, dataInicio, dataFim })
+  const { data: metasData,  error: metasError }                          = useMetas({ marca, mes })
 
   // Dados do período de comparação (só para os big numbers da aba "Visão Geral")
   const { data: mediaCompareRaw } = useMediaData({ marca, dataInicio: cmpInicio, dataFim: cmpFim })
@@ -1989,6 +1992,7 @@ export function SaudeDaMarca() {
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
       {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}
+      <QueryErrorBanner errors={[mediaError, crmError, leadsError, metasError]} scope="Saúde da Marca" />
       <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
         {body}
       </div>

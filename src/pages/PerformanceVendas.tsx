@@ -11,6 +11,8 @@ import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { nf, pct, moneyBig } from '@/lib/format'
 import { currentMonthRange, monthLabelLong as monthLabel, fmtBR, daysInMonth, dayOfMonth } from '@/lib/dateUtils'
 import { SCard, KTile } from '@/components/ui/v2'
+import { downloadCsv } from '@/lib/csv'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 
 const BRANDS = BRANDS_WITH_OVERVIEW
 
@@ -329,9 +331,9 @@ export function PerformanceVendas() {
 
   const brand = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
   const mesKey = start.slice(0, 7)
-  const { data: rows } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end })
+  const { data: rows, error: rowsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end })
   const { data: roster } = useRosterVendas()
-  const { data: metas }  = useMetasPerformance({ mesKey, marca: brand.marca })
+  const { data: metas, error: metasError }  = useMetasPerformance({ mesKey, marca: brand.marca })
   // MQL vem SEMPRE do banco Marketing (P1 confirmado)
   const { data: rawLeads } = useLeads({ marca: brand.marca, dataInicio: start, dataFim: end })
   const mqlCount = useMemo(() => deduplicateLeads(rawLeads).filter(isLeadMql).length, [rawLeads])
@@ -432,16 +434,23 @@ export function PerformanceVendas() {
               style={{ border: 'none', background: 'transparent', color: 'var(--ws-text-primary)', fontSize: 13 }} />
           </div>
 
-          <button style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 16px', borderRadius: 999,
-            border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
-            color: 'var(--ws-text-primary)', fontSize: 13, cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
-          }}>
+          <button
+            onClick={() => downloadCsv(rows, `performance-vendas-${brand.marca ?? 'todas'}-${start}-${end}`)}
+            disabled={!rows.length}
+            title={!rows.length ? 'Sem dados no período' : 'Exportar performance da equipe em CSV'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '10px 16px', borderRadius: 999,
+              border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
+              color: 'var(--ws-text-primary)', fontSize: 13, cursor: rows.length ? 'pointer' : 'not-allowed', boxShadow: 'var(--shadow-sm)',
+              opacity: rows.length ? 1 : 0.5,
+            }}>
             <Download size={14} /> Exportar
           </button>
         </div>
       </div>
+
+      <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance de Vendas" />
 
       {/* ── Seção 1 · SDR ─────────────────────────────────────────────────── */}
       <SectionHeader n={1} accent={SDR_ACCENT} title="Executivos de Expansão (SDR)"

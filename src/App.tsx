@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 import { Login } from '@/pages/Login'
 import { PrivateRoute } from '@/components/PrivateRoute'
 import { AppLayout } from '@/components/AppLayout'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 // Lazy imports: cada rota vira um chunk próprio, reduz bundle inicial ~40%
 const VisaoGeral        = lazy(() => import('@/pages/VisaoGeral').then(m => ({ default: m.VisaoGeral })))
@@ -26,6 +27,31 @@ function PageLoader() {
   )
 }
 
+function RoutedContent() {
+  // key={pathname} reseta o ErrorBoundary ao trocar de rota — erro numa página não persiste na próxima.
+  const { pathname } = useLocation()
+  return (
+    <ErrorBoundary key={pathname} scope={pathname}>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/"              element={<VisaoGeral />} />
+          <Route path="/marca"         element={<SaudeDaMarca />} />
+          <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
+          <Route path="/cadencias"     element={<Cadencias />} />
+          <Route path="/sop-marketing" element={<SopMarketing />} />
+          <Route path="/funil-vendas"       element={<FunilVendas />} />
+          <Route path="/performance-vendas" element={<PerformanceVendas />} />
+          <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
+          <Route path="/analise-perda"      element={<AnalisePerda />} />
+          <Route path="/analise-termos"     element={<AnaliseTermos />} />
+          <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
+          <Route path="*"                 element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -36,22 +62,7 @@ export default function App() {
           element={
             <PrivateRoute>
               <AppLayout>
-                <Suspense fallback={<PageLoader />}>
-                  <Routes>
-                    <Route path="/"              element={<VisaoGeral />} />
-                    <Route path="/marca"         element={<SaudeDaMarca />} />
-                    <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
-                    <Route path="/cadencias"     element={<Cadencias />} />
-                    <Route path="/sop-marketing" element={<SopMarketing />} />
-                    <Route path="/funil-vendas"       element={<FunilVendas />} />
-                    <Route path="/performance-vendas" element={<PerformanceVendas />} />
-                    <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
-                    <Route path="/analise-perda"      element={<AnalisePerda />} />
-                    <Route path="/analise-termos"     element={<AnaliseTermos />} />
-                    <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
-                    <Route path="*"                 element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Suspense>
+                <RoutedContent />
               </AppLayout>
             </PrivateRoute>
           }

@@ -15,7 +15,7 @@ import { useLeads } from '@/hooks/useLeads'
 import { useMetas } from '@/hooks/useMetas'
 import { useAllBrandsMqlPacing } from '@/hooks/useMqlPacing'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
-import { SLUG_TO_MARCA, getMtdDates, monthLabel } from '@/lib/dateUtils'
+import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST_MARKETING } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
@@ -662,7 +662,7 @@ function DateRange({ range, onChange }: {
   range: { start: string; end: string }
   onChange: (r: { start: string; end: string }) => void
 }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocal()
   const inputStyle: CSSProperties = { border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer' }
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--ws-surface)', border: '1px solid var(--ws-border-strong)', borderRadius: 999, padding: '0 14px', height: 40 }}>

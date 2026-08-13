@@ -25,6 +25,8 @@ export interface FbPostRow {
   created_time: string
   message: string | null
   permalink_url: string | null
+  capa_url: string | null
+  media_type: string | null
   reactions_count: number
   comments_count: number
   shares_count: number

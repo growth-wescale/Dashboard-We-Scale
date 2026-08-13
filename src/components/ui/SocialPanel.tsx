@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Users, Heart, MessageCircle, Share2, Eye, ExternalLink } from 'lucide-react'
+import { Users, Heart, MessageCircle, Share2, Eye, ExternalLink, Play } from 'lucide-react'
 import { useFacebookPages, type FbPageDailyRow, type FbPostRow } from '@/hooks/useFacebookPages'
 import { nf, nfK } from '@/lib/format'
 
@@ -167,12 +167,40 @@ function FollowersLineChart({ points }: { points: { dia: string; followers: numb
   )
 }
 
+function PostThumb({ url, mediaType }: { url: string | null; mediaType: string | null }) {
+  const isVideo = mediaType?.startsWith('video') || mediaType === 'video_inline'
+  if (!url) {
+    return (
+      <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--ws-bg)', border: '1px solid var(--ws-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ws-text-secondary)', fontSize: 10 }}>
+        —
+      </div>
+    )
+  }
+  return (
+    <div style={{ position: 'relative', width: 44, height: 44 }}>
+      <img
+        src={url}
+        alt=""
+        loading="lazy"
+        style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover', display: 'block', background: 'var(--ws-bg)' }}
+        onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
+      />
+      {isVideo && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.25)', borderRadius: 6, pointerEvents: 'none' }}>
+          <Play size={14} fill="#fff" color="#fff" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PostsTable({ rows }: { rows: FbPostRow[] }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <table style={tableStyle}>
         <thead>
           <tr>
+            <th style={{ ...thLeft, width: 60 }}></th>
             <th style={thLeft}>Data</th>
             <th style={thLeft}>Post</th>
             <th style={thRight}><Heart size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Reações</th>
@@ -188,6 +216,15 @@ function PostsTable({ rows }: { rows: FbPostRow[] }) {
             const msg = (r.message || '[sem texto]').replace(/\s+/g, ' ').slice(0, 90)
             return (
               <tr key={r.post_id}>
+                <td style={{ ...tdLeft, padding: '6px 12px' }}>
+                  {r.permalink_url ? (
+                    <a href={r.permalink_url} target="_blank" rel="noopener noreferrer" title="Abrir no Facebook" style={{ display: 'block' }}>
+                      <PostThumb url={r.capa_url} mediaType={r.media_type} />
+                    </a>
+                  ) : (
+                    <PostThumb url={r.capa_url} mediaType={r.media_type} />
+                  )}
+                </td>
                 <td style={tdLeft}>{r.created_time.slice(0, 10)}</td>
                 <td style={tdLeftWide} title={r.message || undefined}>{msg}</td>
                 <td style={tdRight}>{nf(r.reactions_count)}</td>

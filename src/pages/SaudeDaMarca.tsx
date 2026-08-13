@@ -368,30 +368,6 @@ function RadarChartSVG({ axes, series, size=340 }: { axes:{key:string;label:stri
   )
 }
 
-function Gauge({ value, max=8, warn=4, label: _label }: { value:number; max?:number; warn?:number; label?:string }) {
-  const W=220, H=130, cx=W/2, cy=H-12, r=92
-  const a=(t:number)=>Math.PI-t*Math.PI
-  const pt=(t:number,rad=r):[number,number]=>[cx+rad*Math.cos(a(t)), cy-rad*Math.sin(a(t))]
-  const t=Math.min(1,value/max)
-  const arc=(t0:number,t1:number,rad:number,w:number,color:string)=>{
-    const [x0,y0]=pt(t0,rad),[x1,y1]=pt(t1,rad)
-    return <path d={`M ${x0} ${y0} A ${rad} ${rad} 0 ${t1-t0>0.5?1:0} 1 ${x1} ${y1}`} fill="none" stroke={color} strokeWidth={w} strokeLinecap="butt" />
-  }
-  const [nx,ny]=pt(warn/max)
-  const centerY = cy - r * 0.38
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ maxWidth:260 }}>
-      {arc(0,1,r,22,'var(--ws-border)')}
-      {arc(0,t,r,22,'var(--brand-accent)')}
-      <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="var(--status-atencao)" strokeWidth="3" />
-      <text x={pt(0,r+14)[0]} y={cy+6} textAnchor="middle" fontSize="11" fill="var(--ws-text-secondary)">0</text>
-      <text x={pt(1,r+10)[0]} y={cy+6} textAnchor="middle" fontSize="11" fill="var(--ws-text-secondary)">{max}</text>
-      <text x={cx} y={centerY} textAnchor="middle" fontSize="28" fontWeight="700" fill="var(--ws-text-primary)" fontFamily="var(--font-display)">{value.toFixed(2)}</text>
-      <text x={cx} y={centerY + 18} textAnchor="middle" fontSize="11" fill="var(--ws-text-secondary)">frequência atual</text>
-    </svg>
-  )
-}
-
 function Scatter({ points, xLabel, yLabel, selectedId, onSelect }: {
   points:{x:number;y:number;size:number;label:string;id:string}[]
   xLabel:string; yLabel:string
@@ -1285,19 +1261,11 @@ function SaudeCampanhas({ b: _b, campaigns, daily: _daily, dataInicio: _dataInic
   const cpm=agg.impressions>0?agg.spend/agg.impressions*1000:0
   const cpc=agg.clicks>0?agg.spend/agg.clicks:0
   const ctr=agg.impressions>0?agg.clicks/agg.impressions*100:0
-  const uniqueClicks=Math.round(agg.clicks*0.94), dailyReach=Math.round(agg.impressions/30/2.3), freq=2.06
   return (
     <div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:16, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:16, marginBottom:16 }}>
         <KTile label="Impressões" value={fmtK(agg.impressions)} />
         <KTile label="Cliques no link" value={fmtK(agg.clicks)} />
-        <KTile label="Cliques únicos" value={fmtK(uniqueClicks)} />
-        <KTile label="Alcance diário méd." value={fmtK(dailyReach)} />
-        <SCard pad={16} style={{ gridRow:'span 2' }}>
-          <div style={{ fontSize:13, fontWeight:600 }}>Frequência</div>
-          <div style={{ fontSize:11.5, color:'var(--ws-text-secondary)', marginBottom:4 }}>otimize acima de 4</div>
-          <Gauge value={freq} max={8} warn={4} />
-        </SCard>
         <KTile label="Investimento" value={money(agg.spend)} />
         <KTile label="CPM" value={money2(cpm)} invert />
         <KTile label="CPC" value={money2(cpc)} invert />
@@ -1501,10 +1469,17 @@ function SaudeRadar({ b }: { b: BrandData }) {
   const projCpsql=Math.round(b.cpsql*(base.eficiencia/(sim.eficiencia||1))/(ratio('qualidade')||1))
   const sqlGrowth=projSql/b.sql-1; const investGrowth=lv.invest/100; const viable=sqlGrowth>=investGrowth-0.001
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'1.15fr 1fr', gap:24, alignItems:'start' }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ padding:'10px 14px', borderRadius:12, background:'var(--status-atencao-bg, #fef7e6)', border:'1px solid var(--status-atencao, #F2A93B)', fontSize:12, lineHeight:1.5 }}>
+        <b>Modelo em beta — estimativa heurística.</b> Os scores do radar são calculados a partir de faixas de referência (investimento, MQL, SQL) e não refletem dados reais de qualidade de criativo/público. Use como ferramenta de simulação de cenários, não como diagnóstico definitivo.
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1.15fr 1fr', gap:24, alignItems:'start' }}>
       <SCard>
-        <CardTitle title="Radar da marca" sub="Forças, fraquezas e oportunidades — arraste as alavancas para simular"
-          right={changed?<button onClick={()=>setLv({invest:0,criativo:50,publico:50})} style={{ border:'1px solid var(--ws-border-strong)', background:'var(--ws-surface)', borderRadius:999, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', color:'var(--ws-text-secondary)' }}>Redefinir</button>:null} />
+        <CardTitle
+          title="Radar da marca · Beta"
+          sub="Forças, fraquezas e oportunidades — arraste as alavancas para simular"
+          right={changed?<button onClick={()=>setLv({invest:0,criativo:50,publico:50})} style={{ border:'1px solid var(--ws-border-strong)', background:'var(--ws-surface)', borderRadius:999, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', color:'var(--ws-text-secondary)' }}>Redefinir</button>:null}
+        />
         <div style={{ display:'flex', justifyContent:'center' }}><RadarChartSVG axes={RADAR_AXES} series={series} size={360} /></div>
         <div style={{ display:'flex', justifyContent:'center', gap:18, marginTop:8, fontSize:12, color:'var(--ws-text-secondary)' }}>
           <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}><span style={{ width:12, height:3, background:'var(--ws-border-strong)' }} />Atual</span>
@@ -1529,6 +1504,7 @@ function SaudeRadar({ b }: { b: BrandData }) {
             <b>{viable?'Cenário viável':'Atenção'}</b> — SQLs {sqlGrowth>=0?'crescem':'caem'} {Math.abs(sqlGrowth*100).toFixed(0)}% {lv.invest!==0?`com ${lv.invest>0?'+':''}${lv.invest}% de verba`:'sem verba adicional'}. {viable?'Retorno acompanha o investimento.':'O ganho de SQL não cobre o aumento de verba — reavalie criativo/público antes de escalar.'}
           </div>}
         </SCard>
+      </div>
       </div>
     </div>
   )

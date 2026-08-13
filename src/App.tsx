@@ -14,6 +14,7 @@ const FunilVendas       = lazy(() => import('@/pages/FunilVendas').then(m => ({ 
 const PerformanceVendas = lazy(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
 const AnalisePerda      = lazy(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
 const AnaliseObjecoes   = lazy(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
+const AnaliseTermos     = lazy(() => import('@/pages/AnaliseTermos').then(m => ({ default: m.AnaliseTermos })))
 
 // Fallback discreto durante carga do chunk (~100-300ms)
 function PageLoader() {
@@ -46,6 +47,7 @@ export default function App() {
                     <Route path="/performance-vendas" element={<PerformanceVendas />} />
                     <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
                     <Route path="/analise-perda"      element={<AnalisePerda />} />
+                    <Route path="/analise-termos"     element={<AnaliseTermos />} />
                     <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
                     <Route path="*"                 element={<Navigate to="/" replace />} />
                   </Routes>

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, ListChecks, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, Activity, Trophy, ListChecks, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Search } from 'lucide-react'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
@@ -71,6 +71,11 @@ const NAV_ITEMS = [
     icon: <TrendingUp size={16} />,
     subItems: VENDAS_SUB,
   },
+  {
+    key: 'analise-termos',
+    label: 'Análise de Termos',
+    icon: <Search size={16} />,
+  },
 ]
 
 function getActiveKey(pathname: string): string {
@@ -79,6 +84,7 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/cadencias')) return 'cadencias'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
   if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes')) return 'vendas'
+  if (pathname.startsWith('/analise-termos')) return 'analise-termos'
   return 'geral'
 }
 
@@ -129,6 +135,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'cadencias') navigate('/cadencias')
     else if (key === 'sop') navigate('/sop-marketing')
     else if (key === 'vendas') navigate('/funil-vendas')
+    else if (key === 'analise-termos') navigate('/analise-termos')
   }
 
   function handleSubNav(key: string) {

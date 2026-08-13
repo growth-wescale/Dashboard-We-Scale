@@ -17,6 +17,7 @@ import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
 import { SLUG_TO_MARCA, monthLabel } from '@/lib/dateUtils'
 import { getCreativeAsset } from '@/lib/creativeAssets'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
+import { TermosPanel } from '@/components/ui/TermosPanel'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
@@ -644,6 +645,7 @@ const SM_TABS = [
   { key:'campanhas',  label:'Campanhas' },
   { key:'conjuntos',  label:'Conjuntos' },
   { key:'anuncios',   label:'Anúncios' },
+  { key:'termos',     label:'Termos' },
   { key:'social',     label:'Social Media' },
   { key:'radar',      label:'Radar' },
 ]
@@ -2127,6 +2129,7 @@ export function SaudeDaMarca() {
       case 'campanhas': return <SaudeCampanhas b={b} campaigns={campaigns} daily={daily} dataInicio={dataInicio} mqlLeads={mqlLeads} />
       case 'conjuntos': return <SaudeConjuntos b={b} campaigns={campaigns} />
       case 'anuncios':  return <SaudeAnuncios  b={b} campaigns={campaigns} />
+      case 'termos':    return <TermosPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
       case 'social':    return <SaudeSocial    social={social} />
       case 'radar':     return <SaudeRadar     b={b} />
       default:          return <SMOverview     b={b} bCompare={bCompare} compareLabel={compareLabel} compareEnabled={compareState.enabled} channels={channels} acqFunnel={acqFunnel} onMqlClick={() => setMqlDrawerOpen(true)} mqlLeads={mqlLeads} crmData={crmData} crmAllData={crmAllData} di={dataInicio} df={dataFim} mediaData={activeMediaData} leadsData={activeLeadsData} pausedData={pausedData} />

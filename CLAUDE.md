@@ -43,45 +43,41 @@ Padrão `loading ? <Spinner> : <Conteudo>` substituído por wrapper com `opacity
 
 ---
 
-## ⚠️ TAREFA PENDENTE — Migração n8n Reccon → We Scale (interrompida 2026-07-21)
+## ✅ Migração n8n → Supabase Edge Functions (2026-08-13)
 
-### Contexto
-Os workflows de ingestão de dados rodavam no n8n da **Reccon** (`recconmarketing.app.n8n.cloud`).
-A meta é migrá-los para o n8n da **We Scale** (`n8n.wescale.com.br`).
+A ingestão de mídia deixou de depender de n8n. Agora roda direto em Edge Functions do Supabase, agendadas via pg_cron.
 
-### O que foi feito
-Os 3 workflows **ativos** foram criados via API no n8n da We Scale:
+### Edge Functions ativas (projeto `jmuluoksnlqrvzbcltim`)
+| Function | Cron job | Escreve em | Schedule |
+|---|---|---|---|
+| `ingest-meta-ads` | `ingest-meta-prod-hourly` | `media_daily_raw` | minuto **5** de cada hora |
+| `ingest-google-ads` | `ingest-google-prod-hourly` | `media_daily_raw` | minuto **10** de cada hora |
+| `ingest-google-search-terms` | `ingest-google-search-terms-daily` | `keywords_daily` + `search_terms_daily` | **05:20 UTC** (02:20 BRT) — yesterday |
+| `ingest-facebook-pages` | `ingest-facebook-pages-daily` | `fb_page_daily` + `fb_posts` | **05:30 UTC** (02:30 BRT) — janela 3d + posts 30d |
 
-| Workflow | ID no We Scale n8n |
-|---|---|
-| Meta Ads → media_daily_raw | `44gfr8W9f0T61l1Q` |
-| ~~RD CRM → crm_funil_raw~~ | ~~`jUYN5lv8pPp4pC6U`~~ (descontinuado 04/ago — funil agora vem do banco de vendas) |
-| Google Ads → media_daily_raw | `jBRaeio8Vm6gIhuw` |
+Ambas invocadas via `net.http_post` pelo helper `public.trigger_ingest(fn_slug, body)`.
 
-Todos criados como **inativos** (precisam de credenciais antes de ativar).
+**Cutover realizado 2026-08-13.** Workflows n8n Reccon `1CEMDCFbCV5w7YhE` (Meta) e `ZkujY5ZJpCTlvjam` (Google) foram **desativados** (não deletados — pode reativar em 1 clique se precisar). Tabela `media_daily_raw_shadow` ainda existe: dropar em ~2 semanas se tudo estiver estável.
 
-### Problema atual — visibilidade
-Os workflows foram criados no **espaço pessoal do dono da API key** (projeto `FOVRZNljim1bDoy1`), não num projeto de equipe compartilhado. O Gabriel não conseguia vê-los na interface porque é outro usuário na conta.
+### Secrets no Supabase Vault
+`META_ACCESS_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DEVELOPER_TOKEN`, `GOOGLE_LOGIN_CUSTOMER_ID` (=8489211674), `SUPABASE_ANON_KEY`. Acesso via RPC `public.get_secret(name)` — SECURITY DEFINER, grant só a service_role.
 
-**Pergunta pendente (para retomar amanhã):**
-> Essa API key foi gerada por você (Gabriel) ou por outro usuário/admin? E no n8n tem seletor de projeto no topo da tela?
+### Estado das ingestões
+- **Google Ads**: n8n Reccon (`ZkujY5ZJpCTlvjam`) estava chamando API v21 **deprecada** e falhava silenciosamente. Edge Function usa v22, cobre 10 contas (incluindo nova marca **"Scale Partners"** = evento presencial We Scale). Backfill de 30 dias feito em 2026-08-13.
+- **Meta Ads**: n8n Reccon (`1CEMDCFbCV5w7YhE`) ainda ativo escrevendo em `media_daily_raw`. Edge Function roda em paralelo escrevendo em `media_daily_raw_shadow` para validação (5-7 dias). Cutover: apontar Edge Function pra `media_daily_raw` e desligar n8n.
 
-### Opções de solução
-1. **Se a API key é do Gabriel**: os workflows estão no espaço pessoal dele — verificar se está olhando para o projeto certo na UI.
-2. **Se a API key é de outro usuário**: precisamos de uma API key do próprio Gabriel para recriar os workflows no espaço dele, ou ele precisa mover via UI para um projeto de equipe.
-3. **Projeto de equipe**: se existir um projeto compartilhado, mover os 3 workflows via UI (arrastar ou opção de mover) para lá.
+### Como invocar manualmente
+```bash
+# Meta
+curl -X POST https://jmuluoksnlqrvzbcltim.supabase.co/functions/v1/ingest-meta-ads \
+  -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
+  -d '{"date_preset":"today","table":"media_daily_raw_shadow"}'
 
-### Credenciais a reconectar (após resolver visibilidade)
-Antes de ativar os workflows, reconectar no painel:
-- **Meta token** (`httpQueryAuth`) — nó "Buscar Insights Meta"
-- **Google Ads OAuth2** (`googleAdsOAuth2Api`) — nó "Buscar Insights Google Ads"
-- **RD CRM OAuth2** (`oAuth2Api`) — nó "Buscar Deals RD CRM"
-- **Supabase** (`supabaseApi`) — nós de upsert que usam `predefinedCredentialType`
-  - Exceção: `Upsert crm_funil_historico` já usa anon key hardcoded, não precisa
+# Google (aceita: today, yesterday, last_7_days, last_14_days, last_30_days, this_month, last_month, ou {"time_range":{"since":"YYYY-MM-DD","until":"YYYY-MM-DD"}})
+curl -X POST https://jmuluoksnlqrvzbcltim.supabase.co/functions/v1/ingest-google-ads \
+  -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
+  -d '{"date_preset":"last_30_days","table":"media_daily_raw"}'
+```
 
-### Workflows originais na Reccon (manter até migração confirmada)
-- `1CEMDCFbCV5w7YhE` — Meta Ads (ativo, roda 1x/hora)
-- ~~`ZxQkRS17ZAEGWVxW`~~ — RD CRM → crm_funil_raw (**descontinuado 04/ago** — pode desativar; funil migrou para banco de vendas)
-- `ZkujY5ZJpCTlvjam` — Google Ads (ativo, roda 1x/hora)
-
-Não desativar Meta e Google na Reccon até os da We Scale estarem ativos e confirmados funcionando.
+### Mapping detalhado marca ↔ conta
+Ver `memory/project_media_ingestion.md`.

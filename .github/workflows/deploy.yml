@@ -41,7 +41,9 @@ jobs:
           test -n "$VPS_HOST" || (echo "VPS_HOST secret vazio"; exit 1)
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s' "$KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          # tr -d remove whitespace/CR/LF que possam ter vazado no secret;
+          # base64 -d puro é intolerante — precisa input limpo.
+          printf '%s' "$KEY_B64" | tr -d '[:space:]' | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           # Valida se a chave é lida corretamente antes de tentar usar
           ssh-keygen -l -f ~/.ssh/deploy_key

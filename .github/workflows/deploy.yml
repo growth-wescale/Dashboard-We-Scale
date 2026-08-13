@@ -31,17 +31,23 @@ jobs:
           VITE_SUPABASE_VENDAS_ANON_KEY: ${{ secrets.VITE_SUPABASE_VENDAS_ANON_KEY }}
         run: npm run build
 
-      - name: Configure SSH
+      - name: Configure SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_DEPLOY_KEY }}
+
+      - name: Add VPS to known_hosts
         run: |
+          set -euxo pipefail
+          test -n "${{ secrets.VPS_HOST }}" || (echo "VPS_HOST secret is empty"; exit 1)
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_DEPLOY_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+          echo "known_hosts populated"
 
       - name: Rsync to VPS
         run: |
+          set -euxo pipefail
           rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
             dist/ \
             root@${{ secrets.VPS_HOST }}:/opt/dashboard/dist/
 

@@ -9,7 +9,7 @@ Dashboard de performance de marketing e vendas da We Scale (Reccon Marketing).
 ## Como rodar localmente
 
 ```bash
-git clone git@github.com:gabriellimas-afk/Dashboard.git
+git clone git@github.com:growth-wescale/Dashboard-We-Scale.git
 cd Dashboard
 cp .env.example .env
 # preencher .env com as chaves do Supabase (peça pro owner)

@@ -29,10 +29,12 @@ interface Props {
   unit: 'one' | 'target'            // 'one' = mostra o que precisa pra 1 venda
   periodLabel: string               // "semana" ou "mês" (texto no header)
   accent?: string
+  vendasOverride?: number | null    // se definido, sobrescreve o realizado da linha "Vendas"
 }
 
 export function InverseFunnel({
   histData, actualData, meta, pctPeriod, unit, periodLabel, accent = '#7F0C72',
+  vendasOverride = null,
 }: Props) {
   const effectiveMeta = unit === 'one' ? 1 : meta
 
@@ -47,6 +49,8 @@ export function InverseFunnel({
       hist[s.key] = histData.filter(d => d[field] != null).length
       actual[s.key] = actualData.filter(d => d[field] != null).length
     }
+
+    if (vendasOverride != null) actual.venda = vendasOverride
 
     const rows: StageResult[] = []
     let currentNeeded: number | null = effectiveMeta
@@ -74,7 +78,7 @@ export function InverseFunnel({
       histTotals: hist,
       hasHistorico: hist.venda > 0 || hist.oportunidade > 0,
     }
-  }, [histData, actualData, effectiveMeta])
+  }, [histData, actualData, effectiveMeta, vendasOverride])
 
   // Taxas históricas entre stages consecutivos (upper/lower)
   const rates = useMemo(() => {

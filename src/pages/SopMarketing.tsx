@@ -10,7 +10,7 @@ import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
 import type { Lead, Marca } from '@/lib/types'
 import { InverseFunnel } from '@/components/ui/InverseFunnel'
-import { getMetaVendas } from '@/constants/metasVendas'
+import { getMetaVendas, getVendasRealizadasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
@@ -454,9 +454,10 @@ interface SopSlideProps {
   monthMode: 'current' | 'closed'
   onMonthModeChange: (mode: 'current' | 'closed') => void
   closedMonthLabel: string
+  onReady?: () => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
 }
 
-function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, closedMonthLabel }: SopSlideProps) {
+function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, closedMonthLabel, onReady }: SopSlideProps) {
   const acc = slide.accent
   const [filterFonte, setFilterFonte] = useState('__all__')
   const [funilPeriod, setFunilPeriod] = useState<'semana' | 'mes'>('mes')
@@ -507,14 +508,34 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: compareRange.start,   dataFim: compareRange.end })
   const allMedia  = isOdontoLegacy ? mediaAllOdl.data  : mediaAllStd.data
   const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
-  const { data: allLeads }     = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const { data: prevLeads }    = useLeads({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const { data: rawCrmCur }    = useVendasFunil({ marca: slide.marca, dataInicio: dates.mtdCurStart,    dataFim: dates.mtdCurEnd })
-  const { data: rawCrmPrev }   = useVendasFunil({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const { data: rawCrmWeek }   = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[4].start, dataFim: dates.weeks[4].end })
-  const { data: rawCrmPrior }  = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[3].start, dataFim: dates.weeks[3].end })
-  const { data: rawCrmAll }    = useVendasFunil({ marca: slide.marca })
-  const { data: metas }        = useMetas({ marca: slide.marca, mes: dates.monthStart })
+  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
+  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
+  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: dates.mtdCurStart,    dataFim: dates.mtdCurEnd })
+  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
+  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[4].start, dataFim: dates.weeks[4].end })
+  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[3].start, dataFim: dates.weeks[3].end })
+  const crmAllRes  = useVendasFunil({ marca: slide.marca })
+  const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
+  const { data: allLeads } = leadsAll
+  const { data: prevLeads } = leadsPrev
+  const { data: rawCrmCur } = crmCurRes
+  const { data: rawCrmPrev } = crmPrevRes
+  const { data: rawCrmWeek } = crmWeekRes
+  const { data: rawCrmPrior } = crmPriorRes
+  const { data: rawCrmAll } = crmAllRes
+  const { data: metas } = metasRes
+
+  // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
+  const allLoaded =
+    !mediaAllStd.loading && !mediaPrevStd.loading &&
+    !mediaAllOdl.loading && !mediaPrevOdl.loading &&
+    !leadsAll.loading && !leadsPrev.loading &&
+    !crmCurRes.loading && !crmPrevRes.loading &&
+    !crmWeekRes.loading && !crmPriorRes.loading &&
+    !crmAllRes.loading && !metasRes.loading
+  useEffect(() => {
+    if (allLoaded) onReady?.()
+  }, [allLoaded, onReady])
 
   const applyF = useCallback((rows: VwMarketingFunil[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -997,6 +1018,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             : isSemana ? metaMes / 4 : metaMes
           const pctPeriod = isSemana ? 1 : pctMes
           const periodLabel = isSemana ? 'semana' : 'mês'
+          // Override manual de vendas apenas em modo mês fechado + período mês
+          // (números confirmados manualmente porque a base do CRM tem lacunas)
+          const vendasOverride = dates.isClosed && !isSemana
+            ? getVendasRealizadasOverride(slide.marca, mesKey)
+            : null
 
           return (
             <div style={{ ...cardStyle, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
@@ -1015,27 +1041,40 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                       { key: 'mes',    label: 'Mês' },
                     ]}
                   />
-                  <ToggleGroup
-                    accent={acc}
-                    value={funilUnit}
-                    onChange={v => setFunilUnit(v as 'one' | 'target')}
-                    options={[
-                      { key: 'one',    label: '1 venda' },
-                      { key: 'target', label: 'Meta' },
-                    ]}
-                  />
+                  {!(dates.isClosed && !isSemana) && (
+                    <ToggleGroup
+                      accent={acc}
+                      value={funilUnit}
+                      onChange={v => setFunilUnit(v as 'one' | 'target')}
+                      options={[
+                        { key: 'one',    label: '1 venda' },
+                        { key: 'target', label: 'Meta' },
+                      ]}
+                    />
+                  )}
                 </div>
               </div>
               <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
-                <InverseFunnel
-                  histData={rawCrmAll}
-                  actualData={actualData}
-                  meta={metaPeriodo}
-                  pctPeriod={pctPeriod}
-                  unit={funilUnit}
-                  periodLabel={periodLabel}
-                  accent={acc}
-                />
+                {dates.isClosed && !isSemana ? (
+                  <ClosedInverseFunnel
+                    marca={slide.marca}
+                    meta={metaMes}
+                    vendas={vendasOverride}
+                    accent={acc}
+                    monthLabel={closedMonthLabel}
+                  />
+                ) : (
+                  <InverseFunnel
+                    histData={rawCrmAll}
+                    actualData={actualData}
+                    meta={metaPeriodo}
+                    pctPeriod={pctPeriod}
+                    unit={funilUnit}
+                    periodLabel={periodLabel}
+                    accent={acc}
+                    vendasOverride={vendasOverride}
+                  />
+                )}
               </div>
             </div>
           )
@@ -1115,6 +1154,144 @@ function ToggleGroup({ value, onChange, options, accent }: ToggleGroupProps) {
   )
 }
 
+// ── ClosedInverseFunnel — funil inverso simplificado pra mês fechado ────────────────
+// Projeta volumes necessários por etapa a partir da meta + taxas históricas hardcoded.
+// Zero fetch — cálculo puro. Usado só quando o toggle "Julho" está ativo + período Mês.
+interface ClosedInverseFunnelProps {
+  marca: Marca
+  meta: number | null
+  vendas: number | null   // realizado em unidades
+  accent: string
+  monthLabel: string
+}
+function ClosedInverseFunnel({ marca, meta, vendas, accent, monthLabel }: ClosedInverseFunnelProps) {
+  if (meta == null) {
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
+        Sem meta cadastrada para {monthLabel}
+      </div>
+    )
+  }
+  const taxas = getFunilTaxas(marca)
+  // Volumes necessários (topo → base) para bater a META.
+  // Cada etapa = próxima ÷ taxa. Ex: Opp = Vendas / taxa_venda_por_opp.
+  const oppNeeded  = meta / taxas.venda_por_opp
+  const salNeeded  = oppNeeded / taxas.opp_por_sal
+  const diagNeeded = salNeeded / taxas.sal_por_diag
+  const sqlNeeded  = diagNeeded / taxas.diag_por_sql
+  const mqlNeeded  = sqlNeeded / taxas.sql_por_mql
+
+  const stages = [
+    { key: 'venda',   label: 'Vendas',      needed: meta,       rate: taxas.venda_por_opp, rateLabel: 'Vendas/Opp', isTop: true },
+    { key: 'opp',     label: 'Oportunidades', needed: oppNeeded, rate: taxas.opp_por_sal,   rateLabel: 'Opp/SAL' },
+    { key: 'sal',     label: 'SAL',         needed: salNeeded,  rate: taxas.sal_por_diag,  rateLabel: 'SAL/R1' },
+    { key: 'diag',    label: 'R1 (Diag.)',  needed: diagNeeded, rate: taxas.diag_por_sql,  rateLabel: 'R1/SQL' },
+    { key: 'sql',     label: 'SQL',         needed: sqlNeeded,  rate: taxas.sql_por_mql,   rateLabel: 'SQL/MQL' },
+    { key: 'mql',     label: 'MQL',         needed: mqlNeeded,  rate: null,                rateLabel: '' },
+  ]
+
+  const v = vendas ?? 0
+  const pctVendas = meta > 0 ? (v / meta) * 100 : 0
+  const colorVendas = pctVendas >= 100 ? '#16a34a' : pctVendas >= 70 ? '#eab308' : '#dc2626'
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: '#334155' }}>
+      {/* Header com meta */}
+      <div style={{ padding: '8px 10px', background: accent, color: '#fff', borderRadius: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.9 }}>
+            Meta de vendas · {monthLabel}
+          </span>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}>
+            {meta}
+          </span>
+        </div>
+        <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
+          Volumes abaixo = <strong>necessário pra bater {meta} venda{meta === 1 ? '' : 's'}</strong> · ~{formatNum(mqlNeeded / meta)} MQL por venda
+        </div>
+      </div>
+
+      {/* Linhas do funil */}
+      {stages.map((s) => {
+        const isVenda = s.key === 'venda'
+        const displayNeeded = Math.ceil(s.needed)
+        const showActual = isVenda   // só na linha vendas mostramos o realizado
+        const progressPct = isVenda ? Math.min(200, pctVendas) : 100
+        const color = isVenda ? colorVendas : '#64748b'
+
+        return (
+          <div key={s.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: '78px 1fr 60px',
+              gap: 8, alignItems: 'center', padding: '5px 8px',
+              background: s.isTop ? '#fef3c7' : '#f8fafc',
+              border: `1px solid ${s.isTop ? '#fbbf24' : '#e2e8f0'}`,
+              borderRadius: 6,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#0f172a' }}>
+                {s.label}
+              </span>
+              <div style={{ position: 'relative', height: 14, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0,
+                  width: `${Math.min(100, progressPct)}%`, background: color,
+                }} />
+                <div style={{
+                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color: progressPct > 50 ? '#fff' : '#0f172a',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {showActual ? `${v} de ${displayNeeded}` : `precisa ${displayNeeded}`}
+                </div>
+              </div>
+              <span style={{
+                textAlign: 'right', fontSize: 10, fontWeight: 700,
+                color: isVenda ? color : '#94a3b8', fontVariantNumeric: 'tabular-nums',
+              }}>
+                {isVenda ? `${Math.round(pctVendas)}%` : '—'}
+              </span>
+            </div>
+
+            {/* Taxa até a próxima etapa */}
+            {s.rate !== null && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                paddingLeft: 78 + 8, paddingRight: 8,
+                fontSize: 9.5, color: '#64748b',
+              }}>
+                <div style={{ flex: 0, color: '#cbd5e1', fontSize: 10, lineHeight: 1 }}>▲</div>
+                <div style={{
+                  flex: 0, padding: '1px 6px', borderRadius: 8,
+                  background: '#eef2f7', border: '1px solid #e2e8f0',
+                  fontSize: 9.5, fontWeight: 700, color: '#334155',
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  {(s.rate * 100).toFixed(0)}%
+                </div>
+                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                <div style={{ fontSize: 9, color: '#94a3b8', fontStyle: 'italic' }}>
+                  taxa {s.rateLabel}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Legenda */}
+      <div style={{ marginTop: 4, padding: '5px 8px', background: '#f1f5f9', borderRadius: 6, fontSize: 9, color: '#64748b' }}>
+        Taxas históricas · vendas em unidades · projeção calculada, sem consulta ao CRM
+      </div>
+    </div>
+  )
+}
+
+function formatNum(n: number): string {
+  if (n < 10) return n.toFixed(1)
+  if (n < 1000) return Math.round(n).toString()
+  return `${(n / 1000).toFixed(1)}k`
+}
+
 // ── SopMarketing ───────────────────────────────────────────────────────────────
 
 export function SopMarketing() {
@@ -1122,13 +1299,16 @@ export function SopMarketing() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPdfExporting, setIsPdfExporting] = useState(false)
   const [pdfProgress, setPdfProgress] = useState('')
+  // Índice do slide sendo exportado no container hidden (renderiza 1 por vez
+  // pra garantir que as queries do useVendasFunil daquele slide terminem)
+  const [exportingIdx, setExportingIdx] = useState<number | null>(null)
+  const exportSlideRef = useRef<HTMLDivElement | null>(null)
   const [monthMode, setMonthMode] = useState<'current' | 'closed'>('current')
   // Mês fechado atual — atualizar quando fechar novo mês.
   // TODO: mover pra src/constants/sopConfig.ts junto com outras configs do S&OP
   const CLOSED_MONTH_KEY = SOP_CLOSED_MONTH_KEY
   const CLOSED_MONTH_LABEL = SOP_CLOSED_MONTH_LABEL
   const containerRef = useRef<HTMLDivElement>(null)
-  const exportSlideRefs = useRef<(HTMLDivElement | null)[]>([])
   const dates = useMemo(
     () => computeRanges(monthMode === 'closed' ? CLOSED_MONTH_KEY : undefined),
     [monthMode],
@@ -1155,47 +1335,86 @@ export function SopMarketing() {
     else document.exitFullscreen?.()
   }
 
+  // Promise resolver setada por downloadPDF a cada slide; SopSlide dispara via onReady
+  const readyResolverRef = useRef<(() => void) | null>(null)
+  const handleSlideReady = useCallback(() => {
+    readyResolverRef.current?.()
+    readyResolverRef.current = null
+  }, [])
+
   async function downloadPDF() {
     if (isPdfExporting) return
     setIsPdfExporting(true)
-    setPdfProgress('Carregando dados...')
+    setPdfProgress('Iniciando...')
 
-    // Wait for all hidden slides to fetch data
-    await new Promise(r => setTimeout(r, 5000))
-
-    setPdfProgress('Gerando PDF...')
-
-    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-      import('html2canvas'),
-      import('jspdf'),
-    ])
-
-    // 297 × 167mm → landscape 16:9 slide format
-    const slideW = 297, slideH = 167
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [slideW, slideH] })
-
-    for (let i = 0; i < SLIDES.length; i++) {
-      const el = exportSlideRefs.current[i]
-      if (!el) continue
-      setPdfProgress(`Slide ${i + 1}/${SLIDES.length}...`)
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
       await document.fonts.ready
-      const canvas = await html2canvas(el, {
-        scale: 1.5,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: 'var(--ws-bg)',
-        width: 1920,
-        height: 1080,
-      })
-      const imgData = canvas.toDataURL('image/jpeg', 0.92)
-      if (i > 0) pdf.addPage([slideW, slideH], 'landscape')
-      pdf.addImage(imgData, 'JPEG', 0, 0, slideW, slideH)
-    }
 
-    pdf.save('sop-marketing.pdf')
-    setIsPdfExporting(false)
-    setPdfProgress('')
+      // 297 × 167mm → landscape 16:9 slide format
+      const slideW = 297, slideH = 167
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: [slideW, slideH],
+        compress: true,
+      })
+
+      for (let i = 0; i < SLIDES.length; i++) {
+        setPdfProgress(`Carregando slide ${i + 1}/${SLIDES.length}...`)
+
+        // Aguarda o SopSlide sinalizar que todos os fetches terminaram (via onReady).
+        // Timeout de 30s por slide como fallback.
+        await new Promise<void>((resolve) => {
+          readyResolverRef.current = resolve
+          setExportingIdx(i)
+          setTimeout(() => {
+            if (readyResolverRef.current) {
+              console.warn(`[downloadPDF] timeout aguardando slide ${i + 1}`)
+              readyResolverRef.current = null
+              resolve()
+            }
+          }, 30000)
+        })
+
+        // Frame extra pra Charts/SVG terminarem o layout depois do último setState
+        await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))
+        await new Promise(r => setTimeout(r, 400))
+
+        const el = exportSlideRef.current
+        if (!el) continue
+        setPdfProgress(`Renderizando slide ${i + 1}/${SLIDES.length}...`)
+
+        const canvas = await html2canvas(el, {
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: '#F8F9FB',
+          width: 1920,
+          height: 1080,
+          windowWidth: 1920,
+          windowHeight: 1080,
+        })
+        const imgData = canvas.toDataURL('image/jpeg', 0.78)
+        canvas.width = 0; canvas.height = 0
+        if (i > 0) pdf.addPage([slideW, slideH], 'landscape')
+        pdf.addImage(imgData, 'JPEG', 0, 0, slideW, slideH, undefined, 'FAST')
+      }
+
+      pdf.save('sop-marketing.pdf')
+    } catch (err) {
+      console.error('[downloadPDF] falhou:', err)
+      alert(`Falha ao gerar PDF: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      readyResolverRef.current = null
+      setExportingIdx(null)
+      setIsPdfExporting(false)
+      setPdfProgress('')
+    }
   }
 
   const slide = SLIDES[activeSlide]
@@ -1204,27 +1423,30 @@ export function SopMarketing() {
     <div ref={containerRef} style={{ height: '100vh', background: 'var(--ws-bg)', overflow: 'hidden' }}>
 
       {/* ── Hidden export container ── */}
-      {isPdfExporting && (
+      {/* Renderiza 1 slide por vez off-screen. Sequencial pra garantir que
+          as queries do useVendasFunil terminem antes da captura. */}
+      {isPdfExporting && exportingIdx !== null && (
         <div style={{
-          position: 'fixed', top: 0, left: 0,
-          opacity: 0, pointerEvents: 'none', zIndex: -1000,
-          overflow: 'hidden',
+          position: 'fixed', top: 0, left: -20000,
+          pointerEvents: 'none',
+          background: '#F8F9FB',
         }}>
-          {SLIDES.map((s, i) => (
-            <div key={s.id}
-              ref={el => { exportSlideRefs.current[i] = el }}
-              style={{ position: 'absolute', top: i * 1080, left: 0, width: 1920, height: 1080, overflow: 'hidden' }}>
-              <SopSlide
-                slide={s} dates={dates}
-                slideIndex={i} total={SLIDES.length}
-                onPrev={() => {}} onNext={() => {}}
-                isFullscreen={false} onToggleFullscreen={() => {}}
-                exportHeight={1080}
-                monthMode={monthMode} onMonthModeChange={setMonthMode}
-                closedMonthLabel={CLOSED_MONTH_LABEL}
-              />
-            </div>
-          ))}
+          <div
+            ref={el => { exportSlideRef.current = el }}
+            style={{ width: 1920, height: 1080, overflow: 'hidden', background: '#F8F9FB' }}
+          >
+            <SopSlide
+              key={SLIDES[exportingIdx].id}
+              slide={SLIDES[exportingIdx]} dates={dates}
+              slideIndex={exportingIdx} total={SLIDES.length}
+              onPrev={() => {}} onNext={() => {}}
+              isFullscreen={false} onToggleFullscreen={() => {}}
+              exportHeight={1080}
+              monthMode={monthMode} onMonthModeChange={setMonthMode}
+              closedMonthLabel={CLOSED_MONTH_LABEL}
+              onReady={handleSlideReady}
+            />
+          </div>
         </div>
       )}
 

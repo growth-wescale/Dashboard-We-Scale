@@ -29,6 +29,8 @@ const BRANDS_SUB = [
   { key: 'liso-laser', label: 'Lisô Laser', dot: '#FF6643' },
   { key: 'b2case',     label: 'B2Case',     dot: '#0169F2' },
   { key: 'viva',       label: 'Viva',       dot: '#FF0069' },
+  { key: 'fred',       label: 'Frederico',  dot: '#2A6E3F' },
+  { key: 'leo',        label: 'Leonardo',   dot: '#3B5998' },
 ]
 
 const VENDAS_SUB = [

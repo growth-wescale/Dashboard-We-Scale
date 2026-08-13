@@ -18,6 +18,7 @@ import { SLUG_TO_MARCA, monthLabel } from '@/lib/dateUtils'
 import { getCreativeAsset } from '@/lib/creativeAssets'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { TermosPanel } from '@/components/ui/TermosPanel'
+import { SocialPanel } from '@/components/ui/SocialPanel'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
@@ -40,12 +41,14 @@ function pausedStrategyLabel(campanha: string | null, conjunto: string | null): 
 
 // ── Brand definitions (static info only) ─────────────────────────────────────
 const BRAND_DEFS = [
-  { key: 'oral-unic',  label: 'Oral Unic',  accent: '#7F0C72' },
-  { key: 'inpot',      label: 'Inpot',      accent: '#C6D32D' },
-  { key: 'eletrovias', label: 'Eletrovias', accent: '#ED6D3A' },
-  { key: 'liso-laser', label: 'Lisô Laser', accent: '#FF6643' },
-  { key: 'b2case',     label: 'B2Case',     accent: '#0169F2' },
-  { key: 'viva',       label: 'Viva',       accent: '#FF0069' },
+  { key: 'oral-unic',  label: 'Oral Unic',         accent: '#7F0C72', tipo: 'marca' as const },
+  { key: 'inpot',      label: 'Inpot',             accent: '#C6D32D', tipo: 'marca' as const },
+  { key: 'eletrovias', label: 'Eletrovias',        accent: '#ED6D3A', tipo: 'marca' as const },
+  { key: 'liso-laser', label: 'Lisô Laser',        accent: '#FF6643', tipo: 'marca' as const },
+  { key: 'b2case',     label: 'B2Case',            accent: '#0169F2', tipo: 'marca' as const },
+  { key: 'viva',       label: 'Viva',              accent: '#FF0069', tipo: 'marca' as const },
+  { key: 'fred',       label: 'Frederico Nicolau', accent: '#2A6E3F', tipo: 'ceo' as const },
+  { key: 'leo',        label: 'Leonardo Pereira',  accent: '#3B5998', tipo: 'ceo' as const },
 ]
 
 type BrandData = {
@@ -282,25 +285,6 @@ function buildAcqFunnel(b: BrandData, media: MediaDailyRaw[]) {
   }
 }
 
-// ── Mock generators (still used for Públicos, Criativos, Social) ──────────────
-function rng(seed: number) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296 } }
-function hash(str: string) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
-
-function jit(r: () => number, base: number, spread: number) { return base * (1 + (r() - 0.5) * spread) }
-
-const VIDEO_CAPTIONS =['Antes e depois 😮', 'Tour pela clínica 🏥', 'Depoimento real 💬', 'Trend do momento 🔥', 'Tira-dúvidas ✨', 'Bastidores do time 🎬', 'Oferta da semana 🏷️', 'Passo a passo 📋', 'Reels do dia 💃', 'Resultado 30 dias 📈']
-
-function mkSocial(b: BrandData) {
-  const r = rng(hash(b.key+'soc'))
-  const views = Math.round(jit(r,42000,0.5)); const likes = Math.round(views*jit(r,0.17,0.3))
-  const comments = Math.round(views*jit(r,0.022,0.4)); const shares = Math.round(views*jit(r,0.009,0.4))
-  const videos = 60 + Math.floor(r()*30)
-  const timeline = Array.from({length:34},()=>({ shares: Math.round(jit(r,380,0.5)), profile: Math.round(jit(r,48,0.6)) }))
-  const active = [1.95,1.55,1.53,1.42,1.85,1.05,1.25].map((v) => Math.round(v*jit(r,1000000,0.1)))
-  const best = VIDEO_CAPTIONS.map((cap,i) => ({ caption: cap, create: `${10-i>0?(26-i):(10)}/0${6+(i%2)}/2026, ${(2+i)%24}:${10+i}:32`, duration: +jit(r,12,0.6).toFixed(2), views: Math.round(jit(r,1700,0.4)), likes: Math.round(jit(r,145,0.4)), shares: Math.round(jit(r,10,0.8)), comments: Math.round(jit(r,18,0.8)), hue: Math.floor(r()*360) })).sort((a,c) => c.views-a.views)
-  return { videos, totalDuration: '34:39', comments, uniqueView: Math.round(views*0.49), totalTimeWatched: '1 M', views, likes, sharesN: shares, likesRate: +(likes/views*100).toFixed(2), commentsRate: +(comments/views*100).toFixed(2), sharesRate: +(shares/views*100).toFixed(2), timeline, active, best }
-}
-
 // ── SUI primitives (saude-ui.jsx) ─────────────────────────────────────────────
 function SCard({ children, style, pad=20 }: { children: ReactNode; style?: CSSProperties; pad?: number }) {
   return <div style={{ background:'var(--ws-surface)', border:'1px solid var(--ws-border)', borderRadius:16, boxShadow:'var(--shadow-sm)', padding:pad, ...style }}>{children}</div>
@@ -478,23 +462,6 @@ function Donut({ slices, size=150 }: { slices:{label:string;value:number;color:s
   )
 }
 
-function Thumb({ hue, src, type, w=46, h=46, radius=8 }: { hue:number; src?:string; type?:string; w?:number; h?:number; radius?:number }) {
-  const playSize = Math.round(w * 0.38)
-  const arrowW = Math.round(playSize * 0.38)
-  const arrowH = Math.round(playSize * 0.28)
-  return (
-    <div style={{ width:w, height:h, borderRadius:radius, flex:'0 0 auto', overflow:'hidden', position:'relative', background:`repeating-linear-gradient(135deg, hsl(${hue} 42% 74%) 0 6px, hsl(${hue} 42% 68%) 6px 12px)` }}>
-      {src && <img src={src} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} onError={(e)=>{ (e.target as HTMLImageElement).style.display='none' }} />}
-      {type === 'video' && (
-        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.18)' }}>
-          <div style={{ width:playSize, height:playSize, borderRadius:'50%', background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <div style={{ width:0, height:0, borderTop:`${arrowH}px solid transparent`, borderBottom:`${arrowH}px solid transparent`, borderLeft:`${arrowW}px solid rgba(255,255,255,0.92)`, marginLeft:2 }} />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function MetricPicker({ options, value, onChange, size='sm' }: { options:{value:string;label:string}[]; value:string; onChange:(v:string)=>void; size?:'sm'|'md' }) {
   return (
@@ -1456,136 +1423,6 @@ function SaudeAnuncios({ b: _b, campaigns }: { b: BrandData; campaigns: Campaign
   )
 }
 
-// ── SaudeSocial ───────────────────────────────────────────────────────────────
-const PINK='#FE2C55', CYAN='#25F4EE', PANEL='#141414', CARD_DARK='#1E1E1E', LINE_DARK='#2A2A2A'
-
-function SocialRing({ label, value, rate, big }: { label:string; value:number; rate?:string; big?:boolean }) {
-  const s=big?128:108
-  return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-      <div style={{ width:s, height:s, borderRadius:'50%', border:`${big?20:16}px solid ${CYAN}`, borderRightColor:PINK, borderBottomColor:PINK, transform:'rotate(-30deg)', boxShadow:`5px 0 0 -3px ${PINK}` }} />
-      <div style={{ textAlign:'center', color:'#fff' }}>
-        <div style={{ fontSize:13, opacity:0.85 }}>{label}</div>
-        <div style={{ fontFamily:'var(--font-display)', fontWeight:600, fontSize:24 }}>{fmt(value)}</div>
-        {rate && <div style={{ fontSize:11.5, opacity:0.7 }}>{rate}</div>}
-      </div>
-    </div>
-  )
-}
-
-function PinkCard({ title, value, wide }: { title:string; value:string|number; wide?:boolean }) {
-  return <div style={{ background:PINK, borderRadius:12, padding:'12px 16px', color:'#fff', boxShadow:`0 0 0 3px #000, 0 0 0 4px ${CYAN}`, flex:wide?'1 1 100%':'1 1 45%' }}><div style={{ fontSize:12.5, opacity:0.9, textAlign:'center' }}>{title}</div><div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:24, textAlign:'center' }}>{value}</div></div>
-}
-
-function SocialTimelineChart({ data }: { data:{shares:number;profile:number}[] }) {
-  const W=560, H=220, padL=30, padR=10, padT=14, padB=30; const iw=W-padL-padR, ih=H-padT-padB
-  const a=data.map((d)=>d.shares), b=data.map((d)=>d.profile)
-  const aMax=Math.max(...a)*1.1, bMax=Math.max(...b)*1.1
-  const x=(i:number)=>padL+(i/(data.length-1))*iw; const yA=(v:number)=>padT+ih-(v/aMax)*ih; const yB=(v:number)=>padT+ih-(v/bMax)*ih
-  const path=(v:number[],y:(n:number)=>number)=>v.map((n,i)=>`${i?'L':'M'} ${x(i)} ${y(n)}`).join(' ')
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ overflow:'visible' }}>
-      {[0,0.5,1].map((g)=><line key={g} x1={padL} x2={W-padR} y1={padT+ih*g} y2={padT+ih*g} stroke={LINE_DARK} strokeWidth="1" />)}
-      <path d={path(a,yA)} fill="none" stroke={CYAN} strokeWidth="2.2" />
-      <path d={path(b,yB)} fill="none" stroke={PINK} strokeWidth="2.2" />
-      {[0,Math.floor(data.length/2),data.length-1].map((i)=><text key={i} x={x(i)} y={H-8} textAnchor="middle" fontSize="10" fill="#888">{`${8+i}/06`}</text>)}
-    </svg>
-  )
-}
-
-function ActiveDays({ data }: { data:number[] }) {
-  const W=520, H=220, padL=8, padR=8, padT=14, padB=40; const iw=W-padL-padR, ih=H-padT-padB
-  const labels=['dom','seg','ter','qua','qui','sex','sáb']; const max=Math.max(...data)*1.12; const bw=(iw/data.length)*0.6
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ overflow:'visible' }}>
-      {[0.5,1].map((g)=><line key={g} x1={padL} x2={W-padR} y1={padT+ih*(1-g)} y2={padT+ih*(1-g)} stroke={LINE_DARK} strokeWidth="1" />)}
-      {data.map((v,i)=>{const cx=padL+(i+0.5)*(iw/data.length); const h=(v/max)*ih; return <g key={i}><rect x={cx-bw/2} y={padT+ih-h} width={bw} height={h} rx="3" fill={CYAN} /><text x={cx} y={H-20} textAnchor="middle" fontSize="10.5" fill="#aaa">{labels[i]}</text></g>})}
-    </svg>
-  )
-}
-
-function DarkPanel({ title, sub, children }: { title?:string; sub?:string; children:ReactNode }) {
-  return (
-    <div style={{ background:PANEL, border:`1px solid ${LINE_DARK}`, borderRadius:14, padding:20 }}>
-      {title && <div style={{ color:'#fff', fontFamily:'var(--font-display)', fontWeight:600, fontSize:16 }}>{title}</div>}
-      {sub && <div style={{ color:'#888', fontSize:12, marginTop:2, marginBottom:10 }}>{sub}</div>}
-      {!sub && title && <div style={{ height:12 }} />}
-      {children}
-    </div>
-  )
-}
-
-function BestVideos({ list }: { list:any[] }) {
-  const maxV=Math.max(...list.map((c)=>c.views)), maxL=Math.max(...list.map((c)=>c.likes))
-  const heat=(t:number,c:string)=>`color-mix(in srgb, ${c} ${Math.round(25+t*75)}%, ${CARD_DARK})`
-  return (
-    <div style={{ overflowX:'auto' }}>
-      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:720, color:'#e8e8e8' }}>
-        <thead><tr style={{ color:'#bbb', fontSize:12, borderBottom:`1px solid ${LINE_DARK}` }}>
-          <th style={{ textAlign:'left', padding:'10px 12px', fontWeight:600 }}>Preview</th>
-          <th style={{ textAlign:'left', padding:'10px 12px', fontWeight:600 }}>Legenda</th>
-          <th style={{ textAlign:'right', padding:'10px 12px', fontWeight:600 }}>Duração</th>
-          <th style={{ textAlign:'right', padding:'10px 12px', fontWeight:600 }}>Views ▾</th>
-          <th style={{ textAlign:'right', padding:'10px 12px', fontWeight:600 }}>Likes</th>
-          <th style={{ textAlign:'right', padding:'10px 12px', fontWeight:600 }}>Shares</th>
-          <th style={{ textAlign:'right', padding:'10px 12px', fontWeight:600 }}>Coment.</th>
-        </tr></thead>
-        <tbody>
-          {list.slice(0,6).map((v,i)=>(
-            <tr key={i} style={{ borderBottom:`1px solid ${LINE_DARK}` }}>
-              <td style={{ padding:'8px 12px' }}><Thumb hue={v.hue} w={44} h={44} radius={6} /></td>
-              <td style={{ padding:'8px 12px' }}>{v.caption}<br /><span style={{ fontSize:11, color:'#888' }}>{v.create}</span></td>
-              <td style={{ padding:'8px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{v.duration.toFixed(2)}</td>
-              <td style={{ padding:'8px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:700, background:heat(v.views/maxV,PINK), color:'#fff' }}>{fmt(v.views)}</td>
-              <td style={{ padding:'8px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums', fontWeight:700, background:heat(v.likes/maxL,CYAN), color:'#06343a' }}>{fmt(v.likes)}</td>
-              <td style={{ padding:'8px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{v.shares}</td>
-              <td style={{ padding:'8px 12px', textAlign:'right', fontVariantNumeric:'tabular-nums' }}>{v.comments}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function SaudeSocial({ social }: { social: ReturnType<typeof mkSocial> }) {
-  const s = social
-  return (
-    <div style={{ background:'#000', borderRadius:18, padding:20, display:'flex', flexDirection:'column', gap:18 }}>
-      <div style={{ display:'grid', gridTemplateColumns:'340px 1fr', gap:20, alignItems:'center' }}>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
-          <PinkCard wide title="Duração total de vídeos" value={s.totalDuration} />
-          <PinkCard title="Vídeos" value={s.videos} />
-          <PinkCard title="Comentários" value={fmt(s.comments)} />
-          <PinkCard title="Views únicos" value={fmtK(s.uniqueView)} />
-          <PinkCard title="Tempo assistido" value={s.totalTimeWatched} />
-        </div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-around', gap:6, flexWrap:'wrap' }}>
-          <SocialRing big label="Views" value={s.views} />
-          <span style={{ color:CYAN, fontSize:20 }}>→</span>
-          <SocialRing label="Likes" value={s.likes} rate={`Taxa ${s.likesRate.toString().replace('.',',')}%`} />
-          <span style={{ color:CYAN, fontSize:20 }}>→</span>
-          <SocialRing label="Comentários" value={s.comments} rate={`Taxa ${s.commentsRate.toString().replace('.',',')}%`} />
-          <span style={{ color:CYAN, fontSize:20 }}>→</span>
-          <SocialRing label="Shares" value={s.sharesN} rate={`Taxa ${s.sharesRate.toString().replace('.',',')}%`} />
-        </div>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:18 }}>
-        <DarkPanel title="Timeline insights">
-          <div style={{ display:'flex', gap:16, fontSize:12, color:'#bbb', marginBottom:6 }}>
-            <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}><span style={{ width:14, height:3, background:CYAN }} />Total shares</span>
-            <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}><span style={{ width:14, height:3, background:PINK }} />Profile views</span>
-          </div>
-          <SocialTimelineChart data={s.timeline} />
-        </DarkPanel>
-        <DarkPanel title="Dias mais ativos" sub="dias da semana com mais views">
-          <ActiveDays data={s.active} />
-        </DarkPanel>
-      </div>
-      <DarkPanel title="🔥 Melhores vídeos"><BestVideos list={s.best} /></DarkPanel>
-    </div>
-  )
-}
 
 // ── SaudeRadar ────────────────────────────────────────────────────────────────
 const RADAR_AXES = [
@@ -2093,8 +1930,6 @@ export function SaudeDaMarca() {
   const daily = buildDailySeries(activeMediaData)
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)
   const acqFunnel = buildAcqFunnel(b, activeMediaData)
-  const social = mkSocial(b)
-
   const loading = mediaLoading || crmLoading || leadsLoading
 
   const periodLabel = useMemo(() => {
@@ -2113,14 +1948,22 @@ export function SaudeDaMarca() {
     return { rows, spend, impr, clicks, campanhas }
   }, [mediaData, isOralUnic])
 
-  // Tabs escondidas: Comunidade e Odonto Legacy não têm Social/Radar (apenas frentes com estrutura completa)
-  const hiddenTabs = isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy') ? ['social', 'radar'] : []
+  // Tabs escondidas por contexto:
+  // - CEOs (tipo=ceo) só têm Social (o resto não faz sentido — não têm ads/funil/etc)
+  // - Comunidade e Odonto Legacy do Oral Unic não têm Social/Radar
+  const isCeo = def.tipo === 'ceo'
+  const hiddenTabs = isCeo
+    ? ['overview', 'campanhas', 'conjuntos', 'anuncios', 'termos', 'radar']
+    : isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy') ? ['social', 'radar'] : []
   // Sub-view "special": bypassa as tabs SM_TABS e renderiza um componente próprio (ex.: Esteira)
   const isOuSpecialView = isOralUnic && ouSubView === 'esteira'
 
   // Auto-reset da tab quando entra em sub-view com tabs restritas e a tab atual foi escondida
   useEffect(() => {
-    if (hiddenTabs.includes(view)) setView('overview')
+    if (hiddenTabs.includes(view)) {
+      const first = SM_TABS.find(t => !hiddenTabs.includes(t.key))
+      if (first) setView(first.key)
+    }
   }, [hiddenTabs, view])
 
   const body = (() => {
@@ -2130,7 +1973,7 @@ export function SaudeDaMarca() {
       case 'conjuntos': return <SaudeConjuntos b={b} campaigns={campaigns} />
       case 'anuncios':  return <SaudeAnuncios  b={b} campaigns={campaigns} />
       case 'termos':    return <TermosPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
-      case 'social':    return <SaudeSocial    social={social} />
+      case 'social':    return <SocialPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
       case 'radar':     return <SaudeRadar     b={b} />
       default:          return <SMOverview     b={b} bCompare={bCompare} compareLabel={compareLabel} compareEnabled={compareState.enabled} channels={channels} acqFunnel={acqFunnel} onMqlClick={() => setMqlDrawerOpen(true)} mqlLeads={mqlLeads} crmData={crmData} crmAllData={crmAllData} di={dataInicio} df={dataFim} mediaData={activeMediaData} leadsData={activeLeadsData} pausedData={pausedData} />
     }

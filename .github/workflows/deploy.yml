@@ -39,11 +39,16 @@ jobs:
           set -euo pipefail
           test -n "$KEY_B64" || (echo "VPS_DEPLOY_KEY_B64 secret vazio"; exit 1)
           test -n "$VPS_HOST" || (echo "VPS_HOST secret vazio"; exit 1)
+          # Debug: tamanho e prefixo (não expõe conteúdo). Esperado: ~577 chars, começa 'LS0t'.
+          CLEAN=$(printf '%s' "$KEY_B64" | tr -d '[:space:]')
+          echo "KEY_B64 tamanho: ${#CLEAN} chars"
+          echo "KEY_B64 primeiros 4 chars: ${CLEAN:0:4}"
+          echo "KEY_B64 últimos 4 chars: ${CLEAN: -4}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           # tr -d remove whitespace/CR/LF que possam ter vazado no secret;
           # base64 -d puro é intolerante — precisa input limpo.
-          printf '%s' "$KEY_B64" | tr -d '[:space:]' | base64 -d > ~/.ssh/deploy_key
+          printf '%s' "$CLEAN" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           # Valida se a chave é lida corretamente antes de tentar usar
           ssh-keygen -l -f ~/.ssh/deploy_key

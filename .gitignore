@@ -27,3 +27,6 @@ dist-ssr
 .env.*
 !.env.example
 .claude
+
+# Codebase de referência do dash Lovable (consulta local, não versionar)
+Codebase Dash Lovable/

@@ -209,7 +209,12 @@ export function AppLayout({ children }: AppLayoutProps) {
           minHeight: '100vh',
           minWidth: 0,
           transition: 'margin-left 0.2s ease',
-          overflow: 'hidden',
+          // 'clip' e não 'hidden': hidden faz deste elemento um container de
+          // rolagem, e aí qualquer position:sticky dentro dele (a FilterBar das
+          // abas de Vendas) gruda neste wrapper em vez da viewport — ou seja,
+          // rola para fora da tela junto com a página. 'clip' corta o
+          // transbordo horizontal da animação da sidebar sem criar o container.
+          overflowX: 'clip',
         }}>
           {/* Topbar */}
           <header style={{

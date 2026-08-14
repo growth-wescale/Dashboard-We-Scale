@@ -1,32 +1,38 @@
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
 import { Download, Clock, TrendingDown, Trophy, Info, X } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
-import { useVendasFunil } from '@/hooks/useVendasFunil'
+import { FilterBar } from '@/components/ui/FilterBar'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { useDashboardNotice } from '@/hooks/useDashboardNotice'
-import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { useMediaData } from '@/hooks/useMediaData'
-import { useLeads } from '@/hooks/useLeads'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
-import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
+import { useFunilVendas } from '@/hooks/useFunilVendas'
+import { useFunilEventos } from '@/hooks/useFunilEventos'
+import { useFunilAging } from '@/hooks/useFunilAging'
+import { computeAging } from '@/lib/aging'
+import { useSharedFilters } from '@/contexts/SharedFiltersContext'
+import {
+  STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
+  countStageEvents, isSale, resolveStage, sumRevenue, toWindow,
+} from '@/lib/metrics'
+import type { StageKey } from '@/lib/metrics'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { nf, money, moneyK } from '@/lib/format'
-import { isoDate, currentMonthRange, shortMonth } from '@/lib/dateUtils'
+import { isoDate, shortMonth } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
-import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 
 const BRANDS = BRANDS_WITH_OVERVIEW
 
-function prevMonthRange(start: string, end: string) {
+/** Modo de leitura do funil. Local à aba — não é um dos toggles globais. */
+type FunnelMode = 'performance' | 'aging' | 'atual'
+
+function prevRange(start: string, end: string) {
   const s = new Date(start + 'T12:00:00'), e = new Date(end + 'T12:00:00')
   s.setMonth(s.getMonth() - 1); e.setMonth(e.getMonth() - 1)
   return { start: isoDate(s), end: isoDate(e) }
 }
-
-// ─── Data helpers ──────────────────────────────────────────────────────────────
-
 
 function fmtMs(ms: number): string {
   if (!ms || ms <= 0) return '—'
@@ -35,17 +41,9 @@ function fmtMs(ms: number): string {
   return d > 0 ? `${d}d ${h}h` : `${h}h`
 }
 
-function buildFunnel(rows: VwMarketingFunil[], di: string, df: string) {
-  const active = rows.filter(r => r.status_atual !== 'Excluído')
-  return [
-    { key: 'tent', label: 'Tentando contato',       value: active.filter(r => inPeriod(r.data_tentando_contato, di, df)).length },
-    { key: 'cont', label: 'Contato efetivo',        value: active.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length },
-    { key: 'sql',  label: 'SQL · Reunião agendada', value: active.filter(r => inPeriod(r.data_sql, di, df)).length },
-    { key: 'diag', label: 'Diagnóstico',            value: active.filter(r => inPeriod(r.data_diagnostico, di, df)).length },
-    { key: 'sal',  label: 'SAL',                    value: active.filter(r => inPeriod(r.data_sal, di, df)).length },
-    { key: 'cof',  label: 'Oportunidade · COF',     value: active.filter(r => inPeriod(r.data_oportunidade, di, df)).length },
-    { key: 'fech', label: 'Fechamento',             value: active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length },
-  ]
+function fmtDias(d: number | null): string {
+  if (d === null) return '—'
+  return d < 1 ? `${Math.round(d * 24)}h` : `${d.toFixed(d < 10 ? 1 : 0)}d`
 }
 
 // ─── TrapFunnel ────────────────────────────────────────────────────────────────
@@ -59,7 +57,7 @@ function TrapFunnel({ stages, invest, accent, dark }: {
   const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
 
   function shade(i: number) {
-    const pct = Math.max(38, 100 - i * 8)
+    const pct = Math.max(38, 100 - i * 5)
     return `color-mix(in srgb, ${accent} ${pct}%, ${dark})`
   }
 
@@ -71,51 +69,100 @@ function TrapFunnel({ stages, invest, accent, dark }: {
         const wBot = last ? wTop * 0.86 : width(stages[i + 1].value)
         const insetTop = (100 - wTop) / 2
         const insetBot = (100 - wBot) / 2
+        // Pode passar de 100%: deals pulam etapas, então o funil não é monotônico.
         const conv = i > 0 && stages[i - 1].value > 0
           ? (s.value / stages[i - 1].value) * 100 : null
+        const subiu = conv !== null && conv > 100
         const cost = invest > 0 && s.value > 0 ? invest / s.value : 0
 
         return (
           <div key={s.key}>
             {i > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 20, alignItems: 'center', height: 15 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center', height: 15 }}>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                    <span style={{ color: 'var(--status-risco)', fontSize: 10 }}>▼</span>
+                    <span style={{ color: subiu ? 'var(--status-positivo)' : 'var(--status-risco)', fontSize: 10 }}>
+                      {subiu ? '▲' : '▼'}
+                    </span>
                     {conv !== null ? conv.toFixed(1) : '—'}%
                   </span>
                 </div>
                 <div />
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 20, alignItems: 'center' }}>
-              <div style={{ position: 'relative', height: 50 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center' }}>
+              <div style={{ position: 'relative', height: 46 }}>
                 <div style={{
                   position: 'absolute', inset: 0,
                   background: shade(i),
                   clipPath: `polygon(${insetTop}% 0, ${100 - insetTop}% 0, ${100 - insetBot}% 100%, ${insetBot}% 100%)`,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.1,
                 }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
                     {nf(s.value)}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,.88)' }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 500, color: 'rgba(255,255,255,.88)' }}>
                     {s.label}
                   </span>
                 </div>
               </div>
-              <div style={{ lineHeight: 1.3 }}>
-                <div style={{ fontSize: 10.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                  Custo / {s.label.split(' · ')[0]}
+              {invest > 0 && (
+                <div style={{ lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                    Custo / {s.label.split(' · ')[0]}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                    {s.value > 0 ? money(cost) : '—'}
+                  </div>
                 </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                  {invest > 0 && s.value > 0 ? money(cost) : '—'}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── AgingList ─────────────────────────────────────────────────────────────────
+
+function AgingList({ linhas, accent }: {
+  linhas: { etapa: string; deals: number; p50: number | null; p75: number | null }[]
+  accent: string
+}) {
+  if (linhas.length === 0) {
+    return <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', padding: '24px 0' }}>
+      Nenhum negócio em aberto no recorte selecionado.
+    </div>
+  }
+  const maxDeals = Math.max(...linhas.map(l => l.deals), 1)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
+        <span>Etapa · negócios parados</span>
+        <span style={{ textAlign: 'right' }}>Mediana</span>
+        <span style={{ textAlign: 'right' }}>P75</span>
+      </div>
+      {linhas.map(l => (
+        <div key={l.etapa} style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px', gap: 12, alignItems: 'center' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
+              <span style={{ color: 'var(--ws-text-primary)' }}>{l.etapa}</span>
+              <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{nf(l.deals)}</span>
+            </div>
+            <div style={{ height: 7, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
+              <div style={{ width: `${(l.deals / maxDeals) * 100}%`, height: '100%', background: accent, borderRadius: 4 }} />
+            </div>
+          </div>
+          <span style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-primary)' }}>
+            {fmtDias(l.p50)}
+          </span>
+          <span style={{ textAlign: 'right', fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>
+            {fmtDias(l.p75)}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -150,7 +197,7 @@ function DonutChart({ slices, size = 140 }: { slices: DonutSlice[]; size?: numbe
   )
 }
 
-// ─── SCard ────────────────────────────────────────────────────────────────────
+// ─── SCard / SectionHead / LeadtimeCard ────────────────────────────────────────
 
 function SCard({ children, style, pad = 20 }: { children: ReactNode; style?: CSSProperties; pad?: number }) {
   return (
@@ -163,8 +210,6 @@ function SCard({ children, style, pad = 20 }: { children: ReactNode; style?: CSS
   )
 }
 
-// ─── SectionHead ──────────────────────────────────────────────────────────────
-
 function SectionHead({ title }: { title: string }) {
   return (
     <div style={{ margin: '32px 0 14px' }}>
@@ -174,8 +219,6 @@ function SectionHead({ title }: { title: string }) {
     </div>
   )
 }
-
-// ─── LeadtimeCard ─────────────────────────────────────────────────────────────
 
 function LeadtimeCard({ label, value, sub, tone, icon }: {
   label: string; value: string; sub: string; tone: string; icon: ReactNode
@@ -199,30 +242,31 @@ function LeadtimeCard({ label, value, sub, tone, icon }: {
   )
 }
 
-// ─── BrandSelect ──────────────────────────────────────────────────────────────
+// ─── ModeToggle ────────────────────────────────────────────────────────────────
 
-function BrandSelect({ value, onChange }: { value: string; onChange: (k: string) => void }) {
+function ModeToggle({ value, onChange }: { value: FunnelMode; onChange: (m: FunnelMode) => void }) {
+  const opts: { v: FunnelMode; label: string; hint: string }[] = [
+    { v: 'performance', label: 'Performance', hint: 'Volume que passou por cada etapa no período' },
+    { v: 'aging', label: 'Aging', hint: 'Há quanto tempo os negócios em aberto estão parados' },
+    { v: 'atual', label: 'Atual', hint: 'Onde os negócios estão agora — ignora o período' },
+  ]
   return (
-    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{
-          appearance: 'none', paddingLeft: 28, paddingRight: 28, paddingTop: 7, paddingBottom: 7,
-          border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', fontSize: 13,
-          background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer',
-          fontFamily: 'var(--font-body)', outline: 'none',
-        }}
-      >
-        {BRANDS.map(b => <option key={b.key} value={b.key}>{b.label}</option>)}
-      </select>
-      {/* color dot */}
-      <span style={{
-        position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-        width: 8, height: 8, borderRadius: '50%',
-        background: BRANDS.find(b => b.key === value)?.accent ?? '#ccc',
-        pointerEvents: 'none',
-      }} />
+    <div style={{ display: 'inline-flex', background: 'var(--ws-bg)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', padding: 2, gap: 2 }}>
+      {opts.map(o => {
+        const on = o.v === value
+        return (
+          <button key={o.v} type="button" onClick={() => onChange(o.v)} title={o.hint}
+            style={{
+              border: 'none', cursor: 'pointer', borderRadius: 4, padding: '5px 12px',
+              fontSize: 12, fontWeight: on ? 700 : 500, fontFamily: 'var(--font-body)',
+              background: on ? 'var(--ws-surface)' : 'transparent',
+              color: on ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)',
+              boxShadow: on ? 'var(--shadow-sm)' : 'none',
+            }}>
+            {o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -230,9 +274,8 @@ function BrandSelect({ value, onChange }: { value: string; onChange: (k: string)
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const [brandKey, setBrandKey] = useState('overview')
-  const [range, setRange] = useState(currentMonthRange)
-  const [filterFonte, setFilterFonte] = useState('__all__')
+  const { brandKey, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const [modo, setModo] = useState<FunnelMode>('performance')
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
 
@@ -241,183 +284,185 @@ export function FunilVendas() {
   const { accent, dark } = brandDef
   const scopeLabel = brandKey === 'overview' ? 'Consolidado' : brandDef.label
 
-  const prev = useMemo(() => prevMonthRange(range.start, range.end), [range.start, range.end])
-  const curMonthLabel = shortMonth(range.start)
+  const prev = useMemo(() => prevRange(range.start, range.end), [range.start, range.end])
 
-  // ── Data ──────────────────────────────────────────────────────────────────────
-  const { data: rawCurRows, loading, error: curError } = useVendasFunil({ marca, dataInicio: range.start, dataFim: range.end })
-  const { data: rawPrevRows }         = useVendasFunil({ marca, dataInicio: prev.start, dataFim: prev.end })
-  const { data: curMedia }            = useMediaData({ marca, dataInicio: range.start, dataFim: range.end })
-  const { data: prevMedia }           = useMediaData({ marca, dataInicio: prev.start, dataFim: prev.end })
-  const { data: rawCurLeads }         = useLeads({ marca, dataInicio: range.start, dataFim: range.end })
-  const { data: rawPrevLeads }        = useLeads({ marca, dataInicio: prev.start, dataFim: prev.end })
+  // ── Dados ───────────────────────────────────────────────────────────────────
+  const { data: rows, loading, error } = useFunilVendas(marca)
+  const { data: curMedia } = useMediaData({ marca, dataInicio: range.start, dataFim: range.end })
+  const { data: prevMedia } = useMediaData({ marca, dataInicio: prev.start, dataFim: prev.end })
 
-  const curRows  = useMemo(() => filterFonte === '__all__' ? rawCurRows  : rawCurRows.filter(r => mapFonte(r.fonte) === filterFonte),  [rawCurRows,  filterFonte])
-  const prevRows = useMemo(() => filterFonte === '__all__' ? rawPrevRows : rawPrevRows.filter(r => mapFonte(r.fonte) === filterFonte), [rawPrevRows, filterFonte])
+  const usaEventos = viewModes.eventSource === 'passages'
+  const { data: eventos } = useFunilEventos({
+    enabled: usaEventos,
+    marca,
+    inicio: range.start,
+    // No modo safra o evento pode ser posterior à janela do MQL.
+    fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
+  })
+  const { periodos } = useFunilAging(modo === 'aging')
 
-  // MQL from leads table (marketing source of truth)
-  const mqlLeads     = useMemo(() => {
-    const leads = deduplicateLeads(rawCurLeads)
-    const filtered = filterFonte === '__all__' ? leads : leads.filter(l => mapFonte(l.utm_source) === filterFonte)
-    return filtered.filter(isLeadMql)
-  }, [rawCurLeads, filterFonte])
-  const prevMqlLeads = useMemo(() => {
-    const leads = deduplicateLeads(rawPrevLeads)
-    const filtered = filterFonte === '__all__' ? leads : leads.filter(l => mapFonte(l.utm_source) === filterFonte)
-    return filtered.filter(isLeadMql)
-  }, [rawPrevLeads, filterFonte])
+  // ── Escopo e janelas ────────────────────────────────────────────────────────
+  const scope = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
+  const win = useMemo(() => toWindow(null, { from: range.start, to: range.end }), [range.start, range.end])
+  const winPrev = useMemo(() => toWindow(null, { from: prev.start, to: prev.end }), [prev.start, prev.end])
 
-  const invest     = useMemo(() => curMedia.reduce((s, r) => s + r.spend_brl, 0), [curMedia])
+  const invest = useMemo(() => curMedia.reduce((s, r) => s + r.spend_brl, 0), [curMedia])
   const prevInvest = useMemo(() => prevMedia.reduce((s, r) => s + r.spend_brl, 0), [prevMedia])
 
-  const funnel = useMemo(() => [
-    { key: 'mql', label: 'MQL', value: mqlLeads.length },
-    ...buildFunnel(curRows, range.start, range.end),
-  ], [curRows, range.start, range.end, mqlLeads])
+  /** Deals do escopo (marca já veio filtrada do servidor). */
+  const scoped = useMemo(() => rows.filter(scope), [rows, scope])
 
+  // ── Funil ───────────────────────────────────────────────────────────────────
+  const funnel = useMemo<FunnelStage[]>(() => {
+    if (modo === 'atual') {
+      // Onde os negócios estão agora. Ignora período de propósito.
+      const porEtapa = new Map<StageKey, number>()
+      for (const r of scoped) {
+        if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') continue
+        const etapa = resolveStage(r.etapa_funil)
+        if (!etapa) continue
+        porEtapa.set(etapa, (porEtapa.get(etapa) ?? 0) + 1)
+      }
+      return STAGE_ORDER.map(s => ({ key: s, label: STAGE_LABEL[s], value: porEtapa.get(s) ?? 0 }))
+    }
+
+    if (usaEventos) {
+      const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
+      const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
+      return STAGE_ORDER.map(s => ({
+        key: s,
+        label: STAGE_LABEL[s],
+        value: countStageEvents(eventos, s, win, viewModes, {
+          cohortIds: safra,
+          extra: e => idsEscopo.has(String(e.id_deal)),
+        }),
+      }))
+    }
+
+    return STAGE_ORDER.map(s => ({
+      key: s,
+      label: STAGE_LABEL[s],
+      value: countStage(scoped, s, win, viewModes),
+    }))
+  }, [modo, usaEventos, scoped, eventos, win, viewModes])
+
+  const aging = useMemo(() => {
+    if (modo !== 'aging') return []
+    const vivos = new Set(
+      scoped.filter(r => r.eh_ciclo_atual && r.status_atual === 'Em andamento').map(r => String(r.id_lead)),
+    )
+    return computeAging(periodos, vivos)
+  }, [modo, scoped, periodos])
+
+  // ── KPIs ────────────────────────────────────────────────────────────────────
   const { kpis, noShow, sources, leadtimes } = useMemo(() => {
-    const active     = curRows.filter(r => r.status_atual !== 'Excluído')
-    const ganhos     = curRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, range.start, range.end))
-    const prevGanhos = prevRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, prev.start, prev.end))
+    const mql = countStage(scoped, 'MQL', win, viewModes)
+    const prevMql = countStage(scoped, 'MQL', winPrev, viewModes)
 
-    const fechamentos     = ganhos.length
-    const prevFechamentos = prevGanhos.length
-    const mql     = mqlLeads.length
-    const prevMql = prevMqlLeads.length
+    const fechamentos = countSales(scoped, win, viewModes)
+    const prevFechamentos = countSales(scoped, winPrev, viewModes)
 
-    const receita     = ganhos.reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
-    const prevReceita = prevGanhos.reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
-    const ticket     = fechamentos > 0 ? receita / fechamentos : 0
+    const receita = sumRevenue(scoped, win, viewModes)
+    const prevReceita = sumRevenue(scoped, winPrev, viewModes)
+
+    const ticket = fechamentos > 0 ? receita / fechamentos : 0
     const prevTicket = prevFechamentos > 0 ? prevReceita / prevFechamentos : 0
-
-    const convGlobal     = mql > 0 ? (fechamentos / mql) * 100 : 0
+    const convGlobal = mql > 0 ? (fechamentos / mql) * 100 : 0
     const prevConvGlobal = prevMql > 0 ? (prevFechamentos / prevMql) * 100 : 0
-    const cac     = fechamentos > 0 ? invest / fechamentos : 0
+    const cac = fechamentos > 0 ? invest / fechamentos : 0
     const prevCac = prevFechamentos > 0 ? prevInvest / prevFechamentos : 0
-    const roas     = invest > 0 ? receita / invest : 0
+    const roas = invest > 0 ? receita / invest : 0
     const prevRoas = prevInvest > 0 ? prevReceita / prevInvest : 0
 
     const pctDelta = (c: number, p: number): number | null => p > 0 ? ((c - p) / p) * 100 : null
 
-    // No-show
-    const noShow = active.filter(r => r.data_no_show).length
+    const noShow = countStage(scoped, 'No Show', win, viewModes)
 
-    // Sources from Ganhos
-    const fonteCounts: Record<string, number> = {}
+    // Origem das vendas — por fonte_macro, a classificação de negócio do CRM.
+    const ganhos = scoped.filter(r => isSale(r) && countStage([r], 'Fechamento', win, viewModes) > 0)
+    const cont: Record<string, number> = {}
     for (const r of ganhos) {
-      const key = mapFonte(r.fonte)
-      fonteCounts[key] = (fonteCounts[key] ?? 0) + 1
+      const k = r.fonte_macro?.trim() || 'Sem Classificação'
+      cont[k] = (cont[k] ?? 0) + 1
     }
-    const SOURCE_COLORS: Record<string, string> = {
-      'Digital · Pago':         accent,
-      'Indicação / Referência': 'var(--ws-vinho-b)',
-      'Digital · Orgânico':    'var(--status-positivo)',
-      'Direto / Prospecção':   'var(--status-atencao)',
-      'Sem classificação':      'var(--ws-border-strong)',
+    const CORES: Record<string, string> = {
+      'Inbound': accent,
+      'Resgate': 'var(--ws-vinho-b)',
+      'Sem Classificação': 'var(--ws-border-strong)',
     }
     const total = Math.max(ganhos.length, 1)
-    const sources: DonutSlice[] = Object.entries(fonteCounts)
-      .map(([label, cnt]) => ({ label, pct: (cnt / total) * 100, color: SOURCE_COLORS[label] ?? '#ccc' }))
+    const sources: DonutSlice[] = Object.entries(cont)
+      .map(([label, n]) => ({ label, pct: (n / total) * 100, color: CORES[label] ?? 'var(--status-atencao)' }))
       .sort((a, b) => b.pct - a.pct)
-    if (sources.length === 0) {
-      sources.push({ label: 'Sem dados', pct: 100, color: 'var(--ws-border)' })
-    }
+    if (sources.length === 0) sources.push({ label: 'Sem dados', pct: 100, color: 'var(--ws-border)' })
 
-    // Leadtimes
-    const today = Date.now()
-    const emAndamento = active.filter(r => r.status_atual === 'Em andamento' && r.data_mql)
-    const perdidos    = active.filter(r => r.status_atual === 'Perdido' && r.data_mql && r.data_perdido)
-    const ganhosLt    = ganhos.filter(r => r.data_mql && r.data_venda)
+    // Tempo de ciclo — sempre a partir da entrada como MQL.
+    const hoje = Date.now()
+    const ms = (a: string, b: string) => Math.max(0, new Date(b).getTime() - new Date(a).getTime())
+    const media = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0
 
-    const avgMs = (pairs: [string, string][]) => pairs.length === 0 ? 0
-      : pairs.reduce((s, [a, b]) => s + Math.max(0, new Date(b).getTime() - new Date(a).getTime()), 0) / pairs.length
-
-    const andamentoMs = emAndamento.length > 0
-      ? emAndamento.reduce((s, r) => s + Math.max(0, today - new Date(r.data_mql!).getTime()), 0) / emAndamento.length
-      : 0
+    const emAndamento = scoped.filter(r => r.status_atual === 'Em andamento' && r.data_novo_mql)
+    const perdidos = scoped.filter(r => r.status_atual === 'Perdido' && r.data_novo_mql && r.data_perdido)
+    const ganhosLt = scoped.filter(r => isSale(r) && r.data_novo_mql && r.data_venda)
 
     const leadtimes = {
-      andamento: { value: fmtMs(andamentoMs), count: emAndamento.length },
-      perda:     { value: fmtMs(avgMs(perdidos.map(r => [r.data_mql!, r.data_perdido!]))) },
-      fechamento:{ value: fmtMs(avgMs(ganhosLt.map(r => [r.data_mql!, r.data_venda!]))) },
+      andamento: {
+        value: fmtMs(media(emAndamento.map(r => Math.max(0, hoje - new Date(r.data_novo_mql!).getTime())))),
+        count: emAndamento.length,
+      },
+      perda: { value: fmtMs(media(perdidos.map(r => ms(r.data_novo_mql!, r.data_perdido!)))) },
+      fechamento: { value: fmtMs(media(ganhosLt.map(r => ms(r.data_novo_mql!, r.data_venda!)))) },
     }
 
     return {
       kpis: {
         receita, fechamentos, ticket, convGlobal, cac, roas, mql,
         deltas: {
-          receita:     pctDelta(receita, prevReceita),
+          receita: pctDelta(receita, prevReceita),
           fechamentos: pctDelta(fechamentos, prevFechamentos),
-          ticket:      pctDelta(ticket, prevTicket),
-          convGlobal:  convGlobal - prevConvGlobal,
-          cac:         pctDelta(cac, prevCac),
-          roas:        pctDelta(roas, prevRoas),
+          ticket: pctDelta(ticket, prevTicket),
+          convGlobal: convGlobal - prevConvGlobal,
+          cac: pctDelta(cac, prevCac),
+          roas: pctDelta(roas, prevRoas),
         },
       },
-      noShow,
-      sources,
-      leadtimes,
+      noShow, sources, leadtimes,
     }
-  }, [curRows, prevRows, invest, prevInvest, accent, range.start, range.end, prev.start, prev.end, mqlLeads, prevMqlLeads])
+  }, [scoped, win, winPrev, viewModes, invest, prevInvest, accent])
 
-  // ── Style helpers ─────────────────────────────────────────────────────────────
   const heroStyle: CSSProperties = {
     '--fs-metric': '26px',
     background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 15%, white), white 68%)`,
     borderColor: `color-mix(in srgb, ${accent} 34%, var(--ws-border))`,
   } as CSSProperties
-
   const metricStyle: CSSProperties = { '--fs-metric': '26px' } as CSSProperties
+  const prevLabel = `vs. ${shortMonth(prev.start)}`
 
-  const prevMonthLabel = `vs. ${shortMonth(prev.start)}`
+  const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
 
   return (
     <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
       {...(brandKey !== 'overview' ? { 'data-brand': brandKey } : {})}>
 
-      {/* ── Page header ──────────────────────────────────────────────────────── */}
       <PageTop
         title="Funil de Vendas"
-        subtitle={`${scopeLabel} · ${curMonthLabel} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
         actions={
-          <>
-            <BrandSelect value={brandKey} onChange={setBrandKey} />
-            <select
-              value={filterFonte}
-              onChange={e => setFilterFonte(e.target.value)}
-              style={{ appearance: 'none', padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', fontSize: 13, background: 'var(--ws-surface)', color: 'var(--ws-text-primary)', cursor: 'pointer', fontFamily: 'var(--font-body)', outline: 'none' }}
-            >
-              <option value="__all__">Todas as fontes</option>
-              {FONTE_CATEGORIAS.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-md)', padding: '4px 12px', background: 'var(--ws-surface)', fontSize: 13 }}>
-              <span style={{ color: 'var(--ws-text-secondary)' }}>Mês</span>
-              <input type="date" value={range.start}
-                onChange={e => setRange(r => ({ ...r, start: e.target.value }))}
-                style={{ border: 'none', background: 'transparent', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }} />
-              <span style={{ color: 'var(--ws-text-secondary)' }}>—</span>
-              <input type="date" value={range.end}
-                onChange={e => setRange(r => ({ ...r, end: e.target.value }))}
-                style={{ border: 'none', background: 'transparent', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }} />
-            </div>
-            <button
-              onClick={() => downloadCsv(
-                rawCurRows,
-                `funil-vendas-${marca ?? 'todas'}-${range.start}-${range.end}`,
-              )}
-              disabled={!rawCurRows.length}
-              title={!rawCurRows.length ? 'Sem dados no período' : 'Exportar deals do período em CSV'}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: rawCurRows.length ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-body)', opacity: rawCurRows.length ? 1 : 0.5 }}
-            >
-              <Download size={14} /> Exportar
-            </button>
-          </>
+          <button
+            onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `funil-vendas-${marca ?? 'todas'}-${range.start}-${range.end}`)}
+            disabled={!scoped.length}
+            title={!scoped.length ? 'Sem dados no período' : 'Exportar deals do recorte em CSV'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: scoped.length ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-body)', opacity: scoped.length ? 1 : 0.5 }}
+          >
+            <Download size={14} /> Exportar
+          </button>
         }
       />
 
-      <QueryErrorBanner errors={[curError]} scope="Funil de Vendas" />
+      <FilterBar />
 
-      {/* ── Data notice (dinâmico via dashboard_notices) ─────────────────────── */}
+      <QueryErrorBanner errors={[error]} scope="Funil de Vendas" />
+
       {notice && notice.mostrar_banner && notice.id !== dismissedNoticeId && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 12,
@@ -427,101 +472,59 @@ export function FunilVendas() {
           border: `1px solid ${notice.cor_fundo
             ? `color-mix(in srgb, ${notice.cor_fundo} 40%, transparent)`
             : 'color-mix(in srgb, #F2A93B 35%, transparent)'}`,
-          borderRadius: 'var(--radius-md)',
-          padding: '12px 16px',
-          marginBottom: 20,
+          borderRadius: 'var(--radius-md)', padding: '12px 16px', marginBottom: 20,
         }}>
           <Info size={16} style={{ color: notice.cor_fundo ?? 'var(--status-atencao)', flexShrink: 0, marginTop: 1 }} />
           <div style={{ flex: 1, fontSize: 13, color: 'var(--ws-text-primary)', lineHeight: 1.5 }}>
             {notice.titulo && <><b>{notice.titulo}.</b>{' '}</>}
             {notice.mensagem}
           </div>
-          <button
-            onClick={() => setDismissedNoticeId(notice.id)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', padding: 2, display: 'flex', flexShrink: 0 }}
-          >
+          <button onClick={() => setDismissedNoticeId(notice.id)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', padding: 2, display: 'flex', flexShrink: 0 }}>
             <X size={15} />
           </button>
         </div>
       )}
 
-      {/* ── KPI strip ────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24 }}>
-        <MetricCard
-          style={heroStyle}
-          label="Receita no período"
-          value={moneyK(kpis.receita)}
-          delta={kpis.deltas.receita ?? undefined}
-          deltaLabel={prevMonthLabel}
-          accent={false}
-        />
-        <MetricCard
-          style={metricStyle}
-          label="Fechamentos"
-          value={nf(kpis.fechamentos)}
-          delta={kpis.deltas.fechamentos ?? undefined}
-          deltaLabel={prevMonthLabel}
-          accent={false}
-        />
-        <MetricCard
-          style={metricStyle}
-          label="Ticket médio"
-          value={moneyK(kpis.ticket)}
-          delta={kpis.deltas.ticket ?? undefined}
-          deltaLabel={prevMonthLabel}
-          accent={false}
-        />
-        <MetricCard
-          style={metricStyle}
-          label="Conversão MQL→Ganho"
-          value={kpis.convGlobal.toFixed(1)}
-          unit="%"
-          delta={kpis.deltas.convGlobal ?? undefined}
-          accent={false}
-        />
-        <MetricCard
-          style={metricStyle}
-          label="CAC (custo/ganho)"
-          value={kpis.cac > 0 ? money(kpis.cac) : '—'}
-          delta={kpis.deltas.cac ?? undefined}
-          deltaLabel={prevMonthLabel}
-          invertDelta
-          accent={false}
-        />
-        <MetricCard
-          style={metricStyle}
-          label="ROAS de mídia"
-          value={kpis.roas > 0 ? kpis.roas.toFixed(1) + 'x' : '—'}
-          delta={kpis.deltas.roas ?? undefined}
-          deltaLabel={prevMonthLabel}
-          accent={false}
-        />
+      {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+        <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={kpis.deltas.receita ?? undefined} deltaLabel={prevLabel} accent={false} />
+        <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={kpis.deltas.fechamentos ?? undefined} deltaLabel={prevLabel} accent={false} />
+        <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={kpis.deltas.ticket ?? undefined} deltaLabel={prevLabel} accent={false} />
+        <MetricCard style={metricStyle} label="Conversão MQL→Ganho" value={kpis.convGlobal.toFixed(1)} unit="%" delta={kpis.deltas.convGlobal ?? undefined} accent={false} />
+        <MetricCard style={metricStyle} label="CAC (custo/ganho)" value={kpis.cac > 0 ? money(kpis.cac) : '—'} delta={kpis.deltas.cac ?? undefined} deltaLabel={prevLabel} invertDelta accent={false} />
+        <MetricCard style={metricStyle} label="ROAS de mídia" value={kpis.roas > 0 ? kpis.roas.toFixed(1) + 'x' : '—'} delta={kpis.deltas.roas ?? undefined} deltaLabel={prevLabel} accent={false} />
       </div>
 
-      {/* ── Main grid ────────────────────────────────────────────────────────── */}
+      {/* ── Funil + laterais ─────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
 
-        {/* Left: Funnel card */}
         <SCard style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '18px 24px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 21 }}>Funil de vendas</div>
               <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
-                Volume por etapa, conversão de passagem e custo acumulado · {scopeLabel}
+                {modo === 'performance' && `Volume por etapa, conversão de passagem e custo acumulado · ${scopeLabel}`}
+                {modo === 'aging' && `Negócios em aberto e há quanto tempo estão parados · ${scopeLabel}`}
+                {modo === 'atual' && `Onde os negócios estão agora, independente do período · ${scopeLabel}`}
               </div>
             </div>
-            <Badge tone="neutral">No-show · {nf(noShow)}</Badge>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ModeToggle value={modo} onChange={setModo} />
+              <Badge tone="neutral">No-show · {nf(noShow)}</Badge>
+            </div>
           </div>
           <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-            <TrapFunnel stages={funnel} invest={invest} accent={accent} dark={dark} />
+            {modo === 'aging'
+              ? <AgingList linhas={aging} accent={accent} />
+              : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark} />}
           </div>
         </SCard>
 
-        {/* Right: Sources + Conversão global */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           <SCard>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, marginBottom: 4 }}>Vendas por fonte</div>
-            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>Origem das oportunidades ganhas</div>
+            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>Origem das oportunidades ganhas · fonte macro do CRM</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
               <DonutChart slices={sources} size={130} />
               <div style={{ flex: 1, minWidth: 160, display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -555,30 +558,15 @@ export function FunilVendas() {
         </div>
       </div>
 
-      {/* ── Tempo de ciclo ───────────────────────────────────────────────────── */}
       <SectionHead title="Tempo de ciclo" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <LeadtimeCard
-          label="Leadtime médio em andamento"
-          value={leadtimes.andamento.value}
+        <LeadtimeCard label="Leadtime médio em andamento" value={leadtimes.andamento.value}
           sub={`${nf(leadtimes.andamento.count)} negociações em aberto — da entrada até hoje`}
-          tone="atencao"
-          icon={<Clock size={17} />}
-        />
-        <LeadtimeCard
-          label="Leadtime médio até a perda"
-          value={leadtimes.perda.value}
-          sub="Média das negociações perdidas no período"
-          tone="risco"
-          icon={<TrendingDown size={17} />}
-        />
-        <LeadtimeCard
-          label="Leadtime médio de fechamento"
-          value={leadtimes.fechamento.value}
-          sub="Da entrada do MQL até o ganho"
-          tone="positivo"
-          icon={<Trophy size={17} />}
-        />
+          tone="atencao" icon={<Clock size={17} />} />
+        <LeadtimeCard label="Leadtime médio até a perda" value={leadtimes.perda.value}
+          sub="Média das negociações perdidas no período" tone="risco" icon={<TrendingDown size={17} />} />
+        <LeadtimeCard label="Leadtime médio de fechamento" value={leadtimes.fechamento.value}
+          sub="Da entrada do MQL até o ganho" tone="positivo" icon={<Trophy size={17} />} />
       </div>
     </div>
   )

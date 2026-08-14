@@ -76,3 +76,28 @@ export function daysInMonth(monthKey: string): number {
 export function dayOfMonth(iso: string): number {
   return Number(iso.slice(-2))
 }
+
+// ── Conversão de timestamptz para data em Brasília ──────────────────────────
+// O banco devolve timestamptz em UTC. Comparar isso direto com 'YYYY-MM-DD'
+// erra por um dia perto da meia-noite: um evento das 23h BRT chega como 02h UTC
+// do dia seguinte e cairia no mês errado na virada.
+
+const BRT_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+/** timestamptz -> 'YYYY-MM-DD' em Brasília. Null para entrada vazia ou inválida. */
+export function toLocalDate(value: string | null | undefined): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return BRT_DATE.format(d) // en-CA já formata como YYYY-MM-DD
+}
+
+/** timestamptz -> 'YYYY-MM' em Brasília. */
+export function toLocalYearMonth(value: string | null | undefined): string | null {
+  return toLocalDate(value)?.slice(0, 7) ?? null
+}

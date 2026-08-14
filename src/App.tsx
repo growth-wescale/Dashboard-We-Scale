@@ -4,6 +4,7 @@ import { Login } from '@/pages/Login'
 import { PrivateRoute } from '@/components/PrivateRoute'
 import { AppLayout } from '@/components/AppLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { SharedFiltersProvider } from '@/contexts/SharedFiltersContext'
 
 // Lazy imports: cada rota vira um chunk próprio, reduz bundle inicial ~40%
 const VisaoGeral        = lazy(() => import('@/pages/VisaoGeral').then(m => ({ default: m.VisaoGeral })))
@@ -61,9 +62,13 @@ export default function App() {
           path="/*"
           element={
             <PrivateRoute>
-              <AppLayout>
-                <RoutedContent />
-              </AppLayout>
+              {/* Filtros das abas de Vendas vivem acima do router: trocar de aba
+                  não pode resetar o recorte que o usuário escolheu. */}
+              <SharedFiltersProvider>
+                <AppLayout>
+                  <RoutedContent />
+                </AppLayout>
+              </SharedFiltersProvider>
             </PrivateRoute>
           }
         />

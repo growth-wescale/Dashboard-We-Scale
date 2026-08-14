@@ -12,12 +12,13 @@ import { ChevronDown, RotateCcw } from 'lucide-react'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { SUB_FONTE_GRUPOS } from '@/lib/fonteMapping'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
-import type { PeriodMode } from '@/contexts/SharedFiltersContext'
+import { opcoesPara } from '@/lib/periodo'
+import type { PeriodMode } from '@/lib/periodo'
 
 /** Valores de fonte_macro que existem hoje na base. */
 const FONTES_MACRO = ['Inbound', 'Resgate', 'Sem Classificação'] as const
 
-const PERIOD_MODES: Exclude<PeriodMode, 'custom'>[] = ['dia', 'mes', 'trimestre', 'ano']
+const PERIOD_MODES: PeriodMode[] = ['dia', 'mes', 'trimestre', 'ano']
 
 /* ── Peças ────────────────────────────────────────────────────────────────── */
 
@@ -158,6 +159,7 @@ export function FilterBar({ extra }: { extra?: ReactNode }) {
   const {
     brandKey, setBrandKey,
     periodMode, setPeriodMode,
+    periodValue, setPeriodValue,
     range, setRange,
     fontes, setFontes,
     subFontes, setSubFontes,
@@ -216,28 +218,46 @@ export function FilterBar({ extra }: { extra?: ReactNode }) {
         <Field label="Período">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Segmented
-              value={periodMode === 'custom' ? ('custom' as PeriodMode) : periodMode}
-              onChange={m => m !== 'custom' && setPeriodMode(m)}
-              options={[
-                ...PERIOD_MODES.map(m => ({ value: m as PeriodMode, label: PERIOD_LABEL[m] })),
-                ...(periodMode === 'custom' ? [{ value: 'custom' as PeriodMode, label: 'Personalizado' }] : []),
-              ]}
+              value={periodMode}
+              onChange={setPeriodMode}
+              options={PERIOD_MODES.map(m => ({ value: m, label: PERIOD_LABEL[m] }))}
             />
-            <input
-              type="date"
-              value={range.start}
-              max={range.end}
-              onChange={e => setRange({ ...range, start: e.target.value })}
-              style={{ ...controlStyle, padding: '5px 8px' }}
-            />
-            <span style={{ color: 'var(--ws-text-secondary)', fontSize: 12 }}>—</span>
-            <input
-              type="date"
-              value={range.end}
-              min={range.start}
-              onChange={e => setRange({ ...range, end: e.target.value })}
-              style={{ ...controlStyle, padding: '5px 8px' }}
-            />
+
+            {periodMode === 'dia' ? (
+              // Intervalo livre: os dois calendários nativos do navegador.
+              <>
+                <input
+                  type="date"
+                  value={range.start}
+                  max={range.end}
+                  onChange={e => setRange({ ...range, start: e.target.value })}
+                  style={{ ...controlStyle, padding: '5px 8px' }}
+                />
+                <span style={{ color: 'var(--ws-text-secondary)', fontSize: 12 }}>—</span>
+                <input
+                  type="date"
+                  value={range.end}
+                  min={range.start}
+                  onChange={e => setRange({ ...range, end: e.target.value })}
+                  style={{ ...controlStyle, padding: '5px 8px' }}
+                />
+              </>
+            ) : (
+              // Mês / trimestre / ano: escolhe QUAL período daquela granularidade.
+              <select
+                value={periodValue}
+                onChange={e => setPeriodValue(e.target.value)}
+                style={{ ...controlStyle, cursor: 'pointer', minWidth: 148 }}
+              >
+                {opcoesPara(periodMode).map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            )}
+
+            <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+              {range.start.split('-').reverse().join('/')} — {range.end.split('-').reverse().join('/')}
+            </span>
           </div>
         </Field>
 

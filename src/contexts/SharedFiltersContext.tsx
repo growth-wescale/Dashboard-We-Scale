@@ -5,16 +5,20 @@
  * recorte: trocar de aba não deve trocar o período nem a marca sob os pés do
  * usuário. Tudo é persistido em localStorage e validado na leitura — valor
  * salvo por uma versão antiga do app não pode derrubar a página.
+ *
+ * O período tem duas partes: a granularidade (`periodMode`) e qual período
+ * daquela granularidade (`periodValue`). No modo 'dia' não há `periodValue` —
+ * o usuário escolhe as datas livremente no calendário.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { isoDate } from '@/lib/dateUtils'
 import { DEFAULT_VIEW_MODES } from '@/lib/metrics'
 import type { EventSource, FunnelView, SalesMode, ViewModes } from '@/lib/metrics'
+import { periodoAtual, rangeForPeriod } from '@/lib/periodo'
+import type { DateRange, PeriodMode } from '@/lib/periodo'
 
-export type PeriodMode = 'dia' | 'mes' | 'trimestre' | 'ano' | 'custom'
-export interface DateRange { start: string; end: string }
+export type { DateRange, PeriodMode } from '@/lib/periodo'
 
 const PREFIX = 'wescale.vendas.'
 
@@ -27,8 +31,7 @@ function read<T>(key: string, isValid: (v: unknown) => v is T, fallback: T): T {
     const parsed = JSON.parse(raw) as unknown
     return isValid(parsed) ? parsed : fallback
   } catch {
-    // localStorage bloqueado ou JSON corrompido: seguir com o padrão.
-    return fallback
+    return fallback // localStorage bloqueado ou JSON corrompido
   }
 }
 
@@ -36,20 +39,13 @@ function write(key: string, value: unknown): void {
   try {
     localStorage.setItem(PREFIX + key, JSON.stringify(value))
   } catch {
-    // Modo privativo ou cota estourada: persistir é opcional, não quebra a tela.
+    // Modo privativo ou cota estourada: persistir é opcional.
   }
 }
 
-/** useState que espelha em localStorage. */
 function usePersisted<T>(key: string, isValid: (v: unknown) => v is T, fallback: T) {
   const [value, setValue] = useState<T>(() => read(key, isValid, fallback))
-  const set = useCallback(
-    (next: T) => {
-      setValue(next)
-      write(key, next)
-    },
-    [key],
-  )
+  const set = useCallback((next: T) => { setValue(next); write(key, next) }, [key])
   return [value, set] as const
 }
 
@@ -62,33 +58,11 @@ const isRange = (v: unknown): v is DateRange =>
   typeof v === 'object' && v !== null &&
   isString((v as DateRange).start) && isString((v as DateRange).end)
 
-/* ── Presets de período ───────────────────────────────────────────────────── */
-
-/** Range de um preset, sempre terminando hoje (não faz sentido projetar futuro). */
-export function rangeForMode(mode: Exclude<PeriodMode, 'custom'>, hoje = new Date()): DateRange {
-  const end = isoDate(hoje)
-  const y = hoje.getFullYear()
-
-  switch (mode) {
-    case 'dia':
-      return { start: end, end }
-    case 'mes':
-      return { start: isoDate(new Date(y, hoje.getMonth(), 1)), end }
-    case 'trimestre': {
-      const primeiroMesDoTri = Math.floor(hoje.getMonth() / 3) * 3
-      return { start: isoDate(new Date(y, primeiroMesDoTri, 1)), end }
-    }
-    case 'ano':
-      return { start: isoDate(new Date(y, 0, 1)), end }
-  }
-}
-
 export const PERIOD_LABEL: Record<PeriodMode, string> = {
-  dia: 'Hoje',
+  dia: 'Dia',
   mes: 'Mês',
   trimestre: 'Trimestre',
   ano: 'Ano',
-  custom: 'Personalizado',
 }
 
 /* ── Contexto ─────────────────────────────────────────────────────────────── */
@@ -97,16 +71,18 @@ interface SharedFilters {
   brandKey: string
   setBrandKey: (k: string) => void
 
+  /** Granularidade do período. */
   periodMode: PeriodMode
-  /** Troca o preset e recalcula o range. Use setRange para datas manuais. */
   setPeriodMode: (m: PeriodMode) => void
+  /** Qual período: '2026-08', '2026-Q3', '2026'. Vazio no modo 'dia'. */
+  periodValue: string
+  setPeriodValue: (v: string) => void
   range: DateRange
+  /** Só no modo 'dia': datas escolhidas à mão. */
   setRange: (r: DateRange) => void
 
-  /** Valores de fonte_macro. Vazio = todas. */
   fontes: string[]
   setFontes: (f: string[]) => void
-  /** Grupos normalizados de utm_source. Vazio = todos. */
   subFontes: string[]
   setSubFontes: (f: string[]) => void
 
@@ -120,62 +96,71 @@ interface SharedFilters {
 
 const Ctx = createContext<SharedFilters | null>(null)
 
+// Exclui 'dia' de propósito: o padrão precisa ter um período nomeado
+// (periodoAtual não sabe responder "qual dia"), e mês é o recorte do time.
+const MODE_PADRAO: Exclude<PeriodMode, 'dia'> = 'mes'
+
 export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   const [brandKey, setBrandKey] = usePersisted('brandKey', isString, 'overview')
+
   const [periodMode, setPeriodModeRaw] = usePersisted<PeriodMode>(
-    'periodMode',
-    oneOf(['dia', 'mes', 'trimestre', 'ano', 'custom'] as const),
-    'mes',
+    'periodMode', oneOf(['dia', 'mes', 'trimestre', 'ano'] as const), MODE_PADRAO,
   )
-  const [range, setRangeRaw] = usePersisted<DateRange>('range', isRange, rangeForMode('mes'))
+  const [periodValue, setPeriodValueRaw] = usePersisted(
+    'periodValue', isString, periodoAtual(MODE_PADRAO),
+  )
+  // Só usado no modo 'dia'; nos demais o range vem de periodMode + periodValue.
+  const [rangeDia, setRangeDia] = usePersisted<DateRange>(
+    'rangeDia', isRange, rangeForPeriod('mes', periodoAtual('mes')),
+  )
+
   const [fontes, setFontes] = usePersisted('fontes', isStringArray, [])
   const [subFontes, setSubFontes] = usePersisted('subFontes', isStringArray, [])
 
-  const [salesMode, setSalesModeRaw] = usePersisted<SalesMode>(
+  const [salesMode, setSalesMode] = usePersisted<SalesMode>(
     'salesMode', oneOf(['deals', 'units'] as const), DEFAULT_VIEW_MODES.salesMode,
   )
-  const [funnelView, setFunnelViewRaw] = usePersisted<FunnelView>(
+  const [funnelView, setFunnelView] = usePersisted<FunnelView>(
     'funnelView', oneOf(['stageDate', 'cohort'] as const), DEFAULT_VIEW_MODES.funnelView,
   )
-  const [eventSource, setEventSourceRaw] = usePersisted<EventSource>(
+  const [eventSource, setEventSource] = usePersisted<EventSource>(
     'eventSource', oneOf(['unique', 'passages'] as const), DEFAULT_VIEW_MODES.eventSource,
   )
 
+  const range = useMemo<DateRange>(
+    () => (periodMode === 'dia' ? rangeDia : rangeForPeriod(periodMode, periodValue)),
+    [periodMode, periodValue, rangeDia],
+  )
+
+  /** Trocar de granularidade seleciona o período corrente dela. */
   const setPeriodMode = useCallback((m: PeriodMode) => {
     setPeriodModeRaw(m)
-    if (m !== 'custom') setRangeRaw(rangeForMode(m))
-  }, [setPeriodModeRaw, setRangeRaw])
-
-  // Mexer nas datas na mão implica sair do preset.
-  const setRange = useCallback((r: DateRange) => {
-    setRangeRaw(r)
-    setPeriodModeRaw('custom')
-  }, [setRangeRaw, setPeriodModeRaw])
+    if (m !== 'dia') setPeriodValueRaw(periodoAtual(m))
+  }, [setPeriodModeRaw, setPeriodValueRaw])
 
   const resetFiltros = useCallback(() => {
     setBrandKey('overview')
-    setPeriodModeRaw('mes')
-    setRangeRaw(rangeForMode('mes'))
+    setPeriodModeRaw(MODE_PADRAO)
+    setPeriodValueRaw(periodoAtual(MODE_PADRAO))
     setFontes([])
     setSubFontes([])
-  }, [setBrandKey, setPeriodModeRaw, setRangeRaw, setFontes, setSubFontes])
+  }, [setBrandKey, setPeriodModeRaw, setPeriodValueRaw, setFontes, setSubFontes])
 
   const value = useMemo<SharedFilters>(() => ({
     brandKey, setBrandKey,
     periodMode, setPeriodMode,
-    range, setRange,
+    periodValue, setPeriodValue: setPeriodValueRaw,
+    range, setRange: setRangeDia,
     fontes, setFontes,
     subFontes, setSubFontes,
     viewModes: { salesMode, funnelView, eventSource },
-    setSalesMode: setSalesModeRaw,
-    setFunnelView: setFunnelViewRaw,
-    setEventSource: setEventSourceRaw,
+    setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   }), [
-    brandKey, setBrandKey, periodMode, setPeriodMode, range, setRange,
-    fontes, setFontes, subFontes, setSubFontes,
-    salesMode, funnelView, eventSource,
-    setSalesModeRaw, setFunnelViewRaw, setEventSourceRaw, resetFiltros,
+    brandKey, setBrandKey, periodMode, setPeriodMode, periodValue, setPeriodValueRaw,
+    range, setRangeDia, fontes, setFontes, subFontes, setSubFontes,
+    salesMode, funnelView, eventSource, setSalesMode, setFunnelView, setEventSource,
+    resetFiltros,
   ])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>

@@ -239,6 +239,30 @@ export function sumRevenue(
   return acc
 }
 
+/* ── Perdas ──────────────────────────────────────────────────────────────── */
+
+/** Só é perda se o estado atual é 'Perdido'. Cada ciclo carrega seu próprio desfecho. */
+export function isLoss(row: FunnelRow): boolean {
+  return row.status_atual === 'Perdido'
+}
+
+function lossInWindow(r: FunnelRow, win: PeriodWindow, modes: ViewModes): boolean {
+  if (modes.funnelView === 'cohort') {
+    // Safra: MQL no período E a negociação foi perdida (em qualquer data).
+    return isInWindow(r[COHORT_ROOT_FIELD], win) && !!r.data_perdido
+  }
+  return isInWindow(r.data_perdido, win)
+}
+
+/** Deals perdidos na janela — mesmo toggle stageDate/cohort de countSales. */
+export function rowsInLoss(
+  rows: FunnelRow[],
+  win: PeriodWindow,
+  modes: ViewModes,
+): FunnelRow[] {
+  return rows.filter(r => isLoss(r) && lossInWindow(r, win, modes))
+}
+
 /* ── Contagem por etapa (tabela flat) ────────────────────────────────────── */
 
 /** Este deal conta nesta etapa, nesta janela? */

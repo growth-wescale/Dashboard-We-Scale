@@ -52,3 +52,27 @@ export function normalizeSubFonte(utmSource: string | null | undefined): SubFont
   if (VAZIOS.has(raw)) return 'Não identificado'
   return MAPA[raw] ?? 'Outros'
 }
+
+/**
+ * Normalização da fonte macro (classificação de negócio do CRM).
+ *
+ * O campo "Fonte Macro" no RD é texto livre — parte dos deals foi escrita como
+ * 'INBOUND' (caixa alta) por um processo antigo, o resto como 'Inbound'. Sem
+ * normalizar, viram duas opções separadas no filtro e a contagem de Inbound
+ * fica dividida entre elas. Corrige só a exibição; o valor no RD fica como está.
+ */
+const FONTE_MACRO_CANONICA = [
+  'Inbound',
+  'Resgate',
+  'Prospecção Ativa',
+  'Evento',
+  'Outro CRM',
+  'Indicação',
+] as const
+
+export function normalizeFonteMacro(fonteMacro: string | null | undefined): string {
+  const raw = (fonteMacro ?? '').trim()
+  if (!raw) return 'Sem Classificação'
+  const canonica = FONTE_MACRO_CANONICA.find(v => v.toLowerCase() === raw.toLowerCase())
+  return canonica ?? raw
+}

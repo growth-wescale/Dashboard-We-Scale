@@ -13,7 +13,7 @@ import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useFunilAging } from '@/hooks/useFunilAging'
 import { computeAging } from '@/lib/aging'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
-import { normalizeSubFonte } from '@/lib/fonteMapping'
+import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
   countStageEvents, isSale, resolveStage, sumRevenue, toWindow,
@@ -319,7 +319,7 @@ export function FunilVendas() {
   // valor novo no CRM (como "Prospecção Ativa") precisa aparecer sozinho.
   // Derivadas de `rows`, não de `scoped`, senão filtrar esconde as demais opções.
   const fontesDisponiveis = useMemo(
-    () => [...new Set(rows.map(r => r.fonte_macro?.trim() || 'Sem Classificação'))],
+    () => [...new Set(rows.map(r => normalizeFonteMacro(r.fonte_macro)))],
     [rows],
   )
   const subFontesDisponiveis = useMemo(
@@ -395,7 +395,7 @@ export function FunilVendas() {
     const ganhos = scoped.filter(r => isSale(r) && countStage([r], 'Fechamento', win, viewModes) > 0)
     const cont: Record<string, number> = {}
     for (const r of ganhos) {
-      const k = r.fonte_macro?.trim() || 'Sem Classificação'
+      const k = normalizeFonteMacro(r.fonte_macro)
       cont[k] = (cont[k] ?? 0) + 1
     }
     const CORES: Record<string, string> = {

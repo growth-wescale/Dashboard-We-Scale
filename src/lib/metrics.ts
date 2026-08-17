@@ -25,7 +25,7 @@
  */
 
 import { toLocalDate, toLocalYearMonth } from '@/lib/dateUtils'
-import { normalizeSubFonte } from '@/lib/fonteMapping'
+import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import type { FunnelRow } from '@/lib/funnelTypes'
 
 /* ── Toggles ─────────────────────────────────────────────────────────────── */
@@ -424,7 +424,7 @@ export function buildScopeFilter(opts: ScopeOptions): (r: FunnelRow) => boolean 
   const { marcas = [], fontes = [], subFontes = [], sdrs = [], closers = [] } = opts
   return (r: FunnelRow) => {
     if (marcas.length && !marcas.includes(r.marca ?? '')) return false
-    if (fontes.length && !fontes.includes(r.fonte_macro ?? '')) return false
+    if (fontes.length && !fontes.includes(normalizeFonteMacro(r.fonte_macro))) return false
     if (subFontes.length && !subFontes.includes(normalizeSubFonte(r.utm_source))) return false
     if (sdrs.length && !sdrs.includes(r.nome_sdr ?? '')) return false
     if (closers.length && !closers.includes(r.nome_closer ?? '')) return false

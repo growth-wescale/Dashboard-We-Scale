@@ -21,7 +21,7 @@ const PAGE_SIZE = 1000
 const COLS = [
   'id_lead', 'ciclo', 'eh_reciclagem', 'eh_ciclo_atual',
   'marca', 'nome_funil', 'etapa_funil', 'status_atual',
-  'nome_sdr', 'nome_closer',
+  'nome_sdr', 'nome_closer', 'nome_negociacao',
   'fonte_macro', 'sub_fonte', 'utm_source', 'utm_medium', 'utm_campaign',
   'valor_contrato', 'quantidade_unidades', 'motivo_perda',
   'data_criacao_negociacao', 'data_criacao_original',

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
@@ -13,10 +14,10 @@ import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useFunilAging } from '@/hooks/useFunilAging'
 import { computeAging } from '@/lib/aging'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
-import { normalizeSubFonte } from '@/lib/fonteMapping'
+import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, isSale, resolveStage, sumRevenue, toWindow,
+  countStageEvents, dealsInStage, isSale, resolveStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { StageKey } from '@/lib/metrics'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
@@ -51,8 +52,9 @@ function fmtDias(d: number | null): string {
 
 interface FunnelStage { key: string; label: string; value: number }
 
-function TrapFunnel({ stages, invest, accent, dark }: {
+function TrapFunnel({ stages, invest, accent, dark, onStageClick }: {
   stages: FunnelStage[]; invest: number; accent: string; dark: string
+  onStageClick?: (key: string) => void
 }) {
   const v0 = Math.max(stages[0]?.value ?? 1, 1)
   const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
@@ -93,12 +95,16 @@ function TrapFunnel({ stages, invest, accent, dark }: {
             )}
             <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center' }}>
               <div style={{ position: 'relative', height: 46 }}>
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: shade(i),
-                  clipPath: `polygon(${insetTop}% 0, ${100 - insetTop}% 0, ${100 - insetBot}% 100%, ${insetBot}% 100%)`,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.1,
-                }}>
+                <div
+                  onClick={onStageClick ? () => onStageClick(s.key) : undefined}
+                  title={onStageClick ? `Ver deals em ${s.label}` : undefined}
+                  style={{
+                    position: 'absolute', inset: 0,
+                    background: shade(i),
+                    clipPath: `polygon(${insetTop}% 0, ${100 - insetTop}% 0, ${100 - insetBot}% 100%, ${insetBot}% 100%)`,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.1,
+                    cursor: onStageClick ? 'pointer' : 'default',
+                  }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
                     {nf(s.value)}
                   </span>
@@ -277,6 +283,7 @@ function ModeToggle({ value, onChange }: { value: FunnelMode; onChange: (m: Funn
 export function FunilVendas() {
   const { brandKey, range, fontes, subFontes, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
+  const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
 
@@ -319,7 +326,7 @@ export function FunilVendas() {
   // valor novo no CRM (como "Prospecção Ativa") precisa aparecer sozinho.
   // Derivadas de `rows`, não de `scoped`, senão filtrar esconde as demais opções.
   const fontesDisponiveis = useMemo(
-    () => [...new Set(rows.map(r => r.fonte_macro?.trim() || 'Sem Classificação'))],
+    () => [...new Set(rows.map(r => normalizeFonteMacro(r.fonte_macro)))],
     [rows],
   )
   const subFontesDisponiveis = useMemo(
@@ -367,6 +374,13 @@ export function FunilVendas() {
     return computeAging(periodos, vivos)
   }, [modo, scoped, periodos])
 
+  // Deals por trás da etapa clicada no funil — mesma regra usada pra contar,
+  // pra nunca mostrar uma lista diferente do número que a pessoa clicou.
+  const dealsDoClique = useMemo(() => {
+    if (!clickedStage) return []
+    return dealsInStage(scoped, eventos, clickedStage, win, viewModes, modo === 'atual' ? 'atual' : 'performance')
+  }, [clickedStage, scoped, eventos, win, viewModes, modo])
+
   // ── KPIs ────────────────────────────────────────────────────────────────────
   const { kpis, noShow, sources, leadtimes } = useMemo(() => {
     const mql = countStage(scoped, 'MQL', win, viewModes)
@@ -395,7 +409,7 @@ export function FunilVendas() {
     const ganhos = scoped.filter(r => isSale(r) && countStage([r], 'Fechamento', win, viewModes) > 0)
     const cont: Record<string, number> = {}
     for (const r of ganhos) {
-      const k = r.fonte_macro?.trim() || 'Sem Classificação'
+      const k = normalizeFonteMacro(r.fonte_macro)
       cont[k] = (cont[k] ?? 0) + 1
     }
     const CORES: Record<string, string> = {
@@ -530,7 +544,8 @@ export function FunilVendas() {
           <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
               ? <AgingList linhas={aging} accent={accent} />
-              : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark} />}
+              : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark}
+                  onStageClick={key => setClickedStage(key as StageKey)} />}
           </div>
         </SCard>
 
@@ -581,6 +596,15 @@ export function FunilVendas() {
         <LeadtimeCard label="Leadtime médio de fechamento" value={leadtimes.fechamento.value}
           sub="Da entrada do MQL até o ganho" tone="positivo" icon={<Trophy size={17} />} />
       </div>
+
+      <StageDealsDrawer
+        open={clickedStage !== null}
+        onClose={() => setClickedStage(null)}
+        stageLabel={clickedStage ? STAGE_LABEL[clickedStage] : ''}
+        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        deals={dealsDoClique}
+        accent={accent}
+      />
     </div>
   )
 }

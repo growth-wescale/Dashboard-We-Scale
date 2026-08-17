@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
-import { Download, Clock, TrendingDown, Trophy, Info, X } from 'lucide-react'
+import { Download, TrendingDown, Trophy, Info, X } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
@@ -17,7 +17,7 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, dealsInStage, isSale, resolveStage, sumRevenue, toWindow,
+  countStageEvents, dealsInStage, isSale, resolveStage, rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { StageKey } from '@/lib/metrics'
 import {
@@ -478,22 +478,27 @@ export function FunilVendas() {
       .sort((a, b) => b.pct - a.pct)
     if (sources.length === 0) sources.push({ label: 'Sem dados', pct: 100, color: 'var(--ws-border)' })
 
-    // Tempo de ciclo — sempre a partir da entrada como MQL.
-    const hoje = Date.now()
+    // Tempo de ciclo — sempre a partir da entrada como MQL. Respeita o mesmo
+    // toggle "Deals criados no período" (stageDate/cohort) do resto da página.
     const ms = (a: string, b: string) => Math.max(0, new Date(b).getTime() - new Date(a).getTime())
     const media = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0
 
-    const emAndamento = scoped.filter(r => r.status_atual === 'Em andamento' && r.data_novo_mql)
-    const perdidos = scoped.filter(r => r.status_atual === 'Perdido' && r.data_novo_mql && r.data_perdido)
-    const ganhosLt = scoped.filter(r => isSale(r) && r.data_novo_mql && r.data_venda)
+    // Reciclagem às vezes não gera novo evento de MQL no ciclo atual. Nesse
+    // caso usa a data de MQL mais antiga que esse lead já teve, em outro ciclo.
+    const primeiroMql = new Map<string, string>()
+    for (const r of scoped) {
+      if (!r.data_novo_mql) continue
+      const atual = primeiroMql.get(r.id_lead)
+      if (!atual || r.data_novo_mql < atual) primeiroMql.set(r.id_lead, r.data_novo_mql)
+    }
+    const mqlEfetivo = (r: (typeof scoped)[number]) => r.data_novo_mql ?? primeiroMql.get(r.id_lead) ?? null
+
+    const perdidos = rowsInLoss(scoped, win, viewModes).filter(r => mqlEfetivo(r))
+    const ganhosLt = rowsInStage(scoped, 'Fechamento', win, viewModes).filter(r => mqlEfetivo(r))
 
     const leadtimes = {
-      andamento: {
-        value: fmtMs(media(emAndamento.map(r => Math.max(0, hoje - new Date(r.data_novo_mql!).getTime())))),
-        count: emAndamento.length,
-      },
-      perda: { value: fmtMs(media(perdidos.map(r => ms(r.data_novo_mql!, r.data_perdido!)))) },
-      fechamento: { value: fmtMs(media(ganhosLt.map(r => ms(r.data_novo_mql!, r.data_venda!)))) },
+      perda: { value: fmtMs(media(perdidos.map(r => ms(mqlEfetivo(r)!, r.data_perdido!)))) },
+      fechamento: { value: fmtMs(media(ganhosLt.map(r => ms(mqlEfetivo(r)!, r.data_venda!)))) },
     }
 
     return {
@@ -654,14 +659,11 @@ export function FunilVendas() {
       </div>
 
       <SectionHead title="Tempo de ciclo" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <LeadtimeCard label="Leadtime médio em andamento" value={leadtimes.andamento.value}
-          sub={`${nf(leadtimes.andamento.count)} negociações em aberto — da entrada até hoje`}
-          tone="atencao" icon={<Clock size={17} />} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
         <LeadtimeCard label="Leadtime médio até a perda" value={leadtimes.perda.value}
           sub="Média das negociações perdidas no período" tone="risco" icon={<TrendingDown size={17} />} />
         <LeadtimeCard label="Leadtime médio de fechamento" value={leadtimes.fechamento.value}
-          sub="Da entrada do MQL até o ganho" tone="positivo" icon={<Trophy size={17} />} />
+          sub="Da entrada do MQL até o ganho, no período" tone="positivo" icon={<Trophy size={17} />} />
       </div>
 
       <StageDealsDrawer

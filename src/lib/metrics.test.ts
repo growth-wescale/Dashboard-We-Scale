@@ -9,6 +9,7 @@ import {
   countStage,
   countStageEvents,
   dealKey,
+  dealsInStage,
   isInWindow,
   resolveStage,
   sumRevenue,
@@ -33,6 +34,7 @@ function row(over: Partial<FunnelRow> = {}): FunnelRow {
     status_atual: 'Em andamento',
     nome_sdr: null,
     nome_closer: null,
+    nome_negociacao: null,
     fonte_macro: null,
     sub_fonte: null,
     utm_source: null,
@@ -401,5 +403,78 @@ describe('buildScopeFilter', () => {
 
   it('combina critérios com AND', () => {
     expect(buildScopeFilter({ marcas: ['Inpot'], fontes: ['Resgate'] })(r)).toBe(false)
+  })
+})
+
+// ── Deals por trás do clique numa etapa (popup de detalhe) ─────────────────
+
+describe('dealsInStage', () => {
+  const ev = (over: Partial<FunnelEventRow>): FunnelEventRow => ({
+    id_deal: 'd1',
+    dia: '2026-08-05',
+    marca: 'Inpot',
+    etapa_canonica: 'Contato Efetivo',
+    id_etapa: 'et-generica',
+    nome_funil: 'SDR',
+    ciclo: 1,
+    rn_deal_etapa_mes: 1,
+    ...over,
+  })
+
+  it('Fechamento usa a trava de venda, não o histórico de eventos', () => {
+    const scoped = [
+      row({ id_lead: 'a', status_atual: 'Ganho', data_venda: '2026-08-05T10:00:00+00:00' }),
+      row({ id_lead: 'b', status_atual: 'Em andamento', data_venda: '2026-08-06T10:00:00+00:00' }),
+    ]
+    const out = dealsInStage(scoped, [], 'Fechamento', AGOSTO, modes(), 'performance')
+    expect(out).toHaveLength(1)
+    expect(out[0].row.id_lead).toBe('a')
+    expect(out[0].dataEtapa).toBe('2026-08-05T10:00:00+00:00')
+  })
+
+  it('modo Atual devolve deals vivos parados na etapa, ignorando o período', () => {
+    const scoped = [
+      row({ id_lead: 'a', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Negociação SAL (7 dias)' }),
+      row({ id_lead: 'b', eh_ciclo_atual: false, status_atual: 'Em andamento', etapa_funil: 'Negociação SAL (7 dias)' }), // ciclo antigo
+      row({ id_lead: 'c', eh_ciclo_atual: true, status_atual: 'Perdido', etapa_funil: 'Negociação SAL (7 dias)' }), // morto
+    ]
+    const out = dealsInStage(scoped, [], 'SAL', AGOSTO, modes(), 'atual')
+    expect(out.map(d => d.row.id_lead)).toEqual(['a'])
+  })
+
+  it('modo Performance cruza o evento de volta com a linha completa do deal', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1, marca: 'Inpot', nome_sdr: 'Xayane' })]
+    const eventos = [ev({})]
+    const out = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes(), 'performance')
+    expect(out).toHaveLength(1)
+    expect(out[0].row.nome_sdr).toBe('Xayane')
+    expect(out[0].dataEtapa).toBe('2026-08-05')
+  })
+
+  it('respeita a chave composta id_lead+ciclo — não cruza com o ciclo errado', () => {
+    const scoped = [
+      row({ id_lead: 'd1', ciclo: 1, marca: 'Ciclo 1' }),
+      row({ id_lead: 'd1', ciclo: 2, marca: 'Ciclo 2' }),
+    ]
+    const eventos = [ev({ ciclo: 2 })]
+    const out = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes(), 'performance')
+    expect(out).toHaveLength(1)
+    expect(out[0].row.marca).toBe('Ciclo 2')
+  })
+
+  it('Passagens nunca devolve menos linhas que Únicos, igual à contagem', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const eventos = [ev({}), ev({}), ev({})] // 3 passagens no mesmo mês
+    const unicos = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'unique' }), 'performance')
+    const passagens = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'passages' }), 'performance')
+    expect(unicos).toHaveLength(1)
+    expect(passagens).toHaveLength(3)
+  })
+
+  it('ignora eventos de deals fora do escopo (não estão em scoped)', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const eventos = [ev({ id_deal: 'fora-do-escopo' })]
+    const out = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes(), 'performance')
+    expect(out).toHaveLength(0)
   })
 })

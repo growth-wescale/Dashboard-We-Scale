@@ -19,6 +19,8 @@ export interface FunnelRow {
   /** Etapa crua do RD; precisa passar por resolveStage() antes de contar. */
   etapa_funil: string | null
   status_atual: 'Em andamento' | 'Ganho' | 'Perdido' | 'Excluído' | null
+  /** Nome da negociação no RD — usado no popup de deals por etapa. */
+  nome_negociacao: string | null
 
   nome_sdr: string | null
   nome_closer: string | null

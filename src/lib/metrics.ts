@@ -407,6 +407,55 @@ export function eventsInStage(
   })
 }
 
+/* ── Deals por trás do clique numa etapa (drawer de detalhe) ────────────── */
+
+export interface StageDeal {
+  row: FunnelRow
+  /** Data em que este deal contou nesta etapa — null quando não há uma (raro). */
+  dataEtapa: string | null
+}
+
+/**
+ * Deals por trás do número mostrado numa etapa do funil. Espelha exatamente
+ * a mesma regra usada para contar — Fechamento pela trava de venda, Atual
+ * pela etapa corrente do deal, Performance pelo histórico de eventos — para
+ * que o popup nunca mostre uma lista diferente do que gerou o número.
+ */
+export function dealsInStage(
+  scoped: FunnelRow[],
+  events: FunnelEventRow[],
+  stage: StageKey,
+  win: PeriodWindow,
+  modes: ViewModes,
+  modo: 'performance' | 'atual',
+): StageDeal[] {
+  if (stage === 'Fechamento') {
+    return rowsInStage(scoped, 'Fechamento', win, modes).map(row => ({ row, dataEtapa: row.data_venda }))
+  }
+
+  if (modo === 'atual') {
+    return scoped
+      .filter(r => r.eh_ciclo_atual && r.status_atual === 'Em andamento' && resolveStage(r.etapa_funil) === stage)
+      .map(row => ({ row, dataEtapa: row[STAGE_DATE_FIELD[stage]] }))
+  }
+
+  const byKey = new Map(scoped.map(r => [dealKey(r), r]))
+  const safra = modes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
+  const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
+
+  const eventosNaEtapa = eventsInStage(events, stage, win, modes, {
+    cohortIds: safra,
+    extra: e => idsEscopo.has(String(e.id_deal)),
+  })
+
+  const out: StageDeal[] = []
+  for (const e of eventosNaEtapa) {
+    const row = byKey.get(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))
+    if (row) out.push({ row, dataEtapa: e.dia })
+  }
+  return out
+}
+
 /* ── Escopo (filtros) ────────────────────────────────────────────────────── */
 
 export interface ScopeOptions {

@@ -129,6 +129,20 @@ export const STAGE_LABEL: Record<StageKey, string> = {
 const COHORT_ROOT_FIELD = STAGE_DATE_FIELD['MQL']
 
 /**
+ * Quem é o "dono" do deal na etapa, pro popup de detalhe.
+ *
+ * nome_closer é preenchido assim que o deal troca de mãos e fica assim daí
+ * pra frente — inclusive olhando pra uma etapa antiga, de quando ainda era
+ * só do SDR. Sem essa distinção, o popup de "Contato Efetivo" (etapa do SDR)
+ * mostra Closers como responsáveis, o que não faz sentido pra quem lê.
+ */
+export function stageOwnerRole(stage: StageKey): 'sdr' | 'closer' {
+  const idx = STAGE_ORDER.indexOf(stage)
+  const idxDiagnostico = STAGE_ORDER.indexOf('Diagnóstico')
+  return idx >= 0 && idx >= idxDiagnostico ? 'closer' : 'sdr'
+}
+
+/**
  * Rótulos crus que aparecem em `etapa_funil` e em `etapa_canonica`.
  * O RD guarda o SLA no nome da etapa ("Diagnóstico (1 dia)"), então sem este
  * mapa o modo "Funil Atual" não casaria nenhuma etapa.

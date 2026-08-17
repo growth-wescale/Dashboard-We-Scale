@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ExternalLink, X } from 'lucide-react'
-import type { StageDeal } from '@/lib/metrics'
+import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { toLocalDate, fmtBR } from '@/lib/dateUtils'
 import { nf } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
@@ -105,13 +105,14 @@ const selectStyle: React.CSSProperties = {
 interface StageDealsDrawerProps {
   open: boolean
   onClose: () => void
+  stage: StageKey | null
   stageLabel: string
   subtitle: string
   deals: StageDeal[]
   accent: string
 }
 
-export function StageDealsDrawer({ open, onClose, stageLabel, subtitle, deals, accent }: StageDealsDrawerProps) {
+export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, deals, accent }: StageDealsDrawerProps) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
 
   const options = useMemo(() => ({
@@ -137,9 +138,13 @@ export function StageDealsDrawer({ open, onClose, stageLabel, subtitle, deals, a
     () => topBreakdown(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
     [deals],
   )
+  // Diagnóstico em diante é do Closer; antes disso, do SDR — nome_closer já vem
+  // preenchido bem antes da etapa dele, e mostrar Closer numa etapa de SDR confunde.
+  const ownerRole = stage ? stageOwnerRole(stage) : 'sdr'
+  const ownerLabel = ownerRole === 'closer' ? 'Closer' : 'SDR'
   const porResponsavel = useMemo(
-    () => topBreakdown(deals, d => d.row.nome_closer || d.row.nome_sdr, () => accent),
-    [deals, accent],
+    () => topBreakdown(deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent),
+    [deals, accent, ownerRole],
   )
 
   if (!open) return null
@@ -185,7 +190,7 @@ export function StageDealsDrawer({ open, onClose, stageLabel, subtitle, deals, a
           display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
         }}>
           <BarList title="Por Marca" rows={porMarca} />
-          <BarList title="Por Responsável" rows={porResponsavel} />
+          <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} />
         </div>
 
         {/* filtros */}

@@ -323,10 +323,31 @@ export interface FunnelEventRow {
   dia: string | null
   marca: string | null
   etapa_canonica: string | null
+  /** Etapa crua do RD. Necessária para as etapas com regra por funil. */
+  id_etapa?: string | null
   nome_funil?: string | null
   ciclo?: number | null
-  /** 1 marca a primeira passagem do deal por aquela etapa no mês. */
-  rn_deal_etapa_mes: number | null
+  /**
+   * Primeira passagem do deal pela etapa no mês, segundo o banco.
+   *
+   * NÃO usar para deduplicar: a partição é (deal, etapa_canonica, mês), sem
+   * separar funil. Nas etapas com regra por funil o rn=1 pode ser justamente o
+   * evento que a regra descarta, e o deal sumiria. A unicidade é calculada
+   * aqui, depois de aplicar a regra — ver eventsInStage.
+   */
+  rn_deal_etapa_mes?: number | null
+}
+
+/**
+ * Etapas que só contam num funil específico.
+ *
+ * "Reunião Agendada SQL" existe no funil do SDR e no do Closer. Quando o SDR
+ * agenda, o negócio migra para o Closer e a MESMA reunião gera dois eventos —
+ * o que inflava o SQL de 71 para 144. Regra do negócio: vale a etapa do Closer;
+ * duas reuniões só quando o deal reentra nela.
+ */
+const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, string>> = {
+  'Reunião Agendada SQL': '69b1badfe1def700137f1b89', // Closer
 }
 
 export interface EventCountOptions {
@@ -345,7 +366,13 @@ export function countStageEvents(
   return eventsInStage(events, stageLabel, win, modes, optsOrExtra).length
 }
 
-/** Mesma regra de countStageEvents, devolvendo os eventos. */
+/**
+ * Eventos que contam numa etapa, na janela.
+ *
+ * No modo 'unique' a deduplicação é feita aqui, por (deal, ciclo, mês), DEPOIS
+ * de aplicar todos os filtros — inclusive a regra de funil. Por construção,
+ * 'passages' nunca devolve menos linhas que 'unique'.
+ */
 export function eventsInStage(
   events: FunnelEventRow[],
   stageLabel: string,
@@ -357,14 +384,25 @@ export function eventsInStage(
     typeof optsOrExtra === 'function' ? { extra: optsOrExtra } : (optsOrExtra ?? {})
   const cohort = modes.funnelView === 'cohort' ? (opts.cohortIds ?? null) : null
   const alvo = resolveStage(stageLabel)
+  const idObrigatorio = alvo ? STAGE_ID_OBRIGATORIO[alvo] : undefined
 
-  return events.filter(e => {
+  const elegiveis = events.filter(e => {
     if (resolveStage(e.etapa_canonica) !== alvo) return false
+    if (idObrigatorio && e.id_etapa !== idObrigatorio) return false
     if (cohort) {
       if (!cohort.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))) return false
     } else if (!isInWindow(e.dia, win)) return false
-    if (modes.eventSource === 'unique' && (e.rn_deal_etapa_mes ?? 1) !== 1) return false
     if (opts.extra && !opts.extra(e)) return false
+    return true
+  })
+
+  if (modes.eventSource === 'passages') return elegiveis
+
+  const vistos = new Set<string>()
+  return elegiveis.filter(e => {
+    const chave = `${dealKey({ id_lead: e.id_deal, ciclo: e.ciclo })}::${toLocalYearMonth(e.dia) ?? '?'}`
+    if (vistos.has(chave)) return false
+    vistos.add(chave)
     return true
   })
 }

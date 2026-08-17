@@ -292,9 +292,11 @@ export function FunilVendas() {
   const { data: curMedia } = useMediaData({ marca, dataInicio: range.start, dataFim: range.end })
   const { data: prevMedia } = useMediaData({ marca, dataInicio: prev.start, dataFim: prev.end })
 
-  const usaEventos = viewModes.eventSource === 'passages'
+  // Os DOIS modos de contagem leem o histórico de eventos. Antes, "Deals
+  // únicos" vinha da tabela plana e "Passagens" dos eventos — bases diferentes,
+  // e Passagens chegava a aparecer MENOR que Únicos, o que é impossível.
   const { data: eventos } = useFunilEventos({
-    enabled: usaEventos,
+    enabled: true,
     marca,
     inicio: range.start,
     // No modo safra o evento pode ser posterior à janela do MQL.
@@ -339,25 +341,23 @@ export function FunilVendas() {
       return STAGE_ORDER.map(s => ({ key: s, label: STAGE_LABEL[s], value: porEtapa.get(s) ?? 0 }))
     }
 
-    if (usaEventos) {
-      const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
-      const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
-      return STAGE_ORDER.map(s => ({
-        key: s,
-        label: STAGE_LABEL[s],
-        value: countStageEvents(eventos, s, win, viewModes, {
-          cohortIds: safra,
-          extra: e => idsEscopo.has(String(e.id_deal)),
-        }),
-      }))
-    }
+    const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
+    const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
     return STAGE_ORDER.map(s => ({
       key: s,
       label: STAGE_LABEL[s],
-      value: countStage(scoped, s, win, viewModes),
+      // Fechamento não é etapa no histórico — venda é um tipo de evento à parte.
+      // Procurar por etapa "Fechamento" nos eventos devolvia sempre zero, e a
+      // venda sumia da tela ao ligar Passagens. Sempre pela trava de venda.
+      value: s === 'Fechamento'
+        ? countSales(scoped, win, viewModes)
+        : countStageEvents(eventos, s, win, viewModes, {
+            cohortIds: safra,
+            extra: e => idsEscopo.has(String(e.id_deal)),
+          }),
     }))
-  }, [modo, usaEventos, scoped, eventos, win, viewModes])
+  }, [modo, scoped, eventos, win, viewModes])
 
   const aging = useMemo(() => {
     if (modo !== 'aging') return []

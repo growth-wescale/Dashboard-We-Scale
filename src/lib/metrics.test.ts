@@ -249,18 +249,16 @@ describe('countStageEvents', () => {
     dia: '2026-08-05',
     marca: 'Inpot',
     etapa_canonica: 'Contato Efetivo',
+    id_etapa: 'et-generica',
+    nome_funil: 'SDR',
     ciclo: 1,
     rn_deal_etapa_mes: 1,
     ...over,
   })
 
-  const eventos = [
-    ev({ rn_deal_etapa_mes: 1 }),
-    ev({ rn_deal_etapa_mes: 2 }), // revisita no mesmo mês
-    ev({ rn_deal_etapa_mes: 3 }),
-  ]
+  const eventos = [ev({}), ev({}), ev({})] // mesmo deal, 3 passagens no mês
 
-  it('unique conta só a primeira passagem do mês', () => {
+  it('unique conta o deal uma vez por mês, por mais que ele revisite', () => {
     expect(countStageEvents(eventos, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'unique' }))).toBe(1)
   })
 
@@ -268,18 +266,78 @@ describe('countStageEvents', () => {
     expect(countStageEvents(eventos, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'passages' }))).toBe(3)
   })
 
+  it('unique conta deals diferentes separadamente', () => {
+    const dois = [ev({ id_deal: 'a' }), ev({ id_deal: 'b' }), ev({ id_deal: 'b' })]
+    expect(countStageEvents(dois, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'unique' }))).toBe(2)
+  })
+
+  it('unique separa ciclos do mesmo deal', () => {
+    const reciclado = [ev({ ciclo: 1 }), ev({ ciclo: 2 })]
+    expect(countStageEvents(reciclado, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'unique' }))).toBe(2)
+  })
+
   it('ignora eventos de outra etapa', () => {
     expect(countStageEvents(eventos, 'SAL', AGOSTO, modes())).toBe(0)
   })
 
   it('em cohort, filtra pela safra e não pela data do evento', () => {
-    const foraDaJanela = [ev({ dia: '2026-09-20', rn_deal_etapa_mes: 1 })]
+    const foraDaJanela = [ev({ dia: '2026-09-20' })]
     const safra = new Set([dealKey({ id_lead: 'd1', ciclo: 1 })])
     expect(
       countStageEvents(foraDaJanela, 'Contato Efetivo', AGOSTO, modes({ funnelView: 'cohort' }), {
         cohortIds: safra,
       }),
     ).toBe(1)
+  })
+
+  // A INVARIANTE. Foi violada em produção: Passagens aparecia MENOR que Únicos
+  // porque cada modo lia uma base diferente.
+  it('passages nunca é menor que unique', () => {
+    const bagunca = [
+      ev({ id_deal: 'a' }), ev({ id_deal: 'a' }), ev({ id_deal: 'b' }),
+      ev({ id_deal: 'c' }), ev({ id_deal: 'c' }), ev({ id_deal: 'c' }),
+    ]
+    for (const etapa of ['Contato Efetivo', 'SAL'] as const) {
+      const u = countStageEvents(bagunca, etapa, AGOSTO, modes({ eventSource: 'unique' }))
+      const p = countStageEvents(bagunca, etapa, AGOSTO, modes({ eventSource: 'passages' }))
+      expect(p).toBeGreaterThanOrEqual(u)
+    }
+  })
+})
+
+// Regra de negócio do Junior: "Reunião Agendada SQL" só conta na etapa do funil
+// do Closer. A mesma etapa existe no funil do SDR, e o handoff SDR->Closer
+// gerava dois eventos para uma única reunião — inflando o SQL de 71 para 144.
+describe('Reunião Agendada SQL — só a etapa do Closer', () => {
+  const ETAPA_CLOSER = '69b1badfe1def700137f1b89'
+  const evSql = (funil: string, id_etapa: string, over: Partial<FunnelEventRow> = {}): FunnelEventRow => ({
+    id_deal: 'd1', dia: '2026-08-05', marca: 'Inpot',
+    etapa_canonica: 'Reunião Agendada SQL', id_etapa, nome_funil: funil,
+    ciclo: 1, rn_deal_etapa_mes: 1, ...over,
+  })
+
+  const handoff = [
+    evSql('SDR', '69380917e00ed10014daaa68'),  // não conta
+    evSql('Closer', ETAPA_CLOSER),             // conta
+  ]
+
+  it('ignora a etapa homônima do funil SDR', () => {
+    expect(countStageEvents(handoff, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'passages' }))).toBe(1)
+  })
+
+  it('conta duas vezes só se o deal reentrar na etapa do Closer', () => {
+    const reentrou = [...handoff, evSql('Closer', ETAPA_CLOSER)]
+    expect(countStageEvents(reentrou, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'passages' }))).toBe(2)
+    expect(countStageEvents(reentrou, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'unique' }))).toBe(1)
+  })
+
+  it('não usa rn_deal_etapa_mes do banco, que agrupa sem separar funil', () => {
+    // o rn=1 é do SDR (excluído); se dependêssemos dele, o Closer sumiria
+    const rnDoSdr = [
+      evSql('SDR', '69380917e00ed10014daaa68', { rn_deal_etapa_mes: 1 }),
+      evSql('Closer', ETAPA_CLOSER, { rn_deal_etapa_mes: 2 }),
+    ]
+    expect(countStageEvents(rnDoSdr, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'unique' }))).toBe(1)
   })
 })
 

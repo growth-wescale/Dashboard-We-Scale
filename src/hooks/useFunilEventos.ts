@@ -15,8 +15,10 @@ import type { FunnelEventRow } from '@/lib/metrics'
 
 const PAGE_SIZE = 1000
 
+// id_etapa é obrigatório: etapas homônimas em funis diferentes ("Reunião
+// Agendada SQL" no SDR e no Closer) só se distinguem por ele.
 const COLS = [
-  'id_deal', 'dia', 'marca', 'etapa_canonica', 'nome_funil', 'ciclo', 'rn_deal_etapa_mes',
+  'id_deal', 'dia', 'marca', 'etapa_canonica', 'id_etapa', 'nome_funil', 'ciclo', 'rn_deal_etapa_mes',
 ].join(',')
 
 interface Params {

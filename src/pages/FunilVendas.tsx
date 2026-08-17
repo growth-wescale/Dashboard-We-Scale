@@ -13,6 +13,7 @@ import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useFunilAging } from '@/hooks/useFunilAging'
 import { computeAging } from '@/lib/aging'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
+import { normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
   countStageEvents, isSale, resolveStage, sumRevenue, toWindow,
@@ -312,6 +313,18 @@ export function FunilVendas() {
   /** Deals do escopo (marca já veio filtrada do servidor). */
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
 
+  // Opções dos filtros de origem saem dos próprios dados, nunca de lista fixa:
+  // valor novo no CRM (como "Prospecção Ativa") precisa aparecer sozinho.
+  // Derivadas de `rows`, não de `scoped`, senão filtrar esconde as demais opções.
+  const fontesDisponiveis = useMemo(
+    () => [...new Set(rows.map(r => r.fonte_macro?.trim() || 'Sem Classificação'))],
+    [rows],
+  )
+  const subFontesDisponiveis = useMemo(
+    () => [...new Set(rows.map(r => normalizeSubFonte(r.utm_source) as string))],
+    [rows],
+  )
+
   // ── Funil ───────────────────────────────────────────────────────────────────
   const funnel = useMemo<FunnelStage[]>(() => {
     if (modo === 'atual') {
@@ -459,7 +472,7 @@ export function FunilVendas() {
         }
       />
 
-      <FilterBar />
+      <FilterBar fontesDisponiveis={fontesDisponiveis} subFontesDisponiveis={subFontesDisponiveis} />
 
       <QueryErrorBanner errors={[error]} scope="Funil de Vendas" />
 

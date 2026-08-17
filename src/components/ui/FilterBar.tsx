@@ -6,7 +6,7 @@
  * A sombra só aparece depois que a barra descola do topo — daí o sentinela.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDown, RotateCcw } from 'lucide-react'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
@@ -15,10 +15,25 @@ import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { opcoesPara } from '@/lib/periodo'
 import type { PeriodMode } from '@/lib/periodo'
 
-/** Valores de fonte_macro que existem hoje na base. */
-const FONTES_MACRO = ['Inbound', 'Resgate', 'Sem Classificação'] as const
-
 const PERIOD_MODES: PeriodMode[] = ['dia', 'mes', 'trimestre', 'ano']
+
+/**
+ * Cestos genéricos vão para o fim da lista; o resto em ordem alfabética.
+ *
+ * As opções de Fonte NÃO são fixas no código: vêm dos dados carregados. Uma
+ * lista fixa aqui já quebrou uma vez — quando "Prospecção Ativa" passou a
+ * existir no CRM, o filtro continuou oferecendo só os três valores antigos e
+ * 174 deals ficaram inalcançáveis.
+ */
+const CESTOS = ['Sem Classificação', 'Outros', 'Não identificado']
+
+function ordenarOpcoes(valores: string[]): string[] {
+  return [...valores].sort((a, b) => {
+    const ia = CESTOS.indexOf(a), ib = CESTOS.indexOf(b)
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? -1 : ia) - (ib === -1 ? -1 : ib)
+    return a.localeCompare(b, 'pt-BR')
+  })
+}
 
 /* ── Peças ────────────────────────────────────────────────────────────────── */
 
@@ -155,7 +170,15 @@ function MultiSelect({ label, options, selected, onChange }: {
 
 /* ── Barra ────────────────────────────────────────────────────────────────── */
 
-export function FilterBar({ extra }: { extra?: ReactNode }) {
+interface FilterBarProps {
+  extra?: ReactNode
+  /** Valores de fonte_macro presentes nos dados. Sem isso o filtro fica vazio. */
+  fontesDisponiveis?: string[]
+  /** Grupos de sub-fonte presentes nos dados. */
+  subFontesDisponiveis?: string[]
+}
+
+export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: FilterBarProps) {
   const {
     brandKey, setBrandKey,
     periodMode, setPeriodMode,
@@ -182,6 +205,18 @@ export function FilterBar({ extra }: { extra?: ReactNode }) {
   }, [])
 
   const marcaAtual = BRANDS_WITH_OVERVIEW.find(b => b.key === brandKey) ?? BRANDS_WITH_OVERVIEW[0]
+
+  // Opções vindas dos dados. O que já está selecionado entra na lista mesmo que
+  // suma dos dados — senão o usuário fica com um filtro ativo que não consegue
+  // desmarcar. SUB_FONTE_GRUPOS entra como piso porque é um domínio fechado.
+  const opcoesFonte = useMemo(
+    () => ordenarOpcoes([...new Set([...(fontesDisponiveis ?? []), ...fontes])]),
+    [fontesDisponiveis, fontes],
+  )
+  const opcoesSubFonte = useMemo(
+    () => ordenarOpcoes([...new Set([...(subFontesDisponiveis ?? SUB_FONTE_GRUPOS), ...subFontes])]),
+    [subFontesDisponiveis, subFontes],
+  )
 
   return (
     <>
@@ -262,11 +297,11 @@ export function FilterBar({ extra }: { extra?: ReactNode }) {
         </Field>
 
         <Field label="Fonte">
-          <MultiSelect label="Fonte macro" options={FONTES_MACRO} selected={fontes} onChange={setFontes} />
+          <MultiSelect label="Fonte macro" options={opcoesFonte} selected={fontes} onChange={setFontes} />
         </Field>
 
         <Field label="Sub-fonte">
-          <MultiSelect label="Origem do tráfego" options={SUB_FONTE_GRUPOS} selected={subFontes} onChange={setSubFontes} />
+          <MultiSelect label="Origem do tráfego" options={opcoesSubFonte} selected={subFontes} onChange={setSubFontes} />
         </Field>
 
         <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--ws-border)', margin: '0 2px' }} />

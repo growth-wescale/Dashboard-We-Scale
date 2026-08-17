@@ -20,21 +20,18 @@ import {
   countStageEvents, dealsInStage, isSale, resolveStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { StageKey } from '@/lib/metrics'
+import {
+  periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
+} from '@/lib/periodo'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { nf, money, moneyK } from '@/lib/format'
-import { isoDate, shortMonth } from '@/lib/dateUtils'
+import { shortMonth } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
 
 const BRANDS = BRANDS_WITH_OVERVIEW
 
 /** Modo de leitura do funil. Local à aba — não é um dos toggles globais. */
 type FunnelMode = 'performance' | 'aging' | 'atual'
-
-function prevRange(start: string, end: string) {
-  const s = new Date(start + 'T12:00:00'), e = new Date(end + 'T12:00:00')
-  s.setMonth(s.getMonth() - 1); e.setMonth(e.getMonth() - 1)
-  return { start: isoDate(s), end: isoDate(e) }
-}
 
 function fmtMs(ms: number): string {
   if (!ms || ms <= 0) return '—'
@@ -278,10 +275,27 @@ function ModeToggle({ value, onChange }: { value: FunnelMode; onChange: (m: Funn
   )
 }
 
+/** Segunda linha de comparação nos 4 KPIs principais, só quando o período
+ *  está em curso: mostra "vs. mês anterior inteiro" ao lado do MTD, que já
+ *  vai no delta principal do card. */
+function DeltaSecundario({ delta, label }: { delta: number | null; label: string }) {
+  if (delta == null) return null
+  const up = delta >= 0
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11.5, fontFamily: 'var(--font-body)' }}>
+      <span style={{ fontSize: 10 }}>{up ? '▲' : '▼'}</span>
+      <span style={{ color: up ? 'var(--status-positivo)' : 'var(--status-risco)', fontWeight: 600 }}>
+        {Math.abs(delta).toFixed(1)}%
+      </span>
+      <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 400 }}>{label}</span>
+    </span>
+  )
+}
+
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const { brandKey, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { brandKey, periodMode, periodValue, range, fontes, subFontes, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
@@ -292,7 +306,25 @@ export function FunilVendas() {
   const { accent, dark } = brandDef
   const scopeLabel = brandKey === 'overview' ? 'Consolidado' : brandDef.label
 
-  const prev = useMemo(() => prevRange(range.start, range.end), [range.start, range.end])
+  // Comparação sempre com o período anterior de mesma granularidade — mês vs
+  // mês, trimestre vs trimestre, ano vs ano — e truncada aos mesmos dias
+  // corridos quando o período atual está em curso. Ver `rangeAnteriorComparavel`.
+  const prev = useMemo(
+    () => periodMode === 'dia' ? rangeAnteriorDia(range) : rangeAnteriorComparavel(periodMode, periodValue),
+    [periodMode, periodValue, range],
+  )
+
+  // Período em curso (ex.: agosto pela metade) tem uma segunda leitura: além
+  // do MTD (mesmos dias corridos do mês anterior, em `prev`), o card mostra
+  // também o total do mês anterior INTEIRO, pra quem quer ver o tamanho do
+  // mês fechado de referência. Período fechado não precisa disso — MTD e
+  // "inteiro" seriam o mesmo número.
+  const { emCurso, prevFull } = useMemo(() => {
+    if (periodMode === 'dia') return { emCurso: false, prevFull: null }
+    const emCurso = periodoEmCurso(periodMode, periodValue)
+    const prevFull = emCurso ? rangeForPeriod(periodMode, periodoAnterior(periodMode, periodValue)) : null
+    return { emCurso, prevFull }
+  }, [periodMode, periodValue])
 
   // ── Dados ───────────────────────────────────────────────────────────────────
   const { data: rows, loading, error } = useFunilVendas(marca)
@@ -315,6 +347,10 @@ export function FunilVendas() {
   const scope = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
   const win = useMemo(() => toWindow(null, { from: range.start, to: range.end }), [range.start, range.end])
   const winPrev = useMemo(() => toWindow(null, { from: prev.start, to: prev.end }), [prev.start, prev.end])
+  const winPrevFull = useMemo(
+    () => prevFull && toWindow(null, { from: prevFull.start, to: prevFull.end }),
+    [prevFull],
+  )
 
   const invest = useMemo(() => curMedia.reduce((s, r) => s + r.spend_brl, 0), [curMedia])
   const prevInvest = useMemo(() => prevMedia.reduce((s, r) => s + r.spend_brl, 0), [prevMedia])
@@ -403,6 +439,25 @@ export function FunilVendas() {
 
     const pctDelta = (c: number, p: number): number | null => p > 0 ? ((c - p) / p) * 100 : null
 
+    // Segunda leitura só quando o período está em curso: MTD (`prev`, acima)
+    // já compara dias corridos como dias corridos; isso aqui é o contraponto
+    // "quão grande foi o mês anterior inteiro", pedido explicitamente pra não
+    // esconder que o MTD é parcial.
+    let deltasFull: { receita: number | null; fechamentos: number | null; ticket: number | null; convGlobal: number } | undefined
+    if (winPrevFull) {
+      const prevFullFechamentos = countSales(scoped, winPrevFull, viewModes)
+      const prevFullReceita = sumRevenue(scoped, winPrevFull, viewModes)
+      const prevFullMql = countStage(scoped, 'MQL', winPrevFull, viewModes)
+      const prevFullTicket = prevFullFechamentos > 0 ? prevFullReceita / prevFullFechamentos : 0
+      const prevFullConvGlobal = prevFullMql > 0 ? (prevFullFechamentos / prevFullMql) * 100 : 0
+      deltasFull = {
+        receita: pctDelta(receita, prevFullReceita),
+        fechamentos: pctDelta(fechamentos, prevFullFechamentos),
+        ticket: pctDelta(ticket, prevFullTicket),
+        convGlobal: convGlobal - prevFullConvGlobal,
+      }
+    }
+
     const noShow = countStage(scoped, 'No Show', win, viewModes)
 
     // Origem das vendas — por fonte_macro, a classificação de negócio do CRM.
@@ -452,10 +507,11 @@ export function FunilVendas() {
           cac: pctDelta(cac, prevCac),
           roas: pctDelta(roas, prevRoas),
         },
+        deltasFull,
       },
       noShow, sources, leadtimes,
     }
-  }, [scoped, win, winPrev, viewModes, invest, prevInvest, accent])
+  }, [scoped, win, winPrev, winPrevFull, viewModes, invest, prevInvest, accent])
 
   const heroStyle: CSSProperties = {
     '--fs-metric': '26px',
@@ -463,7 +519,14 @@ export function FunilVendas() {
     borderColor: `color-mix(in srgb, ${accent} 34%, var(--ws-border))`,
   } as CSSProperties
   const metricStyle: CSSProperties = { '--fs-metric': '26px' } as CSSProperties
+
+  // Período em curso: o rótulo principal deixa explícito que a comparação é
+  // "até o mesmo dia" (MTD/QTD/YTD), pra não parecer que é contra o mês
+  // anterior inteiro — é exatamente essa confusão que gerou a dúvida original.
+  const SUFIXO_EM_CURSO = { mes: 'MTD', trimestre: 'QTD', ano: 'YTD' } as const
   const prevLabel = `vs. ${shortMonth(prev.start)}`
+    + (emCurso && periodMode !== 'dia' ? ` (${SUFIXO_EM_CURSO[periodMode]})` : '')
+  const prevFullLabel = prevFull ? `${shortMonth(prevFull.start)} inteiro` : ''
 
   const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
 
@@ -515,10 +578,14 @@ export function FunilVendas() {
 
       {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-        <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={kpis.deltas.receita ?? undefined} deltaLabel={prevLabel} accent={false} />
-        <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={kpis.deltas.fechamentos ?? undefined} deltaLabel={prevLabel} accent={false} />
-        <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={kpis.deltas.ticket ?? undefined} deltaLabel={prevLabel} accent={false} />
-        <MetricCard style={metricStyle} label="Conversão MQL→Ganho" value={kpis.convGlobal.toFixed(1)} unit="%" delta={kpis.deltas.convGlobal ?? undefined} accent={false} />
+        <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={kpis.deltas.receita ?? undefined} deltaLabel={prevLabel} accent={false}
+          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={kpis.deltas.fechamentos ?? undefined} deltaLabel={prevLabel} accent={false}
+          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.fechamentos} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={kpis.deltas.ticket ?? undefined} deltaLabel={prevLabel} accent={false}
+          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.ticket} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label="Conversão MQL→Ganho" value={kpis.convGlobal.toFixed(1)} unit="%" delta={kpis.deltas.convGlobal ?? undefined} deltaLabel={prevLabel} accent={false}
+          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.convGlobal} label={`vs. ${prevFullLabel}`} />} />
         <MetricCard style={metricStyle} label="CAC (custo/ganho)" value={kpis.cac > 0 ? money(kpis.cac) : '—'} delta={kpis.deltas.cac ?? undefined} deltaLabel={prevLabel} invertDelta accent={false} />
         <MetricCard style={metricStyle} label="ROAS de mídia" value={kpis.roas > 0 ? kpis.roas.toFixed(1) + 'x' : '—'} delta={kpis.deltas.roas ?? undefined} deltaLabel={prevLabel} accent={false} />
       </div>

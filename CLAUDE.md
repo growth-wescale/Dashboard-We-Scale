@@ -1,83 +1,270 @@
 # Dashboard We Scale — Contexto para Claude Code
 
-## Projeto
-Dashboard de performance de marketing da We Scale (Reccon Marketing).
-- **Stack**: React 19 + TypeScript + Vite + Tailwind CSS 4 + Supabase + React Router 7
-- **VPS**: root@89.117.32.70 — deploy via `rsync dist/ → /opt/dashboard/dist/`
-- **URL produção**: https://dashboard.srv1816822.hstgr.cloud
-- **Deploy**: `npm run build && rsync -az --delete dist/ root@89.117.32.70:/opt/dashboard/dist/`
-
-## Memórias detalhadas
-Ver `/Users/gablimas/.claude/projects/-Users-gablimas-Documents-We-Scale-Dashboard/memory/`
+> Este arquivo é carregado automaticamente em toda conversa nesta pasta.
+> **Ao terminar qualquer mudança no dashboard ou no banco, registre em "Histórico
+> de mudanças" no fim do arquivo** e atualize a seção correspondente aqui em cima.
 
 ---
 
-## ✅ Loading reload ao trocar período — IMPLEMENTADO (2026-07-21)
+## 1. O que é
 
-Padrão `loading ? <Spinner> : <Conteudo>` substituído por wrapper com `opacity: loading ? 0.5 : 1` em:
-- `SaudeDaMarca.tsx`: wraps o `{body}` (linha ~1760)
-- `VisaoGeral.tsx`: `opacity` direto no `<div {...rootProps}>` principal + wrapper no bloco de pacing
+Dashboard de performance de **marketing e vendas** da We Scale. Duas áreas com
+donos diferentes convivendo no mesmo app:
 
----
+| Área | Abas | Dono |
+|---|---|---|
+| Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, Cadências, S&OP Marketing, Análise de Termos | Gabriel |
+| **Expansão / Vendas** | **Funil de Vendas, Performance Detalhada, Análise de Perda, Análise de Objeções** | **Junior** |
 
-## O que foi feito nesta sessão (2026-07-21)
+**Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
-1. **Conta Meta Inpot substituída** nos workflows n8n:
-   - Conta antiga: `1025593326315005` (restrita/perdida)
-   - Conta nova: `987872747563639`
-   - Alterados: workflow `1CEMDCFbCV5w7YhE` (ativo, 1x/hora) e `5o4BazIAFFjgGsWk` (histórico)
-   - Dados históricos da conta antiga preservados na base
-
-2. **BubbleMatrix adicionado à SaudeDaMarca (aba Visão Geral)**:
-   - Arquivo: `src/components/ui/BubbleMatrix.tsx`
-   - SVG puro, eixo X = faixas de aging, eixo Y = etapas abertas (MQL→SQL→Diagnóstico→SAL)
-   - Deduplicação por deal_id, bolhas com escala √, tooltip completo
-   - Filtros por canal e campanha
-   - Layout: grid `1fr 1fr` ao lado do "Funil de aquisição"
-
-3. **Filtros de período corrigidos** (liberados para meses anteriores):
-   - `VisaoGeral.tsx`: removido `min={monthStart}` e `max={monthEnd}` do DateRange
-   - `SaudeDaMarca.tsx`: presets expandidos para Mês -1, Mês -2, Mês -3, 90d
-
-4. **Leads de teste deletados** (5 emails tipo gaasfsadfbriel... @wescale.com.br)
+- **Stack**: React 19 + TypeScript + Vite + Tailwind 4 + Supabase + React Router 7
+- **Produção**: https://dashboard.srv1816822.hstgr.cloud
+- **Repositório**: https://github.com/growth-wescale/Dashboard-We-Scale
 
 ---
 
-## ✅ Migração n8n → Supabase Edge Functions (2026-08-13)
+## 2. Os DOIS Supabase (a confusão mais cara deste projeto)
 
-A ingestão de mídia deixou de depender de n8n. Agora roda direto em Edge Functions do Supabase, agendadas via pg_cron.
+| Projeto | Ref | Serve para |
+|---|---|---|
+| Marketing | `jmuluoksnlqrvzbcltim` | mídia paga, leads, SOP, termos |
+| **Expansão** | **`cygxmduuwlwfbodfrlkr`** | **funil, metas, perdas, cadências, event sourcing** |
 
-### Edge Functions ativas (projeto `jmuluoksnlqrvzbcltim`)
-| Function | Cron job | Escreve em | Schedule |
-|---|---|---|---|
-| `ingest-meta-ads` | `ingest-meta-prod-hourly` | `media_daily_raw` | minuto **5** de cada hora |
-| `ingest-google-ads` | `ingest-google-prod-hourly` | `media_daily_raw` | minuto **10** de cada hora |
-| `ingest-google-search-terms` | `ingest-google-search-terms-daily` | `keywords_daily` + `search_terms_daily` | **05:20 UTC** (02:20 BRT) — yesterday |
-| `ingest-facebook-pages` | `ingest-facebook-pages-daily` | `fb_page_daily` + `fb_posts` | **05:30 UTC** (02:30 BRT) — janela 3d + posts 30d |
+Clientes separados no código: `src/lib/supabase.ts` (Marketing) e
+`src/lib/supabaseVendas.ts` (Expansão).
 
-Ambas invocadas via `net.http_post` pelo helper `public.trigger_ingest(fn_slug, body)`.
+**Regra**: tudo de Vendas vem do Supabase de Expansão. A única coisa que ainda
+vem do Marketing nas abas de Vendas é **investimento de mídia**, que sustenta
+CAC e ROAS.
 
-**Cutover realizado 2026-08-13.** Workflows n8n Reccon `1CEMDCFbCV5w7YhE` (Meta) e `ZkujY5ZJpCTlvjam` (Google) foram **desativados** (não deletados — pode reativar em 1 clique se precisar). Tabela `media_daily_raw_shadow` ainda existe: dropar em ~2 semanas se tudo estiver estável.
+### Fonte da verdade é o RD Station, não o Supabase
 
-### Secrets no Supabase Vault
-`META_ACCESS_TOKEN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DEVELOPER_TOKEN`, `GOOGLE_LOGIN_CUSTOMER_ID` (=8489211674), `SUPABASE_ANON_KEY`. Acesso via RPC `public.get_secret(name)` — SECURITY DEFINER, grant só a service_role.
+`deal_snapshot` é **espelho** do RD CRM (UPSERT por `id_deal` via webhook n8n).
+Escrever direto nele é sobrescrito no próximo sync. Mudança de dado de negócio
+tem que ser feita **no RD via API**, e o espelho se atualiza sozinho.
 
-### Estado das ingestões
-- **Google Ads**: n8n Reccon (`ZkujY5ZJpCTlvjam`) estava chamando API v21 **deprecada** e falhava silenciosamente. Edge Function usa v22, cobre 10 contas (incluindo nova marca **"Scale Partners"** = evento presencial We Scale). Backfill de 30 dias feito em 2026-08-13.
-- **Meta Ads**: n8n Reccon (`1CEMDCFbCV5w7YhE`) ainda ativo escrevendo em `media_daily_raw`. Edge Function roda em paralelo escrevendo em `media_daily_raw_shadow` para validação (5-7 dias). Cutover: apontar Edge Function pra `media_daily_raw` e desligar n8n.
-
-### Como invocar manualmente
-```bash
-# Meta
-curl -X POST https://jmuluoksnlqrvzbcltim.supabase.co/functions/v1/ingest-meta-ads \
-  -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
-  -d '{"date_preset":"today","table":"media_daily_raw_shadow"}'
-
-# Google (aceita: today, yesterday, last_7_days, last_14_days, last_30_days, this_month, last_month, ou {"time_range":{"since":"YYYY-MM-DD","until":"YYYY-MM-DD"}})
-curl -X POST https://jmuluoksnlqrvzbcltim.supabase.co/functions/v1/ingest-google-ads \
-  -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
-  -d '{"date_preset":"last_30_days","table":"media_daily_raw"}'
+```
+RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapshot + deal_eventos
+                                                              └──> views ──> dashboard
 ```
 
-### Mapping detalhado marca ↔ conta
-Ver `memory/project_media_ingestion.md`.
+---
+
+## 3. Modelo de dados de Expansão
+
+### Tabelas centrais
+
+| Objeto | O que é |
+|---|---|
+| `deal_snapshot` | estado atual de cada deal (espelho do RD). `payload` jsonb tem os campos personalizados |
+| `deal_eventos` | log append-only de eventos (mudança de etapa, ganho, perda, troca de responsável, mudança de funil, mudança de fonte macro) |
+| `vw_deal_ciclo_enriquecido` | 1 linha por **ciclo de vida** do deal. Chave composta `id_lead + ciclo` |
+| **`vw_funil_vendas`** | **base das abas de Vendas.** Projeção da anterior com allowlist de funis, sem deals de teste e sem Excluído |
+| `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
+| `vw_deal_etapa_periodos` | entrada/saída por etapa — base do modo Aging |
+| `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
+
+`vw_marketing_funil` é a view **antiga**; ainda serve Performance Detalhada e
+Análise de Perda até elas serem migradas. Não usar em código novo.
+
+### Campos que importam
+
+- `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
+- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro
+- `quantidade_unidades` — franquias por contrato, usado no toggle Unidades
+- `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
+
+### Event Sourcing dirigido por configuração
+
+Para rastrear um campo novo do payload **basta inserir uma linha** — sem tocar
+em função nem no n8n:
+
+```sql
+insert into event_fields_config
+  (nome_campo, tipo_evento, caminho_json, ativo, modo_processamento, label_no_payload)
+values
+  ('Meu Campo', 'mudanca_meu_campo', 'payload.Meu Campo', true, 'config', 'Meu Campo');
+```
+
+`processar_deal_evento` lê essa tabela e compara o payload antigo com o novo.
+
+---
+
+## 4. Regras de negócio (não quebrar)
+
+**Trava de venda.** Só é venda se `status_atual = 'Ganho'`. `data_venda`
+preenchida não basta — deals revertidos mantêm a data.
+
+**Fechamento não é etapa.** No histórico de eventos, ganho é um *tipo de
+evento*, não etapa. Contar Fechamento sempre pela trava de venda, nunca
+procurando etapa no event sourcing.
+
+**"Reunião Agendada SQL" só conta no funil do Closer** (`69b1badfe1def700137f1b89`).
+A etapa existe também no SDR, e o handoff SDR→Closer gera dois eventos para a
+mesma reunião. Duas reuniões só quando o deal **reentra** na etapa do Closer.
+
+**Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
+a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
+Não usar `rn_deal_etapa_mes` do banco: a partição ignora funil.
+
+**Aging exige deals vivos.** `vw_deal_etapa_periodos` não fecha o período quando
+o deal é perdido. Sem cruzar com `status_atual = 'Em andamento'` e
+`eh_ciclo_atual`, "Tentando Contato" mostra 1.959 deals parados há 95 dias em
+vez de 105 há 10 dias.
+
+**O funil não é monotônico.** Deals pulam etapas: em ago/26, Pré-Contrato (3) >
+Comitê (2). Taxa de passagem acima de 100% é normal, exibida com seta pra cima.
+
+**Deal sem marca é invisível.** As views exigem marca preenchida. Deals sem
+marca no RD não aparecem no dashboard, nem no Consolidado.
+
+**Período em curso termina hoje**, não no último dia. Senão o mês corrente
+compete com meses fechados e todo indicador parece em queda.
+
+---
+
+## 5. Arquitetura da aba Funil de Vendas
+
+```
+src/lib/metrics.ts            camada ÚNICA de contagem (12 etapas, toggles, trava de venda)
+src/lib/periodo.ts            granularidade e range de período (puro, testado)
+src/lib/aging.ts              agregação do modo Aging (puro, testado)
+src/lib/fonteMapping.ts       normaliza utm_source em grupos
+src/lib/funnelTypes.ts        tipos de vw_funil_vendas
+
+src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
+src/components/ui/FilterBar.tsx         barra sticky
+
+src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
+src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
+src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
+```
+
+### Os controles da barra
+
+| Controle | Efeito |
+|---|---|
+| Marca | filtra no servidor |
+| Período | granularidade (dia/mês/trimestre/ano) + qual período |
+| Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado. **Opções vêm dos dados, nunca de lista fixa** |
+| Vendas | Negócios × Unidades |
+| Deals criados no período | Off = data da etapa · On = safra de MQL |
+| Contagem | Deals únicos × Passagens |
+
+Modos do card do funil: **Performance** (volume no período), **Aging** (há
+quanto tempo parados), **Atual** (onde estão agora, ignora período).
+
+---
+
+## 6. Deploy
+
+`main` é protegida. Todo trabalho passa por PR; o merge dispara o deploy
+automático (build + rsync para a VPS), que leva ~45s.
+
+```bash
+git checkout -b feat/nome-curto     # ou fix/, docs/, refactor/, chore/
+# ... mudanças ...
+git commit -m "feat(vendas): descrição em pt-BR"
+gh pr create --base main
+# CI passar -> merge -> deploy automático
+```
+
+Convenções em `CONTRIBUTING.md`. Commits em pt-BR, Conventional Commits.
+
+---
+
+## 7. Armadilhas do ambiente (custaram tempo)
+
+**A pasta está no OneDrive.** Build local leva minutos porque o OneDrive
+intercepta cada I/O, e o dev server do Vite chega a travar. Para build e teste,
+copie o `src/` para disco local:
+
+```bash
+rsync -a --delete "$PWD/src/" ~/ws-dashboard-build/src/
+cd ~/ws-dashboard-build && npm run build && npx vitest run    # ~300ms
+```
+
+**`tsc --noEmit` é mais permissivo que `tsc -b`.** O build de produção usa
+`-b` e pega import não usado. Sempre valide com `npm run build`.
+
+**`overflow: hidden` mata `position: sticky`.** Torna o elemento container de
+rolagem. Use `overflow-x: clip` (já corrigido no `AppLayout`).
+
+**Python do sistema não tem certificados raiz.** Scripts que chamam API externa
+devem usar `curl` via `subprocess`, não `urllib`.
+
+**API do RD Station CRM**: token vai em **query param** `?token=`, nunca em
+header Authorization. Campos obrigatórios vazios (ex.: Marca) fazem qualquer
+`PUT` falhar com 422 — o erro vem em `deal_required_custom_fields`. `PUT` de
+custom fields faz **merge**, não substitui os demais.
+
+---
+
+## 8. Pendências conhecidas
+
+- [ ] **Performance Detalhada e Análise de Perda** ainda leem `vw_marketing_funil` e têm filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext`
+- [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
+- [ ] **Motivos de perda hardcoded** em `src/constants/motivosPerda.ts` (listas de string, frágil a acento)
+- [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
+- [ ] **Anon key do Supabase de Marketing exposta** no histórico do git (repo é público) — rotacionar
+- [ ] **~50 deals sem marca** no CRM, invisíveis no dashboard
+- [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
+- [ ] Dados de Expansão no Supabase ainda não usados: `db_tarefas_sdr` (38k linhas), `DB_Reunioes_MeetRox`, `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências
+
+---
+
+## 9. Histórico de mudanças
+
+### 2026-08-17 — Correção do toggle de Contagem
+Passagens aparecia **menor** que Deals únicos, e Fechamento zerava em Passagens.
+Três causas: os modos liam bases diferentes; venda não é etapa no histórico; e
+"Reunião Agendada SQL" duplicava no handoff SDR→Closer (71 → 144).
+Os dois modos passaram a ler o histórico de eventos, Fechamento sempre pela
+trava de venda, e SQL só na etapa do Closer. PR #4.
+
+### 2026-08-17 — Filtro de Fonte dinâmico
+As opções de Fonte estavam fixas no código (`Inbound`, `Resgate`,
+`Sem Classificação`). Quando "Prospecção Ativa" passou a existir, 174 deals
+ficaram inalcançáveis pelo filtro. Agora as opções derivam dos dados. PR #3.
+
+### 2026-08-14 — Fonte Macro = "Prospecção Ativa" no RD
+401 de 423 deals do funil Prospecção Ativa classificados via API do RD.
+Os 268 marcados como `Resgate` foram **preservados** por decisão do Junior.
+21 bloqueados por falta de Marca — depois preenchidos com Marca=Oral Unic,
+Cidade=a, Estado=a. 2 deals estavam deletados no RD.
+
+Verificação feita antes: **nenhuma cadência ativa usa Fonte Macro como
+gatilho**. A cadência #5 usa **Sub-Fonte** — o plano original de mover Fonte
+Macro para lá teria quebrado 268 deals.
+
+### 2026-08-14 — Event Sourcing captura Fonte Macro
+`processar_deal_evento` passou a ler `event_fields_config`, cumprindo o que a
+tabela prometia na descrição. Novo campo rastreado = 1 INSERT.
+
+### 2026-08-14 — Funil de Vendas migrado para o Supabase de Expansão
+MQL vinha da tabela `leads` do Supabase de **Marketing** e era o denominador da
+conversão global. Agora todo o volume vem do banco de Expansão.
+Inclui: view `vw_funil_vendas`, 12 etapas (4 novas: Interesse Reunião, Conexão,
+Comitê, Pré-Contrato), FilterBar sticky, período por granularidade, modos
+Performance/Aging/Atual, e correção do `overflow:hidden` do AppLayout que
+impedia sticky. Primeiro conjunto de testes do repositório (vitest). PR #1.
+
+Spec: `docs/superpowers/specs/2026-08-14-funil-vendas-supabase-design.md`
+
+---
+
+## 10. Histórico do lado Marketing (Gabriel)
+
+Ingestão de mídia migrada de n8n para Edge Functions do Supabase em 2026-08-13,
+agendadas por pg_cron no projeto `jmuluoksnlqrvzbcltim`:
+
+| Function | Escreve em | Quando |
+|---|---|---|
+| `ingest-meta-ads` | `media_daily_raw` | minuto 5 de cada hora |
+| `ingest-google-ads` | `media_daily_raw` | minuto 10 de cada hora |
+| `ingest-google-search-terms` | `keywords_daily`, `search_terms_daily` | 05:20 UTC |
+| `ingest-facebook-pages` | `fb_page_daily`, `fb_posts` | 05:30 UTC |
+
+Secrets no Vault do projeto de Marketing, acessados via `public.get_secret(name)`.
+Workflows n8n antigos desativados, não deletados.

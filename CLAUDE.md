@@ -216,6 +216,23 @@ custom fields faz **merge**, não substitui os demais.
 
 ## 9. Histórico de mudanças
 
+### 2026-08-17 — Leadtime de perda/fechamento passa a respeitar período
+Os cards de "Tempo de ciclo" (Funil de Vendas) ignoravam o período e o toggle
+"Deals criados no período" — eram sempre média vitalícia, mesmo com o rótulo
+do card de perda dizendo "no período". `rowsInLoss` (novo, espelha `isSale`/
+`rowsInStage`) e `rowsInStage(..., 'Fechamento', ...)` agora aplicam `win` e
+`viewModes`, iguais ao resto da página.
+
+Card "Leadtime médio em andamento" removido (métrica sem utilidade prática).
+
+Investigação inicial suspeitou que `status_atual` era espelhado entre ciclos
+de reciclagem (exigindo `eh_ciclo_atual` nos filtros de perda/venda, como em
+outros pontos do arquivo) — **checado direto no banco e descartado**: cada
+ciclo carrega seu próprio `status_atual` corretamente. O que existe de
+verdade: reciclagem às vezes não gera novo evento de MQL no ciclo atual, daí
+o leadtime cair para a data de MQL mais antiga que o lead teve em outro
+ciclo, em vez de descartar o deal do cálculo. PR #9.
+
 ### 2026-08-17 — Correção do toggle de Contagem
 Passagens aparecia **menor** que Deals únicos, e Fechamento zerava em Passagens.
 Três causas: os modos liam bases diferentes; venda não é etapa no histórico; e

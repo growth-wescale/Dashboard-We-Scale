@@ -12,6 +12,7 @@ import {
   dealsInStage,
   isInWindow,
   resolveStage,
+  stageOwnerRole,
   sumRevenue,
   toWindow,
   type FunnelEventRow,
@@ -476,5 +477,21 @@ describe('dealsInStage', () => {
     const eventos = [ev({ id_deal: 'fora-do-escopo' })]
     const out = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes(), 'performance')
     expect(out).toHaveLength(0)
+  })
+})
+
+// ── Dono do deal por etapa (SDR × Closer no popup) ──────────────────────────
+
+describe('stageOwnerRole', () => {
+  it('etapas de SDR (antes de Diagnóstico) são do SDR', () => {
+    expect(stageOwnerRole('MQL')).toBe('sdr')
+    expect(stageOwnerRole('Contato Efetivo')).toBe('sdr')
+    expect(stageOwnerRole('Reunião Agendada SQL')).toBe('sdr')
+  })
+
+  it('Diagnóstico em diante é do Closer, mesmo com nome_closer já preenchido antes', () => {
+    expect(stageOwnerRole('Diagnóstico')).toBe('closer')
+    expect(stageOwnerRole('SAL')).toBe('closer')
+    expect(stageOwnerRole('Fechamento')).toBe('closer')
   })
 })

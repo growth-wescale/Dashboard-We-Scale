@@ -600,6 +600,7 @@ export function FunilVendas() {
       <StageDealsDrawer
         open={clickedStage !== null}
         onClose={() => setClickedStage(null)}
+        stage={clickedStage}
         stageLabel={clickedStage ? STAGE_LABEL[clickedStage] : ''}
         subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
         deals={dealsDoClique}

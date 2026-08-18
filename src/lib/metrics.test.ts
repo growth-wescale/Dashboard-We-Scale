@@ -11,6 +11,7 @@ import {
   dealKey,
   dealsInStage,
   isInWindow,
+  repeatedDealsInStage,
   resolveStage,
   stageOwnerRole,
   sumRevenue,
@@ -477,6 +478,74 @@ describe('dealsInStage', () => {
     const eventos = [ev({ id_deal: 'fora-do-escopo' })]
     const out = dealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes(), 'performance')
     expect(out).toHaveLength(0)
+  })
+})
+
+// ── Repetidos em Passagens (contador + popup) ───────────────────────────────
+
+describe('repeatedDealsInStage', () => {
+  const ev = (over: Partial<FunnelEventRow>): FunnelEventRow => ({
+    id_deal: 'd1',
+    dia: '2026-08-05',
+    marca: 'Inpot',
+    etapa_canonica: 'Contato Efetivo',
+    id_etapa: 'et-generica',
+    nome_funil: 'SDR',
+    ciclo: 1,
+    rn_deal_etapa_mes: 1,
+    ...over,
+  })
+
+  it('uma única passagem no mês não é repetição', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const out = repeatedDealsInStage(scoped, [ev({})], 'Contato Efetivo', AGOSTO, modes())
+    expect(out).toHaveLength(0)
+  })
+
+  it('cada passagem além da primeira no mês vira 1 repetido', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const eventos = [ev({ dia: '2026-08-02' }), ev({ dia: '2026-08-05' }), ev({ dia: '2026-08-09' })]
+    const out = repeatedDealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes())
+    expect(out).toHaveLength(2)
+    expect(out.map(d => d.dataEtapa)).toEqual(['2026-08-05', '2026-08-09'])
+    expect(out.every(d => d.row.id_lead === 'd1')).toBe(true)
+  })
+
+  it('passagens em meses diferentes não contam como repetição entre si', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const eventos = [ev({ dia: '2026-08-02' }), ev({ dia: '2026-09-02' })]
+    const out = repeatedDealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes())
+    expect(out).toHaveLength(0)
+  })
+
+  it('respeita a chave composta id_lead+ciclo — não mistura repetição entre ciclos', () => {
+    const scoped = [
+      row({ id_lead: 'd1', ciclo: 1 }),
+      row({ id_lead: 'd1', ciclo: 2 }),
+    ]
+    const eventos = [ev({ ciclo: 1 }), ev({ ciclo: 2 })]
+    const out = repeatedDealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes())
+    expect(out).toHaveLength(0)
+  })
+
+  it('Fechamento não é passagem — nunca tem repetido', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1, status_atual: 'Ganho', data_venda: '2026-08-05T10:00:00+00:00' })]
+    const out = repeatedDealsInStage(scoped, [], 'Fechamento', AGOSTO, modes())
+    expect(out).toHaveLength(0)
+  })
+
+  it('ignora eventos de deals fora do escopo', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const eventos = [ev({ id_deal: 'fora-do-escopo', dia: '2026-08-02' }), ev({ id_deal: 'fora-do-escopo', dia: '2026-08-05' })]
+    const out = repeatedDealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes())
+    expect(out).toHaveLength(0)
+  })
+
+  it('conta repetição mesmo chamado com modes de Únicos — não depende do toggle do chamador', () => {
+    const scoped = [row({ id_lead: 'd1', ciclo: 1 })]
+    const eventos = [ev({ dia: '2026-08-02' }), ev({ dia: '2026-08-05' })]
+    const out = repeatedDealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'unique' }))
+    expect(out).toHaveLength(1)
   })
 })
 

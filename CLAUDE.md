@@ -216,6 +216,22 @@ custom fields faz **merge**, não substitui os demais.
 
 ## 9. Histórico de mudanças
 
+### 2026-08-18 — Repetidos no Funil de Vendas (modo Passagens)
+Com o toggle **Contagem = Passagens**, cada passagem além da primeira do
+deal/ciclo no mês agora conta como "repetido" — antes o drawer já mostrava a
+mesma linha várias vezes nesse modo, mas sem nenhuma indicação de que era
+repetição, nem contador algum.
+
+Adicionado: badge com o total de repetidos (+ %) no cabeçalho do card do
+funil; legenda clicável "+N repetidos" abaixo de cada etapa; popup por etapa
+listando quais deals são os repetidos, reaproveitando o `StageDealsDrawer`
+existente (mesmo componente do popup de deals da etapa, sem alterá-lo).
+
+`repeatedDealsInStage()` (novo, em `metrics.ts`) espelha `dealsInStage()` —
+mesma regra de escopo, ciclo e cohort — pra lista nunca divergir do número
+mostrado. Fechamento nunca tem repetido: é a trava de venda (`status_atual`),
+não uma passagem no histórico de eventos, então o conceito não se aplica. PR #11.
+
 ### 2026-08-17 — Correção do toggle de Contagem
 Passagens aparecia **menor** que Deals únicos, e Fechamento zerava em Passagens.
 Três causas: os modos liam bases diferentes; venda não é etapa no histórico; e

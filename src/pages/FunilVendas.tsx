@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
-import { Download, TrendingDown, Trophy, Info, X, Repeat } from 'lucide-react'
+import { Download, TrendingDown, Trophy, Info, X, Repeat, CornerDownRight } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
+import { RepeatedDealsDrawer } from '@/components/ui/RepeatedDealsDrawer'
 import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
@@ -17,10 +18,10 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, dealsInStage, isSale, repeatedDealsInStage, resolveStage, rowsInLoss, rowsInStage,
-  sumRevenue, toWindow,
+  countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage, rowsInLoss,
+  rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
-import type { StageDeal, StageKey } from '@/lib/metrics'
+import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
 import {
   periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
@@ -50,12 +51,14 @@ function fmtDias(d: number | null): string {
 
 interface FunnelStage { key: string; label: string; value: number }
 
-function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick }: {
+function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick, noShow }: {
   stages: FunnelStage[]; invest: number; accent: string; dark: string
   onStageClick?: (key: string) => void
   /** Repetidos por etapa — só preenchido em modo Passagens. */
   repeatedCounts?: Map<string, number>
   onRepeatClick?: (key: string) => void
+  /** Deals que agendaram e não apareceram — sai do fluxo aqui, não é etapa do funil. */
+  noShow?: number
 }) {
   const v0 = Math.max(stages[0]?.value ?? 1, 1)
   const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
@@ -140,6 +143,19 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts
                   <Repeat size={9} />
                   +{nf(repeated)} repetido{repeated !== 1 ? 's' : ''}
                 </button>
+              </div>
+            )}
+            {s.key === 'Reunião Agendada SQL' && !!noShow && (
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 2px' }}>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  border: '1px dashed var(--status-atencao)', borderRadius: 999,
+                  padding: '4px 12px', fontSize: 11, fontWeight: 600,
+                  color: 'var(--status-atencao)', background: 'var(--status-atencao-bg)',
+                }} title="Agendaram e não apareceram — sai do fluxo aqui, não conta como etapa do funil">
+                  <CornerDownRight size={12} />
+                  No-show · {nf(noShow)}
+                </div>
               </div>
             )}
           </div>
@@ -320,6 +336,7 @@ export function FunilVendas() {
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
+  const [totalRepeatsOpen, setTotalRepeatsOpen] = useState(false)
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
 
@@ -460,9 +477,19 @@ export function FunilVendas() {
     () => funnel.filter(s => s.key !== 'Fechamento').reduce((s, f) => s + f.value, 0),
     [funnel],
   )
-  const repeatedDealsDoClique = useMemo(
-    () => (clickedRepeatStage ? (repeatedByStage.get(clickedRepeatStage) ?? []) : []),
-    [clickedRepeatStage, repeatedByStage],
+  // Agrupado por deal — cada grupo carrega `vezes`, pra quem vê o popup saber
+  // quantas repetições cada deal teve sem contar linha.
+  const repeatedGroupsByStage = useMemo(
+    () => new Map(STAGE_ORDER.map(s => [s, groupRepeatedDeals(repeatedByStage.get(s) ?? [], s)])),
+    [repeatedByStage],
+  )
+  const repeatedGroupsDoClique = useMemo<RepeatedDealGroup[]>(
+    () => (clickedRepeatStage ? (repeatedGroupsByStage.get(clickedRepeatStage) ?? []) : []),
+    [clickedRepeatStage, repeatedGroupsByStage],
+  )
+  const allRepeatedGroups = useMemo<RepeatedDealGroup[]>(
+    () => STAGE_ORDER.flatMap(s => repeatedGroupsByStage.get(s) ?? []),
+    [repeatedGroupsByStage],
   )
 
   // ── KPIs ────────────────────────────────────────────────────────────────────
@@ -658,12 +685,15 @@ export function FunilVendas() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ModeToggle value={modo} onChange={setModo} />
-              <Badge tone="neutral">No-show · {nf(noShow)}</Badge>
               {totalRepeated > 0 && (
-                <Badge tone="atencao">
-                  Repetidos · {nf(totalRepeated)}
-                  {totalPassagens > 0 && ` (${((totalRepeated / totalPassagens) * 100).toFixed(1)}%)`}
-                </Badge>
+                <button type="button" onClick={() => setTotalRepeatsOpen(true)} title="Ver todos os repetidos" style={{
+                  border: 'none', padding: 0, cursor: 'pointer', background: 'none', borderRadius: 'var(--radius-pill)',
+                }}>
+                  <Badge tone="atencao">
+                    Repetidos · {nf(totalRepeated)}
+                    {totalPassagens > 0 && ` (${((totalRepeated / totalPassagens) * 100).toFixed(1)}%)`}
+                  </Badge>
+                </button>
               )}
             </div>
           </div>
@@ -672,7 +702,8 @@ export function FunilVendas() {
               ? <AgingList linhas={aging} accent={accent} />
               : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark}
                   onStageClick={key => setClickedStage(key as StageKey)}
-                  repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)} />}
+                  repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
+                  noShow={noShow} />}
           </div>
         </SCard>
 
@@ -731,14 +762,23 @@ export function FunilVendas() {
         accent={accent}
       />
 
-      <StageDealsDrawer
+      <RepeatedDealsDrawer
         open={clickedRepeatStage !== null}
         onClose={() => setClickedRepeatStage(null)}
-        stage={clickedRepeatStage}
-        stageLabel={clickedRepeatStage ? `Repetidos · ${STAGE_LABEL[clickedRepeatStage]}` : ''}
+        title={clickedRepeatStage ? `Repetidos · ${STAGE_LABEL[clickedRepeatStage]}` : ''}
         subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
-        deals={repeatedDealsDoClique}
+        groups={repeatedGroupsDoClique}
         accent={accent}
+      />
+
+      <RepeatedDealsDrawer
+        open={totalRepeatsOpen}
+        onClose={() => setTotalRepeatsOpen(false)}
+        title="Repetidos · todas as etapas"
+        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        groups={allRepeatedGroups}
+        accent={accent}
+        multiStage
       />
     </div>
   )

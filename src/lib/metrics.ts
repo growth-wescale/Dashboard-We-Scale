@@ -537,6 +537,36 @@ export function repeatedDealsInStage(
   return out
 }
 
+export interface RepeatedDealGroup {
+  row: FunnelRow
+  stage: StageKey
+  /** Quantas passagens extras (além da primeira) esse deal teve nesta etapa. */
+  vezes: number
+  /** Data da passagem repetida mais recente. */
+  ultimaData: string | null
+}
+
+/**
+ * Agrupa a saída de `repeatedDealsInStage` por deal — um deal com 3 passagens
+ * gera 2 linhas em `deals` (uma por passagem extra); aqui vira 1 grupo com
+ * `vezes: 2`, pra quem vê o popup saber quantas vezes cada deal repetiu sem
+ * ter que contar linha.
+ */
+export function groupRepeatedDeals(deals: StageDeal[], stage: StageKey): RepeatedDealGroup[] {
+  const porDeal = new Map<string, RepeatedDealGroup>()
+  for (const d of deals) {
+    const key = dealKey(d.row)
+    const grupo = porDeal.get(key)
+    if (!grupo) {
+      porDeal.set(key, { row: d.row, stage, vezes: 1, ultimaData: d.dataEtapa })
+    } else {
+      grupo.vezes += 1
+      if (d.dataEtapa && (!grupo.ultimaData || d.dataEtapa > grupo.ultimaData)) grupo.ultimaData = d.dataEtapa
+    }
+  }
+  return [...porDeal.values()]
+}
+
 /* ── Escopo (filtros) ────────────────────────────────────────────────────── */
 
 export interface ScopeOptions {

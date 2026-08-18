@@ -10,6 +10,7 @@ import {
   countStageEvents,
   dealKey,
   dealsInStage,
+  groupRepeatedDeals,
   isInWindow,
   repeatedDealsInStage,
   resolveStage,
@@ -546,6 +547,60 @@ describe('repeatedDealsInStage', () => {
     const eventos = [ev({ dia: '2026-08-02' }), ev({ dia: '2026-08-05' })]
     const out = repeatedDealsInStage(scoped, eventos, 'Contato Efetivo', AGOSTO, modes({ eventSource: 'unique' }))
     expect(out).toHaveLength(1)
+  })
+})
+
+describe('groupRepeatedDeals', () => {
+  it('agrupa passagens repetidas do mesmo deal, contando quantas vezes', () => {
+    const d = row({ id_lead: 'd1', ciclo: 1 })
+    const out = groupRepeatedDeals(
+      [{ row: d, dataEtapa: '2026-08-05' }, { row: d, dataEtapa: '2026-08-09' }],
+      'Contato Efetivo',
+    )
+    expect(out).toHaveLength(1)
+    expect(out[0].vezes).toBe(2)
+    expect(out[0].row.id_lead).toBe('d1')
+  })
+
+  it('mantém deals diferentes em grupos separados', () => {
+    const a = row({ id_lead: 'a', ciclo: 1 })
+    const b = row({ id_lead: 'b', ciclo: 1 })
+    const out = groupRepeatedDeals(
+      [{ row: a, dataEtapa: '2026-08-05' }, { row: b, dataEtapa: '2026-08-06' }, { row: b, dataEtapa: '2026-08-07' }],
+      'Contato Efetivo',
+    )
+    expect(out).toHaveLength(2)
+    expect(out.find(g => g.row.id_lead === 'a')?.vezes).toBe(1)
+    expect(out.find(g => g.row.id_lead === 'b')?.vezes).toBe(2)
+  })
+
+  it('separa ciclos diferentes do mesmo id_lead', () => {
+    const c1 = row({ id_lead: 'd1', ciclo: 1 })
+    const c2 = row({ id_lead: 'd1', ciclo: 2 })
+    const out = groupRepeatedDeals(
+      [{ row: c1, dataEtapa: '2026-08-05' }, { row: c2, dataEtapa: '2026-08-06' }],
+      'Contato Efetivo',
+    )
+    expect(out).toHaveLength(2)
+  })
+
+  it('usa a data mais recente como ultimaData', () => {
+    const d = row({ id_lead: 'd1', ciclo: 1 })
+    const out = groupRepeatedDeals(
+      [{ row: d, dataEtapa: '2026-08-09' }, { row: d, dataEtapa: '2026-08-02' }],
+      'Contato Efetivo',
+    )
+    expect(out[0].ultimaData).toBe('2026-08-09')
+  })
+
+  it('preserva a etapa recebida em cada grupo', () => {
+    const d = row({ id_lead: 'd1', ciclo: 1 })
+    const out = groupRepeatedDeals([{ row: d, dataEtapa: '2026-08-05' }], 'SAL')
+    expect(out[0].stage).toBe('SAL')
+  })
+
+  it('lista vazia devolve grupos vazios', () => {
+    expect(groupRepeatedDeals([], 'MQL')).toEqual([])
   })
 })
 

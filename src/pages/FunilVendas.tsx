@@ -35,6 +35,10 @@ const BRANDS = BRANDS_WITH_OVERVIEW
 /** Modo de leitura do funil. Local à aba — não é um dos toggles globais. */
 type FunnelMode = 'performance' | 'aging' | 'atual'
 
+/** Etapas do funil + No Show, pra popup de repetidos — No Show fica fora do
+ *  funil em si (STAGE_ORDER), mas também tem passagem repetida no histórico. */
+const REPEATABLE_STAGES: StageKey[] = [...STAGE_ORDER, 'No Show']
+
 function fmtMs(ms: number): string {
   if (!ms || ms <= 0) return '—'
   const d = Math.floor(ms / 86400000)
@@ -51,7 +55,7 @@ function fmtDias(d: number | null): string {
 
 interface FunnelStage { key: string; label: string; value: number }
 
-function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick, noShow }: {
+function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick, noShow, noShowRepeated = 0 }: {
   stages: FunnelStage[]; invest: number; accent: string; dark: string
   onStageClick?: (key: string) => void
   /** Repetidos por etapa — só preenchido em modo Passagens. */
@@ -59,6 +63,7 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts
   onRepeatClick?: (key: string) => void
   /** Deals que agendaram e não apareceram — sai do fluxo aqui, não é etapa do funil. */
   noShow?: number
+  noShowRepeated?: number
 }) {
   const v0 = Math.max(stages[0]?.value ?? 1, 1)
   const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
@@ -130,32 +135,55 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts
               )}
             </div>
             {repeated > 0 && (
-              <div style={{ textAlign: 'center', marginTop: 3 }}>
-                <button
-                  type="button"
-                  onClick={() => onRepeatClick?.(s.key)}
-                  title={`Ver os ${nf(repeated)} repetidos em ${s.label}`}
-                  style={{
-                    border: 'none', background: 'none', cursor: onRepeatClick ? 'pointer' : 'default', padding: 0,
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 10.5, fontWeight: 600, color: 'var(--status-atencao)', fontFamily: 'var(--font-body)',
-                  }}>
-                  <Repeat size={9} />
-                  +{nf(repeated)} repetido{repeated !== 1 ? 's' : ''}
-                </button>
+              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, marginTop: 3 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => onRepeatClick?.(s.key)}
+                    title={`Ver os ${nf(repeated)} repetidos em ${s.label}`}
+                    style={{
+                      border: 'none', background: 'none', cursor: onRepeatClick ? 'pointer' : 'default', padding: 0,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: 10.5, fontWeight: 600, color: 'var(--status-atencao)', fontFamily: 'var(--font-body)',
+                    }}>
+                    <Repeat size={9} />
+                    +{nf(repeated)} repetido{repeated !== 1 ? 's' : ''}
+                  </button>
+                </div>
+                <div />
               </div>
             )}
             {s.key === 'Reunião Agendada SQL' && !!noShow && (
-              <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 2px' }}>
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  border: '1px dashed var(--status-atencao)', borderRadius: 999,
-                  padding: '4px 12px', fontSize: 11, fontWeight: 600,
-                  color: 'var(--status-atencao)', background: 'var(--status-atencao-bg)',
-                }} title="Agendaram e não apareceram — sai do fluxo aqui, não conta como etapa do funil">
-                  <CornerDownRight size={12} />
-                  No-show · {nf(noShow)}
+              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '8px 0 2px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div
+                    onClick={onRepeatClick && noShowRepeated ? () => onRepeatClick('No Show') : undefined}
+                    title="Agendaram e não apareceram — sai do fluxo aqui, não conta como etapa do funil"
+                    style={{
+                      width: `${width(noShow)}%`,
+                      border: '1.5px dashed #000', borderRadius: 8, background: 'transparent',
+                      padding: '5px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      lineHeight: 1.25, cursor: onRepeatClick && noShowRepeated ? 'pointer' : 'default',
+                    }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      fontSize: 11.5, fontWeight: 700, color: 'var(--ws-text-primary)', whiteSpace: 'nowrap',
+                    }}>
+                      <CornerDownRight size={11} />
+                      No-show · {nf(noShow)}
+                    </span>
+                    {noShowRepeated > 0 && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2,
+                        fontSize: 10, fontWeight: 600, color: 'var(--status-atencao)', whiteSpace: 'nowrap',
+                      }}>
+                        <Repeat size={8} />
+                        +{nf(noShowRepeated)} repetido{noShowRepeated !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
+                <div />
               </div>
             )}
           </div>
@@ -461,7 +489,7 @@ export function FunilVendas() {
   const repeatedByStage = useMemo(() => {
     const map = new Map<StageKey, StageDeal[]>()
     if (viewModes.eventSource !== 'passages' || modo !== 'performance') return map
-    for (const s of STAGE_ORDER) map.set(s, repeatedDealsInStage(scoped, eventos, s, win, viewModes))
+    for (const s of REPEATABLE_STAGES) map.set(s, repeatedDealsInStage(scoped, eventos, s, win, viewModes))
     return map
   }, [viewModes, modo, scoped, eventos, win])
 
@@ -477,10 +505,12 @@ export function FunilVendas() {
     () => funnel.filter(s => s.key !== 'Fechamento').reduce((s, f) => s + f.value, 0),
     [funnel],
   )
+  const noShowRepeated = repeatedByStage.get('No Show')?.length ?? 0
+
   // Agrupado por deal — cada grupo carrega `vezes`, pra quem vê o popup saber
   // quantas repetições cada deal teve sem contar linha.
   const repeatedGroupsByStage = useMemo(
-    () => new Map(STAGE_ORDER.map(s => [s, groupRepeatedDeals(repeatedByStage.get(s) ?? [], s)])),
+    () => new Map(REPEATABLE_STAGES.map(s => [s, groupRepeatedDeals(repeatedByStage.get(s) ?? [], s)])),
     [repeatedByStage],
   )
   const repeatedGroupsDoClique = useMemo<RepeatedDealGroup[]>(
@@ -703,7 +733,7 @@ export function FunilVendas() {
               : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark}
                   onStageClick={key => setClickedStage(key as StageKey)}
                   repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
-                  noShow={noShow} />}
+                  noShow={noShow} noShowRepeated={noShowRepeated} />}
           </div>
         </SCard>
 

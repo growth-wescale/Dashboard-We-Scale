@@ -135,6 +135,9 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
+src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no funil)
+src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "todas as etapas" (modo Passagens)
+src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos dois popups acima
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
@@ -216,6 +219,21 @@ custom fields faz **merge**, não substitui os demais.
 
 ## 9. Histórico de mudanças
 
+### 2026-08-18 — Popup de repetidos por deal + No-show sai do topo
+O contador de repetidos agrupava por passagem, não por deal — um "+5
+repetidos" podia ser 2 deals sem dizer quantas vezes cada um. `groupRepeatedDeals()`
+(novo em `metrics.ts`) agrupa por deal (ou deal+etapa no popup geral) e expõe
+`vezes`, agora coluna na tabela. Badge "Repetidos" do cabeçalho ficou clicável:
+abre popup com todas as etapas, breakdown "Por Etapa" + coluna Etapa.
+
+No-show saiu do cabeçalho do card (onde parecia mais um KPI) e virou uma
+saída lateral tracejada logo após "SQL · Reunião agendada" — ponto real onde
+o deal sai do fluxo normal — com visual que deixa claro que não é etapa do funil.
+
+`StageDealsDrawer` e o novo `RepeatedDealsDrawer` passaram a compartilhar
+BarList/topBreakdown/StatusBadge/cell/fmtData via `dealDrawerShared.tsx`, que
+antes viviam duplicados dentro do primeiro. PR #13.
+
 ### 2026-08-18 — Repetidos no Funil de Vendas (modo Passagens)
 Com o toggle **Contagem = Passagens**, cada passagem além da primeira do
 deal/ciclo no mês agora conta como "repetido" — antes o drawer já mostrava a
@@ -224,8 +242,8 @@ repetição, nem contador algum.
 
 Adicionado: badge com o total de repetidos (+ %) no cabeçalho do card do
 funil; legenda clicável "+N repetidos" abaixo de cada etapa; popup por etapa
-listando quais deals são os repetidos, reaproveitando o `StageDealsDrawer`
-existente (mesmo componente do popup de deals da etapa, sem alterá-lo).
+listando quais deals são os repetidos (ver ajuste de agrupamento por deal,
+acima).
 
 `repeatedDealsInStage()` (novo, em `metrics.ts`) espelha `dealsInStage()` —
 mesma regra de escopo, ciclo e cohort — pra lista nunca divergir do número

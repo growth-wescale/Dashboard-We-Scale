@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
-import { Download, TrendingDown, Trophy, Info, X } from 'lucide-react'
+import { Download, TrendingDown, Trophy, Info, X, Repeat } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
@@ -17,9 +17,10 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, dealsInStage, isSale, resolveStage, rowsInLoss, rowsInStage, sumRevenue, toWindow,
+  countStageEvents, dealsInStage, isSale, repeatedDealsInStage, resolveStage, rowsInLoss, rowsInStage,
+  sumRevenue, toWindow,
 } from '@/lib/metrics'
-import type { StageKey } from '@/lib/metrics'
+import type { StageDeal, StageKey } from '@/lib/metrics'
 import {
   periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
@@ -49,9 +50,12 @@ function fmtDias(d: number | null): string {
 
 interface FunnelStage { key: string; label: string; value: number }
 
-function TrapFunnel({ stages, invest, accent, dark, onStageClick }: {
+function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick }: {
   stages: FunnelStage[]; invest: number; accent: string; dark: string
   onStageClick?: (key: string) => void
+  /** Repetidos por etapa — só preenchido em modo Passagens. */
+  repeatedCounts?: Map<string, number>
+  onRepeatClick?: (key: string) => void
 }) {
   const v0 = Math.max(stages[0]?.value ?? 1, 1)
   const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
@@ -74,6 +78,7 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick }: {
           ? (s.value / stages[i - 1].value) * 100 : null
         const subiu = conv !== null && conv > 100
         const cost = invest > 0 && s.value > 0 ? invest / s.value : 0
+        const repeated = repeatedCounts?.get(s.key) ?? 0
 
         return (
           <div key={s.key}>
@@ -121,6 +126,22 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick }: {
                 </div>
               )}
             </div>
+            {repeated > 0 && (
+              <div style={{ textAlign: 'center', marginTop: 3 }}>
+                <button
+                  type="button"
+                  onClick={() => onRepeatClick?.(s.key)}
+                  title={`Ver os ${nf(repeated)} repetidos em ${s.label}`}
+                  style={{
+                    border: 'none', background: 'none', cursor: onRepeatClick ? 'pointer' : 'default', padding: 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 10.5, fontWeight: 600, color: 'var(--status-atencao)', fontFamily: 'var(--font-body)',
+                  }}>
+                  <Repeat size={9} />
+                  +{nf(repeated)} repetido{repeated !== 1 ? 's' : ''}
+                </button>
+              </div>
+            )}
           </div>
         )
       })}
@@ -298,6 +319,7 @@ export function FunilVendas() {
   const { brandKey, periodMode, periodValue, range, fontes, subFontes, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
+  const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
 
@@ -416,6 +438,32 @@ export function FunilVendas() {
     if (!clickedStage) return []
     return dealsInStage(scoped, eventos, clickedStage, win, viewModes, modo === 'atual' ? 'atual' : 'performance')
   }, [clickedStage, scoped, eventos, win, viewModes, modo])
+
+  // Repetidos por etapa — só existe em modo Passagens + Performance (Atual lê
+  // a etapa corrente do deal, Aging é outra métrica; nenhum dos dois é passagem).
+  const repeatedByStage = useMemo(() => {
+    const map = new Map<StageKey, StageDeal[]>()
+    if (viewModes.eventSource !== 'passages' || modo !== 'performance') return map
+    for (const s of STAGE_ORDER) map.set(s, repeatedDealsInStage(scoped, eventos, s, win, viewModes))
+    return map
+  }, [viewModes, modo, scoped, eventos, win])
+
+  const repeatedCounts = useMemo(
+    () => new Map(STAGE_ORDER.map(s => [s, repeatedByStage.get(s)?.length ?? 0])),
+    [repeatedByStage],
+  )
+  const totalRepeated = useMemo(
+    () => [...repeatedCounts.values()].reduce((s, n) => s + n, 0),
+    [repeatedCounts],
+  )
+  const totalPassagens = useMemo(
+    () => funnel.filter(s => s.key !== 'Fechamento').reduce((s, f) => s + f.value, 0),
+    [funnel],
+  )
+  const repeatedDealsDoClique = useMemo(
+    () => (clickedRepeatStage ? (repeatedByStage.get(clickedRepeatStage) ?? []) : []),
+    [clickedRepeatStage, repeatedByStage],
+  )
 
   // ── KPIs ────────────────────────────────────────────────────────────────────
   const { kpis, noShow, sources, leadtimes } = useMemo(() => {
@@ -611,13 +659,20 @@ export function FunilVendas() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <ModeToggle value={modo} onChange={setModo} />
               <Badge tone="neutral">No-show · {nf(noShow)}</Badge>
+              {totalRepeated > 0 && (
+                <Badge tone="atencao">
+                  Repetidos · {nf(totalRepeated)}
+                  {totalPassagens > 0 && ` (${((totalRepeated / totalPassagens) * 100).toFixed(1)}%)`}
+                </Badge>
+              )}
             </div>
           </div>
           <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
               ? <AgingList linhas={aging} accent={accent} />
               : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark}
-                  onStageClick={key => setClickedStage(key as StageKey)} />}
+                  onStageClick={key => setClickedStage(key as StageKey)}
+                  repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)} />}
           </div>
         </SCard>
 
@@ -673,6 +728,16 @@ export function FunilVendas() {
         stageLabel={clickedStage ? STAGE_LABEL[clickedStage] : ''}
         subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
         deals={dealsDoClique}
+        accent={accent}
+      />
+
+      <StageDealsDrawer
+        open={clickedRepeatStage !== null}
+        onClose={() => setClickedRepeatStage(null)}
+        stage={clickedRepeatStage}
+        stageLabel={clickedRepeatStage ? `Repetidos · ${STAGE_LABEL[clickedRepeatStage]}` : ''}
+        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        deals={repeatedDealsDoClique}
         accent={accent}
       />
     </div>

@@ -494,6 +494,49 @@ export function dealsInStage(
   return out
 }
 
+/**
+ * Passagens "a mais" numa etapa: a partir da 2ª passagem do deal/ciclo no
+ * mesmo mês, cada uma conta como 1 repetido. Espelha a mesma chave de
+ * deduplicação de `eventsInStage` no modo 'unique' — repetidos = passagens
+ * menos únicos, por construção.
+ *
+ * Sempre avalia em modo Passagens, não importa o `eventSource` do `modes`
+ * recebido: repetido é uma pergunta sobre o histórico de eventos, não sobre
+ * o toggle de quem chamou. Fechamento não é passagem (é a trava de venda),
+ * então nunca tem repetido.
+ */
+export function repeatedDealsInStage(
+  scoped: FunnelRow[],
+  events: FunnelEventRow[],
+  stage: StageKey,
+  win: PeriodWindow,
+  modes: ViewModes,
+): StageDeal[] {
+  if (stage === 'Fechamento') return []
+
+  const byKey = new Map(scoped.map(r => [dealKey(r), r]))
+  const safra = modes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
+  const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
+
+  const passagens = eventsInStage(events, stage, win, { ...modes, eventSource: 'passages' }, {
+    cohortIds: safra,
+    extra: e => idsEscopo.has(String(e.id_deal)),
+  })
+
+  const vistos = new Set<string>()
+  const out: StageDeal[] = []
+  for (const e of passagens) {
+    const chave = `${dealKey({ id_lead: e.id_deal, ciclo: e.ciclo })}::${toLocalYearMonth(e.dia) ?? '?'}`
+    if (!vistos.has(chave)) {
+      vistos.add(chave)
+      continue
+    }
+    const row = byKey.get(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))
+    if (row) out.push({ row, dataEtapa: e.dia })
+  }
+  return out
+}
+
 /* ── Escopo (filtros) ────────────────────────────────────────────────────── */
 
 export interface ScopeOptions {

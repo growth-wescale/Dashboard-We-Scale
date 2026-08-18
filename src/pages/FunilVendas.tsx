@@ -91,7 +91,7 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts
         return (
           <div key={s.key}>
             {i > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center', height: 15 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center', padding: '7px 0' }}>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
                     <span style={{ color: subiu ? 'var(--status-positivo)' : 'var(--status-risco)', fontSize: 10 }}>
@@ -135,7 +135,7 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts
               )}
             </div>
             {repeated > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, marginTop: 3 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '4px 0 6px' }}>
                 <div style={{ textAlign: 'center' }}>
                   <button
                     type="button"
@@ -154,7 +154,7 @@ function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts
               </div>
             )}
             {s.key === 'Reunião Agendada SQL' && !!noShow && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '8px 0 2px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '6px 0 10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <div
                     onClick={onRepeatClick && noShowRepeated ? () => onRepeatClick('No Show') : undefined}

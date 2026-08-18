@@ -219,6 +219,21 @@ custom fields faz **merge**, não substitui os demais.
 
 ## 9. Histórico de mudanças
 
+### 2026-08-18 — Caixa de No-show: centralizada, tracejado preto, com repetidos
+Primeira versão da caixa de No-show (pill laranja) ficava descentralizada do
+eixo do funil — a div centralizava contra a largura da linha inteira,
+incluindo a coluna de custo, não só contra a coluna do funil — e visualmente
+igual ao selo de repetidos, confundindo os dois. A legenda de "+N repetidos"
+por etapa tinha o mesmo bug de centralização, só que menos visível (texto
+sem borda).
+
+Virou um retângulo de bordas arredondadas, borda tracejada preta, sem
+preenchimento, com largura calculada pela mesma função de escala das etapas
+do funil — proporcional à quantidade de No-show, igual aos degraus. No-show
+também ganhou sua própria contagem de repetidos (o evento "No Show" também
+pode ter passagem repetida no histórico), clicável, abrindo o mesmo popup
+das outras etapas. PR #15.
+
 ### 2026-08-18 — Popup de repetidos por deal + No-show sai do topo
 O contador de repetidos agrupava por passagem, não por deal — um "+5
 repetidos" podia ser 2 deals sem dizer quantas vezes cada um. `groupRepeatedDeals()`

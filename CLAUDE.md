@@ -219,6 +219,11 @@ custom fields faz **merge**, não substitui os demais.
 
 ## 9. Histórico de mudanças
 
+### 2026-08-18 — Mais espaço entre "repetidos" e a seta de conversão
+"+N repetidos" e a seta de conversão (▼ XX%) entre etapas do funil ficavam
+quase colados — a legenda só tinha `marginTop: 3` e a linha de conversão
+tinha altura fixa de 15px sem padding. PR #17.
+
 ### 2026-08-18 — Caixa de No-show: centralizada, tracejado preto, com repetidos
 Primeira versão da caixa de No-show (pill laranja) ficava descentralizada do
 eixo do funil — a div centralizava contra a largura da linha inteira,

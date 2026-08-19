@@ -138,6 +138,7 @@ src/components/ui/FilterBar.tsx         barra sticky
 src/components/ui/TrapFunnel.tsx          funil visual (trapézios, custo, repetidos) — compartilhado com Performance Detalhada
 src/components/ui/FunilCompletoSection.tsx bloco do funil completo (12 etapas) em Performance Detalhada
 src/components/ui/MultiSelect.tsx         multi-seleção estilo Excel — usada pela barra E pelos filtros dos popups
+src/components/ui/DateRangePicker.tsx     calendário + atalhos (Hoje/Ontem/...) pro filtro de Dia
 src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no funil) — filtros MultiSelect por marca/funil/fonte/SDR/closer, opções vêm sempre do próprio recorte
 src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "todas as etapas" (modo Passagens)
 src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
@@ -242,6 +243,30 @@ custom fields faz **merge**, não substitui os demais.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-19 — Filtro de Dia vira calendário com atalhos, no lugar de 2 inputs nativos
+Selecionar um range no modo Dia exigia abrir o calendário nativo duas vezes
+(um `<input type="date">` pro início, outro pro fim) — incômodo pra qualquer
+recorte, e a raiz de o filtro de dia só mostrar zero ("ainda não está dando
+pra ver os dados do dia", segundo o Junior).
+
+Novo `src/components/ui/DateRangePicker.tsx`: um botão só, abre popover com
+calendário mensal (clique no dia inicial, depois no final — a ordem não
+importa, o componente reordena sozinho) + coluna de atalhos (Hoje, Ontem,
+Esta semana, Últimos 7 dias, Últimos 30 dias) que aplica na hora. Seleção
+manual no calendário exige confirmar em "Aplicar" — sem isso o segundo
+clique já aplicaria a seleção sem chance de revisar. Dias futuros ficam
+desabilitados; navegação de mês trava no piso (`PISO_PERIODO`) e em "hoje".
+
+Inspirado no seletor do dashboard antigo (Lovable) que o Junior mandou de
+referência — sem a coluna de atalho "mês inteiro" que aquele tinha, porque
+duplicaria o modo Mês que já existe separado no filtro de período.
+
+Verificado manualmente: como o app inteiro exige login (Claude não tem
+credencial), o componente foi montado numa rota temporária sem autenticação
+só pra esse teste, verificado no browser (seleção de range, atalhos,
+navegação de mês, dias futuros bloqueados) e removido antes do commit — não
+sobrou nenhum vestígio no código.
 
 ### 2026-08-19 — Filtros dos popups viram MultiSelect; popups leves de KPI; Aging/Atual ganham leadtime duplo
 `MultiSelect` saiu de `FilterBar.tsx` pra `src/components/ui/MultiSelect.tsx`

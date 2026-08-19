@@ -15,6 +15,7 @@ import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { opcoesPara } from '@/lib/periodo'
 import type { OpcaoPeriodo, PeriodMode } from '@/lib/periodo'
 import { MultiSelect, controlStyle, labelStyle, ordenarOpcoes } from './MultiSelect'
+import { DateRangePicker } from './DateRangePicker'
 
 const PERIOD_MODES: PeriodMode[] = ['dia', 'mes', 'trimestre', 'ano']
 
@@ -145,45 +146,26 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
             />
 
             {periodMode === 'dia' ? (
-              // Intervalo livre: os dois calendários nativos do navegador.
-              // Sem min/max cruzados de propósito — cada campo se autocorrige
-              // pra nunca deixar o range invertido (start > end), inclusive
-              // quando os dois apontam pro mesmo dia.
-              <>
-                <input
-                  type="date"
-                  value={range.start}
-                  onChange={e => {
-                    const start = e.target.value
-                    setRange({ start, end: start > range.end ? start : range.end })
-                  }}
-                  style={{ ...controlStyle, padding: '5px 8px' }}
-                />
-                <span style={{ color: 'var(--ws-text-secondary)', fontSize: 12 }}>—</span>
-                <input
-                  type="date"
-                  value={range.end}
-                  onChange={e => {
-                    const end = e.target.value
-                    setRange({ start: end < range.start ? end : range.start, end })
-                  }}
-                  style={{ ...controlStyle, padding: '5px 8px' }}
-                />
-              </>
+              // Calendário + atalhos (Hoje, Ontem, Últimos 7 dias...), um só
+              // clique pra aplicar o range — antes eram 2 calendários nativos
+              // separados (início, depois fim), incômodo pra escolher qualquer
+              // recorte e fácil de deixar o range invertido sem perceber.
+              <DateRangePicker value={range} onChange={setRange} />
             ) : (
-              // Mês / trimestre / ano: multi-seleção estilo Excel — pelo menos 1 marcado sempre.
-              <MultiSelect
-                label={PERIOD_LABEL[periodMode]}
-                options={opcoesPeriodo}
-                selected={periodValues}
-                onChange={setPeriodValues}
-                minSelected={1}
-              />
+              <>
+                {/* Mês / trimestre / ano: multi-seleção estilo Excel — pelo menos 1 marcado sempre. */}
+                <MultiSelect
+                  label={PERIOD_LABEL[periodMode]}
+                  options={opcoesPeriodo}
+                  selected={periodValues}
+                  onChange={setPeriodValues}
+                  minSelected={1}
+                />
+                <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {range.start.split('-').reverse().join('/')} — {range.end.split('-').reverse().join('/')}
+                </span>
+              </>
             )}
-
-            <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-              {range.start.split('-').reverse().join('/')} — {range.end.split('-').reverse().join('/')}
-            </span>
           </div>
         </Field>
 

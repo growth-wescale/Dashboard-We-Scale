@@ -135,59 +135,67 @@ export interface MetaResumo {
   metaQtdVendas: number
 }
 
-async function fetchMetasMeses(mesesKeys: string[], marca?: string): Promise<{ rows: RawMetaRow[]; error: string | null }> {
+async function fetchMetasMeses(mesesKeys: string[]): Promise<{ rows: RawMetaRow[]; error: string | null }> {
   if (mesesKeys.length === 0) return { rows: [], error: null }
   const mesesInicio = mesesKeys.map(k => `${k}-01`)
-  let q = supabaseVendas
+  const { data, error } = await supabaseVendas
     .from('DB_Metas_Performance')
     .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas')
     .in('mes_referencia', mesesInicio)
     .in('funcao', ['SDR', 'Closer'])
-  if (marca) q = q.eq('marca', marca)
-  const { data, error } = await q
   if (error) return { rows: [], error: error.message }
   return { rows: (data ?? []) as RawMetaRow[], error: null }
 }
 
-function resumir(rows: RawMetaRow[]): MetaResumo {
-  let metaFinanceira = 0, metaQtdVendas = 0
+const VAZIO_META: MetaResumo = { metaFinanceira: 0, metaQtdVendas: 0 }
+
+/** Soma por marca — sempre todas as marcas presentes nas linhas; o chamador
+ *  filtra/soma o subconjunto que precisar (ex.: as marcas selecionadas no filtro). */
+function resumirPorMarca(rows: RawMetaRow[]): Map<string, MetaResumo> {
+  const map = new Map<string, MetaResumo>()
   for (const r of rows) {
     if (!r.nome_colaborador || !r.funcao || r.funcao === 'Repasse') continue
-    if (r.marca && MARCAS_EXCLUIR.has(r.marca)) continue
-    metaFinanceira += r.meta_financeira ?? 0
-    metaQtdVendas += r.meta_qtd_vendas ?? 0
+    if (!r.marca || MARCAS_EXCLUIR.has(r.marca)) continue
+    const cur = map.get(r.marca) ?? { ...VAZIO_META }
+    cur.metaFinanceira += r.meta_financeira ?? 0
+    cur.metaQtdVendas += r.meta_qtd_vendas ?? 0
+    map.set(r.marca, cur)
   }
-  return { metaFinanceira, metaQtdVendas }
+  return map
 }
 
 interface ResumoFilters {
   /** Meses cobertos pelo período selecionado ('YYYY-MM'). Vazio = sem meta (ex.: modo Dia). */
   mesesKeys: string[]
-  marca?: string
 }
 
 interface UseMetaResumoResult {
-  data: MetaResumo
+  /** Meta por marca (chave = `marca` canônica do banco). Marca ausente = sem meta cadastrada. */
+  porMarca: Map<string, MetaResumo>
   loading: boolean
   error: string | null
 }
 
-/** Meta somada dos meses cobertos pelo período selecionado — team total, sem quebra por colaborador. */
-export function useMetaResumo({ mesesKeys, marca }: ResumoFilters): UseMetaResumoResult {
+/**
+ * Meta por marca dos meses cobertos pelo período selecionado — sempre busca
+ * todas as marcas (a tabela é pequena, poucas linhas por mês); o card de Meta
+ * soma/filtra o subconjunto das marcas selecionadas no filtro compartilhado.
+ */
+export function useMetaResumo({ mesesKeys }: ResumoFilters): UseMetaResumoResult {
   // Chave estável pro efeito: `mesesKeys` é recriado a cada render pelo chamador.
   const chave = mesesKeys.join(',')
-  const [data, setData] = useState<MetaResumo>({ metaFinanceira: 0, metaQtdVendas: 0 })
+  const [porMarca, setPorMarca] = useState<Map<string, MetaResumo>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchAll = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
     setError(null)
-    const { rows, error: err } = await fetchMetasMeses(chave ? chave.split(',') : [], marca)
+    const { rows, error: err } = await fetchMetasMeses(chave ? chave.split(',') : [])
     if (err) { setError(err); setLoading(false); return }
-    setData(resumir(rows))
+    setPorMarca(resumirPorMarca(rows))
     setLoading(false)
-  }, [chave, marca])
+  }, [chave])
 
   useEffect(() => {
     let cancelled = false
@@ -204,5 +212,5 @@ export function useMetaResumo({ mesesKeys, marca }: ResumoFilters): UseMetaResum
     }
   }, [fetchAll])
 
-  return { data, loading, error }
+  return { porMarca, loading, error }
 }

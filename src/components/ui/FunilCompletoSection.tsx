@@ -19,35 +19,59 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import {
   STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStageEvents, toWindow,
 } from '@/lib/metrics'
-import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
+import { BRAND_LIST, BRAND_OVERVIEW } from '@/constants/brands'
+import type { BrandDef } from '@/constants/brands'
+import type { Marca } from '@/lib/types'
 
 export function FunilCompletoSection() {
-  const { brandKey, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
-  const brandDef = BRANDS_WITH_OVERVIEW.find(b => b.key === brandKey) ?? BRANDS_WITH_OVERVIEW[0]
-  const marca = brandDef.marca
-  const { accent, dark } = brandDef
-  const scopeLabel = brandKey === 'overview' ? 'Consolidado' : brandDef.label
+  const { brandKeys, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
 
-  const { data: rows, loading } = useFunilVendas(marca)
+  const marcasSelecionadas = useMemo(
+    () => brandKeys.map(k => BRAND_LIST.find(b => b.key === k)).filter((b): b is BrandDef => !!b),
+    [brandKeys],
+  )
+  const todasSelecionadas = marcasSelecionadas.length === BRAND_LIST.length
+  const { accent, dark } = marcasSelecionadas.length === 1 ? marcasSelecionadas[0] : BRAND_OVERVIEW
+  const scopeLabel = todasSelecionadas
+    ? 'Consolidado'
+    : marcasSelecionadas.length === 1
+      ? marcasSelecionadas[0].label
+      : marcasSelecionadas.length <= 3
+        ? marcasSelecionadas.map(b => b.label).join(', ')
+        : `${marcasSelecionadas.length} marcas selecionadas`
+  const marcaFetch = marcasSelecionadas.length === 1 ? marcasSelecionadas[0].marca : undefined
+  const marcasParaEscopo: string[] = useMemo(
+    () => marcasSelecionadas.map(b => b.marca).filter((m): m is Marca => !!m),
+    [marcasSelecionadas],
+  )
+
+  const { data: rows, loading } = useFunilVendas(marcaFetch)
   const { data: eventos } = useFunilEventos({
     enabled: true,
-    marca,
+    marca: marcaFetch,
     inicio: range.start,
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
   })
-  const { data: curMedia } = useMediaData({ marca, dataInicio: range.start, dataFim: range.end })
+  const { data: curMedia } = useMediaData({ marca: marcaFetch, dataInicio: range.start, dataFim: range.end })
 
-  const scope = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
+  const scope = useMemo(
+    () => buildScopeFilter({ marcas: marcasParaEscopo, fontes, subFontes }),
+    [marcasParaEscopo, fontes, subFontes],
+  )
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
   const win = useMemo(
     () => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))),
     [ranges],
   )
 
-  // União exata: soma só mídia dos dias que caem de fato num período selecionado.
+  // União exata: soma só mídia dos dias que caem de fato num período
+  // selecionado, e só das marcas selecionadas (quando a busca trouxe mais de uma).
   const invest = useMemo(
-    () => curMedia.reduce((s, r) => s + (ranges.some(rg => r.dia >= rg.start && r.dia <= rg.end) ? r.spend_brl : 0), 0),
-    [curMedia, ranges],
+    () => curMedia.reduce((s, r) => s + (
+      ranges.some(rg => r.dia >= rg.start && r.dia <= rg.end) && marcasParaEscopo.includes(r.marca)
+        ? r.spend_brl : 0
+    ), 0),
+    [curMedia, ranges, marcasParaEscopo],
   )
 
   const funnel = useMemo<FunnelStage[]>(() => {

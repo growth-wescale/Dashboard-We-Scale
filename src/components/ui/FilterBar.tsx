@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { ChevronDown, RotateCcw } from 'lucide-react'
-import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
+import { BRAND_LIST } from '@/constants/brands'
 import { SUB_FONTE_GRUPOS } from '@/lib/fonteMapping'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { opcoesPara } from '@/lib/periodo'
@@ -106,13 +106,15 @@ interface MultiSelectOption { value: string; label: string }
  * "Limpar seleção". Nenhum item marcado = sem filtro (mostra tudo) — a menos
  * que `minSelected` exija um piso (ex.: período nunca pode ficar vazio).
  */
-function MultiSelect({ label, options, selected, onChange, minSelected = 0 }: {
+function MultiSelect({ label, options, selected, onChange, minSelected = 0, allLabel }: {
   label: string
   options: readonly MultiSelectOption[]
   selected: string[]
   onChange: (v: string[]) => void
   /** Nº mínimo de itens que devem continuar marcados (ex.: período = 1). */
   minSelected?: number
+  /** Rótulo quando TODAS as opções estão marcadas (ex.: "Consolidado" pra Marca). */
+  allLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -128,9 +130,11 @@ function MultiSelect({ label, options, selected, onChange, minSelected = 0 }: {
 
   const resumo = selected.length === 0
     ? 'Todas'
-    : selected.length === 1
-      ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
-      : `${selected.length} selecionados`
+    : allLabel && selected.length === options.length
+      ? allLabel
+      : selected.length === 1
+        ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
+        : `${selected.length} selecionados`
 
   return (
     <div ref={box} style={{ position: 'relative' }}>
@@ -207,7 +211,7 @@ interface FilterBarProps {
 
 export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: FilterBarProps) {
   const {
-    brandKey, setBrandKey,
+    brandKeys, setBrandKeys,
     periodMode, setPeriodMode,
     periodValues, setPeriodValues,
     range, setRange,
@@ -231,7 +235,7 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
     return () => obs.disconnect()
   }, [])
 
-  const marcaAtual = BRANDS_WITH_OVERVIEW.find(b => b.key === brandKey) ?? BRANDS_WITH_OVERVIEW[0]
+  const opcoesMarca = useMemo(() => BRAND_LIST.map(b => ({ value: b.key, label: b.label })), [])
 
   // Opções vindas dos dados. O que já está selecionado entra na lista mesmo que
   // suma dos dados — senão o usuário fica com um filtro ativo que não consegue
@@ -266,19 +270,7 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
         }}
       >
         <Field label="Marca">
-          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-            <span style={{
-              position: 'absolute', left: 10, width: 8, height: 8, borderRadius: '50%',
-              background: marcaAtual.accent, pointerEvents: 'none',
-            }} />
-            <select
-              value={brandKey}
-              onChange={e => setBrandKey(e.target.value)}
-              style={{ ...controlStyle, appearance: 'none', paddingLeft: 26, paddingRight: 24, cursor: 'pointer' }}
-            >
-              {BRANDS_WITH_OVERVIEW.map(b => <option key={b.key} value={b.key}>{b.label}</option>)}
-            </select>
-          </div>
+          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} minSelected={1} allLabel="Consolidado" />
         </Field>
 
         <Field label="Período">

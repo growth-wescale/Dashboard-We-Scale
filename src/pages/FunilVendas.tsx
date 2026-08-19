@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
-import { Download, TrendingDown, Trophy, Info, X, Target } from 'lucide-react'
+import { Download, TrendingDown, Trophy, Info, X, ChevronDown } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
@@ -29,7 +29,9 @@ import {
   mesesDoPeriodo, periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
 import type { PeriodMode } from '@/lib/periodo'
-import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
+import { BRAND_LIST, BRAND_OVERVIEW } from '@/constants/brands'
+import type { BrandDef } from '@/constants/brands'
+import type { Marca } from '@/lib/types'
 import { nf, money, moneyK } from '@/lib/format'
 import { shortMonth } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
@@ -48,8 +50,6 @@ const MACRO_STAGE_LABEL: Partial<Record<StageKey, string>> = {
 const PERIOD_LABEL_PLURAL: Record<'mes' | 'trimestre' | 'ano', string> = {
   mes: 'meses', trimestre: 'trimestres', ano: 'anos',
 }
-
-const BRANDS = BRANDS_WITH_OVERVIEW
 
 /** Modo de leitura do funil. Local à aba — não é um dos toggles globais. */
 type FunnelMode = 'performance' | 'aging' | 'atual'
@@ -115,7 +115,7 @@ function AgingList({ linhas, accent }: {
 
 // ─── DonutChart ────────────────────────────────────────────────────────────────
 
-interface DonutSlice { label: string; pct: number; color: string }
+interface DonutSlice { label: string; count: number; pct: number; color: string }
 
 function DonutChart({ slices, size = 140 }: { slices: DonutSlice[]; size?: number }) {
   const cx = size / 2, cy = size / 2
@@ -189,14 +189,31 @@ function LeadtimeCard({ label, value, sub, tone, icon }: {
 }
 
 /** Barra de progresso Realizado vs. Meta. `meta` 0 = sem meta cadastrada nesse recorte. */
-function MetaProgresso({ label, realizado, meta, formatter, accent }: {
+function MetaProgresso({ label, realizado, meta, formatter, accent, porMarca }: {
   label: string; realizado: number; meta: number; formatter: (n: number) => string; accent: string
+  /** Quebra por marca, pro dropdown — só faz sentido com 2+ marcas. */
+  porMarca?: { label: string; realizado: number; meta: number }[]
 }) {
+  const [aberto, setAberto] = useState(false)
   const pctAting = meta > 0 ? Math.min(100, (realizado / meta) * 100) : 0
+  const temQuebra = (porMarca?.length ?? 0) > 1
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
-        <span style={{ color: 'var(--ws-text-primary)' }}>{label}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--ws-text-primary)' }}>
+          {label}
+          {temQuebra && (
+            <button
+              type="button"
+              onClick={() => setAberto(a => !a)}
+              title="Ver meta por marca"
+              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', color: 'var(--ws-text-secondary)' }}
+            >
+              <ChevronDown size={12} style={{ transform: aberto ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }} />
+            </button>
+          )}
+        </span>
         <span style={{ fontWeight: 600, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
           {meta > 0 ? `${formatter(realizado)} / ${formatter(meta)}` : '—'}
         </span>
@@ -204,6 +221,18 @@ function MetaProgresso({ label, realizado, meta, formatter, accent }: {
       <div style={{ height: 7, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
         <div style={{ width: `${pctAting}%`, height: '100%', background: accent, borderRadius: 4 }} />
       </div>
+      {aberto && temQuebra && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 2, paddingTop: 8, borderTop: '1px solid var(--ws-border)' }}>
+          {porMarca!.map(m => (
+            <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--ws-text-secondary)' }}>
+              <span>{m.label}</span>
+              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {m.meta > 0 ? `${formatter(m.realizado)} / ${formatter(m.meta)}` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -257,7 +286,7 @@ function DeltaSecundario({ delta, label }: { delta: number | null; label: string
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const { brandKey, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
@@ -265,10 +294,23 @@ export function FunilVendas() {
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
 
-  const brandDef = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
-  const marca = brandDef.marca
-  const { accent, dark } = brandDef
-  const scopeLabel = brandKey === 'overview' ? 'Consolidado' : brandDef.label
+  const marcasSelecionadas = useMemo(
+    () => brandKeys.map(k => BRAND_LIST.find(b => b.key === k)).filter((b): b is BrandDef => !!b),
+    [brandKeys],
+  )
+  const todasSelecionadas = marcasSelecionadas.length === BRAND_LIST.length
+  const { accent, dark } = marcasSelecionadas.length === 1 ? marcasSelecionadas[0] : BRAND_OVERVIEW
+  const scopeLabel = todasSelecionadas
+    ? 'Consolidado'
+    : marcasSelecionadas.length === 1
+      ? marcasSelecionadas[0].label
+      : marcasSelecionadas.length <= 3
+        ? marcasSelecionadas.map(b => b.label).join(', ')
+        : `${marcasSelecionadas.length} marcas selecionadas`
+  // Busca no servidor filtrada por marca só quando é exatamente 1 selecionada
+  // — mais rápido. Com 2+ marcas, busca tudo e filtra no cliente via `scope`,
+  // junto com fonte/sub-fonte (mesmo padrão dos outros filtros).
+  const marcaFetch = marcasSelecionadas.length === 1 ? marcasSelecionadas[0].marca : undefined
 
   // 2+ períodos selecionados: comparação "vs. período anterior" não faz
   // sentido pra um conjunto não-contíguo, então some da tela inteira.
@@ -297,23 +339,22 @@ export function FunilVendas() {
   }, [periodMode, periodValue, multiPeriodo])
 
   // Meses cobertos pela seleção atual — base da meta (mensal por natureza).
+  // Sempre busca todas as marcas; a soma/quebra pelas marcas selecionadas é
+  // feita abaixo, junto com o realizado (mesmo subconjunto dos dois lados).
   const mesesMeta = useMemo(() => mesesDoPeriodo(periodMode, periodValues), [periodMode, periodValues])
-  const { data: metaResumo } = useMetaResumo({
-    mesesKeys: mesesMeta,
-    marca: brandKey === 'overview' ? undefined : marca,
-  })
+  const { porMarca: metaPorMarca } = useMetaResumo({ mesesKeys: mesesMeta })
 
   // ── Dados ───────────────────────────────────────────────────────────────────
-  const { data: rows, loading, error } = useFunilVendas(marca)
-  const { data: curMedia } = useMediaData({ marca, dataInicio: range.start, dataFim: range.end })
-  const { data: prevMedia } = useMediaData({ marca, dataInicio: prev.start, dataFim: prev.end })
+  const { data: rows, loading, error } = useFunilVendas(marcaFetch)
+  const { data: curMedia } = useMediaData({ marca: marcaFetch, dataInicio: range.start, dataFim: range.end })
+  const { data: prevMedia } = useMediaData({ marca: marcaFetch, dataInicio: prev.start, dataFim: prev.end })
 
   // Os DOIS modos de contagem leem o histórico de eventos. Antes, "Deals
   // únicos" vinha da tabela plana e "Passagens" dos eventos — bases diferentes,
   // e Passagens chegava a aparecer MENOR que Únicos, o que é impossível.
   const { data: eventos } = useFunilEventos({
     enabled: true,
-    marca,
+    marca: marcaFetch,
     inicio: range.start,
     // No modo safra o evento pode ser posterior à janela do MQL.
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
@@ -321,7 +362,22 @@ export function FunilVendas() {
   const { periodos } = useFunilAging(modo === 'aging')
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
-  const scope = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
+  // Marca entra no escopo mesmo quando `marcaFetch` já filtrou no servidor —
+  // nesse caso é um no-op (as linhas já são só daquela marca); é essencial
+  // quando 2+ marcas estão selecionadas e a busca trouxe tudo.
+  const marcasParaEscopo: string[] = useMemo(
+    () => marcasSelecionadas.map(b => b.marca).filter((m): m is Marca => !!m),
+    [marcasSelecionadas],
+  )
+  const scope = useMemo(
+    () => buildScopeFilter({ marcas: marcasParaEscopo, fontes, subFontes }),
+    [marcasParaEscopo, fontes, subFontes],
+  )
+  // Mesmo escopo, mas sem restrição de marca — base pra quebrar KPIs por marca
+  // no dropdown do card de Meta (funciona com o quanto de dado já veio: se
+  // `marcaFetch` filtrou 1 marca no servidor, só tem aquela marca mesmo).
+  const scopeSemMarca = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
+
   // `ranges` é a união exata dos períodos selecionados (1 ou vários) — nunca
   // usar `range` (caixa delimitadora) aqui, senão multi-seleção não-contígua
   // (ex.: Jun + Ago) incluiria Julho por engano.
@@ -336,16 +392,25 @@ export function FunilVendas() {
   )
 
   // Mídia é buscada num intervalo único (min–max da seleção) mas somada só
-  // pras linhas cujo dia cai de fato em algum dos períodos selecionados —
-  // mesma união exata usada pra filtrar deals.
+  // pras linhas cujo dia cai de fato em algum dos períodos selecionados, e só
+  // das marcas selecionadas (quando a busca trouxe mais de uma) — mesma união
+  // exata usada pra filtrar deals.
+  const emEscopo = useMemo(() => (r: { dia: string; marca: string | null }) =>
+    ranges.some(rg => r.dia >= rg.start && r.dia <= rg.end) && marcasParaEscopo.includes(r.marca ?? ''),
+  [ranges, marcasParaEscopo])
   const invest = useMemo(
-    () => curMedia.reduce((s, r) => s + (ranges.some(rg => r.dia >= rg.start && r.dia <= rg.end) ? r.spend_brl : 0), 0),
-    [curMedia, ranges],
+    () => curMedia.reduce((s, r) => s + (emEscopo(r) ? r.spend_brl : 0), 0),
+    [curMedia, emEscopo],
   )
-  const prevInvest = useMemo(() => prevMedia.reduce((s, r) => s + r.spend_brl, 0), [prevMedia])
+  const prevInvest = useMemo(
+    () => prevMedia.reduce((s, r) => s + (marcasParaEscopo.includes(r.marca ?? '') ? r.spend_brl : 0), 0),
+    [prevMedia, marcasParaEscopo],
+  )
 
-  /** Deals do escopo (marca já veio filtrada do servidor). */
+  /** Deals do escopo — marca, fonte e sub-fonte, seja o filtro do servidor ou do cliente. */
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
+  /** Mesmo recorte, sem restrição de marca — usado só pra quebra por marca. */
+  const scopedSemMarca = useMemo(() => rows.filter(scopeSemMarca), [rows, scopeSemMarca])
 
   // Opções dos filtros de origem saem dos próprios dados, nunca de lista fixa:
   // valor novo no CRM (como "Prospecção Ativa") precisa aparecer sozinho.
@@ -501,9 +566,9 @@ export function FunilVendas() {
     }
     const total = Math.max(ganhos.length, 1)
     const sources: DonutSlice[] = Object.entries(cont)
-      .map(([label, n]) => ({ label, pct: (n / total) * 100, color: CORES[label] ?? 'var(--status-atencao)' }))
+      .map(([label, n]) => ({ label, count: n, pct: (n / total) * 100, color: CORES[label] ?? 'var(--status-atencao)' }))
       .sort((a, b) => b.pct - a.pct)
-    if (sources.length === 0) sources.push({ label: 'Sem dados', pct: 100, color: 'var(--ws-border)' })
+    if (sources.length === 0) sources.push({ label: 'Sem dados', count: 0, pct: 100, color: 'var(--ws-border)' })
 
     // Tempo de ciclo — sempre a partir da entrada como MQL. Respeita o mesmo
     // toggle "Deals criados no período" (stageDate/cohort) do resto da página.
@@ -545,6 +610,46 @@ export function FunilVendas() {
     }
   }, [scoped, win, winPrev, winPrevFull, viewModes, invest, prevInvest, accent])
 
+  // ── Meta e realizado por marca ──────────────────────────────────────────────
+  // Base pro dropdown "ver por marca" do card de Meta: soma receita/fechamentos
+  // por marca a partir do recorte SEM restrição de marca (`scopedSemMarca`),
+  // pra que o dropdown reflita exatamente as marcas selecionadas no filtro.
+  const realizadoPorMarca = useMemo(() => {
+    const map = new Map<string, { receita: number; fechamentos: number }>()
+    for (const b of marcasSelecionadas) {
+      if (!b.marca) continue
+      const rowsDaMarca = scopedSemMarca.filter(r => r.marca === b.marca)
+      map.set(b.marca, {
+        receita: sumRevenue(rowsDaMarca, win, viewModes),
+        fechamentos: countSales(rowsDaMarca, win, viewModes),
+      })
+    }
+    return map
+  }, [marcasSelecionadas, scopedSemMarca, win, viewModes])
+
+  const metaSelecionada = useMemo(() => {
+    let metaFinanceira = 0, metaQtdVendas = 0
+    for (const b of marcasSelecionadas) {
+      const m = b.marca ? metaPorMarca.get(b.marca) : undefined
+      metaFinanceira += m?.metaFinanceira ?? 0
+      metaQtdVendas += m?.metaQtdVendas ?? 0
+    }
+    return { metaFinanceira, metaQtdVendas }
+  }, [marcasSelecionadas, metaPorMarca])
+
+  // Só faz sentido detalhar por marca quando há 2+ marcas em jogo.
+  const quebraPorMarca = marcasSelecionadas.length > 1
+  const metaReceitaPorMarca = useMemo(() => marcasSelecionadas.map(b => ({
+    label: b.label,
+    realizado: (b.marca && realizadoPorMarca.get(b.marca)?.receita) ?? 0,
+    meta: (b.marca && metaPorMarca.get(b.marca)?.metaFinanceira) ?? 0,
+  })), [marcasSelecionadas, realizadoPorMarca, metaPorMarca])
+  const metaFechamentosPorMarca = useMemo(() => marcasSelecionadas.map(b => ({
+    label: b.label,
+    realizado: (b.marca && realizadoPorMarca.get(b.marca)?.fechamentos) ?? 0,
+    meta: (b.marca && metaPorMarca.get(b.marca)?.metaQtdVendas) ?? 0,
+  })), [marcasSelecionadas, realizadoPorMarca, metaPorMarca])
+
   const heroStyle: CSSProperties = {
     '--fs-metric': '26px',
     background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 15%, white), white 68%)`,
@@ -570,14 +675,14 @@ export function FunilVendas() {
 
   return (
     <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
-      {...(brandKey !== 'overview' ? { 'data-brand': brandKey } : {})}>
+      {...(marcasSelecionadas.length === 1 ? { 'data-brand': marcasSelecionadas[0].key } : {})}>
 
       <PageTop
         title="Visão Macro"
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         actions={
           <button
-            onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `visao-macro-${marca ?? 'todas'}-${range.start}-${range.end}`)}
+            onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `visao-macro-${marcasSelecionadas.map(b => b.key).join('-') || 'todas'}-${range.start}-${range.end}`)}
             disabled={!scoped.length}
             title={!scoped.length ? 'Sem dados no período' : 'Exportar deals do recorte em CSV'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: scoped.length ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-body)', opacity: scoped.length ? 1 : 0.5 }}
@@ -676,7 +781,10 @@ export function FunilVendas() {
                   <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5 }}>
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
                     <span style={{ flex: 1, color: 'var(--ws-text-primary)' }}>{s.label}</span>
-                    <span style={{ fontWeight: 600, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                      {nf(s.count)}
+                    </span>
+                    <span style={{ fontWeight: 600, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', minWidth: 46, textAlign: 'right' }}>
                       {s.pct.toFixed(1)}%
                     </span>
                   </div>
@@ -686,12 +794,13 @@ export function FunilVendas() {
           </SCard>
 
           {mesesMeta.length > 0 && (
-            <SCard pad={18} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600 }}>
-                <Target size={13} /> Meta do período
+            <SCard style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, marginBottom: 4 }}>Meta do período</div>
+                <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Receita e fechamentos vs. meta cadastrada · {scopeLabel}</div>
               </div>
-              <MetaProgresso label="Receita" realizado={kpis.receita} meta={metaResumo.metaFinanceira} formatter={moneyK} accent={accent} />
-              <MetaProgresso label="Fechamentos" realizado={kpis.fechamentos} meta={metaResumo.metaQtdVendas} formatter={nf} accent={accent} />
+              <MetaProgresso label="Receita" realizado={kpis.receita} meta={metaSelecionada.metaFinanceira} formatter={moneyK} accent={accent} porMarca={quebraPorMarca ? metaReceitaPorMarca : undefined} />
+              <MetaProgresso label="Fechamentos" realizado={kpis.fechamentos} meta={metaSelecionada.metaQtdVendas} formatter={nf} accent={accent} porMarca={quebraPorMarca ? metaFechamentosPorMarca : undefined} />
             </SCard>
           )}
         </div>

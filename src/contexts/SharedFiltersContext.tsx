@@ -6,9 +6,16 @@
  * usuário. Tudo é persistido em localStorage e validado na leitura — valor
  * salvo por uma versão antiga do app não pode derrubar a página.
  *
- * O período tem duas partes: a granularidade (`periodMode`) e qual período
- * daquela granularidade (`periodValue`). No modo 'dia' não há `periodValue` —
- * o usuário escolhe as datas livremente no calendário.
+ * O período tem duas partes: a granularidade (`periodMode`) e quais períodos
+ * daquela granularidade (`periodValues` — multi-seleção, como filtro de
+ * Excel). No modo 'dia' não há `periodValues` — o usuário escolhe as datas
+ * livremente no calendário.
+ *
+ * Com 2+ períodos selecionados, `ranges` é a UNIÃO exata deles (cada um já
+ * truncado em "hoje" individualmente se estiver em curso) — não o intervalo
+ * contínuo entre o primeiro e o último. `range` continua existindo como a
+ * caixa delimitadora (menor início, maior fim) só para exibição e para
+ * consultas de servidor que precisam de um único intervalo (ex.: mídia).
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
@@ -74,9 +81,12 @@ interface SharedFilters {
   /** Granularidade do período. */
   periodMode: PeriodMode
   setPeriodMode: (m: PeriodMode) => void
-  /** Qual período: '2026-08', '2026-Q3', '2026'. Vazio no modo 'dia'. */
-  periodValue: string
-  setPeriodValue: (v: string) => void
+  /** Períodos selecionados: ['2026-08'], ou vários ['2026-06','2026-08']. Vazio no modo 'dia'. */
+  periodValues: string[]
+  setPeriodValues: (v: string[]) => void
+  /** União exata dos ranges dos períodos selecionados (1 elemento fora do modo 'dia' quando só 1 selecionado). */
+  ranges: DateRange[]
+  /** Caixa delimitadora de `ranges` — só para exibição/consultas de intervalo único, nunca para filtrar linhas. */
   range: DateRange
   /** Só no modo 'dia': datas escolhidas à mão. */
   setRange: (r: DateRange) => void
@@ -106,10 +116,11 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   const [periodMode, setPeriodModeRaw] = usePersisted<PeriodMode>(
     'periodMode', oneOf(['dia', 'mes', 'trimestre', 'ano'] as const), MODE_PADRAO,
   )
-  const [periodValue, setPeriodValueRaw] = usePersisted(
-    'periodValue', isString, periodoAtual(MODE_PADRAO),
+  const isNonEmptyStringArray = (v: unknown): v is string[] => isStringArray(v) && v.length > 0
+  const [periodValues, setPeriodValuesRaw] = usePersisted(
+    'periodValues', isNonEmptyStringArray, [periodoAtual(MODE_PADRAO)],
   )
-  // Só usado no modo 'dia'; nos demais o range vem de periodMode + periodValue.
+  // Só usado no modo 'dia'; nos demais o range vem de periodMode + periodValues.
   const [rangeDia, setRangeDia] = usePersisted<DateRange>(
     'rangeDia', isRange, rangeForPeriod('mes', periodoAtual('mes')),
   )
@@ -127,38 +138,50 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     'eventSource', oneOf(['unique', 'passages'] as const), DEFAULT_VIEW_MODES.eventSource,
   )
 
-  const range = useMemo<DateRange>(
-    () => (periodMode === 'dia' ? rangeDia : rangeForPeriod(periodMode, periodValue)),
-    [periodMode, periodValue, rangeDia],
-  )
+  const ranges = useMemo<DateRange[]>(() => {
+    if (periodMode === 'dia') return [rangeDia]
+    return periodValues.map(v => rangeForPeriod(periodMode, v))
+  }, [periodMode, periodValues, rangeDia])
+
+  // Caixa delimitadora: só para textos e para consultas de servidor que
+  // precisam de um único intervalo (ex.: mídia). Nunca usar para filtrar
+  // linhas — isso é o papel de `ranges`, que preserva a união exata.
+  const range = useMemo<DateRange>(() => {
+    let { start, end } = ranges[0]
+    for (const r of ranges) {
+      if (r.start < start) start = r.start
+      if (r.end > end) end = r.end
+    }
+    return { start, end }
+  }, [ranges])
 
   /** Trocar de granularidade seleciona o período corrente dela. */
   const setPeriodMode = useCallback((m: PeriodMode) => {
     setPeriodModeRaw(m)
-    if (m !== 'dia') setPeriodValueRaw(periodoAtual(m))
-  }, [setPeriodModeRaw, setPeriodValueRaw])
+    if (m !== 'dia') setPeriodValuesRaw([periodoAtual(m)])
+  }, [setPeriodModeRaw, setPeriodValuesRaw])
 
   const resetFiltros = useCallback(() => {
     setBrandKey('overview')
     setPeriodModeRaw(MODE_PADRAO)
-    setPeriodValueRaw(periodoAtual(MODE_PADRAO))
+    setPeriodValuesRaw([periodoAtual(MODE_PADRAO)])
     setFontes([])
     setSubFontes([])
-  }, [setBrandKey, setPeriodModeRaw, setPeriodValueRaw, setFontes, setSubFontes])
+  }, [setBrandKey, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes])
 
   const value = useMemo<SharedFilters>(() => ({
     brandKey, setBrandKey,
     periodMode, setPeriodMode,
-    periodValue, setPeriodValue: setPeriodValueRaw,
-    range, setRange: setRangeDia,
+    periodValues, setPeriodValues: setPeriodValuesRaw,
+    ranges, range, setRange: setRangeDia,
     fontes, setFontes,
     subFontes, setSubFontes,
     viewModes: { salesMode, funnelView, eventSource },
     setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   }), [
-    brandKey, setBrandKey, periodMode, setPeriodMode, periodValue, setPeriodValueRaw,
-    range, setRangeDia, fontes, setFontes, subFontes, setSubFontes,
+    brandKey, setBrandKey, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
+    ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes,
     salesMode, funnelView, eventSource, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   ])

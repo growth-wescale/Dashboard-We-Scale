@@ -101,6 +101,32 @@ describe('isInWindow', () => {
     expect(isInWindow('2026-08-05 10:00:00.123456+00', AGOSTO)).toBe(true)
     expect(isInWindow('2026-08-05T10:00:00Z', AGOSTO)).toBe(true)
   })
+
+  it('mesmo dia como início e fim ainda casa (multi-seleção de 1 dia)', () => {
+    const umDia = toWindow(null, { from: '2026-08-19', to: '2026-08-19' })
+    expect(isInWindow('2026-08-19T23:00:00+00:00', umDia)).toBe(true)
+    expect(isInWindow('2026-08-18T23:59:00+00:00', umDia)).toBe(false)
+  })
+
+  describe('ranges (multi-seleção de período)', () => {
+    it('aceita união exata de vários períodos não-contíguos', () => {
+      const win = toWindow(null, null, [
+        { from: '2026-06-01', to: '2026-06-30' },
+        { from: '2026-08-01', to: '2026-08-14' },
+      ])
+      expect(isInWindow('2026-06-15T10:00:00+00:00', win)).toBe(true)
+      expect(isInWindow('2026-08-05T10:00:00+00:00', win)).toBe(true)
+      // Julho está no meio dos dois ranges mas não foi selecionado.
+      expect(isInWindow('2026-07-15T10:00:00+00:00', win)).toBe(false)
+    })
+
+    it('tem prioridade sobre dateRange quando os dois estão presentes', () => {
+      const win = toWindow(null, { from: '2026-01-01', to: '2026-12-31' }, [
+        { from: '2026-08-01', to: '2026-08-14' },
+      ])
+      expect(isInWindow('2026-03-01T10:00:00+00:00', win)).toBe(false)
+    })
+  })
 })
 
 // ── Catálogo de etapas ─────────────────────────────────────────────────────

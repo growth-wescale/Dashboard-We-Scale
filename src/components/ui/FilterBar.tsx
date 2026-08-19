@@ -13,7 +13,7 @@ import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { SUB_FONTE_GRUPOS } from '@/lib/fonteMapping'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { opcoesPara } from '@/lib/periodo'
-import type { PeriodMode } from '@/lib/periodo'
+import type { OpcaoPeriodo, PeriodMode } from '@/lib/periodo'
 
 const PERIOD_MODES: PeriodMode[] = ['dia', 'mes', 'trimestre', 'ano']
 
@@ -99,12 +99,20 @@ function Segmented<T extends string>({ value, onChange, options }: {
   )
 }
 
-/** Multi-seleção simples. Nenhum item marcado = sem filtro. */
-function MultiSelect({ label, options, selected, onChange }: {
+interface MultiSelectOption { value: string; label: string }
+
+/**
+ * Multi-seleção estilo filtro de Excel: checkboxes, "Selecionar tudo" e
+ * "Limpar seleção". Nenhum item marcado = sem filtro (mostra tudo) — a menos
+ * que `minSelected` exija um piso (ex.: período nunca pode ficar vazio).
+ */
+function MultiSelect({ label, options, selected, onChange, minSelected = 0 }: {
   label: string
-  options: readonly string[]
+  options: readonly MultiSelectOption[]
   selected: string[]
   onChange: (v: string[]) => void
+  /** Nº mínimo de itens que devem continuar marcados (ex.: período = 1). */
+  minSelected?: number
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -118,7 +126,11 @@ function MultiSelect({ label, options, selected, onChange }: {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const resumo = selected.length === 0 ? 'Todas' : selected.length === 1 ? selected[0] : `${selected.length} selecionadas`
+  const resumo = selected.length === 0
+    ? 'Todas'
+    : selected.length === 1
+      ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
+      : `${selected.length} selecionados`
 
   return (
     <div ref={box} style={{ position: 'relative' }}>
@@ -136,31 +148,46 @@ function MultiSelect({ label, options, selected, onChange }: {
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 40,
           background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
           borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md, 0 8px 24px rgba(0,0,0,.12))',
-          padding: 6, minWidth: 190,
+          padding: 6, minWidth: 190, maxHeight: 320, overflowY: 'auto',
         }}>
           <div style={{ ...labelStyle, padding: '4px 8px 6px' }}>{label}</div>
           {options.map(opt => {
-            const on = selected.includes(opt)
+            const on = selected.includes(opt.value)
+            const travado = on && selected.length <= minSelected
             return (
-              <label key={opt} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12.5, color: 'var(--ws-text-primary)' }}>
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: travado ? 'default' : 'pointer', fontSize: 12.5, color: travado ? 'var(--ws-text-secondary)' : 'var(--ws-text-primary)' }}>
                 <input
                   type="checkbox"
                   checked={on}
-                  onChange={() => onChange(on ? selected.filter(s => s !== opt) : [...selected, opt])}
-                  style={{ accentColor: 'var(--ws-accent, #2ABCB5)', cursor: 'pointer' }}
+                  disabled={travado}
+                  onChange={() => onChange(on ? selected.filter(s => s !== opt.value) : [...selected, opt.value])}
+                  style={{ accentColor: 'var(--ws-accent, #2ABCB5)', cursor: travado ? 'default' : 'pointer' }}
                 />
-                {opt}
+                {opt.label}
               </label>
             )
           })}
-          {selected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => onChange([])}
-              style={{ width: '100%', marginTop: 4, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
-            >
-              Limpar seleção
-            </button>
+          {(selected.length > minSelected || selected.length < options.length) && (
+            <div style={{ display: 'flex', marginTop: 4, borderTop: '1px solid var(--ws-border)', paddingTop: 4 }}>
+              {selected.length < options.length && (
+                <button
+                  type="button"
+                  onClick={() => onChange(options.map(o => o.value))}
+                  style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
+                >
+                  Selecionar tudo
+                </button>
+              )}
+              {selected.length > minSelected && (
+                <button
+                  type="button"
+                  onClick={() => onChange(minSelected === 0 ? [] : [selected[0]])}
+                  style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
+                >
+                  Limpar seleção
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -182,7 +209,7 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
   const {
     brandKey, setBrandKey,
     periodMode, setPeriodMode,
-    periodValue, setPeriodValue,
+    periodValues, setPeriodValues,
     range, setRange,
     fontes, setFontes,
     subFontes, setSubFontes,
@@ -210,12 +237,16 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
   // suma dos dados — senão o usuário fica com um filtro ativo que não consegue
   // desmarcar. SUB_FONTE_GRUPOS entra como piso porque é um domínio fechado.
   const opcoesFonte = useMemo(
-    () => ordenarOpcoes([...new Set([...(fontesDisponiveis ?? []), ...fontes])]),
+    () => ordenarOpcoes([...new Set([...(fontesDisponiveis ?? []), ...fontes])]).map(v => ({ value: v, label: v })),
     [fontesDisponiveis, fontes],
   )
   const opcoesSubFonte = useMemo(
-    () => ordenarOpcoes([...new Set([...(subFontesDisponiveis ?? SUB_FONTE_GRUPOS), ...subFontes])]),
+    () => ordenarOpcoes([...new Set([...(subFontesDisponiveis ?? SUB_FONTE_GRUPOS), ...subFontes])]).map(v => ({ value: v, label: v })),
     [subFontesDisponiveis, subFontes],
+  )
+  const opcoesPeriodo: OpcaoPeriodo[] = useMemo(
+    () => (periodMode === 'dia' ? [] : opcoesPara(periodMode)),
+    [periodMode],
   )
 
   return (
@@ -260,34 +291,39 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
 
             {periodMode === 'dia' ? (
               // Intervalo livre: os dois calendários nativos do navegador.
+              // Sem min/max cruzados de propósito — cada campo se autocorrige
+              // pra nunca deixar o range invertido (start > end), inclusive
+              // quando os dois apontam pro mesmo dia.
               <>
                 <input
                   type="date"
                   value={range.start}
-                  max={range.end}
-                  onChange={e => setRange({ ...range, start: e.target.value })}
+                  onChange={e => {
+                    const start = e.target.value
+                    setRange({ start, end: start > range.end ? start : range.end })
+                  }}
                   style={{ ...controlStyle, padding: '5px 8px' }}
                 />
                 <span style={{ color: 'var(--ws-text-secondary)', fontSize: 12 }}>—</span>
                 <input
                   type="date"
                   value={range.end}
-                  min={range.start}
-                  onChange={e => setRange({ ...range, end: e.target.value })}
+                  onChange={e => {
+                    const end = e.target.value
+                    setRange({ start: end < range.start ? end : range.start, end })
+                  }}
                   style={{ ...controlStyle, padding: '5px 8px' }}
                 />
               </>
             ) : (
-              // Mês / trimestre / ano: escolhe QUAL período daquela granularidade.
-              <select
-                value={periodValue}
-                onChange={e => setPeriodValue(e.target.value)}
-                style={{ ...controlStyle, cursor: 'pointer', minWidth: 148 }}
-              >
-                {opcoesPara(periodMode).map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              // Mês / trimestre / ano: multi-seleção estilo Excel — pelo menos 1 marcado sempre.
+              <MultiSelect
+                label={PERIOD_LABEL[periodMode]}
+                options={opcoesPeriodo}
+                selected={periodValues}
+                onChange={setPeriodValues}
+                minSelected={1}
+              />
             )}
 
             <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>

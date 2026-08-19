@@ -14,7 +14,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, Cadências, S&OP Marketing, Análise de Termos | Gabriel |
-| **Expansão / Vendas** | **Funil de Vendas, Performance Detalhada, Análise de Perda, Análise de Objeções** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance Detalhada, Análise de Perda, Análise de Objeções** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -124,17 +124,19 @@ compete com meses fechados e todo indicador parece em queda.
 
 ---
 
-## 5. Arquitetura da aba Funil de Vendas
+## 5. Arquitetura da aba Visão Macro
 
 ```
 src/lib/metrics.ts            camada ÚNICA de contagem (12 etapas, toggles, trava de venda)
-src/lib/periodo.ts            granularidade e range de período (puro, testado)
+src/lib/periodo.ts            granularidade, range de período e multi-seleção (puro, testado)
 src/lib/aging.ts              agregação do modo Aging (puro, testado)
 src/lib/fonteMapping.ts       normaliza utm_source em grupos
 src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
+src/components/ui/TrapFunnel.tsx          funil visual (trapézios, custo, repetidos) — compartilhado com Performance Detalhada
+src/components/ui/FunilCompletoSection.tsx bloco do funil completo (12 etapas) em Performance Detalhada
 src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no funil)
 src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "todas as etapas" (modo Passagens)
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos dois popups acima
@@ -142,6 +144,7 @@ src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
+src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (soma vários meses, sem quebra por pessoa)
 ```
 
 ### Os controles da barra
@@ -149,14 +152,26 @@ src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
 | Controle | Efeito |
 |---|---|
 | Marca | filtra no servidor |
-| Período | granularidade (dia/mês/trimestre/ano) + qual período |
+| Período | granularidade (dia/mês/trimestre/ano) + quais períodos (multi-seleção estilo Excel, exceto no modo Dia) |
 | Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado. **Opções vêm dos dados, nunca de lista fixa** |
 | Vendas | Negócios × Unidades |
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
 
 Modos do card do funil: **Performance** (volume no período), **Aging** (há
-quanto tempo parados), **Atual** (onde estão agora, ignora período).
+quanto tempo parados), **Atual** (onde estão agora, ignora período). A Visão
+Macro mostra um subconjunto de 7 etapas (MQL → Contato Efetivo → SQL ·
+Reunião Agendada → Diagnóstico → SAL → Oportunidade → Fechamento); o funil
+completo de 12 etapas fica em Performance Detalhada.
+
+**Multi-seleção de período é união exata, não intervalo.** Selecionar Junho +
+Agosto mostra só esses dois meses — Julho não entra, mesmo estando entre os
+dois. `SharedFiltersContext.ranges` carrega essa união (um `DateRange` por
+período selecionado, cada um truncado em "hoje" individualmente se estiver em
+curso); `range` continua existindo só como caixa delimitadora pra textos e
+consultas de servidor de intervalo único (ex.: mídia). Com 2+ períodos
+selecionados, a comparação "vs. período anterior" some da tela — não há
+"anterior" bem definido pra um conjunto não-contíguo.
 
 ---
 
@@ -206,7 +221,7 @@ custom fields faz **merge**, não substitui os demais.
 
 ## 8. Pendências conhecidas
 
-- [ ] **Performance Detalhada e Análise de Perda** ainda leem `vw_marketing_funil` e têm filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext`
+- [ ] **Performance Detalhada e Análise de Perda** ainda leem `vw_marketing_funil` e têm filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext` — Performance Detalhada já ganhou um bloco novo (`FunilCompletoSection`) na base nova, mas o resto da página continua na antiga
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **Motivos de perda hardcoded** em `src/constants/motivosPerda.ts` (listas de string, frágil a acento)
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
@@ -218,6 +233,95 @@ custom fields faz **merge**, não substitui os demais.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-19 — Funil de Vendas vira Visão Macro: rename, multi-seleção de período, funil simplificado, meta
+Renomeado para **Visão Macro** (menu + título). Três problemas de filtro
+corrigidos e um pedido de conteúdo (brainstorm com o Junior sobre o que fazia
+sentido numa tela de snapshot executivo de Expansão de Franquias):
+
+**Filtro de dia zerando dados.** Os dois `<input type="date">` tinham
+`min`/`max` cruzados entre si; digitar (não só usar o calendário) podia
+produzir um range invertido sem nenhum aviso, zerando tudo. Cada campo agora
+se autocorrige — mudar o início empurra o fim junto se ficar pra trás, e
+vice-versa — o que também resolve trivialmente "quero ver só um dia".
+
+**Multi-seleção de período (mês/trimestre/ano), estilo Excel.** Reaproveitado
+o `MultiSelect` que já existia pra Fonte/Sub-Fonte. Semântica é **união
+exata**, não intervalo: selecionar Jun + Ago mostra só esses dois meses, sem
+preencher Julho. `SharedFiltersContext` trocou `periodValue: string` por
+`periodValues: string[]` e passou a expor `ranges: DateRange[]` (a união,
+cada período já truncado em "hoje" individualmente se em curso) ao lado de
+`range` (caixa delimitadora, só pra texto/consultas de intervalo único).
+`metrics.ts` ganhou um terceiro parâmetro em `toWindow`/`isInWindow`
+(`ranges`) com prioridade sobre `dateRange` — sem isso, meses em `activePeriods`
+(mecanismo antigo, nunca usado de fato) não teriam o truncamento de "hoje" que
+`rangeForPeriod` já fazia. Com 2+ períodos selecionados a comparação "vs.
+período anterior" some da tela — não existe "anterior" bem definido pra um
+conjunto não-contíguo.
+
+**Funil simplificado.** Visão Macro passou de 12 para 7 etapas (MQL → Contato
+Efetivo → SQL · Reunião Agendada → Diagnóstico → SAL → Oportunidade →
+Fechamento — "Oportunidade · COF" virou só "Oportunidade" nessa tela). O
+funil completo de 12 etapas + custo por etapa + badges de repetidos migrou
+pra **Performance Detalhada**, num bloco novo e independente
+(`FunilCompletoSection`) que lê a mesma base (`vw_funil_vendas` +
+`SharedFiltersContext`) da Visão Macro — sem tocar no resto da página, que
+continua na base antiga (`vw_marketing_funil`, filtros próprios).
+`TrapFunnel` saiu de dentro de `FunilVendas.tsx` pra
+`src/components/ui/TrapFunnel.tsx`, compartilhado pelas duas telas.
+
+**Card "Conversão global" removido** — duplicava a KPI "Conversão MQL→Ganho"
+do topo, mesmo número duas vezes na mesma tela.
+
+**Card de Meta novo.** Receita e Fechamentos vs. `DB_Metas_Performance`
+(`meta_financeira`/`meta_qtd_vendas`), somada por todos os meses cobertos
+pelo período selecionado (trimestre/ano somam os meses; Consolidado soma
+todas as marcas, excluindo `Geral/Outbound/Repasse` como já fazia
+`metaTimeSdr`/`metaTimeCloserFat`). Meta é mensal por natureza — some da tela
+no modo Dia. Novo `useMetaResumo` em `useMetasPerformance.ts`; ignora o
+toggle Negócios×Unidades (não existe meta de unidades na base).
+
+Branch original ficou 8 PRs atrás da `main` (features de "repetidos" e
+No-show redesenhado, já em produção) sem eu perceber de início — refeito numa
+branch nova a partir da `main` atual pra não regredir nada já publicado.
+
+### 2026-08-18 — `vw_deal_ciclo_enriquecido` parava de rodar por timeout
+Dashboard demorando 10-15s pra carregar e às vezes quebrando com "canceling
+statement due to statement timeout" — em **todas** as abas, não só Funil de
+Vendas.
+
+Causa raiz: a CTE `ult` de `vw_deal_ciclo_enriquecido` recomputava a cadeia
+inteira de views (`vw_deal_ciclo` → `vw_deal_eventos_ciclo`, com joins em
+`deal_eventos`, `deal_contatos`, `atribuicao_legado`, `pessoa_alias`,
+`nome_cargo_foto` e uma subquery correlacionada por linha) uma **segunda vez**
+só pra achar o ciclo máximo por `id_lead` — 1 vez em `ult`, 1 vez em `norm`.
+O role `anon` do dashboard tem `statement_timeout` de só 3s; qualquer página
+de `vw_funil_vendas` (sem filtro de data, ~5 páginas de 1000 linhas por
+carregamento) já levava ~1,9s cada, perto ou acima do limite.
+
+Troquei a CTE `ult` por uma window function (`max(ciclo) OVER (PARTITION BY
+id_lead)`) sobre o mesmo scan de `vw_deal_ciclo` que `norm` já fazia —
+resultado idêntico, sem a segunda passada. Validado com checksums (count,
+count ciclo_atual, count ganhos, soma de valor_contrato — idênticos antes e
+depois) e `EXPLAIN ANALYZE` na query real do hook: 1896ms → 882ms por página
+(2,15x mais rápido), 168k → 116k buffer hits. Afeta `vw_funil_vendas` e
+`vw_marketing_funil` (ambas dependem dessa view), portanto todas as abas de
+Vendas. Aplicado direto no Supabase de Expansão (`cygxmduuwlwfbodfrlkr`),
+sem migration no repo (é `CREATE OR REPLACE VIEW`, não versionado em código).
+
+Ainda sobra trabalho: mesmo a ~880ms/página, 5 páginas sequenciais somam
+~4s+ sob carga — perto do timeout de novo. Se o problema voltar, os próximos
+suspeitos são a subquery correlacionada de `ciclo` em `vw_deal_eventos_ciclo`
+(hoje 1 índice-only-scan por linha de evento) e o padrão de paginação do
+`useFunilVendas` (5 round-trips sequenciais porque o PostgREST limita a
+1000 linhas por request).
+
+### 2026-08-17 — Leadtime de perda/fechamento passa a respeitar período
+Os cards de "Tempo de ciclo" (Funil de Vendas) ignoravam o período e o toggle
+"Deals criados no período" — eram sempre média vitalícia, mesmo com o rótulo
+do card de perda dizendo "no período". `rowsInLoss` (novo, espelha `isSale`/
+`rowsInStage`) e `rowsInStage(..., 'Fechamento', ...)` agora aplicam `win` e
+`viewModes`, iguais ao resto da página.
 
 ### 2026-08-18 — Mais espaço entre "repetidos" e a seta de conversão
 "+N repetidos" e a seta de conversão (▼ XX%) entre etapas do funil ficavam

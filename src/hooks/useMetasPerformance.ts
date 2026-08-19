@@ -127,3 +127,82 @@ export function metaTimeSdr(metas: MetaAgregada[]): number {
 export function metaTimeCloserFat(metas: MetaAgregada[]): number {
   return metas.filter(m => m.funcao === 'Closer').reduce((s, m) => s + m.metaFinanceira, 0)
 }
+
+/* ── Meta somada de vários meses (card "Meta do período" da Visão Macro) ──── */
+
+export interface MetaResumo {
+  metaFinanceira: number
+  metaQtdVendas: number
+}
+
+async function fetchMetasMeses(mesesKeys: string[], marca?: string): Promise<{ rows: RawMetaRow[]; error: string | null }> {
+  if (mesesKeys.length === 0) return { rows: [], error: null }
+  const mesesInicio = mesesKeys.map(k => `${k}-01`)
+  let q = supabaseVendas
+    .from('DB_Metas_Performance')
+    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas')
+    .in('mes_referencia', mesesInicio)
+    .in('funcao', ['SDR', 'Closer'])
+  if (marca) q = q.eq('marca', marca)
+  const { data, error } = await q
+  if (error) return { rows: [], error: error.message }
+  return { rows: (data ?? []) as RawMetaRow[], error: null }
+}
+
+function resumir(rows: RawMetaRow[]): MetaResumo {
+  let metaFinanceira = 0, metaQtdVendas = 0
+  for (const r of rows) {
+    if (!r.nome_colaborador || !r.funcao || r.funcao === 'Repasse') continue
+    if (r.marca && MARCAS_EXCLUIR.has(r.marca)) continue
+    metaFinanceira += r.meta_financeira ?? 0
+    metaQtdVendas += r.meta_qtd_vendas ?? 0
+  }
+  return { metaFinanceira, metaQtdVendas }
+}
+
+interface ResumoFilters {
+  /** Meses cobertos pelo período selecionado ('YYYY-MM'). Vazio = sem meta (ex.: modo Dia). */
+  mesesKeys: string[]
+  marca?: string
+}
+
+interface UseMetaResumoResult {
+  data: MetaResumo
+  loading: boolean
+  error: string | null
+}
+
+/** Meta somada dos meses cobertos pelo período selecionado — team total, sem quebra por colaborador. */
+export function useMetaResumo({ mesesKeys, marca }: ResumoFilters): UseMetaResumoResult {
+  // Chave estável pro efeito: `mesesKeys` é recriado a cada render pelo chamador.
+  const chave = mesesKeys.join(',')
+  const [data, setData] = useState<MetaResumo>({ metaFinanceira: 0, metaQtdVendas: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchAll = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    setError(null)
+    const { rows, error: err } = await fetchMetasMeses(chave ? chave.split(',') : [], marca)
+    if (err) { setError(err); setLoading(false); return }
+    setData(resumir(rows))
+    setLoading(false)
+  }, [chave, marca])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAll(true).catch(() => {})
+
+    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
+    window.addEventListener('dashboard:refresh', handleRefresh)
+    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 300000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('dashboard:refresh', handleRefresh)
+    }
+  }, [fetchAll])
+
+  return { data, loading, error }
+}

@@ -1,31 +1,27 @@
 /**
- * Agregação do modo Aging — quanto tempo os deals estão parados em cada etapa.
+ * Agregação dos modos Aging e Atual — quanto tempo os deals estão parados em
+ * cada etapa, e há quanto tempo estão no funil desde que viraram MQL.
  *
  * Módulo puro de propósito: não importa o cliente Supabase, para poder ser
  * testado sem variável de ambiente e sem rede.
  */
 
+import { resolveStage } from '@/lib/metrics'
 import type { EtapaPeriodoRow } from '@/lib/funnelTypes'
 
 export interface AgingPorEtapa {
   etapa: string
   deals: number
-  /** Dias parados — mediana. */
-  p50: number | null
-  p75: number | null
+  /** Média de dias parados NESSA etapa. */
+  mediaEtapa: number | null
+  /** Média de dias desde que o deal virou MQL (idade total no funil). */
+  mediaAndamento: number | null
 }
 
 const DIA_MS = 86_400_000
 
-/** Percentil por interpolação linear. Espera a lista já ordenada. */
-function percentil(ordenados: number[], p: number): number | null {
-  if (ordenados.length === 0) return null
-  const idx = (ordenados.length - 1) * p
-  const lo = Math.floor(idx)
-  const hi = Math.ceil(idx)
-  if (lo === hi) return ordenados[lo]
-  return ordenados[lo] + (ordenados[hi] - ordenados[lo]) * (idx - lo)
-}
+const media = (xs: number[]): number | null =>
+  xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null
 
 /**
  * Agrega o aging por etapa, contando APENAS deals vivos.
@@ -35,33 +31,51 @@ function percentil(ordenados: number[], p: number): number | null {
  * `vw_deal_etapa_periodos` não fecha o período quando o deal é perdido, então
  * sem ele "Tentando Contato" aparece com 1.959 deals parados há 95 dias em vez
  * dos 105 há 10 dias que são a realidade operacional.
+ *
+ * `mqlPorDeal` (id_lead -> data ISO do MQL) alimenta `mediaAndamento`; deal
+ * sem MQL conhecido só não entra nessa média — ainda conta em `deals`.
+ *
+ * Agrupa pela etapa CANÔNICA (`resolveStage`), não pela string crua da view —
+ * senão variantes do mesmo rótulo (ex.: "SQL" vs "Reunião Agendada") viram
+ * grupos separados e a contagem por etapa fica errada.
  */
 export function computeAging(
   periodos: EtapaPeriodoRow[],
   dealsVivos: Set<string>,
+  mqlPorDeal: Map<string, string>,
   agora = Date.now(),
 ): AgingPorEtapa[] {
-  const porEtapa = new Map<string, number[]>()
+  const porEtapa = new Map<string, { etapa: number[]; andamento: number[] }>()
 
   for (const p of periodos) {
     if (!p.etapa || !p.data_entrada) continue
-    if (!dealsVivos.has(String(p.deal_id))) continue
+    const dealId = String(p.deal_id)
+    if (!dealsVivos.has(dealId)) continue
 
     const entrada = new Date(p.data_entrada).getTime()
     if (Number.isNaN(entrada)) continue
 
-    const dias = (agora - entrada) / DIA_MS
-    if (dias < 0) continue // relógio torto ou data futura: não inventar aging
+    const diasEtapa = (agora - entrada) / DIA_MS
+    if (diasEtapa < 0) continue // relógio torto ou data futura: não inventar aging
 
-    const lista = porEtapa.get(p.etapa)
-    if (lista) lista.push(dias)
-    else porEtapa.set(p.etapa, [dias])
+    const chave = resolveStage(p.etapa) ?? p.etapa
+    const bucket = porEtapa.get(chave) ?? { etapa: [], andamento: [] }
+    bucket.etapa.push(diasEtapa)
+
+    const mqlIso = mqlPorDeal.get(dealId)
+    if (mqlIso) {
+      const mql = new Date(mqlIso).getTime()
+      const diasAndamento = (agora - mql) / DIA_MS
+      if (!Number.isNaN(mql) && diasAndamento >= 0) bucket.andamento.push(diasAndamento)
+    }
+
+    porEtapa.set(chave, bucket)
   }
 
-  return [...porEtapa.entries()]
-    .map(([etapa, dias]) => {
-      dias.sort((a, b) => a - b)
-      return { etapa, deals: dias.length, p50: percentil(dias, 0.5), p75: percentil(dias, 0.75) }
-    })
-    .sort((a, b) => b.deals - a.deals)
+  return [...porEtapa.entries()].map(([etapa, b]) => ({
+    etapa,
+    deals: b.etapa.length,
+    mediaEtapa: media(b.etapa),
+    mediaAndamento: media(b.andamento),
+  }))
 }

@@ -16,6 +16,10 @@
  * contínuo entre o primeiro e o último. `range` continua existindo como a
  * caixa delimitadora (menor início, maior fim) só para exibição e para
  * consultas de servidor que precisam de um único intervalo (ex.: mídia).
+ *
+ * Marca segue o mesmo molde: `brandKeys` é multi-seleção (nunca vazio).
+ * Todas as marcas reais marcadas ao mesmo tempo é visualmente equivalente a
+ * "Consolidado" — não existe um valor sentinela separado pra isso.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
@@ -24,6 +28,7 @@ import { DEFAULT_VIEW_MODES } from '@/lib/metrics'
 import type { EventSource, FunnelView, SalesMode, ViewModes } from '@/lib/metrics'
 import { periodoAtual, rangeForPeriod } from '@/lib/periodo'
 import type { DateRange, PeriodMode } from '@/lib/periodo'
+import { BRAND_LIST } from '@/constants/brands'
 
 export type { DateRange, PeriodMode } from '@/lib/periodo'
 
@@ -59,6 +64,7 @@ function usePersisted<T>(key: string, isValid: (v: unknown) => v is T, fallback:
 const isString = (v: unknown): v is string => typeof v === 'string'
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every(x => typeof x === 'string')
+const isNonEmptyStringArray = (v: unknown): v is string[] => isStringArray(v) && v.length > 0
 const oneOf = <T extends string>(allowed: readonly T[]) =>
   (v: unknown): v is T => typeof v === 'string' && (allowed as readonly string[]).includes(v)
 const isRange = (v: unknown): v is DateRange =>
@@ -75,8 +81,9 @@ export const PERIOD_LABEL: Record<PeriodMode, string> = {
 /* ── Contexto ─────────────────────────────────────────────────────────────── */
 
 interface SharedFilters {
-  brandKey: string
-  setBrandKey: (k: string) => void
+  /** Marcas selecionadas (chaves de BRAND_LIST). Todas selecionadas == Consolidado. Nunca vazio. */
+  brandKeys: string[]
+  setBrandKeys: (k: string[]) => void
 
   /** Granularidade do período. */
   periodMode: PeriodMode
@@ -110,13 +117,15 @@ const Ctx = createContext<SharedFilters | null>(null)
 // (periodoAtual não sabe responder "qual dia"), e mês é o recorte do time.
 const MODE_PADRAO: Exclude<PeriodMode, 'dia'> = 'mes'
 
+// Todas as marcas reais selecionadas de saída == Consolidado.
+const TODAS_MARCAS = BRAND_LIST.map(b => b.key)
+
 export function SharedFiltersProvider({ children }: { children: ReactNode }) {
-  const [brandKey, setBrandKey] = usePersisted('brandKey', isString, 'overview')
+  const [brandKeys, setBrandKeys] = usePersisted('brandKeys', isNonEmptyStringArray, TODAS_MARCAS)
 
   const [periodMode, setPeriodModeRaw] = usePersisted<PeriodMode>(
     'periodMode', oneOf(['dia', 'mes', 'trimestre', 'ano'] as const), MODE_PADRAO,
   )
-  const isNonEmptyStringArray = (v: unknown): v is string[] => isStringArray(v) && v.length > 0
   const [periodValues, setPeriodValuesRaw] = usePersisted(
     'periodValues', isNonEmptyStringArray, [periodoAtual(MODE_PADRAO)],
   )
@@ -162,15 +171,15 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   }, [setPeriodModeRaw, setPeriodValuesRaw])
 
   const resetFiltros = useCallback(() => {
-    setBrandKey('overview')
+    setBrandKeys(TODAS_MARCAS)
     setPeriodModeRaw(MODE_PADRAO)
     setPeriodValuesRaw([periodoAtual(MODE_PADRAO)])
     setFontes([])
     setSubFontes([])
-  }, [setBrandKey, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes])
+  }, [setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes])
 
   const value = useMemo<SharedFilters>(() => ({
-    brandKey, setBrandKey,
+    brandKeys, setBrandKeys,
     periodMode, setPeriodMode,
     periodValues, setPeriodValues: setPeriodValuesRaw,
     ranges, range, setRange: setRangeDia,
@@ -180,7 +189,7 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   }), [
-    brandKey, setBrandKey, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
+    brandKeys, setBrandKeys, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
     ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes,
     salesMode, funnelView, eventSource, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,

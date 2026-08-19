@@ -144,14 +144,14 @@ src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
-src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (soma vários meses, sem quebra por pessoa)
+src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
 ```
 
 ### Os controles da barra
 
 | Controle | Efeito |
 |---|---|
-| Marca | filtra no servidor |
+| Marca | multi-seleção estilo Excel. Todas marcadas == Consolidado. 2+ marcas: busca sem filtro no servidor e filtra no cliente |
 | Período | granularidade (dia/mês/trimestre/ano) + quais períodos (multi-seleção estilo Excel, exceto no modo Dia) |
 | Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado. **Opções vêm dos dados, nunca de lista fixa** |
 | Vendas | Negócios × Unidades |
@@ -233,6 +233,34 @@ custom fields faz **merge**, não substitui os demais.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-19 — Marca vira multi-seleção; card de Meta ganha quebra por marca
+Filtro de Marca era o único ainda com `<select>` nativo (destoava do resto da
+barra) e só permitia uma marca (ou Consolidado) por vez. Virou `MultiSelect`
+igual Fonte/Período, e agora aceita **várias marcas ao mesmo tempo** — não só
+"uma" ou "todas". `SharedFiltersContext.brandKey: string` virou
+`brandKeys: string[]` (nunca vazio; todas as marcas reais marcadas ao mesmo
+tempo é visualmente igual a "Consolidado", sem valor sentinela separado).
+
+Busca no servidor continua filtrada por marca quando é **exatamente 1**
+selecionada (mais rápido); com 2+ busca tudo e filtra no cliente via
+`buildScopeFilter({ marcas })`, mesmo padrão já usado por Fonte/Sub-Fonte.
+Cor de tema usa a da marca só com 1 selecionada; com 2+ cai no teal do
+Consolidado. Afeta `FunilVendas.tsx` e `FunilCompletoSection.tsx`
+(Performance Detalhada), que leem o mesmo filtro compartilhado.
+
+Card de Meta ganhou dropdown "ver por marca" (ícone de seta) em Receita e
+Fechamentos, mostrando meta + realizado de cada marca selecionada — só
+aparece com 2+ marcas em jogo. `useMetaResumo` parou de aceitar `marca` e
+passou a sempre buscar todas (a tabela de metas é pequena) devolvendo
+`porMarca: Map<string, MetaResumo>`; quem soma/filtra pro subconjunto
+selecionado é o próprio `FunilVendas.tsx`, junto com o realizado (mesma
+lógica pros dois lados, mesmo `scopedSemMarca`). Título do card também virou
+igual "Funil de vendas"/"Vendas por fonte" (`font-display`, 18px) — antes era
+um rótulo pequeno em caixa alta, destoando dos vizinhos.
+
+"Vendas por fonte" passou a mostrar quantidade **e** % lado a lado na legenda
+(só tinha %).
 
 ### 2026-08-19 — Funil de Vendas vira Visão Macro: rename, multi-seleção de período, funil simplificado, meta
 Renomeado para **Visão Macro** (menu + título). Três problemas de filtro

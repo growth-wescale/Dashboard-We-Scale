@@ -4,25 +4,22 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT } from '@/constants/brands'
 import { BarList, StatusBadge, cell, fmtData, topBreakdown } from './dealDrawerShared'
+import { MultiSelect, ordenarOpcoes } from './MultiSelect'
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
+// Mesmo componente e lógica da barra de filtros da Visão Macro (MultiSelect):
+// opções vêm sempre dos deals do próprio recorte (nunca lista fixa), e cada
+// campo aceita marcar vários valores ao mesmo tempo.
 
 interface FilterState {
-  marca: string
-  funil: string
-  fonte: string
-  sdr: string
-  closer: string
+  marca: string[]
+  funil: string[]
+  fonte: string[]
+  sdr: string[]
+  closer: string[]
 }
 
-const EMPTY_FILTERS: FilterState = { marca: '', funil: '', fonte: '', sdr: '', closer: '' }
-
-const selectStyle: React.CSSProperties = {
-  border: '1px solid var(--ws-border)', borderRadius: 8,
-  background: 'var(--ws-bg)', color: 'var(--ws-text-primary)',
-  fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 500,
-  padding: '6px 10px', cursor: 'pointer', minWidth: 0, flex: '1 1 140px',
-}
+const EMPTY_FILTERS: FilterState = { marca: [], funil: [], fonte: [], sdr: [], closer: [] }
 
 // ─── StageDealsDrawer ───────────────────────────────────────────────────────
 
@@ -40,23 +37,23 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
 
   const options = useMemo(() => ({
-    marca: [...new Set(deals.map(d => d.row.marca?.trim()).filter((v): v is string => !!v))].sort(),
-    funil: [...new Set(deals.map(d => d.row.nome_funil?.trim()).filter((v): v is string => !!v))].sort(),
-    fonte: [...new Set(deals.map(d => d.row.fonte_macro?.trim()).filter((v): v is string => !!v))].sort(),
-    sdr: [...new Set(deals.map(d => d.row.nome_sdr?.trim()).filter((v): v is string => !!v))].sort(),
-    closer: [...new Set(deals.map(d => d.row.nome_closer?.trim()).filter((v): v is string => !!v))].sort(),
+    marca: ordenarOpcoes([...new Set(deals.map(d => d.row.marca?.trim()).filter((v): v is string => !!v))]),
+    funil: ordenarOpcoes([...new Set(deals.map(d => d.row.nome_funil?.trim()).filter((v): v is string => !!v))]),
+    fonte: ordenarOpcoes([...new Set(deals.map(d => d.row.fonte_macro?.trim()).filter((v): v is string => !!v))]),
+    sdr: ordenarOpcoes([...new Set(deals.map(d => d.row.nome_sdr?.trim()).filter((v): v is string => !!v))]),
+    closer: ordenarOpcoes([...new Set(deals.map(d => d.row.nome_closer?.trim()).filter((v): v is string => !!v))]),
   }), [deals])
 
   const filtered = useMemo(() => deals.filter(({ row: r }) => {
-    if (filters.marca && r.marca !== filters.marca) return false
-    if (filters.funil && r.nome_funil !== filters.funil) return false
-    if (filters.fonte && r.fonte_macro !== filters.fonte) return false
-    if (filters.sdr && r.nome_sdr !== filters.sdr) return false
-    if (filters.closer && r.nome_closer !== filters.closer) return false
+    if (filters.marca.length && !filters.marca.includes(r.marca ?? '')) return false
+    if (filters.funil.length && !filters.funil.includes(r.nome_funil ?? '')) return false
+    if (filters.fonte.length && !filters.fonte.includes(r.fonte_macro ?? '')) return false
+    if (filters.sdr.length && !filters.sdr.includes(r.nome_sdr ?? '')) return false
+    if (filters.closer.length && !filters.closer.includes(r.nome_closer ?? '')) return false
     return true
   }), [deals, filters])
 
-  const hasFilters = Object.values(filters).some(Boolean)
+  const hasFilters = Object.values(filters).some(v => v.length > 0)
 
   const porMarca = useMemo(
     () => topBreakdown(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
@@ -123,26 +120,16 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
           display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>Filtrar por</span>
-          <select value={filters.marca} onChange={e => setFilters(f => ({ ...f, marca: e.target.value }))} style={selectStyle}>
-            <option value="">Todas as marcas</option>
-            {options.marca.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-          <select value={filters.funil} onChange={e => setFilters(f => ({ ...f, funil: e.target.value }))} style={selectStyle}>
-            <option value="">Todos os funis</option>
-            {options.funil.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-          <select value={filters.fonte} onChange={e => setFilters(f => ({ ...f, fonte: e.target.value }))} style={selectStyle}>
-            <option value="">Todas as fontes</option>
-            {options.fonte.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-          <select value={filters.sdr} onChange={e => setFilters(f => ({ ...f, sdr: e.target.value }))} style={selectStyle}>
-            <option value="">Todos os SDRs</option>
-            {options.sdr.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-          <select value={filters.closer} onChange={e => setFilters(f => ({ ...f, closer: e.target.value }))} style={selectStyle}>
-            <option value="">Todos os Closers</option>
-            {options.closer.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
+          <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: v }))}
+            selected={filters.marca} onChange={v => setFilters(f => ({ ...f, marca: v }))} />
+          <MultiSelect label="Funil" options={options.funil.map(v => ({ value: v, label: v }))}
+            selected={filters.funil} onChange={v => setFilters(f => ({ ...f, funil: v }))} />
+          <MultiSelect label="Fonte" options={options.fonte.map(v => ({ value: v, label: v }))}
+            selected={filters.fonte} onChange={v => setFilters(f => ({ ...f, fonte: v }))} />
+          <MultiSelect label="SDR" options={options.sdr.map(v => ({ value: v, label: v }))}
+            selected={filters.sdr} onChange={v => setFilters(f => ({ ...f, sdr: v }))} />
+          <MultiSelect label="Closer" options={options.closer.map(v => ({ value: v, label: v }))}
+            selected={filters.closer} onChange={v => setFilters(f => ({ ...f, closer: v }))} />
           {hasFilters && (
             <button
               onClick={() => setFilters(EMPTY_FILTERS)}

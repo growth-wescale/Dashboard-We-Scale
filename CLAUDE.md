@@ -137,9 +137,11 @@ src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em l
 src/components/ui/FilterBar.tsx         barra sticky
 src/components/ui/TrapFunnel.tsx          funil visual (trapézios, custo, repetidos) — compartilhado com Performance Detalhada
 src/components/ui/FunilCompletoSection.tsx bloco do funil completo (12 etapas) em Performance Detalhada
-src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no funil)
+src/components/ui/MultiSelect.tsx         multi-seleção estilo Excel — usada pela barra E pelos filtros dos popups
+src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no funil) — filtros MultiSelect por marca/funil/fonte/SDR/closer, opções vêm sempre do próprio recorte
 src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "todas as etapas" (modo Passagens)
-src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos dois popups acima
+src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
+src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
@@ -158,11 +160,18 @@ src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
 
-Modos do card do funil: **Performance** (volume no período), **Aging** (há
-quanto tempo parados), **Atual** (onde estão agora, ignora período). A Visão
-Macro mostra um subconjunto de 7 etapas (MQL → Contato Efetivo → SQL ·
-Reunião Agendada → Diagnóstico → SAL → Oportunidade → Fechamento); o funil
-completo de 12 etapas fica em Performance Detalhada.
+Modos do card do funil: **Performance** (volume no período, `TrapFunnel`),
+**Aging** (há quanto tempo parados) e **Atual** (onde estão agora, ignora
+período) — os dois últimos renderizam `EtapaLeadtimeList`, não o funil visual:
+uma etapa por linha, na mesma sequência de 7 do Performance, com 2 médias —
+tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde o MQL).
+Aging lê de `vw_deal_etapa_periodos` (tempo por etapa) cruzado com
+`data_novo_mql` de `vw_funil_vendas` (tempo em andamento); Atual computa as
+duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
+aging. A Visão Macro mostra um subconjunto de 7 etapas (MQL → Contato
+Efetivo → SQL · Reunião Agendada → Diagnóstico → SAL → Oportunidade →
+Fechamento) em todos os 3 modos; o funil completo de 12 etapas fica em
+Performance Detalhada.
 
 **Multi-seleção de período é união exata, não intervalo.** Selecionar Junho +
 Agosto mostra só esses dois meses — Julho não entra, mesmo estando entre os
@@ -233,6 +242,34 @@ custom fields faz **merge**, não substitui os demais.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-19 — Filtros dos popups viram MultiSelect; popups leves de KPI; Aging/Atual ganham leadtime duplo
+`MultiSelect` saiu de `FilterBar.tsx` pra `src/components/ui/MultiSelect.tsx`
+(junto com `controlStyle`/`labelStyle`/`ordenarOpcoes`) pra ser compartilhado.
+`StageDealsDrawer` (popup ao clicar numa etapa do funil) trocou os 5
+`<select>` nativos (marca/funil/fonte/SDR/closer) por `MultiSelect` — mesmo
+visual da barra, e agora aceita marcar vários valores por filtro, não só um.
+As opções já vinham dos próprios deals do popup (nunca lista fixa); isso não
+mudou, só ganhou `ordenarOpcoes` (ordem pt-BR) no lugar de `.sort()` cru.
+
+Receita, Fechamentos e Vendas por fonte ganharam popup ao clicar — mas leve:
+`SimpleDealsDrawer`, só a lista de deals ganhos (negociação/marca/fonte/
+valor/data), sem filtro nem quebra por marca/responsável como o popup do
+funil. `MetricCard` já suportava `onClick`; `SCard` (local a `FunilVendas.tsx`)
+ganhou a mesma capacidade pro card de Vendas por fonte, que não é MetricCard.
+
+**Aging e Atual pararam de usar Mediana/P75 e de mostrar o funil visual.**
+Viram `EtapaLeadtimeList` — uma linha por etapa, na mesma sequência de 7 do
+Performance (antes Aging ordenava por quantidade de deals, usando a etapa
+crua da view, sem resolver variantes de rótulo pro mesmo StageKey — corrigido
+junto). Cada linha mostra 2 médias: tempo parado NESSA etapa, e tempo em
+andamento no funil inteiro desde o MQL (métrica nova). `computeAging`
+(`aging.ts`) mudou de percentil pra média e ganhou um 3º parâmetro
+(`mqlPorDeal: Map<id_lead, data_novo_mql>`) pra calcular a segunda métrica;
+resolve a etapa com `resolveStage` antes de agrupar. Atual não usa mais
+`vw_deal_etapa_periodos` pra isso — computa as duas datas direto de cada
+`FunnelRow` vivo (`data_<etapa atual>` e `data_novo_mql`), sem depender da
+tabela de aging.
 
 ### 2026-08-19 — Marca vira multi-seleção; card de Meta ganha quebra por marca
 Filtro de Marca era o único ainda com `<select>` nativo (destoava do resto da

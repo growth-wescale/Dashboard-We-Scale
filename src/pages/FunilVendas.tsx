@@ -7,6 +7,7 @@ import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
+import { SimpleDealsDrawer } from '@/components/ui/SimpleDealsDrawer'
 import { RepeatedDealsDrawer } from '@/components/ui/RepeatedDealsDrawer'
 import { TrapFunnel } from '@/components/ui/TrapFunnel'
 import type { FunnelStage } from '@/components/ui/TrapFunnel'
@@ -20,7 +21,7 @@ import { computeAging } from '@/lib/aging'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
-  STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
+  STAGE_DATE_FIELD, STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
   countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage, rowsInLoss,
   rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
@@ -72,10 +73,18 @@ function fmtDias(d: number | null): string {
 
 // ─── AgingList ─────────────────────────────────────────────────────────────────
 
-function AgingList({ linhas, accent }: {
-  linhas: { etapa: string; deals: number; p50: number | null; p75: number | null }[]
-  accent: string
-}) {
+interface EtapaLeadtimeRow {
+  etapa: StageKey
+  label: string
+  deals: number
+  /** Média de dias parados NESSA etapa. */
+  mediaEtapa: number | null
+  /** Média de dias em andamento no funil inteiro (desde o MQL). */
+  mediaAndamento: number | null
+}
+
+/** Lista de etapas com 2 leadtimes — usada pelos modos Aging e Atual. */
+function EtapaLeadtimeList({ linhas, accent }: { linhas: EtapaLeadtimeRow[]; accent: string }) {
   if (linhas.length === 0) {
     return <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', padding: '24px 0' }}>
       Nenhum negócio em aberto no recorte selecionado.
@@ -85,16 +94,16 @@ function AgingList({ linhas, accent }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
         <span>Etapa · negócios parados</span>
-        <span style={{ textAlign: 'right' }}>Mediana</span>
-        <span style={{ textAlign: 'right' }}>P75</span>
+        <span style={{ textAlign: 'right' }}>Média na etapa</span>
+        <span style={{ textAlign: 'right' }}>Média em andamento</span>
       </div>
       {linhas.map(l => (
-        <div key={l.etapa} style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px', gap: 12, alignItems: 'center' }}>
+        <div key={l.etapa} style={{ display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, alignItems: 'center' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-              <span style={{ color: 'var(--ws-text-primary)' }}>{l.etapa}</span>
+              <span style={{ color: 'var(--ws-text-primary)' }}>{l.label}</span>
               <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{nf(l.deals)}</span>
             </div>
             <div style={{ height: 7, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
@@ -102,10 +111,10 @@ function AgingList({ linhas, accent }: {
             </div>
           </div>
           <span style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-primary)' }}>
-            {fmtDias(l.p50)}
+            {fmtDias(l.mediaEtapa)}
           </span>
           <span style={{ textAlign: 'right', fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>
-            {fmtDias(l.p75)}
+            {fmtDias(l.mediaAndamento)}
           </span>
         </div>
       ))}
@@ -145,12 +154,19 @@ function DonutChart({ slices, size = 140 }: { slices: DonutSlice[]; size?: numbe
 
 // ─── SCard / SectionHead / LeadtimeCard ────────────────────────────────────────
 
-function SCard({ children, style, pad = 20 }: { children: ReactNode; style?: CSSProperties; pad?: number }) {
+function SCard({ children, style, pad = 20, onClick }: { children: ReactNode; style?: CSSProperties; pad?: number; onClick?: () => void }) {
   return (
-    <div style={{
-      background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
-      borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: pad, ...style,
-    }}>
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
+        borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-sm)', padding: pad,
+        cursor: onClick ? 'pointer' : undefined, transition: onClick ? 'border-color .15s' : undefined,
+        ...style,
+      }}
+      onMouseEnter={onClick ? e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--brand-accent)' } : undefined}
+      onMouseLeave={onClick ? e => { (e.currentTarget as HTMLDivElement).style.borderColor = '' } : undefined}
+    >
       {children}
     </div>
   )
@@ -291,6 +307,7 @@ export function FunilVendas() {
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
   const [totalRepeatsOpen, setTotalRepeatsOpen] = useState(false)
+  const [popupKpi, setPopupKpi] = useState<'receita' | 'fechamentos' | 'fonte' | null>(null)
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
 
@@ -425,19 +442,9 @@ export function FunilVendas() {
   )
 
   // ── Funil ───────────────────────────────────────────────────────────────────
+  // Só usado no modo Performance — Aging e Atual usam EtapaLeadtimeList (abaixo).
   const funnel = useMemo<FunnelStage[]>(() => {
-    if (modo === 'atual') {
-      // Onde os negócios estão agora. Ignora período de propósito.
-      const porEtapa = new Map<StageKey, number>()
-      for (const r of scoped) {
-        if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') continue
-        const etapa = resolveStage(r.etapa_funil)
-        if (!etapa) continue
-        porEtapa.set(etapa, (porEtapa.get(etapa) ?? 0) + 1)
-      }
-      return MACRO_STAGES.map(s => ({ key: s, label: MACRO_STAGE_LABEL[s] ?? STAGE_LABEL[s], value: porEtapa.get(s) ?? 0 }))
-    }
-
+    if (modo !== 'performance') return []
     const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
     const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
@@ -456,13 +463,75 @@ export function FunilVendas() {
     }))
   }, [modo, scoped, eventos, win, viewModes])
 
+  // MQL de cada deal vivo — alimenta "média em andamento" nos modos Aging e Atual.
+  const mqlPorDealVivo = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of scoped) {
+      if (r.eh_ciclo_atual && r.status_atual === 'Em andamento' && r.data_novo_mql) {
+        map.set(String(r.id_lead), r.data_novo_mql)
+      }
+    }
+    return map
+  }, [scoped])
+
+  // Etapas na mesma sequência do funil Performance — só as que têm negócio parado.
+  function ordenarPorMacroStages(porStageKey: Map<StageKey, { deals: number; mediaEtapa: number | null; mediaAndamento: number | null }>): EtapaLeadtimeRow[] {
+    return MACRO_STAGES
+      .map(s => {
+        const a = porStageKey.get(s)
+        if (!a || a.deals === 0) return null
+        return { etapa: s, label: MACRO_STAGE_LABEL[s] ?? STAGE_LABEL[s], ...a }
+      })
+      .filter((x): x is EtapaLeadtimeRow => x !== null)
+  }
+
   const aging = useMemo(() => {
     if (modo !== 'aging') return []
-    const vivos = new Set(
-      scoped.filter(r => r.eh_ciclo_atual && r.status_atual === 'Em andamento').map(r => String(r.id_lead)),
+    const vivos = new Set(mqlPorDealVivo.keys())
+    const porEtapaRaw = computeAging(periodos, vivos, mqlPorDealVivo)
+    const porStageKey = new Map(
+      porEtapaRaw
+        .map(a => [resolveStage(a.etapa), a] as const)
+        .filter((x): x is [StageKey, typeof porEtapaRaw[number]] => x[0] !== null),
     )
-    return computeAging(periodos, vivos)
-  }, [modo, scoped, periodos])
+    return ordenarPorMacroStages(porStageKey)
+  }, [modo, periodos, mqlPorDealVivo])
+
+  // Atual: mesma lista/leadtimes do Aging, mas a partir da etapa corrente de
+  // cada deal vivo (ignora período de propósito) — sem depender da tabela de
+  // períodos de aging, que só carrega tempo parado numa etapa específica.
+  const atualLeadtime = useMemo(() => {
+    if (modo !== 'atual') return []
+    const agora = Date.now()
+    const DIA_MS = 86_400_000
+    const porStageKey = new Map<StageKey, { deals: number; etapaDias: number[]; andamentoDias: number[] }>()
+
+    for (const r of scoped) {
+      if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') continue
+      const etapa = resolveStage(r.etapa_funil)
+      if (!etapa) continue
+
+      const bucket = porStageKey.get(etapa) ?? { deals: 0, etapaDias: [], andamentoDias: [] }
+      bucket.deals += 1
+
+      const dataEtapa = r[STAGE_DATE_FIELD[etapa]]
+      if (dataEtapa) {
+        const dias = (agora - new Date(dataEtapa).getTime()) / DIA_MS
+        if (!Number.isNaN(dias) && dias >= 0) bucket.etapaDias.push(dias)
+      }
+      if (r.data_novo_mql) {
+        const dias = (agora - new Date(r.data_novo_mql).getTime()) / DIA_MS
+        if (!Number.isNaN(dias) && dias >= 0) bucket.andamentoDias.push(dias)
+      }
+      porStageKey.set(etapa, bucket)
+    }
+
+    const media = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null
+    const resumido = new Map(
+      [...porStageKey.entries()].map(([s, b]) => [s, { deals: b.deals, mediaEtapa: media(b.etapaDias), mediaAndamento: media(b.andamentoDias) }]),
+    )
+    return ordenarPorMacroStages(resumido)
+  }, [modo, scoped])
 
   // Deals por trás da etapa clicada no funil — mesma regra usada pra contar,
   // pra nunca mostrar uma lista diferente do número que a pessoa clicou.
@@ -470,6 +539,26 @@ export function FunilVendas() {
     if (!clickedStage) return []
     return dealsInStage(scoped, eventos, clickedStage, win, viewModes, modo === 'atual' ? 'atual' : 'performance')
   }, [clickedStage, scoped, eventos, win, viewModes, modo])
+
+  // Deals ganhos no recorte — base dos pop-ups leves de Receita/Fechamentos/Vendas por fonte.
+  const ganhosNoPeriodo = useMemo(
+    () => rowsInStage(scoped, 'Fechamento', win, viewModes),
+    [scoped, win, viewModes],
+  )
+  const ganhosPorValor = useMemo(
+    () => [...ganhosNoPeriodo].sort((a, b) => (b.valor_contrato ?? 0) - (a.valor_contrato ?? 0)),
+    [ganhosNoPeriodo],
+  )
+  const ganhosPorData = useMemo(
+    () => [...ganhosNoPeriodo].sort((a, b) => (b.data_venda ?? '').localeCompare(a.data_venda ?? '')),
+    [ganhosNoPeriodo],
+  )
+  const ganhosPorFonte = useMemo(
+    () => [...ganhosNoPeriodo].sort((a, b) =>
+      normalizeFonteMacro(a.fonte_macro).localeCompare(normalizeFonteMacro(b.fonte_macro), 'pt-BR')
+      || (b.valor_contrato ?? 0) - (a.valor_contrato ?? 0)),
+    [ganhosNoPeriodo],
+  )
 
   // Repetidos por etapa — só existe em modo Passagens + Performance (Atual lê
   // a etapa corrente do deal, Aging é outra métrica; nenhum dos dois é passagem).
@@ -722,8 +811,10 @@ export function FunilVendas() {
       {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
         <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={delta(kpis.deltas.receita)} deltaLabel={prevLabel} accent={false}
+          onClick={() => setPopupKpi('receita')}
           description={deltasFull && <DeltaSecundario delta={deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
         <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={delta(kpis.deltas.fechamentos)} deltaLabel={prevLabel} accent={false}
+          onClick={() => setPopupKpi('fechamentos')}
           description={deltasFull && <DeltaSecundario delta={deltasFull.fechamentos} label={`vs. ${prevFullLabel}`} />} />
         <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={delta(kpis.deltas.ticket)} deltaLabel={prevLabel} accent={false}
           description={deltasFull && <DeltaSecundario delta={deltasFull.ticket} label={`vs. ${prevFullLabel}`} />} />
@@ -762,16 +853,18 @@ export function FunilVendas() {
           </div>
           <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
-              ? <AgingList linhas={aging} accent={accent} />
-              : <TrapFunnel stages={funnel} invest={modo === 'performance' ? invest : 0} accent={accent} dark={dark}
-                  onStageClick={key => setClickedStage(key as StageKey)}
-                  repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
-                  noShow={noShow} noShowRepeated={noShowRepeated} />}
+              ? <EtapaLeadtimeList linhas={aging} accent={accent} />
+              : modo === 'atual'
+                ? <EtapaLeadtimeList linhas={atualLeadtime} accent={accent} />
+                : <TrapFunnel stages={funnel} invest={invest} accent={accent} dark={dark}
+                    onStageClick={key => setClickedStage(key as StageKey)}
+                    repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
+                    noShow={noShow} noShowRepeated={noShowRepeated} />}
           </div>
         </SCard>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <SCard>
+          <SCard onClick={() => setPopupKpi('fonte')}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, marginBottom: 4 }}>Vendas por fonte</div>
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>Origem das oportunidades ganhas · fonte macro do CRM</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
@@ -841,6 +934,32 @@ export function FunilVendas() {
         groups={allRepeatedGroups}
         accent={accent}
         multiStage
+      />
+
+      <SimpleDealsDrawer
+        open={popupKpi === 'receita'}
+        onClose={() => setPopupKpi(null)}
+        title="Receita no período"
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        deals={ganhosPorValor}
+        accent={accent}
+      />
+      <SimpleDealsDrawer
+        open={popupKpi === 'fechamentos'}
+        onClose={() => setPopupKpi(null)}
+        title={`Fechamentos${unidadeSufixo}`}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        deals={ganhosPorData}
+        accent={accent}
+      />
+      <SimpleDealsDrawer
+        open={popupKpi === 'fonte'}
+        onClose={() => setPopupKpi(null)}
+        title="Vendas por fonte"
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        deals={ganhosPorFonte}
+        accent={accent}
+        destacarFonte
       />
     </div>
   )

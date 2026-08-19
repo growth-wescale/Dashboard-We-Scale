@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactNode, CSSProperties } from 'react'
-import { Download, TrendingDown, Trophy, Info, X, Repeat, CornerDownRight } from 'lucide-react'
+import { Download, TrendingDown, Trophy, Info, X, Target } from 'lucide-react'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
@@ -8,11 +8,14 @@ import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { RepeatedDealsDrawer } from '@/components/ui/RepeatedDealsDrawer'
+import { TrapFunnel } from '@/components/ui/TrapFunnel'
+import type { FunnelStage } from '@/components/ui/TrapFunnel'
 import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useFunilAging } from '@/hooks/useFunilAging'
+import { useMetaResumo } from '@/hooks/useMetasPerformance'
 import { computeAging } from '@/lib/aging'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
@@ -23,12 +26,28 @@ import {
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
 import {
-  periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
+  mesesDoPeriodo, periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
+import type { PeriodMode } from '@/lib/periodo'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { nf, money, moneyK } from '@/lib/format'
 import { shortMonth } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
+
+/** Subconjunto de etapas mostrado na Visão Macro — o funil completo (12
+ *  etapas) fica na Performance Detalhada, pra não operacionalizar o snapshot
+ *  executivo. Rótulo local: "Oportunidade" em vez do técnico "Oportunidade · COF". */
+const MACRO_STAGES: StageKey[] = [
+  'MQL', 'Contato Efetivo', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF', 'Fechamento',
+]
+const MACRO_STAGE_LABEL: Partial<Record<StageKey, string>> = {
+  'Oportunidade COF': 'Oportunidade',
+}
+
+/** Plural pro rótulo "N ___ selecionados" no subtítulo com multi-seleção. */
+const PERIOD_LABEL_PLURAL: Record<'mes' | 'trimestre' | 'ano', string> = {
+  mes: 'meses', trimestre: 'trimestres', ano: 'anos',
+}
 
 const BRANDS = BRANDS_WITH_OVERVIEW
 
@@ -49,148 +68,6 @@ function fmtMs(ms: number): string {
 function fmtDias(d: number | null): string {
   if (d === null) return '—'
   return d < 1 ? `${Math.round(d * 24)}h` : `${d.toFixed(d < 10 ? 1 : 0)}d`
-}
-
-// ─── TrapFunnel ────────────────────────────────────────────────────────────────
-
-interface FunnelStage { key: string; label: string; value: number }
-
-function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick, noShow, noShowRepeated = 0 }: {
-  stages: FunnelStage[]; invest: number; accent: string; dark: string
-  onStageClick?: (key: string) => void
-  /** Repetidos por etapa — só preenchido em modo Passagens. */
-  repeatedCounts?: Map<string, number>
-  onRepeatClick?: (key: string) => void
-  /** Deals que agendaram e não apareceram — sai do fluxo aqui, não é etapa do funil. */
-  noShow?: number
-  noShowRepeated?: number
-}) {
-  const v0 = Math.max(stages[0]?.value ?? 1, 1)
-  const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
-
-  function shade(i: number) {
-    const pct = Math.max(38, 100 - i * 5)
-    return `color-mix(in srgb, ${accent} ${pct}%, ${dark})`
-  }
-
-  return (
-    <div>
-      {stages.map((s, i) => {
-        const last = i === stages.length - 1
-        const wTop = width(s.value)
-        const wBot = last ? wTop * 0.86 : width(stages[i + 1].value)
-        const insetTop = (100 - wTop) / 2
-        const insetBot = (100 - wBot) / 2
-        // Pode passar de 100%: deals pulam etapas, então o funil não é monotônico.
-        const conv = i > 0 && stages[i - 1].value > 0
-          ? (s.value / stages[i - 1].value) * 100 : null
-        const subiu = conv !== null && conv > 100
-        const cost = invest > 0 && s.value > 0 ? invest / s.value : 0
-        const repeated = repeatedCounts?.get(s.key) ?? 0
-
-        return (
-          <div key={s.key}>
-            {i > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center', padding: '7px 0' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                    <span style={{ color: subiu ? 'var(--status-positivo)' : 'var(--status-risco)', fontSize: 10 }}>
-                      {subiu ? '▲' : '▼'}
-                    </span>
-                    {conv !== null ? conv.toFixed(1) : '—'}%
-                  </span>
-                </div>
-                <div />
-              </div>
-            )}
-            <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center' }}>
-              <div style={{ position: 'relative', height: 46 }}>
-                <div
-                  onClick={onStageClick ? () => onStageClick(s.key) : undefined}
-                  title={onStageClick ? `Ver deals em ${s.label}` : undefined}
-                  style={{
-                    position: 'absolute', inset: 0,
-                    background: shade(i),
-                    clipPath: `polygon(${insetTop}% 0, ${100 - insetTop}% 0, ${100 - insetBot}% 100%, ${insetBot}% 100%)`,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.1,
-                    cursor: onStageClick ? 'pointer' : 'default',
-                  }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>
-                    {nf(s.value)}
-                  </span>
-                  <span style={{ fontSize: 10.5, fontWeight: 500, color: 'rgba(255,255,255,.88)' }}>
-                    {s.label}
-                  </span>
-                </div>
-              </div>
-              {invest > 0 && (
-                <div style={{ lineHeight: 1.3 }}>
-                  <div style={{ fontSize: 10.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                    Custo / {s.label.split(' · ')[0]}
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                    {s.value > 0 ? money(cost) : '—'}
-                  </div>
-                </div>
-              )}
-            </div>
-            {repeated > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '4px 0 6px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => onRepeatClick?.(s.key)}
-                    title={`Ver os ${nf(repeated)} repetidos em ${s.label}`}
-                    style={{
-                      border: 'none', background: 'none', cursor: onRepeatClick ? 'pointer' : 'default', padding: 0,
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      fontSize: 10.5, fontWeight: 600, color: 'var(--status-atencao)', fontFamily: 'var(--font-body)',
-                    }}>
-                    <Repeat size={9} />
-                    +{nf(repeated)} repetido{repeated !== 1 ? 's' : ''}
-                  </button>
-                </div>
-                <div />
-              </div>
-            )}
-            {s.key === 'Reunião Agendada SQL' && !!noShow && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '6px 0 10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <div
-                    onClick={onRepeatClick && noShowRepeated ? () => onRepeatClick('No Show') : undefined}
-                    title="Agendaram e não apareceram — sai do fluxo aqui, não conta como etapa do funil"
-                    style={{
-                      width: `${width(noShow)}%`,
-                      border: '1.5px dashed #000', borderRadius: 8, background: 'transparent',
-                      padding: '5px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      lineHeight: 1.25, cursor: onRepeatClick && noShowRepeated ? 'pointer' : 'default',
-                    }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      fontSize: 11.5, fontWeight: 700, color: 'var(--ws-text-primary)', whiteSpace: 'nowrap',
-                    }}>
-                      <CornerDownRight size={11} />
-                      No-show · {nf(noShow)}
-                    </span>
-                    {noShowRepeated > 0 && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2,
-                        fontSize: 10, fontWeight: 600, color: 'var(--status-atencao)', whiteSpace: 'nowrap',
-                      }}>
-                        <Repeat size={8} />
-                        +{nf(noShowRepeated)} repetido{noShowRepeated !== 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div />
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 // ─── AgingList ─────────────────────────────────────────────────────────────────
@@ -311,6 +188,26 @@ function LeadtimeCard({ label, value, sub, tone, icon }: {
   )
 }
 
+/** Barra de progresso Realizado vs. Meta. `meta` 0 = sem meta cadastrada nesse recorte. */
+function MetaProgresso({ label, realizado, meta, formatter, accent }: {
+  label: string; realizado: number; meta: number; formatter: (n: number) => string; accent: string
+}) {
+  const pctAting = meta > 0 ? Math.min(100, (realizado / meta) * 100) : 0
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+        <span style={{ color: 'var(--ws-text-primary)' }}>{label}</span>
+        <span style={{ fontWeight: 600, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+          {meta > 0 ? `${formatter(realizado)} / ${formatter(meta)}` : '—'}
+        </span>
+      </div>
+      <div style={{ height: 7, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
+        <div style={{ width: `${pctAting}%`, height: '100%', background: accent, borderRadius: 4 }} />
+      </div>
+    </div>
+  )
+}
+
 // ─── ModeToggle ────────────────────────────────────────────────────────────────
 
 function ModeToggle({ value, onChange }: { value: FunnelMode; onChange: (m: FunnelMode) => void }) {
@@ -360,7 +257,7 @@ function DeltaSecundario({ delta, label }: { delta: number | null; label: string
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const { brandKey, periodMode, periodValue, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { brandKey, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
@@ -372,6 +269,12 @@ export function FunilVendas() {
   const marca = brandDef.marca
   const { accent, dark } = brandDef
   const scopeLabel = brandKey === 'overview' ? 'Consolidado' : brandDef.label
+
+  // 2+ períodos selecionados: comparação "vs. período anterior" não faz
+  // sentido pra um conjunto não-contíguo, então some da tela inteira.
+  const multiPeriodo = periodMode !== 'dia' && periodValues.length > 1
+  // Âncora pro cálculo de comparação — só usada quando há exatamente 1 período.
+  const periodValue = periodValues[0] ?? ''
 
   // Comparação sempre com o período anterior de mesma granularidade — mês vs
   // mês, trimestre vs trimestre, ano vs ano — e truncada aos mesmos dias
@@ -385,13 +288,20 @@ export function FunilVendas() {
   // do MTD (mesmos dias corridos do mês anterior, em `prev`), o card mostra
   // também o total do mês anterior INTEIRO, pra quem quer ver o tamanho do
   // mês fechado de referência. Período fechado não precisa disso — MTD e
-  // "inteiro" seriam o mesmo número.
+  // "inteiro" seriam o mesmo número. Nunca em multi-seleção.
   const { emCurso, prevFull } = useMemo(() => {
-    if (periodMode === 'dia') return { emCurso: false, prevFull: null }
+    if (periodMode === 'dia' || multiPeriodo) return { emCurso: false, prevFull: null }
     const emCurso = periodoEmCurso(periodMode, periodValue)
     const prevFull = emCurso ? rangeForPeriod(periodMode, periodoAnterior(periodMode, periodValue)) : null
     return { emCurso, prevFull }
-  }, [periodMode, periodValue])
+  }, [periodMode, periodValue, multiPeriodo])
+
+  // Meses cobertos pela seleção atual — base da meta (mensal por natureza).
+  const mesesMeta = useMemo(() => mesesDoPeriodo(periodMode, periodValues), [periodMode, periodValues])
+  const { data: metaResumo } = useMetaResumo({
+    mesesKeys: mesesMeta,
+    marca: brandKey === 'overview' ? undefined : marca,
+  })
 
   // ── Dados ───────────────────────────────────────────────────────────────────
   const { data: rows, loading, error } = useFunilVendas(marca)
@@ -412,14 +322,26 @@ export function FunilVendas() {
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
   const scope = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
-  const win = useMemo(() => toWindow(null, { from: range.start, to: range.end }), [range.start, range.end])
+  // `ranges` é a união exata dos períodos selecionados (1 ou vários) — nunca
+  // usar `range` (caixa delimitadora) aqui, senão multi-seleção não-contígua
+  // (ex.: Jun + Ago) incluiria Julho por engano.
+  const win = useMemo(
+    () => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))),
+    [ranges],
+  )
   const winPrev = useMemo(() => toWindow(null, { from: prev.start, to: prev.end }), [prev.start, prev.end])
   const winPrevFull = useMemo(
     () => prevFull && toWindow(null, { from: prevFull.start, to: prevFull.end }),
     [prevFull],
   )
 
-  const invest = useMemo(() => curMedia.reduce((s, r) => s + r.spend_brl, 0), [curMedia])
+  // Mídia é buscada num intervalo único (min–max da seleção) mas somada só
+  // pras linhas cujo dia cai de fato em algum dos períodos selecionados —
+  // mesma união exata usada pra filtrar deals.
+  const invest = useMemo(
+    () => curMedia.reduce((s, r) => s + (ranges.some(rg => r.dia >= rg.start && r.dia <= rg.end) ? r.spend_brl : 0), 0),
+    [curMedia, ranges],
+  )
   const prevInvest = useMemo(() => prevMedia.reduce((s, r) => s + r.spend_brl, 0), [prevMedia])
 
   /** Deals do escopo (marca já veio filtrada do servidor). */
@@ -448,15 +370,15 @@ export function FunilVendas() {
         if (!etapa) continue
         porEtapa.set(etapa, (porEtapa.get(etapa) ?? 0) + 1)
       }
-      return STAGE_ORDER.map(s => ({ key: s, label: STAGE_LABEL[s], value: porEtapa.get(s) ?? 0 }))
+      return MACRO_STAGES.map(s => ({ key: s, label: MACRO_STAGE_LABEL[s] ?? STAGE_LABEL[s], value: porEtapa.get(s) ?? 0 }))
     }
 
     const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
     const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
-    return STAGE_ORDER.map(s => ({
+    return MACRO_STAGES.map(s => ({
       key: s,
-      label: STAGE_LABEL[s],
+      label: MACRO_STAGE_LABEL[s] ?? STAGE_LABEL[s],
       // Fechamento não é etapa no histórico — venda é um tipo de evento à parte.
       // Procurar por etapa "Fechamento" nos eventos devolvia sempre zero, e a
       // venda sumia da tela ao ligar Passagens. Sempre pela trava de venda.
@@ -637,19 +559,25 @@ export function FunilVendas() {
   const prevLabel = `vs. ${shortMonth(prev.start)}`
     + (emCurso && periodMode !== 'dia' ? ` (${SUFIXO_EM_CURSO[periodMode]})` : '')
   const prevFullLabel = prevFull ? `${shortMonth(prevFull.start)} inteiro` : ''
+  // Comparação não faz sentido com 2+ períodos selecionados — some da tela.
+  const delta = (v: number | null) => multiPeriodo ? undefined : v ?? undefined
+  const deltasFull = multiPeriodo ? undefined : kpis.deltasFull
 
   const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
+  const subtitlePeriodo = multiPeriodo
+    ? `${periodValues.length} ${PERIOD_LABEL_PLURAL[periodMode as Exclude<PeriodMode, 'dia'>]} selecionados`
+    : `${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`
 
   return (
     <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
       {...(brandKey !== 'overview' ? { 'data-brand': brandKey } : {})}>
 
       <PageTop
-        title="Funil de Vendas"
-        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        title="Visão Macro"
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         actions={
           <button
-            onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `funil-vendas-${marca ?? 'todas'}-${range.start}-${range.end}`)}
+            onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `visao-macro-${marca ?? 'todas'}-${range.start}-${range.end}`)}
             disabled={!scoped.length}
             title={!scoped.length ? 'Sem dados no período' : 'Exportar deals do recorte em CSV'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: scoped.length ? 'pointer' : 'not-allowed', fontFamily: 'var(--font-body)', opacity: scoped.length ? 1 : 0.5 }}
@@ -661,7 +589,7 @@ export function FunilVendas() {
 
       <FilterBar fontesDisponiveis={fontesDisponiveis} subFontesDisponiveis={subFontesDisponiveis} />
 
-      <QueryErrorBanner errors={[error]} scope="Funil de Vendas" />
+      <QueryErrorBanner errors={[error]} scope="Visão Macro" />
 
       {notice && notice.mostrar_banner && notice.id !== dismissedNoticeId && (
         <div style={{
@@ -688,16 +616,16 @@ export function FunilVendas() {
 
       {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-        <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={kpis.deltas.receita ?? undefined} deltaLabel={prevLabel} accent={false}
-          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
-        <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={kpis.deltas.fechamentos ?? undefined} deltaLabel={prevLabel} accent={false}
-          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.fechamentos} label={`vs. ${prevFullLabel}`} />} />
-        <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={kpis.deltas.ticket ?? undefined} deltaLabel={prevLabel} accent={false}
-          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.ticket} label={`vs. ${prevFullLabel}`} />} />
-        <MetricCard style={metricStyle} label="Conversão MQL→Ganho" value={kpis.convGlobal.toFixed(1)} unit="%" delta={kpis.deltas.convGlobal ?? undefined} deltaLabel={prevLabel} accent={false}
-          description={kpis.deltasFull && <DeltaSecundario delta={kpis.deltasFull.convGlobal} label={`vs. ${prevFullLabel}`} />} />
-        <MetricCard style={metricStyle} label="CAC (custo/ganho)" value={kpis.cac > 0 ? money(kpis.cac) : '—'} delta={kpis.deltas.cac ?? undefined} deltaLabel={prevLabel} invertDelta accent={false} />
-        <MetricCard style={metricStyle} label="ROAS de mídia" value={kpis.roas > 0 ? kpis.roas.toFixed(1) + 'x' : '—'} delta={kpis.deltas.roas ?? undefined} deltaLabel={prevLabel} accent={false} />
+        <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={delta(kpis.deltas.receita)} deltaLabel={prevLabel} accent={false}
+          description={deltasFull && <DeltaSecundario delta={deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={delta(kpis.deltas.fechamentos)} deltaLabel={prevLabel} accent={false}
+          description={deltasFull && <DeltaSecundario delta={deltasFull.fechamentos} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={delta(kpis.deltas.ticket)} deltaLabel={prevLabel} accent={false}
+          description={deltasFull && <DeltaSecundario delta={deltasFull.ticket} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label="Conversão MQL→Ganho" value={kpis.convGlobal.toFixed(1)} unit="%" delta={delta(kpis.deltas.convGlobal)} deltaLabel={prevLabel} accent={false}
+          description={deltasFull && <DeltaSecundario delta={deltasFull.convGlobal} label={`vs. ${prevFullLabel}`} />} />
+        <MetricCard style={metricStyle} label="CAC (custo/ganho)" value={kpis.cac > 0 ? money(kpis.cac) : '—'} delta={delta(kpis.deltas.cac)} deltaLabel={prevLabel} invertDelta accent={false} />
+        <MetricCard style={metricStyle} label="ROAS de mídia" value={kpis.roas > 0 ? kpis.roas.toFixed(1) + 'x' : '—'} delta={delta(kpis.deltas.roas)} deltaLabel={prevLabel} accent={false} />
       </div>
 
       {/* ── Funil + laterais ─────────────────────────────────────────────────── */}
@@ -757,20 +685,15 @@ export function FunilVendas() {
             </div>
           </SCard>
 
-          <SCard pad={18} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600 }}>
-              Conversão global
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 34, color: accent }}>
-                {kpis.convGlobal.toFixed(1)}%
-              </span>
-              <span style={{ fontSize: 12.5, color: 'var(--ws-text-secondary)' }}>MQL → fechamento</span>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-              {nf(kpis.fechamentos)} ganhos de {nf(kpis.mql)} MQLs no período
-            </div>
-          </SCard>
+          {mesesMeta.length > 0 && (
+            <SCard pad={18} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600 }}>
+                <Target size={13} /> Meta do período
+              </div>
+              <MetaProgresso label="Receita" realizado={kpis.receita} meta={metaResumo.metaFinanceira} formatter={moneyK} accent={accent} />
+              <MetaProgresso label="Fechamentos" realizado={kpis.fechamentos} meta={metaResumo.metaQtdVendas} formatter={nf} accent={accent} />
+            </SCard>
+          )}
         </div>
       </div>
 
@@ -786,8 +709,8 @@ export function FunilVendas() {
         open={clickedStage !== null}
         onClose={() => setClickedStage(null)}
         stage={clickedStage}
-        stageLabel={clickedStage ? STAGE_LABEL[clickedStage] : ''}
-        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        stageLabel={clickedStage ? (MACRO_STAGE_LABEL[clickedStage] ?? STAGE_LABEL[clickedStage]) : ''}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         deals={dealsDoClique}
         accent={accent}
       />
@@ -796,7 +719,7 @@ export function FunilVendas() {
         open={clickedRepeatStage !== null}
         onClose={() => setClickedRepeatStage(null)}
         title={clickedRepeatStage ? `Repetidos · ${STAGE_LABEL[clickedRepeatStage]}` : ''}
-        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         groups={repeatedGroupsDoClique}
         accent={accent}
       />
@@ -805,7 +728,7 @@ export function FunilVendas() {
         open={totalRepeatsOpen}
         onClose={() => setTotalRepeatsOpen(false)}
         title="Repetidos · todas as etapas"
-        subtitle={`${scopeLabel} · ${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         groups={allRepeatedGroups}
         accent={accent}
         multiStage

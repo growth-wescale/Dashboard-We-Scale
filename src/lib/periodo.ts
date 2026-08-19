@@ -203,3 +203,28 @@ export function opcoesPara(mode: Exclude<PeriodMode, 'dia'>, hoje = new Date()):
   if (mode === 'trimestre') return opcoesTrimestres(hoje)
   return opcoesAnos(hoje)
 }
+
+/**
+ * Meses ('YYYY-MM') cobertos pelos períodos selecionados — usado pra somar
+ * meta mensal (`DB_Metas_Performance`) sob um período de granularidade
+ * maior. Modo 'dia' não tem meta mensal correspondente: vazio de propósito.
+ */
+export function mesesDoPeriodo(mode: PeriodMode, values: string[]): string[] {
+  if (mode === 'dia') return []
+  const out = new Set<string>()
+  for (const v of values) {
+    if (mode === 'mes') {
+      if (/^\d{4}-\d{2}$/.test(v)) out.add(v)
+    } else if (mode === 'trimestre') {
+      const m = /^(\d{4})-Q([1-4])$/.exec(v)
+      if (!m) continue
+      const y = Number(m[1]), mesInicio = (Number(m[2]) - 1) * 3 + 1
+      for (let i = 0; i < 3; i++) out.add(`${y}-${pad(mesInicio + i)}`)
+    } else {
+      const m = /^(\d{4})$/.exec(v)
+      if (!m) continue
+      for (let mes = 1; mes <= 12; mes++) out.add(`${m[1]}-${pad(mes)}`)
+    }
+  }
+  return [...out].sort()
+}

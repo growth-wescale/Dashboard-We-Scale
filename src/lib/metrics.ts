@@ -52,17 +52,33 @@ export interface PeriodWindow {
   /** Conjunto de 'YYYY-MM'. Vazio = qualquer mês. */
   activePeriods: Set<string>
   dateRange: { from: string; to: string } | null
+  /**
+   * União de ranges (multi-seleção de período: vários meses/trimestres/anos
+   * não necessariamente contíguos). Cada range já vem truncado em "hoje"
+   * individualmente quando é o período em curso — ver `rangeForPeriod`.
+   * Prioridade sobre `dateRange` quando presente.
+   */
+  ranges: { from: string; to: string }[] | null
 }
 
 export function toWindow(
   activePeriods?: Set<string> | null,
   dateRange?: { from: string; to: string } | null,
+  ranges?: { from: string; to: string }[] | null,
 ): PeriodWindow {
-  return { activePeriods: activePeriods ?? new Set<string>(), dateRange: dateRange ?? null }
+  return {
+    activePeriods: activePeriods ?? new Set<string>(),
+    dateRange: dateRange ?? null,
+    ranges: ranges ?? null,
+  }
 }
 
 /** A data cai na janela? Sempre avaliada em horário de Brasília. */
 export function isInWindow(dateStr: string | null | undefined, win: PeriodWindow): boolean {
+  if (win.ranges && win.ranges.length > 0) {
+    const d = toLocalDate(dateStr)
+    return !!d && win.ranges.some(r => d >= r.from && d <= r.to)
+  }
   if (win.dateRange) {
     const d = toLocalDate(dateStr)
     return !!d && d >= win.dateRange.from && d <= win.dateRange.to

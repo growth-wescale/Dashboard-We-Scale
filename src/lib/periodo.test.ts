@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  opcoesAnos, opcoesMeses, opcoesTrimestres, periodoAnterior, periodoAtual, periodoEmCurso,
+  mesesDoPeriodo, opcoesAnos, opcoesMeses, opcoesTrimestres, periodoAnterior, periodoAtual, periodoEmCurso,
   rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
 
@@ -163,5 +163,29 @@ describe('opções do seletor', () => {
   it('lida com o piso caindo no mesmo período de hoje', () => {
     expect(opcoesMeses(HOJE, '2026-08')).toEqual([{ value: '2026-08', label: 'Agosto 2026' }])
     expect(opcoesAnos(HOJE, '2026-01')).toEqual([{ value: '2026', label: '2026' }])
+  })
+})
+
+describe('mesesDoPeriodo', () => {
+  it('modo mês devolve os próprios valores', () => {
+    expect(mesesDoPeriodo('mes', ['2026-06', '2026-08'])).toEqual(['2026-06', '2026-08'])
+  })
+
+  it('modo trimestre expande pros 3 meses', () => {
+    expect(mesesDoPeriodo('trimestre', ['2026-Q1'])).toEqual(['2026-01', '2026-02', '2026-03'])
+  })
+
+  it('modo ano expande pros 12 meses', () => {
+    expect(mesesDoPeriodo('ano', ['2026'])).toHaveLength(12)
+  })
+
+  it('deduplica meses de seleções sobrepostas', () => {
+    expect(mesesDoPeriodo('trimestre', ['2026-Q1', '2026-Q2'])).toEqual([
+      '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06',
+    ])
+  })
+
+  it('modo dia não tem meta mensal correspondente', () => {
+    expect(mesesDoPeriodo('dia', ['qualquer'])).toEqual([])
   })
 })

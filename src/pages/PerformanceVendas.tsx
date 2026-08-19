@@ -13,6 +13,7 @@ import { currentMonthRange, monthLabelLong as monthLabel, fmtBR, daysInMonth, da
 import { SCard, KTile } from '@/components/ui/v2'
 import { downloadCsv } from '@/lib/csv'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { FunilCompletoSection } from '@/components/ui/FunilCompletoSection'
 
 const BRANDS = BRANDS_WITH_OVERVIEW
 
@@ -528,6 +529,8 @@ export function PerformanceVendas() {
           })}
         </SCard>
       </div>
+
+      <FunilCompletoSection />
 
       <div style={{ marginTop: 40, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center' }}>
         Período: {fmtBR(start)} – {fmtBR(end)} · Fonte: <code>vw_funil_compat</code> + <code>DB_Metas_Performance</code>

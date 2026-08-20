@@ -89,9 +89,22 @@ const BRT_DATE = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 })
 
-/** timestamptz -> 'YYYY-MM-DD' em Brasília. Null para entrada vazia ou inválida. */
+/** 'YYYY-MM-DD', sem hora nem fuso — ex.: a coluna `dia` de vw_funil_etapas_v2. */
+const DATA_PURA = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * timestamptz -> 'YYYY-MM-DD' em Brasília. Null para entrada vazia ou inválida.
+ *
+ * Data pura (sem hora) passa direto, sem conversão de fuso — ela já é o dia
+ * certo. Se cair no `new Date(value)` de baixo, o JS interpreta 'YYYY-MM-DD'
+ * como meia-noite UTC (não meia-noite local!), e formatar isso em Brasília
+ * (UTC-3) devolve o dia ANTERIOR — bug real: filtro de um único dia (ex.:
+ * "19/08") ficava sempre vazio, porque todo evento daquele dia virava o dia
+ * 18 e caía fora da janela de exatamente um dia.
+ */
 export function toLocalDate(value: string | null | undefined): string | null {
   if (!value) return null
+  if (DATA_PURA.test(value)) return value
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return null
   return BRT_DATE.format(d) // en-CA já formata como YYYY-MM-DD

@@ -227,6 +227,13 @@ header Authorization. Campos obrigatórios vazios (ex.: Marca) fazem qualquer
 `PUT` falhar com 422 — o erro vem em `deal_required_custom_fields`. `PUT` de
 custom fields faz **merge**, não substitui os demais.
 
+**`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
+noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
+Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
+`timestamptz` sempre chegam com hora e não têm esse problema. `toLocalDate`
+(`dateUtils.ts`) já trata isso: string no formato `YYYY-MM-DD` passa direto,
+sem conversão de fuso.
+
 ---
 
 ## 8. Pendências conhecidas
@@ -243,6 +250,38 @@ custom fields faz **merge**, não substitui os demais.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-20 — Achada a causa real do filtro de 1 dia zerando o funil
+O calendário novo (ontem) resolveu a UX, mas o Junior reportou que selecionar
+um único dia (ex.: 19/08 a 19/08) ainda zerava o funil inteiro — enquanto um
+range de 2 dias (18/08–19/08) mostrava dado normalmente. Sintoma exato: bug
+de fuso horário, não de UI.
+
+Causa raiz: `toLocalDate` (`dateUtils.ts`) fazia `new Date(value)` pra
+qualquer entrada, presumindo sempre `timestamptz`. Mas `vw_funil_etapas_v2.dia`
+(base do funil em modo Performance/Passagens, via `useFunilEventos`) é uma
+coluna `date` **pura, sem hora**. `new Date('2026-08-19')` (sem hora) o
+JavaScript interpreta como **meia-noite UTC**, não meia-noite local — e
+formatar isso em Brasília (UTC-3) devolve **18/08**, o dia anterior. Todo
+evento de 19/08 virava 18/08 e caia fora de uma janela de exatamente um dia
+(19 a 19); numa janela de 2 dias (18–19) o evento deslocado ainda caía
+dentro, escondendo o bug.
+
+Confirmado direto no banco antes de mexer no código: `vw_funil_etapas_v2`
+tinha 182 eventos em 19/08 e 129 em 18/08 — não era falta de dado, era o
+dia sendo computado errado no cliente. `toLocalDate` agora detecta string
+`YYYY-MM-DD` pura (sem hora) e devolve direto, sem tentar converter fuso —
+só datas com hora (`timestamptz`) passam pela conversão UTC→Brasília. Corrige
+tanto o filtro de janela (`isInWindow`) quanto a deduplicação por mês em
+modo "Deals únicos" (`toLocalYearMonth`, usado em `eventsInStage` e
+`groupRepeatedDeals`) e a data exibida nos pop-ups de deal (`fmtData`) —
+todos liam da mesma função. Novo `dateUtils.test.ts` trava o caso.
+
+O fix de "min/max cruzados" nos dois `<input type="date">` de ontem era uma
+correção real (evitava range invertido), mas não era a causa deste zero
+específico — o bug estava um nível abaixo, na conversão de data, e só
+apareceu de forma visível depois que o calendário novo tornou trivial
+selecionar exatamente um dia.
 
 ### 2026-08-19 — Filtro de Dia vira calendário com atalhos, no lugar de 2 inputs nativos
 Selecionar um range no modo Dia exigia abrir o calendário nativo duas vezes

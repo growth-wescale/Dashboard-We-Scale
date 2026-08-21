@@ -393,15 +393,23 @@ export interface FunnelEventRow {
 }
 
 /**
- * Etapas que só contam num funil específico.
+ * Etapas que só contam em funis específicos.
  *
  * "Reunião Agendada SQL" existe no funil do SDR e no do Closer. Quando o SDR
  * agenda, o negócio migra para o Closer e a MESMA reunião gera dois eventos —
  * o que inflava o SQL de 71 para 144. Regra do negócio: vale a etapa do Closer;
  * duas reuniões só quando o deal reentra nela.
+ *
+ * O funil Odonto Scale é a exceção: é fechado, o negócio vai do MQL à venda
+ * dentro dele, sem handoff. Não há evento duplicado a descartar, então a etapa
+ * de agendamento dele também vale — senão a marca aparece com reunião
+ * realizada e zero agendamento.
  */
-const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, string>> = {
-  'Reunião Agendada SQL': '69b1badfe1def700137f1b89', // Closer
+const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, readonly string[]>> = {
+  'Reunião Agendada SQL': [
+    '69b1badfe1def700137f1b89', // Closer
+    '68b84341646c55001ed64e53', // Odonto Scale
+  ],
 }
 
 export interface EventCountOptions {
@@ -438,11 +446,11 @@ export function eventsInStage(
     typeof optsOrExtra === 'function' ? { extra: optsOrExtra } : (optsOrExtra ?? {})
   const cohort = modes.funnelView === 'cohort' ? (opts.cohortIds ?? null) : null
   const alvo = resolveStage(stageLabel)
-  const idObrigatorio = alvo ? STAGE_ID_OBRIGATORIO[alvo] : undefined
+  const idsObrigatorios = alvo ? STAGE_ID_OBRIGATORIO[alvo] : undefined
 
   const elegiveis = events.filter(e => {
     if (resolveStage(e.etapa_canonica) !== alvo) return false
-    if (idObrigatorio && e.id_etapa !== idObrigatorio) return false
+    if (idsObrigatorios && !idsObrigatorios.includes(e.id_etapa ?? '')) return false
     if (cohort) {
       if (!cohort.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))) return false
     } else if (!isInWindow(e.dia, win)) return false

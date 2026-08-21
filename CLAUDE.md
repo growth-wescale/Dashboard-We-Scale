@@ -100,9 +100,12 @@ preenchida não basta — deals revertidos mantêm a data.
 evento*, não etapa. Contar Fechamento sempre pela trava de venda, nunca
 procurando etapa no event sourcing.
 
-**"Reunião Agendada SQL" só conta no funil do Closer** (`69b1badfe1def700137f1b89`).
-A etapa existe também no SDR, e o handoff SDR→Closer gera dois eventos para a
-mesma reunião. Duas reuniões só quando o deal **reentra** na etapa do Closer.
+**"Reunião Agendada SQL" só conta na etapa do Closer** (`69b1badfe1def700137f1b89`)
+**ou na do funil Odonto Scale** (`68b84341646c55001ed64e53`). A etapa existe
+também no SDR, e o handoff SDR→Closer gera dois eventos para a mesma reunião —
+por isso a do SDR não conta. Duas reuniões só quando o deal **reentra** na
+etapa. O funil Odonto Scale é a exceção porque é fechado: o negócio vai do MQL
+à venda dentro dele, sem handoff, então não há evento duplicado a descartar.
 
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
@@ -250,6 +253,52 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-21 — Relatório diário do n8n vs. dashboard: 2 × 3 reuniões
+O Brunno reportou que o relatório de 20/08 mostrava 2 reuniões diagnóstico
+enquanto a Visão Macro mostrava 3. Não era fuso: os 3 eventos do dia estão às
+17:26, 17:26 e 18:02 de Brasília, longe da virada.
+
+**Causa raiz: allowlist de funis diferente.** A RPC
+`relatorio_expansao_metricas` filtrava `nome_funil IN ('SDR','Closer')` em todo
+lugar; o dashboard filtra pelos deals de `vw_funil_vendas`, cuja allowlist é
+SDR + Closer + Prospecção Ativa + **Odonto Scale**. A 3ª reunião era um deal do
+funil "Odonto Scale", que a RPC descartava. Pior: a marca já aparecia na tabela
+por marca do e-mail (entra pelas metas), zerada — parecia dado, era exclusão.
+
+**Achado no caminho: o bloco do DIA só contava a primeira passagem da vida do
+deal.** `ev_dia` fazia `min(data_evento)` sobre o histórico **inteiro**, sem
+recorte de período, e só depois testava se essa data caía no dia. Um deal que
+voltasse ao Diagnóstico nunca era contado de novo, em dia nenhum — 3 de 46
+eventos de agosto sumiam assim.
+
+Decisões do Junior: incluir **Odonto Scale** (Prospecção Ativa continua fora) e
+trocar o DIA para **passagens**, com duas passagens pela mesma etapa no mesmo
+dia contando uma vez só (erro de operação no CRM).
+
+Aplicado na migration `rpc_relatorio_expansao_v10_odonto_scale_e_passagens_dia`:
+allowlist num CTE `cfg` só (usada por `lig`, DIA e MTD), e `ev_dia`/`dia_flat`
+viraram `dia_pass` — `SELECT DISTINCT (id_deal, ind, dia)` sobre os eventos do
+período. `marcas_validas` ficou de propósito ancorada em SDR/Closer: só filtra
+metas, "Odonto Scale" já entrava por ali, e ampliar traria marcas sem meta
+(Premium Club) para dentro de `metas_geral`. O MTD só ganhou a allowlist —
+continua contando deal único por etapa no mês, a pedido do Junior, senão todas
+as conversões-chave mudariam de patamar.
+
+**Dedup por dia não substitui a trava de funil em Agendamentos.** Em agosto são
+199 passagens brutas de "Reunião Agendada SQL" (94 SDR + 103 Closer + 2 Odonto
+Scale); deduplicar por (deal, etapa, dia) só remove 70 do handoff, sobrando 129
+em vez dos 105 corretos. As duas regras convivem: trava de etapa **e** dedup.
+
+**Lado do dashboard**, `STAGE_ID_OBRIGATORIO` (`metrics.ts`) mapeava a etapa
+para **um** id; virou lista, com o id da Odonto Scale junto — senão a marca
+apareceria com reunião realizada e zero agendamento (o funil dela é fechado,
+não tem handoff a desduplicar). 2 testes novos em `metrics.test.ts`.
+
+Verificado dia a dia em todo agosto (01 a 21): RPC e regra do dashboard batem
+em Agendamentos, Diagnóstico e SAL nos 21 dias. Em 20/08: 9 / 3 / 0 dos dois
+lados. O n8n não precisou mudar — `MARCAS_VALIDAS` do gerador de HTML já
+listava "Odonto Scale".
 
 ### 2026-08-21 — Conexão entra no funil da Visão Macro
 Junior pediu a etapa **Conexão** logo depois de Contato Efetivo. A Visão Macro

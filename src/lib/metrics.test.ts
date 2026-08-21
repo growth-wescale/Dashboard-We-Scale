@@ -372,6 +372,32 @@ describe('Reunião Agendada SQL — só a etapa do Closer', () => {
   })
 })
 
+// O funil Odonto Scale é fechado: a negociação vai do MQL à venda dentro dele,
+// sem handoff para o Closer. Logo a etapa de agendamento dele também vale — do
+// contrário a marca aparece com reunião realizada e zero agendamento.
+describe('Reunião Agendada SQL — funil Odonto Scale', () => {
+  const ETAPA_ODONTO = '68b84341646c55001ed64e53'
+  const ev = (funil: string, id_etapa: string, over: Partial<FunnelEventRow> = {}): FunnelEventRow => ({
+    id_deal: 'os1', dia: '2026-08-05', marca: 'Odonto Scale',
+    etapa_canonica: 'Reunião Agendada SQL', id_etapa, nome_funil: funil,
+    ciclo: 1, rn_deal_etapa_mes: 1, ...over,
+  })
+
+  it('conta a etapa de agendamento do próprio funil da marca', () => {
+    expect(countStageEvents([ev('Odonto Scale', ETAPA_ODONTO)], 'Reunião Agendada SQL', AGOSTO,
+      modes({ eventSource: 'passages' }))).toBe(1)
+  })
+
+  it('continua ignorando a etapa homônima do SDR quando as duas aparecem', () => {
+    const mix = [
+      ev('SDR', '69380917e00ed10014daaa68', { id_deal: 'd9' }),
+      ev('Odonto Scale', ETAPA_ODONTO),
+    ]
+    expect(countStageEvents(mix, 'Reunião Agendada SQL', AGOSTO,
+      modes({ eventSource: 'passages' }))).toBe(1)
+  })
+})
+
 // ── Conversão ──────────────────────────────────────────────────────────────
 
 describe('conversion', () => {

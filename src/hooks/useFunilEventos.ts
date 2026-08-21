@@ -9,8 +9,18 @@ import type { FunnelEventRow } from '@/lib/metrics'
  * isso o hook aceita `enabled` e não busca nada quando desligado: são ~19 mil
  * eventos que não fazem falta no modo padrão.
  *
- * A view não expõe fonte_macro nem utm_source. O filtro de fonte é aplicado
- * depois, cruzando `id_deal` com o conjunto já filtrado de `vw_funil_vendas`.
+ * A view não expõe fonte_macro nem utm_source. O filtro de MARCA, fonte e
+ * sub-fonte é aplicado depois, cruzando `id_deal` com o conjunto já filtrado
+ * de `vw_funil_vendas`.
+ *
+ * NÃO filtrar por marca no servidor. A coluna `marca` daqui vem de
+ * `deal_eventos.marca` — um retrato denormalizado gravado na ingestão, nulo em
+ * ~17% dos eventos de agosto/26 (a origem `api_backfill_stage_history` nunca
+ * preenche). Um `.eq('marca', ...)` descartava 87% dos eventos da janela e o
+ * funil de uma marca sozinha aparecia zerado, enquanto duas marcas juntas
+ * (que caem no filtro do cliente) mostravam o número certo. A marca confiável
+ * é a do deal, em `vw_funil_vendas` — mesma escolha da RPC do relatório
+ * diário, que lê `deal_snapshot.marca`.
  */
 
 const PAGE_SIZE = 1000
@@ -18,12 +28,11 @@ const PAGE_SIZE = 1000
 // id_etapa é obrigatório: etapas homônimas em funis diferentes ("Reunião
 // Agendada SQL" no SDR e no Closer) só se distinguem por ele.
 const COLS = [
-  'id_deal', 'dia', 'marca', 'etapa_canonica', 'id_etapa', 'nome_funil', 'ciclo', 'rn_deal_etapa_mes',
+  'id_deal', 'dia', 'etapa_canonica', 'id_etapa', 'nome_funil', 'ciclo', 'rn_deal_etapa_mes',
 ].join(',')
 
 interface Params {
   enabled: boolean
-  marca?: string
   inicio: string
   /** Omitido no modo safra: o evento pode ser posterior à janela do MQL. */
   fim?: string
@@ -47,7 +56,6 @@ async function fetchAll(p: Params): Promise<{ rows: FunnelEventRow[]; error: str
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
 
     if (p.fim) q = q.lte('dia', p.fim)
-    if (p.marca) q = q.eq('marca', p.marca)
 
     const { data, error } = await q
     if (error) return { rows: [], error: error.message }
@@ -65,16 +73,16 @@ export function useFunilEventos(p: Params): UseFunilEventosResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { enabled, marca, inicio, fim } = p
+  const { enabled, inicio, fim } = p
 
   const load = useCallback(async () => {
     if (!enabled) { setData([]); setError(null); setLoading(false); return }
     setLoading(true)
-    const { rows, error: err } = await fetchAll({ enabled, marca, inicio, fim })
+    const { rows, error: err } = await fetchAll({ enabled, inicio, fim })
     setError(err)
     if (!err) setData(rows)
     setLoading(false)
-  }, [enabled, marca, inicio, fim])
+  }, [enabled, inicio, fim])
 
   useEffect(() => { void load() }, [load])
 

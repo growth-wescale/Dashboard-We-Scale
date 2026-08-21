@@ -278,7 +278,6 @@ describe('countStageEvents', () => {
   const ev = (over: Partial<FunnelEventRow>): FunnelEventRow => ({
     id_deal: 'd1',
     dia: '2026-08-05',
-    marca: 'Inpot',
     etapa_canonica: 'Contato Efetivo',
     id_etapa: 'et-generica',
     nome_funil: 'SDR',
@@ -342,7 +341,7 @@ describe('countStageEvents', () => {
 describe('Reunião Agendada SQL — só a etapa do Closer', () => {
   const ETAPA_CLOSER = '69b1badfe1def700137f1b89'
   const evSql = (funil: string, id_etapa: string, over: Partial<FunnelEventRow> = {}): FunnelEventRow => ({
-    id_deal: 'd1', dia: '2026-08-05', marca: 'Inpot',
+    id_deal: 'd1', dia: '2026-08-05',
     etapa_canonica: 'Reunião Agendada SQL', id_etapa, nome_funil: funil,
     ciclo: 1, rn_deal_etapa_mes: 1, ...over,
   })
@@ -369,6 +368,33 @@ describe('Reunião Agendada SQL — só a etapa do Closer', () => {
       evSql('Closer', ETAPA_CLOSER, { rn_deal_etapa_mes: 2 }),
     ]
     expect(countStageEvents(rnDoSdr, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'unique' }))).toBe(1)
+  })
+})
+
+// O recorte por marca NUNCA sai do evento. `vw_funil_etapas_v2.marca` vem de
+// `deal_eventos.marca`, um retrato gravado na ingestão que fica nulo em boa
+// parte da base — filtrar por ele (o hook fazia isso no servidor com 1 marca
+// selecionada) derrubava ~87% dos eventos e zerava o funil da marca sozinha.
+// A marca confiável é a do deal, em `vw_funil_vendas`, e entra pelo `extra`.
+describe('recorte por marca vem dos deals, nunca do evento', () => {
+  const ev = (id_deal: string): FunnelEventRow => ({
+    id_deal, dia: '2026-08-05', etapa_canonica: 'Novo MQL',
+    id_etapa: 'et-mql', nome_funil: 'SDR', ciclo: 1, rn_deal_etapa_mes: 1,
+  })
+  const eventos = [ev('d1'), ev('d2'), ev('d3')]
+
+  it('conta todos os eventos dos deals do escopo, sem depender de marca no evento', () => {
+    const idsEscopo = new Set(['d1', 'd2', 'd3'])
+    expect(countStageEvents(eventos, 'MQL', AGOSTO, modes(), {
+      extra: e => idsEscopo.has(String(e.id_deal)),
+    })).toBe(3)
+  })
+
+  it('deixa de fora o evento de deal que não está no escopo', () => {
+    const idsEscopo = new Set(['d1'])
+    expect(countStageEvents(eventos, 'MQL', AGOSTO, modes(), {
+      extra: e => idsEscopo.has(String(e.id_deal)),
+    })).toBe(1)
   })
 })
 
@@ -441,7 +467,6 @@ describe('dealsInStage', () => {
   const ev = (over: Partial<FunnelEventRow>): FunnelEventRow => ({
     id_deal: 'd1',
     dia: '2026-08-05',
-    marca: 'Inpot',
     etapa_canonica: 'Contato Efetivo',
     id_etapa: 'et-generica',
     nome_funil: 'SDR',
@@ -514,7 +539,6 @@ describe('repeatedDealsInStage', () => {
   const ev = (over: Partial<FunnelEventRow>): FunnelEventRow => ({
     id_deal: 'd1',
     dia: '2026-08-05',
-    marca: 'Inpot',
     etapa_canonica: 'Contato Efetivo',
     id_etapa: 'et-generica',
     nome_funil: 'SDR',

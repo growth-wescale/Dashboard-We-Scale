@@ -164,15 +164,15 @@ src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (
 Modos do card do funil: **Performance** (volume no período, `TrapFunnel`),
 **Aging** (há quanto tempo parados) e **Atual** (onde estão agora, ignora
 período) — os dois últimos renderizam `EtapaLeadtimeList`, não o funil visual:
-uma etapa por linha, na mesma sequência de 7 do Performance, com 2 médias —
+uma etapa por linha, na mesma sequência de 8 do Performance, com 2 médias —
 tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde o MQL).
 Aging lê de `vw_deal_etapa_periodos` (tempo por etapa) cruzado com
 `data_novo_mql` de `vw_funil_vendas` (tempo em andamento); Atual computa as
 duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
-aging. A Visão Macro mostra um subconjunto de 7 etapas (MQL → Contato
-Efetivo → SQL · Reunião Agendada → Diagnóstico → SAL → Oportunidade →
-Fechamento) em todos os 3 modos; o funil completo de 12 etapas fica em
-Performance Detalhada.
+aging. A Visão Macro mostra um subconjunto de 8 etapas (MQL → Contato
+Efetivo → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
+Oportunidade → Fechamento) em todos os 3 modos; o funil completo de 12
+etapas fica em Performance Detalhada.
 
 **Multi-seleção de período é união exata, não intervalo.** Selecionar Junho +
 Agosto mostra só esses dois meses — Julho não entra, mesmo estando entre os
@@ -250,6 +250,19 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-21 — Conexão entra no funil da Visão Macro
+Junior pediu a etapa **Conexão** logo depois de Contato Efetivo. A Visão Macro
+foi de 7 pra 8 etapas (`MACRO_STAGES` em `FunilVendas.tsx`) — só isso: a etapa
+já existia no catálogo (`STAGE_ORDER`/`STAGE_DATE_FIELD` → `data_conexao`) e no
+funil completo da Performance Detalhada, então funil, Aging e Atual passaram a
+mostrá-la sem nenhuma outra mudança.
+
+Nota de leitura: Conexão não é usada por todos os funis, então o degrau vem
+**menor** que "SQL · Reunião agendada" logo abaixo dele (em ago/26, no cru:
+Contato Efetivo 337 → Conexão 160 → SQL 217). A conversão Conexão→SQL vai
+passar de 100%, com seta pra cima — comportamento já esperado, o funil não é
+monotônico.
 
 ### 2026-08-20 — Achada a causa real do filtro de 1 dia zerando o funil
 O calendário novo (ontem) resolveu a UX, mas o Junior reportou que selecionar

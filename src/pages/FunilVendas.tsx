@@ -41,7 +41,8 @@ import { downloadCsv } from '@/lib/csv'
  *  etapas) fica na Performance Detalhada, pra não operacionalizar o snapshot
  *  executivo. Rótulo local: "Oportunidade" em vez do técnico "Oportunidade · COF". */
 const MACRO_STAGES: StageKey[] = [
-  'MQL', 'Contato Efetivo', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF', 'Fechamento',
+  'MQL', 'Contato Efetivo', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF',
+  'Fechamento',
 ]
 const MACRO_STAGE_LABEL: Partial<Record<StageKey, string>> = {
   'Oportunidade COF': 'Oportunidade',

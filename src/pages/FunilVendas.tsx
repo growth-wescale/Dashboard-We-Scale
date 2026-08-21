@@ -370,9 +370,11 @@ export function FunilVendas() {
   // Os DOIS modos de contagem leem o histórico de eventos. Antes, "Deals
   // únicos" vinha da tabela plana e "Passagens" dos eventos — bases diferentes,
   // e Passagens chegava a aparecer MENOR que Únicos, o que é impossível.
+  // Sem filtro de marca no servidor: a coluna `marca` da view de eventos é
+  // nula em boa parte da base. O recorte por marca sai de `idsEscopo` (deals
+  // de `vw_funil_vendas`, já filtrados) — ver useFunilEventos.
   const { data: eventos } = useFunilEventos({
     enabled: true,
-    marca: marcaFetch,
     inicio: range.start,
     // No modo safra o evento pode ser posterior à janela do MQL.
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,

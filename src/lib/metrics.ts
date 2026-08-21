@@ -375,7 +375,6 @@ export function conversion(
 export interface FunnelEventRow {
   id_deal: string | number | null
   dia: string | null
-  marca: string | null
   etapa_canonica: string | null
   /** Etapa crua do RD. Necessária para as etapas com regra por funil. */
   id_etapa?: string | null

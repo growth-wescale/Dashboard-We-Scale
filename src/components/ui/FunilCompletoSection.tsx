@@ -46,9 +46,9 @@ export function FunilCompletoSection() {
   )
 
   const { data: rows, loading } = useFunilVendas(marcaFetch)
+  // Sem marca no servidor — o recorte vem de `idsEscopo`. Ver useFunilEventos.
   const { data: eventos } = useFunilEventos({
     enabled: true,
-    marca: marcaFetch,
     inicio: range.start,
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
   })

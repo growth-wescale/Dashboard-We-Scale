@@ -116,6 +116,13 @@ vez de 105 há 10 dias.
 **O funil não é monotônico.** Deals pulam etapas: em ago/26, Pré-Contrato (3) >
 Comitê (2). Taxa de passagem acima de 100% é normal, exibida com seta pra cima.
 
+**Marca do evento não é confiável.** `deal_eventos.marca` (e portanto
+`vw_funil_etapas_v2.marca`) é um retrato denormalizado gravado na ingestão:
+nulo em ~17% dos eventos de ago/26, e 0% preenchido na origem
+`api_backfill_stage_history`. A marca confiável é a do **deal** —
+`vw_funil_vendas.marca` no dashboard, `deal_snapshot.marca` no SQL (é o que a
+RPC do relatório diário já faz). Nunca filtrar evento por marca.
+
 **Deal sem marca é invisível.** As views exigem marca preenchida. Deals sem
 marca no RD não aparecem no dashboard, nem no Consolidado.
 
@@ -250,6 +257,50 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-21 — Funil de UMA marca zerado: filtro de marca no evento
+Junior filtrou 17–21/08 e viu **1 MQL** na Oral Unic (CRM: 10 deals criados) e
+**1** na Viva — mas selecionando as **duas marcas juntas** os números voltavam
+ao normal. Duas marcas mostrando mais que a soma de cada uma é impossível, e
+foi essa inversão que apontou o caminho.
+
+**Causa raiz: `useFunilEventos` filtrava `.eq('marca', ...)` no servidor.**
+O hook só faz isso quando há **exatamente 1 marca** selecionada (com 2+ ele
+busca tudo e filtra no cliente) — exatamente o recorte que quebrava. E a
+coluna `marca` de `vw_funil_etapas_v2` vem de `deal_eventos.marca`, um retrato
+gravado na ingestão que está **nulo em 554 dos 636 eventos** da janela (87%);
+545 desses eventos pertencem a deals que **têm** marca no `deal_snapshot`. Em
+agosto/26 o preenchimento caiu para 82,7% (era 99,5% em junho): a origem
+`api_backfill_stage_history` nunca preenche marca, e `api_sync` preenche só
+metade.
+
+O filtro era **redundante** desde sempre: o recorte por marca já vem de
+`idsEscopo` — o conjunto de `id_lead` de `vw_funil_vendas` (marca
+autoritativa), aplicado no `extra` de `countStageEvents` / `dealsInStage` /
+`repeatedDealsInStage`. Removido dos dois consumidores (Visão Macro e
+`FunilCompletoSection`). `marca` saiu também de `FunnelEventRow` e do `select`
+do hook, pra ninguém reintroduzir o filtro. Perf não sofre: o predicado ficava
+acima da window function da view, não podava scan nenhum.
+
+Verificado end-to-end com o `metrics.ts` real sobre a API real (17–21/08):
+
+| | MQL | Contato | Conexão | SQL | Diag |
+|---|---|---|---|---|---|
+| Oral Unic antes | 1 | 0 | 1 | 0 | 0 |
+| Oral Unic depois | 9 | 4 | 3 | 0 | 0 |
+| Viva antes | 1 | 2 | 2 | 0 | 0 |
+| Viva depois | 9 | 7 | 6 | 3 | 2 |
+| As duas juntas | 18 | 11 | 9 | 3 | 2 |
+
+O "antes" reproduz os prints do Junior etapa por etapa, e depois do fix a
+união das duas marcas é a soma exata das duas sozinhas.
+
+Sobra em aberto, menor: com "Deals criados no período" **On**, Viva bate certo
+com o CRM (9 = 9), mas Oral Unic dá 8 contra 10 do CRM. Não é exclusão da
+view (os 8 deals do período estão todos lá, funil SDR) — é diferença na
+origem, ainda não investigada. E note que, com o toggle **Off**, a linha MQL
+conta **passagem pela etapa** no período, não criação de deal: as duas coisas
+não têm por que bater.
 
 ### 2026-08-21 — Conexão entra no funil da Visão Macro
 Junior pediu a etapa **Conexão** logo depois de Contato Efetivo. A Visão Macro

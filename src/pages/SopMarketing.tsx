@@ -162,6 +162,11 @@ interface Funnel {
   perdido: { mql: number; sql: number; diagnostico: number; sal: number }
 }
 
+function unidadesVendidas(r: VwMarketingFunil): number {
+  const q = Number(r.quantidade_unidades)
+  return Number.isFinite(q) && q > 0 ? q : 1
+}
+
 function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
@@ -169,7 +174,9 @@ function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
     sql:  d.filter(r => inPeriod(r.data_sql, di, df)).length,
     diag: d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
     sal:  d.filter(r => inPeriod(r.data_sal, di, df)).length,
-    fech: d.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length,
+    fech: d
+      .filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
+      .reduce((sum, r) => sum + unidadesVendidas(r), 0),
     perdido: {
       mql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_mql, di, df) && !inPeriod(r.data_sql, di, df)).length,
       sql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_diagnostico, di, df)).length,

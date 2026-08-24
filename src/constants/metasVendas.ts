@@ -47,6 +47,22 @@ export function getVendasRealizadasOverride(marca: Marca, mesKey: string): numbe
   return v == null ? null : v
 }
 
+// Override manual de unidades vendidas por marca por mês (chave: YYYY-MM).
+// Usado no funil MTD do S&OP (etapa 'Fechado') quando `quantidade_unidades` do CRM
+// não reflete a realidade (ex.: RD Marketing não tem esse campo, todo deal grava 1).
+// Quando definido, SUBSTITUI a soma derivada do CRM.
+export const UNIDADES_VENDIDAS_OVERRIDE: Record<string, Partial<Record<Marca, number>>> = {
+  '2026-08': {
+    'Eletrovias': 3,
+    'B2Case': 4,
+  },
+}
+
+export function getUnidadesVendidasOverride(marca: Marca, mesKey: string): number | null {
+  const v = UNIDADES_VENDIDAS_OVERRIDE[mesKey]?.[marca]
+  return v == null ? null : v
+}
+
 // Taxas de conversão históricas usadas no funil inverso de meses fechados.
 // Cada valor é upper/lower (ex: taxa_venda_opp = vendas/oportunidades).
 // Valores baseline — ajustar por marca conforme dados reais do CRM se necessário.

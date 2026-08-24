@@ -19,6 +19,7 @@ import { getCreativeAsset } from '@/lib/creativeAssets'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { TermosPanel } from '@/components/ui/TermosPanel'
 import { SocialPanel } from '@/components/ui/SocialPanel'
+import { EmailMarketingPanel } from '@/components/ui/EmailMarketingPanel'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
@@ -593,6 +594,7 @@ const SM_TABS = [
   { key:'anuncios',   label:'Anúncios' },
   { key:'termos',     label:'Termos' },
   { key:'social',     label:'Social Media' },
+  { key:'email',      label:'E-mail Marketing' },
   { key:'radar',      label:'Radar' },
 ]
 
@@ -1931,9 +1933,16 @@ export function SaudeDaMarca() {
   // - CEOs (tipo=ceo) só têm Social (o resto não faz sentido — não têm ads/funil/etc)
   // - Comunidade e Odonto Legacy do Oral Unic não têm Social/Radar
   const isCeo = def.tipo === 'ceo'
-  const hiddenTabs = isCeo
-    ? ['overview', 'campanhas', 'conjuntos', 'anuncios', 'termos', 'radar']
-    : isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy') ? ['social', 'radar'] : []
+  const hiddenTabs: string[] = (() => {
+    if (isCeo) return ['overview', 'campanhas', 'conjuntos', 'anuncios', 'termos', 'radar', 'email']
+    const hidden: string[] = []
+    // E-mail Marketing é uma página única por marca — não aparece dentro de sub-views (Oral Unic / Inpot)
+    if (isOralUnic && ouSubView !== 'geral') hidden.push('email')
+    if (isInpot && inpSubView !== 'geral') hidden.push('email')
+    // Oral Unic Comunidade e Odonto Legacy não têm Social/Radar
+    if (isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy')) hidden.push('social', 'radar')
+    return hidden
+  })()
   // Sub-view "special": bypassa as tabs SM_TABS e renderiza um componente próprio (ex.: Esteira)
   const isOuSpecialView = isOralUnic && ouSubView === 'esteira'
 
@@ -1953,6 +1962,7 @@ export function SaudeDaMarca() {
       case 'anuncios':  return <SaudeAnuncios  b={b} campaigns={campaigns} />
       case 'termos':    return <TermosPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
       case 'social':    return <SocialPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
+      case 'email':     return <EmailMarketingPanel marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
       case 'radar':     return <SaudeRadar     b={b} />
       default:          return <SMOverview     b={b} bCompare={bCompare} compareLabel={compareLabel} compareEnabled={compareState.enabled} channels={channels} acqFunnel={acqFunnel} onMqlClick={() => setMqlDrawerOpen(true)} mqlLeads={mqlLeads} crmData={crmData} crmAllData={crmAllData} di={dataInicio} df={dataFim} mediaData={activeMediaData} leadsData={activeLeadsData} pausedData={pausedData} />
     }

@@ -1028,11 +1028,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             : isSemana ? metaMes / 4 : metaMes
           const pctPeriod = isSemana ? 1 : pctMes
           const periodLabel = isSemana ? 'semana' : 'mês'
-          // Override manual de vendas apenas em modo mês fechado + período mês
-          // (números confirmados manualmente porque a base do CRM tem lacunas)
-          const vendasOverride = dates.isClosed && !isSemana
-            ? getVendasRealizadasOverride(slide.marca, mesKey)
-            : null
+          // Override manual de vendas (só em período mês):
+          // - Mês fechado → getVendasRealizadasOverride (números confirmados manualmente)
+          // - Mês corrente → getUnidadesVendidasOverride (RD Marketing não popula quantidade_unidades)
+          const vendasOverride = isSemana
+            ? null
+            : dates.isClosed
+              ? getVendasRealizadasOverride(slide.marca, mesKey)
+              : getUnidadesVendidasOverride(slide.marca, mesKey)
 
           return (
             <div style={{ ...cardStyle, overflow: dates.isClosed ? 'hidden' : 'visible' }}>

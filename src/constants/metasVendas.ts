@@ -14,10 +14,10 @@ export const META_VENDAS: Record<string, Partial<Record<Marca, number>>> = {
   },
   '2026-08': {
     'Odonto Scale': 7,
-    'Inpot': 5,
+    'Inpot': 3,
     'B2Case': 4,
     'Eletrovias': 3,
-    'Oral Unic': 2,
+    'Oral Unic': 1,
     'Lisô Laser': 2,
     'Viva': 1,
   },

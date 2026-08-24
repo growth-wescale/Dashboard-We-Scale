@@ -229,6 +229,18 @@
   .rationale .k{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:7px}
   .rationale p{font-size:12.5px;color:rgba(255,255,255,.9);line-height:1.5}
   .aside{display:flex;flex-direction:column;gap:13px}
+  .reguas{margin-top:16px;padding:14px 16px;background:var(--card);border:1px solid var(--linha);border-radius:12px;box-shadow:var(--sh-sm)}
+  .reguas-head{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--roxo-medio);margin-bottom:10px}
+  .reguas-list{display:flex;flex-direction:column;gap:7px}
+  .rg-row{display:grid;grid-template-columns:auto auto 1fr;gap:10px;align-items:baseline;font-size:12.5px;color:var(--tinta);line-height:1.4}
+  .rg-status{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 8px;white-space:nowrap}
+  .rg-status.ok{background:var(--teal-claro);color:var(--teal-esc);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--teal) 25%,transparent)}
+  .rg-status.pending{background:color-mix(in srgb,var(--ambar) 13%,transparent);color:var(--ambar);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ambar) 25%,transparent)}
+  .rg-nome{font-weight:600;color:var(--roxo-escuro);white-space:nowrap}
+  .rg-det{color:var(--tinta-suave);font-size:11.5px}
+  .rg-note{margin-top:9px;padding-top:9px;border-top:1px dashed var(--linha);font-size:11.5px;color:var(--tinta-suave)}
+  .rg-note b{color:var(--tinta)}
+  @media (max-width:820px){.rg-row{grid-template-columns:1fr}}
   @media (max-width:820px){
     .board{padding:14px 14px 44px} .hero{padding:28px 22px 28px} .hero h1{font-size:26px}
     .astats{grid-template-columns:repeat(2,1fr)} .acao-grid{grid-template-columns:1fr}
@@ -286,7 +298,17 @@
         <span class="rmore">Ver reativados →</span>
       </button>
     </div>
-    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques (gatilho ainda não disparou) e continuar acompanhando reativações que se converteram em reunião.</span></div>
+    <div class="reguas">
+      <div class="reguas-head">Réguas — visão consolidada</div>
+      <div class="reguas-list">
+        <div class="rg-row"><span class="rg-status ok">Ativa</span><span class="rg-nome">Reativação MQL 2026</span><span class="rg-det">11 e-mails · 3 segmentos (frios, no-shows, não fecharam) · portfólio (6 marcas)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Indicação Franqueados</span><span class="rg-det">Oral Unic, Lisô, Inpot (avaliação) · 4 e-mails (E1, E2, E3, mensal)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Indicação Colaboradores</span><span class="rg-det">We Scale + franquias · 2 e-mails (E1, E2)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Mês da Indicação · Set/2026</span><span class="rg-det">3 e-mails (lançamento, meio, última chamada) · disparo cross-portfólio</span></div>
+      </div>
+      <div class="rg-note">Prêmio por fechamento: <b>R$ 10.000 em setembro</b> (Mês da Indicação) · <b>R$ 5.000</b> nos demais meses. Régua de MQL segue rodando em paralelo.</div>
+    </div>
+    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques da régua MQL (gatilho ainda não disparou) e publicar as 3 réguas de Indicação em 01/09.</span></div>
   </section>
 
   <div class="frentes" id="frentes"></div>
@@ -323,11 +345,18 @@ const FRENTES=[
 // Lanes ficam com o mesmo texto da última reunião — Gabriel atualiza semanalmente.
 const BRANDS=[
  {key:"oral",name:"Oral Unic",tag:"Franquia odontológica",status:"attn",badge:"Atenção · sem SQL",dark:false,
-  lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[],bkl:[["mkt","Nova campanha de comunidade (CPM passou de R$200)"]],exe:[["mkt","Novos roteiros na persona multiclínica"],["com","9 leads V4 perdidos: 5 inválidos, 2 fora de ICP"]]},
+  lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[],bkl:[["mkt","Sobe hoje · Comunidade em formulário nativo (aprendizado do A/B)"],["mkt","Até 26/08 · Agente de IA em produção qualificando no WhatsApp"],["mkt","Em análise desde 20/08 · Odonto Legacy + Franquia via perfil We Scale (decisão pós-1 semana de funil)"],["mkt","Migrar investimento de aquisição de franquia para Ecossistema Oral Unic Legacy"]],exe:[["mkt","Novos roteiros na persona multiclínica"],["com","9 leads V4 perdidos: 5 inválidos, 2 fora de ICP"]]},
   meta:{mes:1,sem:7,risco:true},
   mkt:[["Investimento","R$ 9.542","R$ 26.801"],["MQL","21","39"],["Leads","31","100"],["CP-MQL","R$ 454","R$ 687"]],
   vnd:{f:[[473,""],[76,"16,1%"],[25,"32,9%"],[8,"32,0%"],[3,"37,5%"],[1,"33,3%"],[1,"100,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",
    perdas:{total:95,top:[["Sem contato após cadência",33,"35%"],["Sem perfil (fora do ICP)",15,"16%"],["Sem interesse / Não quis conversa",6,"6%"],["Atingiu o fim da cadência",5,"5%"],["Teste",5,"5%"],["Dados inválidos",5,"5%"],["Praça sem potencial",3,"3%"],["Sem contato após cadência SDR",3,"3%"],["Sem resposta",2,"2%"],["Sem Timing",2,"2%"]]}}},
+
+ {key:"odonto",name:"Odonto Legacy",tag:"Ecossistema Oral Unic Legacy",status:"good",badge:"1ª venda no mês",dark:true,
+  lanes:{ctx:[["mkt","Campanha anterior desligada por custo de mídia elevado"]],dev:[["mkt","Nova estratégia de posicionamento de marca em desenvolvimento"]],bkl:[],exe:[["mkt","Nova campanha criada e CPM voltou à média de R$50"]]},
+  meta:{mes:7,sem:"—",risco:true},
+  mkt:[["Investimento","R$ 3.833","R$ 11.420"],["MQL","30","36"],["Leads","30","36"],["CP-MQL","R$ 128","R$ 317"]],
+  vnd:{f:[[27,""],[13,"48,1%"],[18,"138,5%"],[0,"0,0%"],[2,""],[5,"250,0%"],[2,"40,0%"],[1,"50,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[1,""]],ns:2,fonte:"Sem Classificação 1 (100%)",
+   perdas:{total:56,top:[["Lead atingiu o fim da cadência",16,"29%"],["Sem perfil (fora do ICP)",11,"20%"],["Sem interesse / Não quis conversa",6,"11%"],["Sem contato após cadência",3,"5%"],["Teste",3,"5%"],["Capital descapitalizado",2,"4%"],["Sócio futuro",2,"4%"],["Sem contato após cadência SDR",2,"4%"],["Parou de responder",2,"4%"],["Dados inválidos (Inbound)",2,"4%"]]}}},
 
  {key:"inpot",name:"Inpot",tag:"Franquia",status:"attn",badge:"Sem venda no mês",dark:true,
   lanes:{ctx:[["mkt","MQLs +47% vs julho, mas SQL −27% e conversão −48%"]],dev:[["mkt","Formulário nativo em validação: 6 MQLs a CPMQL R$80"],["mkt","Novos públicos rodando + realocação de verba nas top performers"]],bkl:[],exe:[["mkt","LP otimizada; e-mail 3k contatos com 6% de abertura"],["com","9 conexões na semana; 4 perdidas por falta de perfil"]]},
@@ -362,14 +391,7 @@ const BRANDS=[
   meta:{mes:3,sem:19,risco:false},
   mkt:[["Investimento","R$ 2.050","R$ 5.863"],["MQL","64","149"],["Leads","270","816"],["CP-MQL","R$ 32","R$ 39"]],
   vnd:{f:[[159,""],[126,"79,2%"],[92,"73,0%"],[97,"105,4%"],[53,"54,6%"],[42,"79,2%"],[19,"45,2%"],[9,"47,4%"],[5,"55,6%"],[3,"60,0%"],[3,"100,0%"],[3,""]],ns:10,fonte:"Inbound 3 (100%) · 2 negociações = 3 unidades",
-   perdas:{total:104,top:[["Sem contato após cadência SDR",30,"29%"],["Sem interesse / Não quis conversa",10,"10%"],["Parou de responder",8,"8%"],["Atingiu o fim da cadência",8,"8%"],["Sem Timing",6,"6%"],["No-Show sem retorno após reagendamento",6,"6%"],["Nossa solução não atende",5,"5%"],["Sem resposta",5,"5%"],["Sem perfil (fora do ICP)",4,"4%"],["Sem Budget - até 100k",4,"4%"]]}}},
-
- {key:"odonto",name:"Odonto Legacy",tag:"Ecossistema Oral Unic Legacy",status:"good",badge:"1ª venda no mês",dark:true,
-  lanes:{ctx:[["mkt","Campanha anterior desligada por custo de mídia elevado"]],dev:[["mkt","Nova estratégia de posicionamento de marca em desenvolvimento"]],bkl:[],exe:[["mkt","Nova campanha criada e CPM voltou à média de R$50"]]},
-  meta:{mes:7,sem:"—",risco:true},
-  mkt:[["Investimento","R$ 3.833","R$ 11.420"],["MQL","30","36"],["Leads","30","36"],["CP-MQL","R$ 128","R$ 317"]],
-  vnd:{f:[[27,""],[13,"48,1%"],[18,"138,5%"],[0,"0,0%"],[2,""],[5,"250,0%"],[2,"40,0%"],[1,"50,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[1,""]],ns:2,fonte:"Sem Classificação 1 (100%)",
-   perdas:{total:56,top:[["Lead atingiu o fim da cadência",16,"29%"],["Sem perfil (fora do ICP)",11,"20%"],["Sem interesse / Não quis conversa",6,"11%"],["Sem contato após cadência",3,"5%"],["Teste",3,"5%"],["Capital descapitalizado",2,"4%"],["Sócio futuro",2,"4%"],["Sem contato após cadência SDR",2,"4%"],["Parou de responder",2,"4%"],["Dados inválidos (Inbound)",2,"4%"]]}}}
+   perdas:{total:104,top:[["Sem contato após cadência SDR",30,"29%"],["Sem interesse / Não quis conversa",10,"10%"],["Parou de responder",8,"8%"],["Atingiu o fim da cadência",8,"8%"],["Sem Timing",6,"6%"],["No-Show sem retorno após reagendamento",6,"6%"],["Nossa solução não atende",5,"5%"],["Sem resposta",5,"5%"],["Sem perfil (fora do ICP)",4,"4%"],["Sem Budget - até 100k",4,"4%"]]}}}
 ];
 
 document.getElementById('frentes').innerHTML = FRENTES.map(f=>`<div class="fr"><span class="tg">${f[0]}</span><p>${f[1]}</p></div>`).join('');

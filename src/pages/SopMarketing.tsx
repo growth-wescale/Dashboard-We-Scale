@@ -10,7 +10,7 @@ import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
 import type { Lead, Marca } from '@/lib/types'
 import { InverseFunnel } from '@/components/ui/InverseFunnel'
-import { getMetaVendas, getVendasRealizadasOverride, getFunilTaxas } from '@/constants/metasVendas'
+import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
@@ -741,12 +741,15 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   }, [chartCurLeads, chartPrevLeads])
 
   // ── Funnel stages ─────────────────────────────────────────────────────────────
+  // Fechado: usa override manual quando existir (RD Marketing não popula
+  // `quantidade_unidades` — todo deal grava 1; override reflete unidades reais)
+  const fechOverride = getUnidadesVendidasOverride(slide.marca, dates.monthStart.slice(0, 7))
   const funnelStages: FunnelStage[] = [
     { label: 'MQL',         count: mtdMql },
     { label: 'SQL',         count: funnelMtd.sql },
     { label: 'Diagnóstico', count: funnelMtd.diag },
     { label: 'SAL',         count: funnelMtd.sal },
-    { label: 'Fechado',     count: funnelMtd.fech },
+    { label: 'Fechado',     count: fechOverride ?? funnelMtd.fech },
   ]
 
   // ── Render ───────────────────────────────────────────────────────────────────

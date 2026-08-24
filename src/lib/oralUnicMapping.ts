@@ -17,11 +17,16 @@ export function isMediaOdontoLegacy(campanha: string | null): boolean {
   return false
 }
 
-// OUF: Franquia (default se não é Legacy nem ODL, ou prefixo explícito [OUF])
+// V4: campanhas da conta compartilhada da V4 Company (prefixo [V4])
+export function isMediaV4(campanha: string | null): boolean {
+  return (campanha ?? '').toUpperCase().includes('[V4]')
+}
+
+// OUF: Franquia (default se não é Legacy nem ODL nem V4, ou prefixo explícito [OUF])
 export function isMediaFranquia(campanha: string | null): boolean {
   const c = (campanha ?? '').toUpperCase()
   if (c.includes('[OUF]')) return true
-  return !isMediaLegacy(campanha) && !isMediaOdontoLegacy(campanha)
+  return !isMediaLegacy(campanha) && !isMediaOdontoLegacy(campanha) && !isMediaV4(campanha)
 }
 
 // Estratégias descontinuadas — mostradas separadamente

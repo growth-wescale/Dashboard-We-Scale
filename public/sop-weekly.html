@@ -196,6 +196,39 @@
   .perda-row .pq{font-family:var(--mono);font-weight:700;color:var(--tinta);font-variant-numeric:tabular-nums}
   .perda-row .pp{font-family:var(--mono);color:var(--tinta-suave);font-size:11px;width:42px;text-align:right}
 
+  .apanel{padding:24px 26px;display:flex;flex-direction:column;gap:18px}
+  .reat-list{display:flex;flex-direction:column;gap:8px}
+  .reat-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;background:var(--card);border:1px solid var(--linha);border-radius:10px;padding:11px 14px;flex-wrap:wrap}
+  .reat-n{font-weight:600;color:var(--tinta);font-size:13.5px}
+  .reat-e{font-family:var(--mono);font-size:11.5px;color:var(--tinta-suave)}
+  .reat-item{border:1px solid var(--linha);border-radius:12px;overflow:hidden;background:var(--card)}
+  .reat-item>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;flex-wrap:wrap}
+  .reat-item>summary::-webkit-details-marker{display:none}
+  .reat-item>summary:hover{background:color-mix(in srgb,var(--roxo-medio) 4%,transparent)}
+  .reat-sum-l{display:flex;flex-direction:column;gap:3px}
+  .reat-sum-l .rn{font-family:var(--disp);font-weight:700;font-size:15px;color:var(--roxo-escuro)}
+  .reat-sum-l .rt{font-family:var(--mono);font-size:10px;color:var(--tinta-suave);letter-spacing:.03em}
+  .reat-sum-r{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .reat-chip{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:4px 9px}
+  .reat-chip.ok{background:var(--teal-claro);color:var(--teal-esc)}
+  .reat-chip.ag{background:color-mix(in srgb,var(--roxo-medio) 12%,transparent);color:var(--roxo-medio)}
+  .reat-chip.dest{background:color-mix(in srgb,var(--ambar) 14%,transparent);color:var(--ambar)}
+  .reat-chev{color:var(--tinta-suave);font-size:18px;line-height:1;transition:transform .2s}
+  .reat-item[open] .reat-chev{transform:rotate(90deg)}
+  .reat-body{padding:12px 15px 15px;border-top:1px solid var(--linha)}
+  .reat-body p{font-size:13px;line-height:1.55;color:var(--tinta);margin-top:9px} .reat-body p:first-child{margin-top:0}
+  .reat-body .perda{color:var(--tinta-suave);font-size:12.5px}
+  .result{background:linear-gradient(150deg,#34cdc5,#22a49d);color:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 16px 34px -22px rgba(42,188,181,.75);border:none;width:100%;text-align:left;font:inherit;cursor:pointer;transition:transform .2s,box-shadow .2s}
+  .result:hover{transform:translateY(-2px);box-shadow:0 22px 44px -20px rgba(42,188,181,.9)}
+  .result .k{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.85)}
+  .result .nm{font-family:var(--disp);font-weight:800;font-size:20px;margin-top:7px;line-height:1.1}
+  .result .role{font-weight:700;font-size:11px;color:#0d5b56;margin:4px 0 9px;font-family:var(--mono);letter-spacing:.02em;text-transform:uppercase}
+  .result p{font-size:13px;color:rgba(255,255,255,.94);line-height:1.5}
+  .rmore{display:inline-block;margin-top:10px;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#eafffb}
+  .rationale{background:linear-gradient(150deg,#7E0E70,#5e0350);color:#fff;border-radius:14px;padding:16px 18px}
+  .rationale .k{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);display:block;margin-bottom:7px}
+  .rationale p{font-size:12.5px;color:rgba(255,255,255,.9);line-height:1.5}
+  .aside{display:flex;flex-direction:column;gap:13px}
   @media (max-width:820px){
     .board{padding:14px 14px 44px} .hero{padding:28px 22px 28px} .hero h1{font-size:26px}
     .astats{grid-template-columns:repeat(2,1fr)} .acao-grid{grid-template-columns:1fr}
@@ -223,24 +256,37 @@
     </p>
   </header>
 
-  <div class="lbl">Ações especiais em campo · a atualizar</div>
+  <div class="lbl">Ações especiais em campo</div>
 
   <section class="acao">
     <div class="acao-head">
       <div>
         <div class="acao-eyebrow">Ação para todas as marcas · em campo</div>
         <h2>Reativação da base de MQLs</h2>
-        <p class="sub">Placeholder — Gabriel vai atualizar esta seção com os números atuais da cadência (envios, aberturas, cliques, reativados).</p>
+        <p class="sub">Cadências segmentadas por estágio de parada, rodando sobre base própria já paga (sem investimento de mídia). Os disparos são acionados por gatilhos conforme o lead avança — leitura chega em ondas, não em lote único.</p>
       </div>
-      <div class="acao-badge"><div class="k">A confirmar</div><div class="d">Aguardando update</div></div>
+      <div class="acao-badge"><div class="k">15 cadências ativadas · leitura</div><div class="d">MTD 24 · Ago 2026</div></div>
     </div>
     <div class="astats">
-      <div class="astat"><div class="v">— <small>cadências</small></div><div class="l">A confirmar</div></div>
-      <div class="astat"><div class="v">— <small>MQLs frios</small></div><div class="l">A confirmar</div></div>
-      <div class="astat"><div class="v">6 <small>marcas</small></div><div class="l">Portfólio ofertado</div></div>
+      <div class="astat"><div class="v">2.774 <small>entregues</small></div><div class="l">E-mails que chegaram na caixa</div></div>
+      <div class="astat"><div class="v">141 <small>abertos · 5,1%</small></div><div class="l">Aberturas únicas</div></div>
+      <div class="astat"><div class="v">— <small>cliques</small></div><div class="l">Ainda sem dados de clique</div></div>
       <div class="astat"><div class="v">R$ 0 <small>de mídia</small></div><div class="l">Recuperação sobre base própria</div></div>
     </div>
-    <div class="acao-next"><b>Nota</b><span>Esta seção é atualizada manualmente pelo Gabriel — os números atuais da cadência serão inseridos aqui.</span></div>
+    <div class="acao-grid">
+      <div class="rationale">
+        <span class="k">Por que segmentado, e não disparo único</span>
+        <p>Disparo único tem resposta baixa. Cada cadência ataca um motivo de parada específico, e a amplitude do portfólio é o argumento: quem não encaixou em uma marca pode encaixar em outra. Os dados chegam conforme os gatilhos disparam com o avanço do lead — por isso a leitura é incremental.</p>
+      </div>
+      <button class="result" type="button" onclick="openReativados()" aria-haspopup="dialog">
+        <div class="k">Reativados pela cadência</div>
+        <div class="nm">5 leads reativados</div>
+        <div class="role">Voltaram a responder após o disparo</div>
+        <p>Destaque: <b>Waldenice Marchezini</b> (Inpot) — já tinha feito a R1 e havia parado; a cadência retomou o contato.</p>
+        <span class="rmore">Ver reativados →</span>
+      </button>
+    </div>
+    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques (gatilho ainda não disparou) e continuar acompanhando reativações que se converteram em reunião.</span></div>
   </section>
 
   <div class="frentes" id="frentes"></div>
@@ -370,6 +416,43 @@ function funnelHTML(v){
 }
 
 const overlay=document.getElementById('overlay'),modal=document.getElementById('modal');
+function openReativados(){
+  modal.innerHTML=`
+    <div class="mhead">
+      <div><h2 id="mTitle">Reativados</h2><div class="mt">Leads que voltaram após a cadência de reativação · clique para abrir</div></div>
+      <div class="mmeta"><span class="metachip ok2">5 reativados</span></div>
+      <button class="close" aria-label="Fechar" onclick="closeModal()">✕</button>
+    </div>
+    <div class="apanel">
+      <div class="reat-list">
+        <details class="reat-item" open>
+          <summary>
+            <span class="reat-sum-l"><span class="rn">Amanda Rocco</span><span class="rt">Foz do Iguaçu/PR · InPot Franchising</span></span>
+            <span class="reat-sum-r"><span class="reat-chip dest">1º resultado</span><span class="reat-chip ok">R1 ✓</span><span class="reat-chip ag">R2 agendada</span><span class="reat-chev">›</span></span>
+          </summary>
+          <div class="reat-body">
+            <p>Amanda e Ali são casados. Amanda pretende investir em um negócio que possa se tornar o principal a longo prazo; o Ali busca um investimento visando uma transição de carreira.</p>
+            <p>Ali tem empresa de tabaco no Paraguai e enxerga grande potencial no mercado saudável; possui um ponto (imóvel) de uma academia de alto padrão. Objetivo: negócio próprio em <b>alimentação saudável</b>, tocável inicialmente pelo Ali, com flexibilidade para a Amanda focar na maternidade e retornar ao mercado depois.</p>
+          </div>
+        </details>
+        <details class="reat-item">
+          <summary>
+            <span class="reat-sum-l"><span class="rn">Waldenice Marchezini</span><span class="rt">nicemarchezini@gmail.com · Inpot</span></span>
+            <span class="reat-sum-r"><span class="reat-chip dest">Destaque</span><span class="reat-chev">›</span></span>
+          </summary>
+          <div class="reat-body">
+            <p>Já tinha feito a <b>R1</b> e depois parou de responder — o contato havia se interrompido, e a cadência retomou.</p>
+            <p>Perfil: potencial franqueada, <b>investidora experiente</b>, busca um negócio simples e rentável. Demonstrou interesse na franquia <b>Inpot</b>, mas quer analisar mais detalhes antes de decidir.</p>
+            <p class="perda"><b>Motivo de perdido na época:</b> optou por negócio próprio.</p>
+          </div>
+        </details>
+        <div class="reat-row"><span class="reat-n">Maira Gregolin</span><span class="reat-e">maira.gregolin@trackingtrade.com.br</span></div>
+        <div class="reat-row"><span class="reat-n">Thiago Montenegro</span><span class="reat-e">thiagocmontenegro@gmail.com</span></div>
+        <div class="reat-row"><span class="reat-n">Marcus Dantas</span><span class="reat-e">marcusdantas@hotmail.com</span></div>
+      </div>
+    </div>`;
+  overlay.classList.add('open');document.body.style.overflow='hidden';document.querySelector('.close').focus();
+}
 function openBrand(idx){
   const b=BRANDS[idx],v=b.vnd;
   const risk=b.meta.risco?`<span class="metachip risk">Risco de não alcance</span>`:`<span class="metachip ok2">Meta batida</span>`;

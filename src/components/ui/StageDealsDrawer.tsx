@@ -3,6 +3,7 @@ import { ExternalLink, X } from 'lucide-react'
 import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT } from '@/constants/brands'
+import { nf } from '@/lib/format'
 import { BarList, StatusBadge, cell, fmtData, topBreakdown } from './dealDrawerShared'
 import { MultiSelect, ordenarOpcoes } from './MultiSelect'
 
@@ -54,6 +55,11 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
   }), [deals, filters])
 
   const hasFilters = Object.values(filters).some(v => v.length > 0)
+
+  // Unidades vem do produto do deal (vw_deal_ciclo_enriquecido), disponível em
+  // qualquer etapa — não só em Fechamento, já que o produto pode ser definido
+  // antes da venda se concretizar.
+  const headers = ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Data na etapa']
 
   const porMarca = useMemo(
     () => topBreakdown(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
@@ -149,9 +155,9 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Data na etapa'].map(h => (
+                {headers.map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: 'left', fontWeight: 600, fontSize: 11,
+                    padding: '10px 16px', textAlign: h === 'Unidades' ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
                   }}>{h}</th>
@@ -161,7 +167,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={headers.length} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -184,6 +190,9 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_sdr)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_closer)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.fonte_macro)}</td>
+                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {nf(r.quantidade_unidades ?? 1)}
+                  </td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
                 </tr>
               ))}

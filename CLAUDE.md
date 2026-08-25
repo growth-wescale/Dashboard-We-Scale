@@ -72,7 +72,7 @@ Análise de Perda até elas serem migradas. Não usar em código novo.
 
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro
-- `quantidade_unidades` — franquias por contrato, usado no toggle Unidades
+- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); vale 1 quando o deal não tem produto com quantidade diferente
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
 
 ### Event Sourcing dirigido por configuração
@@ -253,10 +253,46 @@ sem conversão de fuso.
 - [ ] **~50 deals sem marca** no CRM, invisíveis no dashboard
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
 - [ ] Dados de Expansão no Supabase ainda não usados: `db_tarefas_sdr` (38k linhas), `DB_Reunioes_MeetRox`, `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências
+- [ ] **`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia** — o insert de evento `'perda'` não tem `EXCEPTION WHEN unique_violation` pro índice `ux_deal_eventos_perda_por_dia` (só o `ON CONFLICT` do índice de timestamp exato). Se um deal for perdido, reaberto e perdido de novo no mesmo dia calendário, a segunda perda derruba a função inteira — visto 1x num backfill em 25/08. Raro, mas real
+- [ ] **Chave `service_role` do Supabase de Expansão e token do RD circularam em texto plano** (JSONs de workflow do n8n, exportados pra debug em 25/08). `service_role` ignora RLS por completo — rotacionar as duas quando der
 
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-25 — Unidades vira coluna disponível em qualquer etapa, não só Fechamento
+Até aqui `quantidade_unidades` só existia (na view) pra deals com
+`status_atual = 'Ganho'` — fazia sentido enquanto o único consumo era o
+toggle de vendas Negócios×Unidades. Junior pediu a coluna também no popup de
+detalhamento de etapa (`StageDealsDrawer`, abre ao clicar numa etapa do
+funil), pra qualquer etapa: "é bom pra vermos quantas unidades tal deal está
+negociando", mesmo antes de fechar.
+
+`vw_deal_ciclo_enriquecido` perdeu o `CASE WHEN status_efetivo = 'Ganho' ...
+ELSE NULL` em `quantidade_unidades` — agora todo deal tem
+`GREATEST(COALESCE(_quantidade_unidades, al_unid, 1), 1)`, ganho ou não (o
+produto e a quantidade já existem na negociação antes de virar venda).
+Checksum antes/depois: linhas, ciclo atual, ganhos, soma de valor_contrato,
+perdidos, em andamento — todos idênticos; só `quantidade_unidades` foi de 41
+linhas preenchidas (só ganhos, de 6.395 no total) pra 6.395 (todas), min 1 /
+max 6. `saleUnits()`/`countSales()` (`metrics.ts`) não mudam de
+comportamento — já só liam esse campo em deals com `isSale(r)` verdadeiro.
+
+`StageDealsDrawer.tsx` perdeu a condicional que escondia a coluna Unidades
+fora de Fechamento — aparece sempre agora. `SimpleDealsDrawer.tsx` (popups
+leves de Receita/Fechamentos/Vendas por fonte, que só listam Ganho) também
+ganhou a coluna, já que esses popups sempre lidam com vendas concretizadas.
+
+Pré-condição pro dado fazer sentido: `_quantidade_unidades` no payload
+precisava estar confiável pra qualquer deal, não só os ganhos — só ficou
+assim depois de corrigir e rodar um backfill numa quebra de ingestão do n8n
+(`achatarDeal()` parando de gravar esse e outros 2 campos desde 13/08/2026),
+achada investigando o mesmo pedido do Junior. Não detalhado aqui por não ser
+mudança de dashboard, mas relevante pra entender por que o campo passou a
+ser confiável agora e não antes.
+
+Verificado com `npm run build` + `npx vitest run` (123 testes) via
+`~/ws-dashboard-build`.
 
 ### 2026-08-21 — Funil de UMA marca zerado: filtro de marca no evento
 Junior filtrou 17–21/08 e viu **1 MQL** na Oral Unic (CRM: 10 deals criados) e

@@ -8,7 +8,7 @@
 import { ExternalLink, X } from 'lucide-react'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
-import { money } from '@/lib/format'
+import { money, nf } from '@/lib/format'
 import { cell, fmtData } from './dealDrawerShared'
 
 interface SimpleDealsDrawerProps {
@@ -63,9 +63,9 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Marca', 'Fonte', 'Valor', 'Data'].map(h => (
+                {['Negociação', 'Marca', 'Fonte', 'Unidades', 'Valor', 'Data'].map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: h === 'Valor' ? 'right' : 'left', fontWeight: 600, fontSize: 11,
+                    padding: '10px 16px', textAlign: h === 'Valor' || h === 'Unidades' ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
                   }}>{h}</th>
@@ -75,7 +75,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
             <tbody>
               {deals.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal no recorte selecionado.
                   </td>
                 </tr>
@@ -98,6 +98,9 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                     fontWeight: destacarFonte ? 600 : 400,
                     color: destacarFonte ? accent : 'var(--ws-text-secondary)',
                   }}>{cell(r.fonte_macro)}</td>
+                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {nf(r.quantidade_unidades ?? 1)}
+                  </td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {r.valor_contrato ? money(r.valor_contrato) : '—'}
                   </td>

@@ -72,7 +72,7 @@ Análise de Perda até elas serem migradas. Não usar em código novo.
 
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro
-- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); vale 1 quando o deal não tem produto com quantidade diferente
+- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 só pro toggle de vendas (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
 
 ### Event Sourcing dirigido por configuração
@@ -259,6 +259,36 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-25 — Unidades mostra 0 (não 1) quando o deal não tem produto
+Ajuste rápido logo depois de a coluna Unidades passar a aparecer em qualquer
+etapa (entrada abaixo): Junior olhou o popup do MQL e viu **todo mundo com
+"1 unidade"**, inclusive deals recém-criados sem produto nenhum — o
+`GREATEST(...,1)` da view estava inventando "1" pra qualquer deal sem
+`_quantidade_unidades`, o que é enganoso fora do contexto de venda ("tá
+negociando 1 unidade" quando na verdade não tem produto definido ainda).
+
+Troquei o piso de `GREATEST(COALESCE(_quantidade_unidades, al_unid, 1), 1)`
+pra `GREATEST(COALESCE(_quantidade_unidades, al_unid, 0), 0)` em
+`vw_deal_ciclo_enriquecido` — agora **0 = sem produto cadastrado**, valor
+real = tem produto com essa quantidade. Checksum de novo idêntico (linhas,
+ciclo atual, ganhos, soma de valor, perdidos, em andamento); a distribuição
+mudou de 6.375 deals em "1" pra **6.111 em "0" e 284 com quantidade real**
+(máx. 6).
+
+**Não afeta o toggle de vendas.** `saleUnits()` (`metrics.ts`) já tinha seu
+próprio piso independente (`q > 0 ? q : 1`) — pensado assim desde 19/08
+porque uma venda fechada sem produto registrado ainda conta como 1 unidade
+vendida. Como esse piso é aplicado no código, não na view, o toggle
+Negócios×Unidades continua contando certo mesmo com a view agora devolvendo
+0 pros ganhos sem produto. Só o que é **exibido** na coluna mudou.
+
+`StageDealsDrawer.tsx`/`SimpleDealsDrawer.tsx`: fallback do frontend
+`?? 1` → `?? 0` (cosmético — a view não deve mais devolver null, mas
+mantém a semântica certa se acontecer).
+
+Verificado com `npm run build` + `npx vitest run` (123 testes) via
+`~/ws-dashboard-build`.
 
 ### 2026-08-25 — Unidades vira coluna disponível em qualquer etapa, não só Fechamento
 Até aqui `quantidade_unidades` só existia (na view) pra deals com

@@ -99,7 +99,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                     color: destacarFonte ? accent : 'var(--ws-text-secondary)',
                   }}>{cell(r.fonte_macro)}</td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {nf(r.quantidade_unidades ?? 1)}
+                    {nf(r.quantidade_unidades ?? 0)}
                   </td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {r.valor_contrato ? money(r.valor_contrato) : '—'}

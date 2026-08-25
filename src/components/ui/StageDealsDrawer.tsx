@@ -191,7 +191,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_closer)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.fonte_macro)}</td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {nf(r.quantidade_unidades ?? 1)}
+                    {nf(r.quantidade_unidades ?? 0)}
                   </td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
                 </tr>

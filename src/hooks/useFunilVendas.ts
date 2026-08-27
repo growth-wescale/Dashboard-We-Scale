@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
-import type { FunnelRow } from '@/lib/funnelTypes'
+import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
 
 /**
  * Lê a base do funil de Vendas (view `vw_funil_vendas`, no Supabase de Expansão).
@@ -13,6 +13,11 @@ import type { FunnelRow } from '@/lib/funnelTypes'
  *
  * São ~4,6 mil linhas; a view já exclui deals de teste, status Excluído e
  * funis fora do escopo comercial.
+ *
+ * `origem` (Inbound / Prospecção Ativa) É filtrada no servidor, ao contrário
+ * do período: é sempre um valor só, então não há a ambiguidade que obriga a
+ * marca a filtrar no cliente quando há 2+ selecionadas. Como efeito colateral
+ * bom, a paginação encurta — Inbound são ~5 páginas em vez de 7.
  */
 
 const PAGE_SIZE = 1000
@@ -29,7 +34,7 @@ const COLS = [
   'data_interesse_reuniao', 'data_conexao',
   'data_agendamento_reuniao_sql', 'data_reuniao_realizada', 'data_no_show',
   'data_sal', 'data_oportunidade', 'data_comite', 'data_pre_contrato',
-  'data_venda', 'data_perdido',
+  'data_venda', 'data_perdido', 'origem_comercial',
 ].join(',')
 
 export interface UseFunilVendasResult {
@@ -39,7 +44,7 @@ export interface UseFunilVendasResult {
   reload: () => void
 }
 
-async function fetchAll(marca?: string): Promise<{ rows: FunnelRow[]; error: string | null }> {
+async function fetchAll(origem: OrigemComercial, marca?: string): Promise<{ rows: FunnelRow[]; error: string | null }> {
   const out: FunnelRow[] = []
 
   for (let page = 0; ; page++) {
@@ -48,6 +53,7 @@ async function fetchAll(marca?: string): Promise<{ rows: FunnelRow[]; error: str
       .select(COLS)
       .order('data_criacao_negociacao', { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      .eq('origem_comercial', origem)
 
     if (marca) q = q.eq('marca', marca)
 
@@ -62,18 +68,18 @@ async function fetchAll(marca?: string): Promise<{ rows: FunnelRow[]; error: str
   return { rows: out, error: null }
 }
 
-export function useFunilVendas(marca?: string): UseFunilVendasResult {
+export function useFunilVendas(origem: OrigemComercial, marca?: string): UseFunilVendasResult {
   const [data, setData] = useState<FunnelRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (showLoading: boolean) => {
     if (showLoading) setLoading(true)
-    const { rows, error: err } = await fetchAll(marca)
+    const { rows, error: err } = await fetchAll(origem, marca)
     setError(err)
     if (!err) setData(rows)
     setLoading(false)
-  }, [marca])
+  }, [origem, marca])
 
   useEffect(() => {
     let cancelled = false

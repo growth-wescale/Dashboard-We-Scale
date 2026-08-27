@@ -26,9 +26,11 @@
 
 import { toLocalDate, toLocalYearMonth } from '@/lib/dateUtils'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
-import type { FunnelRow } from '@/lib/funnelTypes'
+import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
 
 /* ── Toggles ─────────────────────────────────────────────────────────────── */
+
+export type { OrigemComercial } from '@/lib/funnelTypes'
 
 export type SalesMode = 'deals' | 'units'
 export type FunnelView = 'stageDate' | 'cohort'
@@ -585,6 +587,8 @@ export function groupRepeatedDeals(deals: StageDeal[], stage: StageKey): Repeate
 /* ── Escopo (filtros) ────────────────────────────────────────────────────── */
 
 export interface ScopeOptions {
+  /** Motor comercial. Omitido = as duas origens passam. */
+  origem?: OrigemComercial
   marcas?: string[]
   /** Valores de fonte_macro. */
   fontes?: string[]
@@ -596,8 +600,11 @@ export interface ScopeOptions {
 
 /** Predicado de escopo reutilizável. Lista vazia = sem restrição. */
 export function buildScopeFilter(opts: ScopeOptions): (r: FunnelRow) => boolean {
-  const { marcas = [], fontes = [], subFontes = [], sdrs = [], closers = [] } = opts
+  const { origem, marcas = [], fontes = [], subFontes = [], sdrs = [], closers = [] } = opts
   return (r: FunnelRow) => {
+    // A view já entrega COALESCE(..., 'Inbound'); o fallback aqui é para a
+    // linha nunca sumir dos dois lados do toggle se algum dia vier nula.
+    if (origem && (r.origem_comercial ?? 'Inbound') !== origem) return false
     if (marcas.length && !marcas.includes(r.marca ?? '')) return false
     if (fontes.length && !fontes.includes(normalizeFonteMacro(r.fonte_macro))) return false
     if (subFontes.length && !subFontes.includes(normalizeSubFonte(r.utm_source))) return false

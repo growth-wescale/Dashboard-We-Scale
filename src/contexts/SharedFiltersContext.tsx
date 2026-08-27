@@ -17,6 +17,10 @@
  * caixa delimitadora (menor início, maior fim) só para exibição e para
  * consultas de servidor que precisam de um único intervalo (ex.: mídia).
  *
+ * `origem` separa os dois motores comerciais — Inbound e Prospecção Ativa.
+ * Não é multi-seleção nem tem estado "Todos": as três abas de Vendas mostram
+ * sempre um lado só, por decisão de negócio.
+ *
  * Marca segue o mesmo molde: `brandKeys` é multi-seleção (nunca vazio).
  * Todas as marcas reais marcadas ao mesmo tempo é visualmente equivalente a
  * "Consolidado" — não existe um valor sentinela separado pra isso.
@@ -29,8 +33,11 @@ import type { EventSource, FunnelView, SalesMode, ViewModes } from '@/lib/metric
 import { periodoAtual, rangeForPeriod } from '@/lib/periodo'
 import type { DateRange, PeriodMode } from '@/lib/periodo'
 import { BRAND_LIST } from '@/constants/brands'
+import { ORIGENS } from '@/lib/funnelTypes'
+import type { OrigemComercial } from '@/lib/funnelTypes'
 
 export type { DateRange, PeriodMode } from '@/lib/periodo'
+export type { OrigemComercial } from '@/lib/funnelTypes'
 
 const PREFIX = 'wescale.vendas.'
 
@@ -81,6 +88,10 @@ export const PERIOD_LABEL: Record<PeriodMode, string> = {
 /* ── Contexto ─────────────────────────────────────────────────────────────── */
 
 interface SharedFilters {
+  /** Motor comercial em foco. Nunca nulo — não existe visão consolidada. */
+  origem: OrigemComercial
+  setOrigem: (o: OrigemComercial) => void
+
   /** Marcas selecionadas (chaves de BRAND_LIST). Todas selecionadas == Consolidado. Nunca vazio. */
   brandKeys: string[]
   setBrandKeys: (k: string[]) => void
@@ -120,7 +131,13 @@ const MODE_PADRAO: Exclude<PeriodMode, 'dia'> = 'mes'
 // Todas as marcas reais selecionadas de saída == Consolidado.
 const TODAS_MARCAS = BRAND_LIST.map(b => b.key)
 
+// Inbound é o motor que sustenta a receita (a Prospecção Ativa não tem venda
+// nenhuma na base), então é o padrão de quem abre o dashboard.
+const ORIGEM_PADRAO: OrigemComercial = 'Inbound'
+
 export function SharedFiltersProvider({ children }: { children: ReactNode }) {
+  const [origem, setOrigem] = usePersisted<OrigemComercial>('origem', oneOf(ORIGENS), ORIGEM_PADRAO)
+
   const [brandKeys, setBrandKeys] = usePersisted('brandKeys', isNonEmptyStringArray, TODAS_MARCAS)
 
   const [periodMode, setPeriodModeRaw] = usePersisted<PeriodMode>(
@@ -171,14 +188,16 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   }, [setPeriodModeRaw, setPeriodValuesRaw])
 
   const resetFiltros = useCallback(() => {
+    setOrigem(ORIGEM_PADRAO)
     setBrandKeys(TODAS_MARCAS)
     setPeriodModeRaw(MODE_PADRAO)
     setPeriodValuesRaw([periodoAtual(MODE_PADRAO)])
     setFontes([])
     setSubFontes([])
-  }, [setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes])
+  }, [setOrigem, setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes])
 
   const value = useMemo<SharedFilters>(() => ({
+    origem, setOrigem,
     brandKeys, setBrandKeys,
     periodMode, setPeriodMode,
     periodValues, setPeriodValues: setPeriodValuesRaw,
@@ -189,7 +208,7 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   }), [
-    brandKeys, setBrandKeys, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
+    origem, setOrigem, brandKeys, setBrandKeys, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
     ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes,
     salesMode, funnelView, eventSource, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,

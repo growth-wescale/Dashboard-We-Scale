@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import type { FunnelEventRow } from '@/lib/metrics'
+import type { OrigemComercial } from '@/lib/funnelTypes'
 
 /**
  * Eventos de passagem por etapa (view `vw_funil_etapas_v2`).
@@ -21,6 +22,11 @@ import type { FunnelEventRow } from '@/lib/metrics'
  * (que caem no filtro do cliente) mostravam o número certo. A marca confiável
  * é a do deal, em `vw_funil_vendas` — mesma escolha da RPC do relatório
  * diário, que lê `deal_snapshot.marca`.
+ *
+ * `origem_comercial` É segura no servidor, ao contrário da marca: ela não vem
+ * de retrato denormalizado, e sim de um join por `id_deal` com COALESCE, então
+ * nunca é nula. Conferido: 14.873 + 1.636 = 16.509, o total da view. Nenhum
+ * evento se perde no filtro.
  */
 
 const PAGE_SIZE = 1000
@@ -33,6 +39,7 @@ const COLS = [
 
 interface Params {
   enabled: boolean
+  origem: OrigemComercial
   inicio: string
   /** Omitido no modo safra: o evento pode ser posterior à janela do MQL. */
   fim?: string
@@ -55,6 +62,8 @@ async function fetchAll(p: Params): Promise<{ rows: FunnelEventRow[]; error: str
       .order('dia', { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
 
+      .eq('origem_comercial', p.origem)
+
     if (p.fim) q = q.lte('dia', p.fim)
 
     const { data, error } = await q
@@ -73,16 +82,16 @@ export function useFunilEventos(p: Params): UseFunilEventosResult {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const { enabled, inicio, fim } = p
+  const { enabled, origem, inicio, fim } = p
 
   const load = useCallback(async () => {
     if (!enabled) { setData([]); setError(null); setLoading(false); return }
     setLoading(true)
-    const { rows, error: err } = await fetchAll({ enabled, inicio, fim })
+    const { rows, error: err } = await fetchAll({ enabled, origem, inicio, fim })
     setError(err)
     if (!err) setData(rows)
     setLoading(false)
-  }, [enabled, inicio, fim])
+  }, [enabled, origem, inicio, fim])
 
   useEffect(() => { void load() }, [load])
 

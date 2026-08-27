@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import type { OrigemComercial } from '@/lib/funnelTypes'
 
 // vw_perdas — uma linha por evento de perda (não por deal).
 // Só colunas usadas na página.
@@ -15,12 +16,15 @@ export interface PerdaEvento {
   data_evento: string | null
   dia: string | null   // 'YYYY-MM-DD'
   mes: string | null   // 'YYYY-MM-01'
+  origem_comercial: OrigemComercial | null
 }
 
 interface Filters {
   marca?: string
   dataInicio?: string  // 'YYYY-MM-DD'
   dataFim?: string     // 'YYYY-MM-DD'
+  /** Motor comercial. Filtrado no servidor: é sempre um valor só. */
+  origem?: OrigemComercial
 }
 
 interface UseResult {
@@ -33,6 +37,7 @@ const PAGE_SIZE = 1000
 const SELECT = [
   'id_evento', 'id_deal', 'marca', 'etapa_canonica', 'ordem_funil',
   'camada', 'responsavel', 'motivo_perda', 'data_evento', 'dia', 'mes',
+  'origem_comercial',
 ].join(', ')
 
 async function fetchPerdas(filters: Filters): Promise<{ rows: PerdaEvento[]; error: string | null }> {
@@ -54,6 +59,7 @@ async function fetchPerdas(filters: Filters): Promise<{ rows: PerdaEvento[]; err
       // Defensive: excluir eventos de perda cujo deal era teste (view já filtra, mas garantimos)
       .or('nome_negociacao.is.null,nome_negociacao.not.ilike.%teste%')
 
+    if (filters.origem) q = q.eq('origem_comercial', filters.origem)
     if (filters.marca) q = q.eq('marca', filters.marca)
     if (filters.dataInicio) q = q.gte('dia', filters.dataInicio)
     if (filters.dataFim)    q = q.lte('dia', filters.dataFim)
@@ -80,7 +86,7 @@ export function usePerdas(filters: Filters = {}): UseResult {
     if (err) { setError(err); setLoading(false); return }
     setData(rows)
     setLoading(false)
-  }, [filters.marca, filters.dataInicio, filters.dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.marca, filters.dataInicio, filters.dataFim, filters.origem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -95,7 +101,7 @@ export function usePerdas(filters: Filters = {}): UseResult {
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [filters.marca, filters.dataInicio, filters.dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.marca, filters.dataInicio, filters.dataFim, filters.origem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { data, loading, error }
 }

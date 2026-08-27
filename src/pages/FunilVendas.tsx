@@ -4,6 +4,7 @@ import { Download, TrendingDown, Trophy, Info, X, ChevronDown } from 'lucide-rea
 import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
+import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
@@ -318,7 +319,7 @@ function DeltaSecundario({ delta, label }: { delta: number | null; label: string
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const { brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
@@ -378,7 +379,7 @@ export function FunilVendas() {
   const { porMarca: metaPorMarca } = useMetaResumo({ mesesKeys: mesesMeta })
 
   // ── Dados ───────────────────────────────────────────────────────────────────
-  const { data: rows, loading, error } = useFunilVendas(marcaFetch)
+  const { data: rows, loading, error } = useFunilVendas(origem, marcaFetch)
   const { data: curMedia } = useMediaData({ marca: marcaFetch, dataInicio: range.start, dataFim: range.end })
   const { data: prevMedia } = useMediaData({ marca: marcaFetch, dataInicio: prev.start, dataFim: prev.end })
 
@@ -390,6 +391,7 @@ export function FunilVendas() {
   // de `vw_funil_vendas`, já filtrados) — ver useFunilEventos.
   const { data: eventos } = useFunilEventos({
     enabled: true,
+    origem,
     inicio: range.start,
     // No modo safra o evento pode ser posterior à janela do MQL.
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
@@ -405,13 +407,13 @@ export function FunilVendas() {
     [marcasSelecionadas],
   )
   const scope = useMemo(
-    () => buildScopeFilter({ marcas: marcasParaEscopo, fontes, subFontes }),
-    [marcasParaEscopo, fontes, subFontes],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes }),
+    [origem, marcasParaEscopo, fontes, subFontes],
   )
   // Mesmo escopo, mas sem restrição de marca — base pra quebrar KPIs por marca
   // no dropdown do card de Meta (funciona com o quanto de dado já veio: se
   // `marcaFetch` filtrou 1 marca no servidor, só tem aquela marca mesmo).
-  const scopeSemMarca = useMemo(() => buildScopeFilter({ fontes, subFontes }), [fontes, subFontes])
+  const scopeSemMarca = useMemo(() => buildScopeFilter({ origem, fontes, subFontes }), [origem, fontes, subFontes])
 
   // `ranges` é a união exata dos períodos selecionados (1 ou vários) — nunca
   // usar `range` (caixa delimitadora) aqui, senão multi-seleção não-contígua
@@ -795,6 +797,7 @@ export function FunilVendas() {
 
       <PageTop
         title="Visão Macro"
+        titleAside={<OrigemToggle />}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         actions={
           <button

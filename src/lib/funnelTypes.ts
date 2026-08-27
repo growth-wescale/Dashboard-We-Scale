@@ -6,6 +6,10 @@
  * por ciclo, cada um com suas próprias datas de etapa, SDR e Closer.
  * Por isso identidade de linha usa `dealKey()`, nunca `id_lead` sozinho.
  */
+export type OrigemComercial = 'Inbound' | 'Prospecção Ativa'
+
+export const ORIGENS: readonly OrigemComercial[] = ['Inbound', 'Prospecção Ativa']
+
 export interface FunnelRow {
   id_lead: string
   /** 1 = original, 2+ = reciclagens. */
@@ -16,6 +20,15 @@ export interface FunnelRow {
 
   marca: string | null
   nome_funil: string | null
+  /**
+   * Motor comercial do negócio: 'Prospecção Ativa' se QUALQUER evento dele
+   * aconteceu no funil de mesmo nome, 'Inbound' caso contrário.
+   *
+   * Não confundir com `fonte_macro`, que também tem um valor
+   * "Prospecção Ativa": são dimensões ortogonais e não se alinham 100%
+   * (há deals Inbound com fonte 'Prospecção Ativa' e vice-versa).
+   */
+  origem_comercial: OrigemComercial | null
   /** Etapa crua do RD; precisa passar por resolveStage() antes de contar. */
   etapa_funil: string | null
   status_atual: 'Em andamento' | 'Ganho' | 'Perdido' | 'Excluído' | null

@@ -64,6 +64,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
 | `vw_deal_etapa_periodos` | entrada/saída por etapa — base do modo Aging |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
+| `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo` |
 
 `vw_marketing_funil` é a view **antiga**; ainda serve Performance Detalhada e
 Análise de Perda até elas serem migradas. Não usar em código novo.
@@ -72,8 +73,44 @@ Análise de Perda até elas serem migradas. Não usar em código novo.
 
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro
+- `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 só pro toggle de vendas (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
+
+### Inbound × Prospecção Ativa
+
+São dois motores comerciais que não se comparam, e desde 27/08 as três abas de
+Vendas mostram **um de cada vez** (toggle ao lado do título, sem estado
+"Todos"). A regra:
+
+> Um deal é **Prospecção Ativa** se QUALQUER evento dele aconteceu no funil
+> "Prospecção Ativa". Caso contrário é **Inbound**. A prospecção contamina o
+> deal inteiro — prospectado e depois negociado no Closer continua sendo
+> Prospecção Ativa.
+
+Três alternativas foram medidas e **descartadas**, todas dão resultado errado:
+
+1. `nome_funil` — é o funil do **último** evento do ciclo. 620 ciclos nascidos
+   no SDR aparecem como "Closer" só por causa do handoff
+2. `fonte_macro = 'Prospecção Ativa'` — dimensão ortogonal (origem de captura,
+   não funil de trabalho). 10 ciclos Inbound têm essa fonte; e dentro da
+   Prospecção Ativa a maior fatia nem usa esse valor: 856 `Prospecção Ativa`
+   + **391 `Resgate`** + 2 `Inbound`
+3. funil do **primeiro** evento do ciclo — deixa de fora 90 ciclos que nasceram
+   em Odonto Scale/SDR e migraram pro Prospecção Ativa no meio do caminho, sem
+   terem sido perdidos
+
+**Grão é o deal, não o ciclo, e dá no mesmo:** medido, **0 deals em 6.126** têm
+um ciclo Inbound e outro Prospecção Ativa. Por isso a classificação sai direto
+de `deal_eventos`, sem tocar em `mv_deal_ciclo_enriquecido`.
+
+**Prospecção Ativa tem 0 vendas e R$ 0 de receita em toda a base** — os ganhos
+e a receita inteira estão no Inbound. Não é bug de contagem: bate com a regra
+de que Prospecção Ativa nunca tem Closer. No toggle dela o funil morre antes do
+Fechamento e a conversão global é 0%.
+
+Qualquer relatório novo (n8n, RPC, e-mail) tem que ler `origem_comercial` das
+views, nunca reimplementar a regra.
 
 ### Event Sourcing dirigido por configuração
 
@@ -161,6 +198,7 @@ src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (
 
 | Controle | Efeito |
 |---|---|
+| **Origem** (ao lado do título, não na barra) | Inbound × Prospecção Ativa. Filtrado **no servidor** — as opções de todos os outros filtros passam a derivar só do recorte ativo |
 | Marca | multi-seleção estilo Excel. Todas marcadas == Consolidado. 2+ marcas: busca sem filtro no servidor e filtra no cliente |
 | Período | granularidade (dia/mês/trimestre/ano) + quais períodos (multi-seleção estilo Excel, exceto no modo Dia) |
 | Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado. **Opções vêm dos dados, nunca de lista fixa** |
@@ -246,6 +284,7 @@ sem conversão de fuso.
 ## 8. Pendências conhecidas
 
 - [ ] **Performance Detalhada e Análise de Perda** ainda leem `vw_marketing_funil` e têm filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext` — Performance Detalhada já ganhou um bloco novo (`FunilCompletoSection`) na base nova, mas o resto da página continua na antiga
+- [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **Motivos de perda hardcoded** em `src/constants/motivosPerda.ts` (listas de string, frágil a acento)
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
@@ -259,6 +298,68 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-27 — Toggle Inbound × Prospecção Ativa nas três abas de Vendas
+Junior pediu para separar Visão Macro, Performance Detalhada e Análise de Perda
+entre os dois motores comerciais, com toggle ao lado do título de cada aba.
+
+**A regra que ele descreveu não cobria a base inteira.** O pedido era por
+origem — nasceu em SDR/Odonto Scale/Closer, ou a retomada foi num desses. Medindo,
+90 ciclos ficam de fora: nasceram num funil Inbound e foram movidos pro
+Prospecção Ativa **no meio do ciclo**, sem perda entre as duas coisas (59 de
+Odonto Scale, 27 do funil legado Oral Unic, 4 do SDR). Caso real:
+`6a3fc687dc26a1001da6f887`, criado 27/06 em "Odonto Scale > Novos Leads",
+movido pro Prospecção Ativa em 10/07 sem ter sido perdido, perdido lá em 17/07.
+Junior decidiu: **Prospecção Ativa contamina o ciclo inteiro.** Regra e
+alternativas descartadas na seção 3.
+
+**Achado que simplificou tudo:** 0 deals em 6.126 têm um ciclo de cada origem.
+Grão-deal e grão-ciclo dão resultado idêntico, então a classificação sai de um
+agregado de `deal_eventos` — **a matview não foi tocada**, nem DROP, nem índice,
+nem o job do `pg_cron`.
+
+Banco: view nova `vw_deal_origem_comercial` + coluna `origem_comercial` por
+`LEFT JOIN` (com `coalesce → 'Inbound'`) em `vw_funil_vendas`,
+`vw_funil_etapas_v2`, `vw_funil_compat`, `vw_marketing_funil` e `vw_perdas`.
+Tudo `CREATE OR REPLACE`, aplicado direto no Supabase de Expansão. Cobertura
+100% (nenhum deal sem evento). Checksums idênticos ao antes em todas as 5 views:
+6.035 ciclos, 40 ganhos, R$ 1.925.827,98 ao centavo.
+
+`EXPLAIN ANALYZE` da query real do `useFunilVendas`: **11ms → 36ms por página**.
+O critério definido no spec era materializar se passasse de 50ms — não passou,
+então ficou como view. Se apertar, `mv_deal_origem_comercial` (6k linhas) no
+mesmo cron de 2min resolve.
+
+Front: `origem` no `SharedFiltersContext` (persistido, padrão Inbound, entra no
+`resetFiltros`), `OrigemToggle.tsx` novo, slot `titleAside` no `PageTop`.
+**O filtro é no servidor** — vale porque é sempre um valor só, sem a ambiguidade
+que obriga a marca a filtrar no cliente com 2+ selecionadas. Efeito colateral
+bom: Inbound são ~5 páginas em vez de 7, fica mais rápido que antes. E as opções
+de todos os outros filtros (marca, fonte, sub-fonte, SDR, closer) passaram a
+seguir o toggle de graça, porque já derivam das linhas carregadas.
+
+**Cuidado herdado:** `origem_comercial` pode ser filtrada no servidor em
+`vw_funil_etapas_v2`, mas `marca` não — a marca ali vem de retrato
+denormalizado, nula em ~17% dos eventos. A origem vem de join com COALESCE e
+nunca é nula; conferido que 14.873 + 1.636 = 16.509, o total da view.
+
+**MQL da Performance Detalhada e da Análise de Perda trocou de banco.** Vinha do
+Supabase de **Marketing** (`useLeads` + `isLeadMql`), que não conhece funil do
+RD e por isso não separava por origem. Passou a vir de `data_novo_mql` da
+Expansão, mesma fonte da Visão Macro — decisão do Junior, ciente de que o número
+muda de patamar. `data_novo_mql` entrou no `.or()` de data do
+`usePerformanceEquipe`, senão deal com MQL na janela mas criado antes sumia.
+Referência de agosto/26: 765 MQL Inbound + 898 Prospecção Ativa — mais da metade
+do topo do funil era prospecção diluída no consolidado.
+
+Card de Meta ficou **inalterado** de propósito (meta cheia nos dois lados) — ver
+pendência na seção 8.
+
+**Não verificado na tela.** O app exige login e o ambiente desta sessão bloqueou
+subir o dev server, então o toggle compila e está testado, mas ninguém olhou o
+posicionamento renderizado.
+
+Spec: `docs/superpowers/specs/2026-08-27-toggle-inbound-prospeccao-ativa-design.md`
 
 ### 2026-08-25 — Unidades mostra 0 (não 1) quando o deal não tem produto
 Ajuste rápido logo depois de a coluna Unidades passar a aparecer em qualquer

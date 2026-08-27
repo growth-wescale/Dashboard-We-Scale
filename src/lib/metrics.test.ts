@@ -58,6 +58,7 @@ function row(over: Partial<FunnelRow> = {}): FunnelRow {
     data_pre_contrato: null,
     data_venda: null,
     data_perdido: null,
+    origem_comercial: 'Inbound',
     ...over,
   } as FunnelRow
 }
@@ -458,6 +459,53 @@ describe('buildScopeFilter', () => {
 
   it('combina critérios com AND', () => {
     expect(buildScopeFilter({ marcas: ['Inpot'], fontes: ['Resgate'] })(r)).toBe(false)
+  })
+})
+
+// ── Origem comercial: Inbound × Prospecção Ativa ───────────────────────────
+
+describe('origem comercial', () => {
+  const inbound = row({ origem_comercial: 'Inbound' })
+  const pa = row({ origem_comercial: 'Prospecção Ativa' })
+
+  it('separa as duas origens', () => {
+    expect(buildScopeFilter({ origem: 'Inbound' })(inbound)).toBe(true)
+    expect(buildScopeFilter({ origem: 'Inbound' })(pa)).toBe(false)
+    expect(buildScopeFilter({ origem: 'Prospecção Ativa' })(pa)).toBe(true)
+    expect(buildScopeFilter({ origem: 'Prospecção Ativa' })(inbound)).toBe(false)
+  })
+
+  it('sem origem no filtro, aceita as duas', () => {
+    expect(buildScopeFilter({})(inbound)).toBe(true)
+    expect(buildScopeFilter({})(pa)).toBe(true)
+  })
+
+  // A view garante COALESCE(..., 'Inbound'); o cliente não pode sumir com a
+  // linha se algum dia chegar nula.
+  it('linha sem origem cai em Inbound', () => {
+    const semOrigem = row({ origem_comercial: null })
+    expect(buildScopeFilter({ origem: 'Inbound' })(semOrigem)).toBe(true)
+    expect(buildScopeFilter({ origem: 'Prospecção Ativa' })(semOrigem)).toBe(false)
+  })
+
+  it('combina com os demais critérios por AND', () => {
+    const r2 = row({ origem_comercial: 'Prospecção Ativa', marca: 'Inpot' })
+    expect(buildScopeFilter({ origem: 'Prospecção Ativa', marcas: ['Inpot'] })(r2)).toBe(true)
+    expect(buildScopeFilter({ origem: 'Inbound', marcas: ['Inpot'] })(r2)).toBe(false)
+  })
+
+  // O requisito do Junior: as opções dos filtros seguem o toggle ativo.
+  it('as opções de fonte derivam só do recorte da origem ativa', () => {
+    const linhas = [
+      row({ id_lead: 'a', origem_comercial: 'Inbound', fonte_macro: 'Inbound' }),
+      row({ id_lead: 'b', origem_comercial: 'Prospecção Ativa', fonte_macro: 'Prospecção Ativa' }),
+      row({ id_lead: 'c', origem_comercial: 'Prospecção Ativa', fonte_macro: 'Resgate' }),
+    ]
+    const fontesDe = (origem: 'Inbound' | 'Prospecção Ativa') =>
+      [...new Set(linhas.filter(buildScopeFilter({ origem })).map(l => l.fonte_macro))].sort()
+
+    expect(fontesDe('Inbound')).toEqual(['Inbound'])
+    expect(fontesDe('Prospecção Ativa')).toEqual(['Prospecção Ativa', 'Resgate'])
   })
 })
 

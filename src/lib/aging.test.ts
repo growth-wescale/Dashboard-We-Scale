@@ -110,6 +110,7 @@ const fakeRow = (over: Partial<FunnelRow>): FunnelRow => ({
   eh_ciclo_atual: true,
   marca: 'Oral Unic',
   nome_funil: 'Oral Unic',
+  origem_comercial: 'Inbound',
   etapa_funil: 'Contato Efetivo',
   status_atual: 'Em andamento',
   nome_negociacao: 'Deal 1',

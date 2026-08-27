@@ -4,8 +4,6 @@ import { usePerformanceEquipe } from '@/hooks/usePerformanceEquipe'
 import type { FunilCompatRow } from '@/hooks/usePerformanceEquipe'
 import { useMetasPerformance, findMeta, metaTimeSdr, metaTimeCloserFat } from '@/hooks/useMetasPerformance'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
-import { useLeads } from '@/hooks/useLeads'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { inPeriod } from '@/lib/vendasUtils'
 import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
 import { nf, pct, moneyBig } from '@/lib/format'
@@ -13,6 +11,8 @@ import { currentMonthRange, monthLabelLong as monthLabel, fmtBR, daysInMonth, da
 import { SCard, KTile } from '@/components/ui/v2'
 import { downloadCsv } from '@/lib/csv'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { OrigemToggle } from '@/components/ui/OrigemToggle'
+import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { FunilCompletoSection } from '@/components/ui/FunilCompletoSection'
 
 const BRANDS = BRANDS_WITH_OVERVIEW
@@ -29,10 +29,12 @@ function activeRows(rows: FunilCompatRow[]) {
   return rows.filter(r => r.status_atual !== 'Excluído')
 }
 
-function computeKpis(rows: FunilCompatRow[], di: string, df: string, mqlCount: number) {
+function computeKpis(rows: FunilCompatRow[], di: string, df: string) {
   const R = activeRows(rows)
-  // MQL vem do banco Marketing (useLeads + isLeadMql), não de data_mql da Expansão
-  const mql   = mqlCount
+  // MQL vem da Expansão (data_novo_mql), não mais do banco de Marketing: só a
+  // Expansão sabe o funil do negócio, e sem isso o toggle Inbound × Prospecção
+  // Ativa não teria efeito sobre este KPI.
+  const mql   = R.filter(r => inPeriod(r.data_novo_mql, di, df)).length
   const tent  = R.filter(r => inPeriod(r.data_tentando_contato, di, df)).length
   const ce    = R.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length
   const sql   = R.filter(r => inPeriod(r.data_agendamento_reuniao_sql, di, df)).length
@@ -326,18 +328,16 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
 // ─── Página ────────────────────────────────────────────────────────────────
 
 export function PerformanceVendas() {
+  const { origem } = useSharedFilters()
   const [brandKey, setBrandKey] = useState<string>('overview')
   const [{ start, end }, setRange] = useState(currentMonthRange())
   const [brandOpen, setBrandOpen] = useState(false)
 
   const brand = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
   const mesKey = start.slice(0, 7)
-  const { data: rows, error: rowsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end })
+  const { data: rows, error: rowsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end, origem })
   const { data: roster } = useRosterVendas()
   const { data: metas, error: metasError }  = useMetasPerformance({ mesKey, marca: brand.marca })
-  // MQL vem SEMPRE do banco Marketing (P1 confirmado)
-  const { data: rawLeads } = useLeads({ marca: brand.marca, dataInicio: start, dataFim: end })
-  const mqlCount = useMemo(() => deduplicateLeads(rawLeads).filter(isLeadMql).length, [rawLeads])
 
   useEffect(() => {
     const handler = () => setRange({ ...currentMonthRange() })
@@ -345,7 +345,7 @@ export function PerformanceVendas() {
     return () => window.removeEventListener('dashboard:refresh', handler)
   }, [])
 
-  const kpis = useMemo(() => computeKpis(rows, start, end, mqlCount), [rows, start, end, mqlCount])
+  const kpis = useMemo(() => computeKpis(rows, start, end), [rows, start, end])
 
   // Conversões
   const convTopo = useMemo(() => [
@@ -376,7 +376,10 @@ export function PerformanceVendas() {
       {/* Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 34, lineHeight: 1.1, color: 'var(--ws-text-primary)', margin: 0 }}>Performance Detalhada</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h1 style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 34, lineHeight: 1.1, color: 'var(--ws-text-primary)', margin: 0 }}>Performance Detalhada</h1>
+            <OrigemToggle />
+          </div>
           <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ws-text-secondary)' }}>
             {brand.label} · {monthLabel(start)}
           </div>

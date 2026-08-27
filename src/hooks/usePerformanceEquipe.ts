@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import type { OrigemComercial } from '@/lib/funnelTypes'
 
 // vw_funil_compat = mesmo grão de vw_marketing_funil (1 linha por deal)
 // + nome_sdr, nome_closer. Colunas de data usam nomes diferentes em compat
@@ -25,12 +26,15 @@ export interface FunilCompatRow {
   motivo_perda: string | null
   valor_contrato: number | null
   funil: string | null
+  origem_comercial: OrigemComercial | null
 }
 
 interface Filters {
   marca?: string
   dataInicio?: string
   dataFim?: string
+  /** Motor comercial. Filtrado no servidor: é sempre um valor só. */
+  origem?: OrigemComercial
 }
 
 interface UseResult {
@@ -45,7 +49,7 @@ const SELECT = [
   'data_criacao_negociacao', 'data_novo_mql', 'data_tentando_contato',
   'data_contato_efetivo', 'data_agendamento_reuniao_sql', 'data_reuniao_realizada', 'data_sal',
   'data_oportunidade', 'data_venda', 'data_perdido', 'data_no_show',
-  'status_atual', 'motivo_perda', 'valor_contrato', 'funil',
+  'status_atual', 'motivo_perda', 'valor_contrato', 'funil', 'origem_comercial',
 ].join(', ')
 
 async function fetchRows(filters: Filters): Promise<{ rows: FunilCompatRow[]; error: string | null }> {
@@ -74,8 +78,12 @@ async function fetchRows(filters: Filters): Promise<{ rows: FunilCompatRow[]; er
     // Excluir deals de teste sem tocar na base
     q = q.or('nome_negociacao.is.null,nome_negociacao.not.ilike.%teste%')
 
+    if (filters.origem) q = q.eq('origem_comercial', filters.origem)
+
+    // data_novo_mql entra na lista porque o KPI de MQL destas páginas passou a
+    // ler da Expansão: sem ela, deal com MQL na janela mas criado antes sumia.
     if (filters.dataInicio) q = q.or(
-      `data_criacao_negociacao.gte.${filters.dataInicio},data_agendamento_reuniao_sql.gte.${filters.dataInicio},data_reuniao_realizada.gte.${filters.dataInicio},data_sal.gte.${filters.dataInicio},data_venda.gte.${filters.dataInicio}`,
+      `data_criacao_negociacao.gte.${filters.dataInicio},data_novo_mql.gte.${filters.dataInicio},data_agendamento_reuniao_sql.gte.${filters.dataInicio},data_reuniao_realizada.gte.${filters.dataInicio},data_sal.gte.${filters.dataInicio},data_venda.gte.${filters.dataInicio}`,
     )
     if (filters.dataFim) q = q.lte('data_criacao_negociacao', filters.dataFim + 'T23:59:59')
 
@@ -101,7 +109,7 @@ export function usePerformanceEquipe(filters: Filters = {}): UseResult {
     if (err) { setError(err); setLoading(false); return }
     setData(rows)
     setLoading(false)
-  }, [filters.marca, filters.dataInicio, filters.dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.marca, filters.dataInicio, filters.dataFim, filters.origem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
@@ -116,7 +124,7 @@ export function usePerformanceEquipe(filters: Filters = {}): UseResult {
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [filters.marca, filters.dataInicio, filters.dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filters.marca, filters.dataInicio, filters.dataFim, filters.origem]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return { data, loading, error }
 }

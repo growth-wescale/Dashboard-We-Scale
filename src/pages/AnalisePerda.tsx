@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Download, Filter } from 'lucide-react'
 import { usePerdas, type PerdaEvento } from '@/hooks/usePerdas'
 import { usePerformanceEquipe, type FunilCompatRow } from '@/hooks/usePerformanceEquipe'
-import { useLeads } from '@/hooks/useLeads'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
-import type { Lead } from '@/lib/types'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo, type CategoriaMotivo } from '@/constants/motivosPerda'
 import { BRANDS_WITH_OVERVIEW, BRAND_ACCENT } from '@/constants/brands'
@@ -13,6 +10,9 @@ import { currentMonthRange, fmtBR, monthLabelLong as monthLabel } from '@/lib/da
 import { SCard, KTile } from '@/components/ui/v2'
 import { downloadCsv } from '@/lib/csv'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { OrigemToggle } from '@/components/ui/OrigemToggle'
+import { useSharedFilters } from '@/contexts/SharedFiltersContext'
+import { inPeriod } from '@/lib/vendasUtils'
 
 // ─── Brand config ──────────────────────────────────────────────────────────
 
@@ -37,10 +37,12 @@ interface KpisHeader {
   etapaTop: string        // etapa_canonica que mais perde
 }
 
-function computeKpis(perdas: PerdaEvento[], deals: FunilCompatRow[], mqlCount: number): KpisHeader {
+function computeKpis(perdas: PerdaEvento[], deals: FunilCompatRow[], di: string, df: string): KpisHeader {
   const activeDeals = deals.filter(d => d.status_atual !== 'Excluído')
-  // MQLs vêm do banco Marketing (P1): já contados no chamador
-  const mqlsPeriodo = mqlCount
+  // MQL vem da Expansão (data_novo_mql), não mais do banco de Marketing: só a
+  // Expansão sabe o funil do negócio, e sem isso o toggle Inbound × Prospecção
+  // Ativa não teria efeito sobre este KPI nem sobre a taxa de perda.
+  const mqlsPeriodo = activeDeals.filter(d => inPeriod(d.data_novo_mql, di, df)).length
 
   // Deduplica perda por deal (1 deal pode ter 2 eventos de perda em reciclagem)
   const perdaByDeal = new Map<string, PerdaEvento>()
@@ -177,12 +179,13 @@ function computeResponsaveis(perdas: PerdaEvento[]): RespRow[] {
 }
 
 interface MarcaRow { marca: string; qtd: number; pctSobreMql: number }
-function computeMarcas(perdas: PerdaEvento[], leadsMql: Lead[]): MarcaRow[] {
-  // MQL por marca vem do banco Marketing (leads deduplicados e filtrados por isLeadMql no chamador)
+function computeMarcas(perdas: PerdaEvento[], deals: FunilCompatRow[], di: string, df: string): MarcaRow[] {
+  // MQL por marca vem da Expansão, mesma fonte do KPI de topo.
   const mqlsPorMarca = new Map<string, number>()
-  for (const l of leadsMql) {
-    if (!l.marca) continue
-    mqlsPorMarca.set(l.marca, (mqlsPorMarca.get(l.marca) ?? 0) + 1)
+  for (const d of deals) {
+    if (!d.marca || d.status_atual === 'Excluído') continue
+    if (!inPeriod(d.data_novo_mql, di, df)) continue
+    mqlsPorMarca.set(d.marca, (mqlsPorMarca.get(d.marca) ?? 0) + 1)
   }
   const perdidoPorMarca = new Map<string, Set<string>>()
   for (const p of perdas) {
@@ -279,6 +282,7 @@ function Heatmap({ motivos, etapas, celulas }: { motivos: string[]; etapas: Etap
 // ─── Página ───────────────────────────────────────────────────────────────
 
 export function AnalisePerda() {
+  const { origem } = useSharedFilters()
   const [brandKey, setBrandKey] = useState<string>('overview')
   const [{ start, end }, setRange] = useState(currentMonthRange())
   const [brandOpen, setBrandOpen] = useState(false)
@@ -286,11 +290,8 @@ export function AnalisePerda() {
   const [respTab, setRespTab] = useState<'todos' | 'SDR' | 'Closer'>('todos')
 
   const brand = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
-  const { data: perdas, error: perdasError } = usePerdas({ marca: brand.marca, dataInicio: start, dataFim: end })
-  const { data: deals, error: dealsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end })
-  // MQLs vêm do banco Marketing (P1)
-  const { data: rawLeads } = useLeads({ marca: brand.marca, dataInicio: start, dataFim: end })
-  const leadsMql = useMemo(() => deduplicateLeads(rawLeads).filter(isLeadMql), [rawLeads])
+  const { data: perdas, error: perdasError } = usePerdas({ marca: brand.marca, dataInicio: start, dataFim: end, origem })
+  const { data: deals, error: dealsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end, origem })
 
   useEffect(() => {
     const handler = () => setRange({ ...currentMonthRange() })
@@ -298,12 +299,12 @@ export function AnalisePerda() {
     return () => window.removeEventListener('dashboard:refresh', handler)
   }, [])
 
-  const kpis     = useMemo(() => computeKpis(perdas, deals, leadsMql.length), [perdas, deals, leadsMql])
+  const kpis     = useMemo(() => computeKpis(perdas, deals, start, end), [perdas, deals, start, end])
   const motivos  = useMemo(() => computeMotivos(perdas), [perdas])
   const etapas   = useMemo(() => computeEtapas(perdas, deals), [perdas, deals])
   const cruz     = useMemo(() => computeCruzamentos(perdas), [perdas])
   const resps    = useMemo(() => computeResponsaveis(perdas), [perdas])
-  const marcas   = useMemo(() => computeMarcas(perdas, leadsMql), [perdas, leadsMql])
+  const marcas   = useMemo(() => computeMarcas(perdas, deals, start, end), [perdas, deals, start, end])
   const evitavel = useMemo(() => computeEvitavel(perdas), [perdas])
 
   const motivosFiltrados = motivoTab === 'todos'
@@ -317,7 +318,10 @@ export function AnalisePerda() {
       {/* Header ── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 34, lineHeight: 1.1, color: 'var(--ws-text-primary)', margin: 0 }}>Análise de Perda</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h1 style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 34, lineHeight: 1.1, color: 'var(--ws-text-primary)', margin: 0 }}>Análise de Perda</h1>
+            <OrigemToggle />
+          </div>
           <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ws-text-secondary)' }}>{brand.label} · {monthLabel(start)}</div>
         </div>
 

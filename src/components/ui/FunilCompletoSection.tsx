@@ -24,7 +24,7 @@ import type { BrandDef } from '@/constants/brands'
 import type { Marca } from '@/lib/types'
 
 export function FunilCompletoSection() {
-  const { brandKeys, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { origem, brandKeys, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
 
   const marcasSelecionadas = useMemo(
     () => brandKeys.map(k => BRAND_LIST.find(b => b.key === k)).filter((b): b is BrandDef => !!b),
@@ -45,18 +45,19 @@ export function FunilCompletoSection() {
     [marcasSelecionadas],
   )
 
-  const { data: rows, loading } = useFunilVendas(marcaFetch)
+  const { data: rows, loading } = useFunilVendas(origem, marcaFetch)
   // Sem marca no servidor — o recorte vem de `idsEscopo`. Ver useFunilEventos.
   const { data: eventos } = useFunilEventos({
     enabled: true,
+    origem,
     inicio: range.start,
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
   })
   const { data: curMedia } = useMediaData({ marca: marcaFetch, dataInicio: range.start, dataFim: range.end })
 
   const scope = useMemo(
-    () => buildScopeFilter({ marcas: marcasParaEscopo, fontes, subFontes }),
-    [marcasParaEscopo, fontes, subFontes],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes }),
+    [origem, marcasParaEscopo, fontes, subFontes],
   )
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
   const win = useMemo(

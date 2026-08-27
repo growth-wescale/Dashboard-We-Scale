@@ -17,7 +17,8 @@ import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useFunilAging } from '@/hooks/useFunilAging'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
-import { computeAging } from '@/lib/aging'
+import { computeAging, dealsInAging } from '@/lib/aging'
+import { fmtDias } from '@/components/ui/dealDrawerShared'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
@@ -26,6 +27,7 @@ import {
   rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
+import type { FunnelRow } from '@/lib/funnelTypes'
 import {
   mesesDoPeriodo, periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
@@ -67,11 +69,6 @@ function fmtMs(ms: number): string {
   return d > 0 ? `${d}d ${h}h` : `${h}h`
 }
 
-function fmtDias(d: number | null): string {
-  if (d === null) return '—'
-  return d < 1 ? `${Math.round(d * 24)}h` : `${d.toFixed(d < 10 ? 1 : 0)}d`
-}
-
 // ─── AgingList ─────────────────────────────────────────────────────────────────
 
 interface EtapaLeadtimeRow {
@@ -85,7 +82,11 @@ interface EtapaLeadtimeRow {
 }
 
 /** Lista de etapas com 2 leadtimes — usada pelos modos Aging e Atual. */
-function EtapaLeadtimeList({ linhas, accent }: { linhas: EtapaLeadtimeRow[]; accent: string }) {
+function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
+  linhas: EtapaLeadtimeRow[]; accent: string
+  /** Clique numa etapa abre o popup com os deals por trás do número. */
+  onRowClick?: (etapa: StageKey) => void
+}) {
   if (linhas.length === 0) {
     return <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', padding: '24px 0' }}>
       Nenhum negócio em aberto no recorte selecionado.
@@ -101,7 +102,21 @@ function EtapaLeadtimeList({ linhas, accent }: { linhas: EtapaLeadtimeRow[]; acc
         <span style={{ textAlign: 'right' }}>Média em andamento</span>
       </div>
       {linhas.map(l => (
-        <div key={l.etapa} style={{ display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, alignItems: 'center' }}>
+        <div key={l.etapa}
+          onClick={onRowClick ? () => onRowClick(l.etapa) : undefined}
+          onKeyDown={onRowClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(l.etapa) } } : undefined}
+          role={onRowClick ? 'button' : undefined}
+          tabIndex={onRowClick ? 0 : undefined}
+          title={onRowClick ? `Ver deals em ${l.label}` : undefined}
+          style={{
+            display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, alignItems: 'center',
+            cursor: onRowClick ? 'pointer' : undefined,
+            borderRadius: 6, padding: onRowClick ? '5px 6px' : undefined, margin: onRowClick ? '0 -6px' : undefined,
+            transition: 'background .12s',
+          }}
+          onMouseEnter={onRowClick ? e => { (e.currentTarget as HTMLDivElement).style.background = 'color-mix(in srgb, var(--ws-border) 30%, transparent)' } : undefined}
+          onMouseLeave={onRowClick ? e => { (e.currentTarget as HTMLDivElement).style.background = '' } : undefined}
+        >
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
               <span style={{ color: 'var(--ws-text-primary)' }}>{l.label}</span>
@@ -466,16 +481,24 @@ export function FunilVendas() {
     }))
   }, [modo, scoped, eventos, win, viewModes])
 
-  // MQL de cada deal vivo — alimenta "média em andamento" nos modos Aging e Atual.
-  const mqlPorDealVivo = useMemo(() => {
-    const map = new Map<string, string>()
+  // Deal vivo (em andamento no ciclo atual e com MQL conhecido) indexado por
+  // id_lead — base do cruzamento do Aging e do popup de deals por etapa.
+  const vivosRowById = useMemo(() => {
+    const map = new Map<string, FunnelRow>()
     for (const r of scoped) {
       if (r.eh_ciclo_atual && r.status_atual === 'Em andamento' && r.data_novo_mql) {
-        map.set(String(r.id_lead), r.data_novo_mql)
+        map.set(String(r.id_lead), r)
       }
     }
     return map
   }, [scoped])
+
+  // MQL de cada deal vivo — alimenta "média em andamento" nos modos Aging e Atual.
+  const mqlPorDealVivo = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [id, r] of vivosRowById) map.set(id, r.data_novo_mql!)
+    return map
+  }, [vivosRowById])
 
   // Etapas na mesma sequência do funil Performance — só as que têm negócio parado.
   function ordenarPorMacroStages(porStageKey: Map<StageKey, { deals: number; mediaEtapa: number | null; mediaAndamento: number | null }>): EtapaLeadtimeRow[] {
@@ -540,8 +563,9 @@ export function FunilVendas() {
   // pra nunca mostrar uma lista diferente do número que a pessoa clicou.
   const dealsDoClique = useMemo(() => {
     if (!clickedStage) return []
+    if (modo === 'aging') return dealsInAging(periodos, vivosRowById, clickedStage)
     return dealsInStage(scoped, eventos, clickedStage, win, viewModes, modo === 'atual' ? 'atual' : 'performance')
-  }, [clickedStage, scoped, eventos, win, viewModes, modo])
+  }, [clickedStage, modo, periodos, vivosRowById, scoped, eventos, win, viewModes])
 
   // Deals ganhos no recorte — base dos pop-ups leves de Receita/Fechamentos/Vendas por fonte.
   const ganhosNoPeriodo = useMemo(
@@ -856,9 +880,9 @@ export function FunilVendas() {
           </div>
           <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
-              ? <EtapaLeadtimeList linhas={aging} accent={accent} />
+              ? <EtapaLeadtimeList linhas={aging} accent={accent} onRowClick={setClickedStage} />
               : modo === 'atual'
-                ? <EtapaLeadtimeList linhas={atualLeadtime} accent={accent} />
+                ? <EtapaLeadtimeList linhas={atualLeadtime} accent={accent} onRowClick={setClickedStage} />
                 : <TrapFunnel stages={funnel} invest={invest} accent={accent} dark={dark}
                     onStageClick={key => setClickedStage(key as StageKey)}
                     repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
@@ -915,9 +939,10 @@ export function FunilVendas() {
         onClose={() => setClickedStage(null)}
         stage={clickedStage}
         stageLabel={clickedStage ? (MACRO_STAGE_LABEL[clickedStage] ?? STAGE_LABEL[clickedStage]) : ''}
-        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        subtitle={modo === 'performance' ? `${scopeLabel} · ${subtitlePeriodo}` : `${scopeLabel} · posição atual`}
         deals={dealsDoClique}
         accent={accent}
+        leadtimeCols={modo !== 'performance'}
       />
 
       <RepeatedDealsDrawer

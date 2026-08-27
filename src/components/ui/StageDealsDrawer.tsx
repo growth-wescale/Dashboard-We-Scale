@@ -4,7 +4,7 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT } from '@/constants/brands'
 import { nf } from '@/lib/format'
-import { BarList, StatusBadge, cell, fmtData, topBreakdown } from './dealDrawerShared'
+import { BarList, StatusBadge, cell, fmtData, fmtDias, diasDesde, topBreakdown } from './dealDrawerShared'
 import { MultiSelect, ordenarOpcoes } from './MultiSelect'
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
@@ -32,10 +32,16 @@ interface StageDealsDrawerProps {
   subtitle: string
   deals: StageDeal[]
   accent: string
+  /** Modos Aging/Atual: troca a coluna "Data na etapa" por "Parado na etapa" e
+   *  "Em andamento" (dias), e ordena os mais travados no topo. */
+  leadtimeCols?: boolean
 }
 
-export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, deals, accent }: StageDealsDrawerProps) {
+export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, deals, accent, leadtimeCols = false }: StageDealsDrawerProps) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
+  // Congela o "agora" no primeiro render — as colunas de tempo e a ordenação
+  // não precisam mudar a cada re-render enquanto o drawer está na tela.
+  const [agora] = useState(() => Date.now())
 
   const options = useMemo(() => ({
     marca: ordenarOpcoes([...new Set(deals.map(d => d.row.marca?.trim()).filter((v): v is string => !!v))]),
@@ -56,10 +62,20 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
 
   const hasFilters = Object.values(filters).some(v => v.length > 0)
 
+  // Aging/Atual: os mais parados na etapa primeiro — é a leitura que importa
+  // nesses modos. Performance mantém a ordem dos eventos.
+  const ordered = useMemo(() => {
+    if (!leadtimeCols) return filtered
+    return [...filtered].sort((a, b) => (diasDesde(b.dataEtapa, agora) ?? -1) - (diasDesde(a.dataEtapa, agora) ?? -1))
+  }, [filtered, leadtimeCols, agora])
+
   // Unidades vem do produto do deal (vw_deal_ciclo_enriquecido), disponível em
   // qualquer etapa — não só em Fechamento, já que o produto pode ser definido
-  // antes da venda se concretizar.
-  const headers = ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Data na etapa']
+  // antes da venda se concretizar. Nos modos Aging/Atual a última coluna vira
+  // duas: quanto tempo parado na etapa e há quanto tempo o deal está no funil.
+  const headers = leadtimeCols
+    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Parado na etapa', 'Em andamento']
+    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Data na etapa']
 
   const porMarca = useMemo(
     () => topBreakdown(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
@@ -165,13 +181,13 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {ordered.length === 0 ? (
                 <tr>
                   <td colSpan={headers.length} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal encontrado para os filtros selecionados.
                   </td>
                 </tr>
-              ) : filtered.map(({ row: r, dataEtapa }, i) => (
+              ) : ordered.map(({ row: r, dataEtapa }, i) => (
                 <tr key={`${r.id_lead}::${r.ciclo}::${i}`} style={{
                   background: i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--ws-border) 20%, transparent)',
                   borderBottom: '1px solid var(--ws-border)',
@@ -193,7 +209,14 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {nf(r.quantidade_unidades ?? 0)}
                   </td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
+                  {leadtimeCols ? (
+                    <>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(diasDesde(dataEtapa, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtDias(diasDesde(r.data_novo_mql, agora))}</td>
+                    </>
+                  ) : (
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
+                  )}
                 </tr>
               ))}
             </tbody>

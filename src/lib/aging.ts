@@ -7,7 +7,8 @@
  */
 
 import { resolveStage } from '@/lib/metrics'
-import type { EtapaPeriodoRow } from '@/lib/funnelTypes'
+import type { StageDeal, StageKey } from '@/lib/metrics'
+import type { EtapaPeriodoRow, FunnelRow } from '@/lib/funnelTypes'
 
 export interface AgingPorEtapa {
   etapa: string
@@ -78,4 +79,40 @@ export function computeAging(
     mediaEtapa: media(b.etapa),
     mediaAndamento: media(b.andamento),
   }))
+}
+
+/**
+ * Deals por trás do número de uma etapa no modo Aging — espelha exatamente o
+ * mesmo filtro do loop de `computeAging` (deal vivo, `data_entrada` válida, sem
+ * data futura, etapa canônica), só que preservando a `FunnelRow` para o popup.
+ *
+ * `vivosRowById` (id_lead -> linha) faz o papel do `dealsVivos` do
+ * `computeAging`: só entram deals em andamento no ciclo atual, já filtrados por
+ * marca e fonte. `dataEtapa` carrega a entrada na etapa, base do "parado na
+ * etapa" mostrado no popup.
+ */
+export function dealsInAging(
+  periodos: EtapaPeriodoRow[],
+  vivosRowById: Map<string, FunnelRow>,
+  stage: StageKey,
+  agora = Date.now(),
+): StageDeal[] {
+  const out: StageDeal[] = []
+
+  for (const p of periodos) {
+    if (!p.etapa || !p.data_entrada) continue
+
+    const row = vivosRowById.get(String(p.deal_id))
+    if (!row) continue
+
+    const entrada = new Date(p.data_entrada).getTime()
+    if (Number.isNaN(entrada)) continue
+    if ((agora - entrada) / DIA_MS < 0) continue
+
+    if ((resolveStage(p.etapa) ?? p.etapa) !== stage) continue
+
+    out.push({ row, dataEtapa: p.data_entrada })
+  }
+
+  return out
 }

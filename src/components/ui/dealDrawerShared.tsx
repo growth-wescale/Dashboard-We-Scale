@@ -6,6 +6,23 @@ export function fmtData(value: string | null): string {
   return iso ? fmtBR(iso) : '—'
 }
 
+/** Dias corridos (com "h" abaixo de 1 dia) — usado nas colunas de tempo do
+ *  popup nos modos Aging/Atual e na lista de etapas da Visão Macro. */
+export function fmtDias(d: number | null): string {
+  if (d === null) return '—'
+  return d < 1 ? `${Math.round(d * 24)}h` : `${d.toFixed(d < 10 ? 1 : 0)}d`
+}
+
+/** Dias entre `iso` e `agora`; null quando a data falta, é inválida ou está
+ *  no futuro (relógio torto) — não inventa tempo negativo. */
+export function diasDesde(iso: string | null | undefined, agora: number): number | null {
+  if (!iso) return null
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return null
+  const dias = (agora - t) / 86_400_000
+  return dias >= 0 ? dias : null
+}
+
 export function cell(value: string | null | undefined): string {
   return value?.trim() ? value : '—'
 }

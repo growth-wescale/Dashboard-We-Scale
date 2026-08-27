@@ -51,7 +51,7 @@ export interface MultiSelectOption { value: string; label: string }
  * Nenhum item marcado = sem filtro (mostra tudo) — a menos que `minSelected`
  * exija um piso (ex.: período e marca nunca podem ficar vazios).
  */
-export function MultiSelect({ label, options, selected, onChange, minSelected = 0, allLabel }: {
+export function MultiSelect({ label, options, selected, onChange, minSelected = 0, allLabel, universoTotal }: {
   label: string
   options: readonly MultiSelectOption[]
   selected: string[]
@@ -60,6 +60,14 @@ export function MultiSelect({ label, options, selected, onChange, minSelected = 
   minSelected?: number
   /** Rótulo quando TODAS as opções estão marcadas (ex.: "Consolidado" pra Marca). */
   allLabel?: string
+  /**
+   * Tamanho do domínio completo, quando `options` pode vir menor que ele (ex.:
+   * Marca só lista quem tem dado na origem atual, mas "todas selecionadas"
+   * continua significando as 7 marcas de verdade, não as 5 exibidas — sem
+   * isso o rótulo mostraria "5 selecionados" no lugar de "Consolidado").
+   * Default: `options.length`, igual antes.
+   */
+  universoTotal?: number
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -75,7 +83,7 @@ export function MultiSelect({ label, options, selected, onChange, minSelected = 
 
   const resumo = selected.length === 0
     ? 'Todas'
-    : allLabel && selected.length === options.length
+    : allLabel && selected.length === (universoTotal ?? options.length)
       ? allLabel
       : selected.length === 1
         ? (options.find(o => o.value === selected[0])?.label ?? selected[0])

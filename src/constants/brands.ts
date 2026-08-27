@@ -56,3 +56,24 @@ export function findBrandByMarca(marca: string | null | undefined): BrandDef | u
 export const BRAND_ACCENT: Record<string, string> = Object.fromEntries(
   BRAND_LIST.map(b => [b.marca!, b.accent]),
 )
+
+/**
+ * Opções do filtro de Marca — mesma regra de Fonte/Sub-Fonte, adaptada ao fato
+ * de Marca ser "todas marcadas por padrão" (Consolidado), não "nenhuma".
+ *
+ * Com tudo marcado (Consolidado), a seleção não é uma preferência real a
+ * proteger: a lista mostra só o que tem dado no recorte atual (ex.: dentro do
+ * toggle de origem comercial). Isolar 1+ marca de propósito é diferente — aí
+ * ela entra na lista mesmo que suma do recorte, senão o usuário fica com um
+ * filtro marcado e sem como desmarcar.
+ */
+export function opcoesMarcaDisponiveis(
+  marcasDisponiveis: string[] | undefined,
+  brandKeys: string[],
+): BrandDef[] {
+  const consolidado = brandKeys.length === BRAND_LIST.length
+  const chaves = new Set(
+    consolidado ? (marcasDisponiveis ?? BRAND_LIST.map(b => b.key)) : [...(marcasDisponiveis ?? []), ...brandKeys],
+  )
+  return BRAND_LIST.filter(b => chaves.has(b.key))
+}

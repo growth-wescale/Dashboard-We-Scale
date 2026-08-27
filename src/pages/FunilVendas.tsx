@@ -460,6 +460,14 @@ export function FunilVendas() {
     () => [...new Set(rows.map(r => normalizeSubFonte(r.utm_source) as string))],
     [rows],
   )
+  // Marca, ao contrário de Fonte/Sub-Fonte, era lista fixa (BRAND_LIST inteira)
+  // — não tinha efeito nenhum do toggle de origem. Eletrovias, Viva e Premium
+  // Club não têm nenhum deal em Prospecção Ativa; sem isso o dropdown deixava
+  // selecionar uma marca que sempre voltava vazia nesse toggle.
+  const marcasDisponiveis = useMemo(() => {
+    const presentes = new Set(rows.map(r => r.marca).filter((v): v is string => !!v))
+    return BRAND_LIST.filter(b => b.marca && presentes.has(b.marca)).map(b => b.key)
+  }, [rows])
 
   // ── Funil ───────────────────────────────────────────────────────────────────
   // Só usado no modo Performance — Aging e Atual usam EtapaLeadtimeList (abaixo).
@@ -811,7 +819,7 @@ export function FunilVendas() {
         }
       />
 
-      <FilterBar fontesDisponiveis={fontesDisponiveis} subFontesDisponiveis={subFontesDisponiveis} />
+      <FilterBar marcasDisponiveis={marcasDisponiveis} fontesDisponiveis={fontesDisponiveis} subFontesDisponiveis={subFontesDisponiveis} />
 
       <QueryErrorBanner errors={[error]} scope="Visão Macro" />
 

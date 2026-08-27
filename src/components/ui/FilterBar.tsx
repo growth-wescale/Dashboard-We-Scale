@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
-import { BRAND_LIST } from '@/constants/brands'
+import { BRAND_LIST, opcoesMarcaDisponiveis } from '@/constants/brands'
 import { SUB_FONTE_GRUPOS } from '@/lib/fonteMapping'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { opcoesPara } from '@/lib/periodo'
@@ -67,13 +67,15 @@ function Segmented<T extends string>({ value, onChange, options }: {
 
 interface FilterBarProps {
   extra?: ReactNode
+  /** Chaves de BRAND_LIST presentes nos dados (ex.: dentro do toggle de origem). */
+  marcasDisponiveis?: string[]
   /** Valores de fonte_macro presentes nos dados. Sem isso o filtro fica vazio. */
   fontesDisponiveis?: string[]
   /** Grupos de sub-fonte presentes nos dados. */
   subFontesDisponiveis?: string[]
 }
 
-export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: FilterBarProps) {
+export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFontesDisponiveis }: FilterBarProps) {
   const {
     brandKeys, setBrandKeys,
     periodMode, setPeriodMode,
@@ -99,7 +101,10 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
     return () => obs.disconnect()
   }, [])
 
-  const opcoesMarca = useMemo(() => BRAND_LIST.map(b => ({ value: b.key, label: b.label })), [])
+  const opcoesMarca = useMemo(
+    () => opcoesMarcaDisponiveis(marcasDisponiveis, brandKeys).map(b => ({ value: b.key, label: b.label })),
+    [marcasDisponiveis, brandKeys],
+  )
 
   // Opções vindas dos dados. O que já está selecionado entra na lista mesmo que
   // suma dos dados — senão o usuário fica com um filtro ativo que não consegue
@@ -134,7 +139,7 @@ export function FilterBar({ extra, fontesDisponiveis, subFontesDisponiveis }: Fi
         }}
       >
         <Field label="Marca">
-          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} minSelected={1} allLabel="Consolidado" />
+          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} minSelected={1} allLabel="Consolidado" universoTotal={BRAND_LIST.length} />
         </Field>
 
         <Field label="Período">

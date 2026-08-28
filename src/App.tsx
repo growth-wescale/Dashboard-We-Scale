@@ -10,14 +10,12 @@ import { SharedFiltersProvider } from '@/contexts/SharedFiltersContext'
 const VisaoGeral        = lazy(() => import('@/pages/VisaoGeral').then(m => ({ default: m.VisaoGeral })))
 const SaudeDaMarca      = lazy(() => import('@/pages/SaudeDaMarca').then(m => ({ default: m.SaudeDaMarca })))
 const MetaCopaB2B       = lazy(() => import('@/pages/MetaCopaB2B').then(m => ({ default: m.MetaCopaB2B })))
-const Cadencias         = lazy(() => import('@/pages/Cadencias').then(m => ({ default: m.Cadencias })))
 const SopMarketing      = lazy(() => import('@/pages/SopMarketing').then(m => ({ default: m.SopMarketing })))
 const FunilVendas       = lazy(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
 const PerformanceVendas = lazy(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
 const AnalisePerda      = lazy(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
 const AnaliseObjecoes   = lazy(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
 const GpSetembro        = lazy(() => import('@/pages/GpSetembro').then(m => ({ default: m.GpSetembro })))
-const AnaliseTermos     = lazy(() => import('@/pages/AnaliseTermos').then(m => ({ default: m.AnaliseTermos })))
 
 // Fallback discreto durante carga do chunk (~100-300ms)
 function PageLoader() {
@@ -39,15 +37,15 @@ function RoutedContent() {
           <Route path="/"              element={<VisaoGeral />} />
           <Route path="/marca"         element={<SaudeDaMarca />} />
           <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
-          <Route path="/cadencias"     element={<Cadencias />} />
           <Route path="/sop-marketing" element={<SopMarketing />} />
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
           <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
           <Route path="/gp-setembro"        element={<GpSetembro />} />
           <Route path="/analise-perda"      element={<AnalisePerda />} />
-          <Route path="/analise-termos"     element={<AnaliseTermos />} />
           <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
+          <Route path="/cadencias"         element={<Navigate to="/" replace />} />
+          <Route path="/analise-termos"    element={<Navigate to="/marca" replace />} />
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

@@ -301,6 +301,43 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-08-28 — Odonto Legacy na SOP: rename, KPI strip novo, volume por etapa CRM, funil inverso scrollable
+Junior pediu quatro coisas no slide Odonto Legacy da SOP, aplicadas nas duas
+superfícies (React `SopMarketing.tsx` + estática `sop-weekly.html`):
+
+1. **Rename**. Label da aba passa de "Odonto Scale" (React) / "Oral Unic Legacy"
+   (HTML) pra `Odonto Legacy` nos dois. `marca: 'Odonto Scale'` continua no
+   banco (regra `feedback_odonto_vocabulario.md`).
+2. **KPI strip vira 3 cards**: `Invest · MQL · (CP-MQL + Custo/membro
+   comunidade)`. Removi LEADS. O 3º card ficou duplo: `KpiCard` ganhou campo
+   opcional `extra?: { label; value }` renderizado abaixo dos deltas com
+   divisor. Custo/membro = `mtdInvest / COMUNIDADE_LEGACY_ATUAL.total` (80,
+   hardcoded no constants). No HTML a `mkt` table equivalente passou de
+   `[Invest, MQL, Leads]` pra `[Invest, MQL, CP-MQL, Custo/membro]` — sem os
+   dois valores (semana/MTD) sendo divididos por 80 (semana R$ 64 é meio sem
+   sentido, mas mantém a paridade visual do layout).
+3. **Volume por etapa do CRM** abaixo do gráfico MQL Semanal (Col 1) — só
+   Odonto Legacy. Snapshot: deals ativos hoje agrupados pelas 8 etapas da
+   Visão Macro (`MACRO_STAGES_SOP` local ao arquivo, mesma sequência do
+   `MACRO_STAGES` de `FunilVendas.tsx`). Usa `resolveStage` do `metrics.ts`
+   sobre `rawCrmAll` já filtrado por marca pelo `useVendasFunil`. No HTML
+   virou um bloco `extras` novo com valores hardcoded do snapshot 28/08
+   (MQL 2 · Contato efetivo 1 · SQL 1 · Diagnóstico 1 · SAL 2 · resto 0);
+   16 deals em Tentando Contato ficam de fora (não estão na Visão Macro).
+4. **Funil Inverso scrollable** (mês corrente): `overflow: 'visible'` →
+   `overflowY: 'auto'` no card da Col 3, mesmo padrão do card "MTD vs MTD"
+   (Col 2). Caso mês fechado mantém `overflow: 'hidden'` porque o
+   `ClosedInverseFunnel` tem layout fixo. Antes cortava embaixo quando o
+   funil ficava mais alto que a coluna.
+
+Deploy manual via rsync pra VPS (fora do fluxo padrão de PR). Commits
+`e75eb8f` e `11d1c3b` ficaram na `deploy-local`, ainda não abertos em PR.
+
+**Cuidado herdado** revelado no processo: a rotina de verificação diária
+comparava `main` local com `origin/main`, achando que `deploy-local` estava
+12 commits atrás. Não estava — `deploy-local` já continha os PRs #27-31 há
+tempos. Ver `feedback_deploy_check_deploy_local_nao_main.md`.
+
 ### 2026-08-28 — Limpeza: removidas Cadências e Análise de Termos
 Cadências não estava em uso ativo; Análise de Termos era redundante com a aba
 "termos" dentro de Saúde da Marca (mesmo componente `TermosPanel`).

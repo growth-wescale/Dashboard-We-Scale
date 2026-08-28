@@ -1127,7 +1127,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               : getUnidadesVendidasOverride(slide.marca, mesKey)
 
           return (
-            <div style={{ ...cardStyle, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
+            <div style={dates.isClosed
+              ? { ...cardStyle, overflow: 'hidden' }
+              : { ...cardStyle, overflowY: 'auto' }}>
               <div style={{
                 marginBottom: 6, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
@@ -1156,7 +1158,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                   )}
                 </div>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible', flexShrink: 0 }}>
                 {dates.isClosed && !isSemana ? (
                   <ClosedInverseFunnel
                     marca={slide.marca}

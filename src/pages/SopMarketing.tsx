@@ -12,6 +12,8 @@ import type { Lead, Marca } from '@/lib/types'
 import { InverseFunnel } from '@/components/ui/InverseFunnel'
 import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
+import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
+import { COMUNIDADE_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -225,7 +227,7 @@ const SLIDES: SlideConfig[] = [
   { id: 'liso',          label: 'Lisô Laser',   marca: 'Lisô Laser',   accent: '#FF6643' },
   { id: 'viva',          label: 'Viva',         marca: 'Viva',         accent: '#FF0069' },
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
-  { id: 'odonto-scale',  label: 'Odonto Scale', marca: 'Odonto Scale', accent: '#0ea5e9' },
+  { id: 'odonto-scale',  label: 'Odonto Scale', marca: 'Odonto Scale', accent: '#7f0c72' },
 ]
 
 // ── SVG Charts ─────────────────────────────────────────────────────────────────
@@ -657,7 +659,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     mtdAnt: { txt: string; col: string }
   }
 
-  const kpiCards: KpiCard[] = [
+  const kpiCardsAll: KpiCard[] = [
     {
       label: 'INVEST.',
       value: fmtBRL(w4.invest),
@@ -701,13 +703,20 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       mtdAnt: deltaLabel(funnelMtd.sal, funnelMtdP.sal),
     },
   ]
+  // Odonto Legacy: foco em receita/qualidade — remove CP-MQL, SQL, CP-SQL, SAL
+  const kpiCards: KpiCard[] = isOdontoLegacy
+    ? kpiCardsAll.filter(c => ['INVEST.', 'LEADS', 'MQL'].includes(c.label))
+    : kpiCardsAll
 
   // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
-  const mtdItems: MtdItem[] = [
-    { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
-    { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
-    { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
-  ]
+  // Odonto Legacy: foco em receita/qualidade, sem SQL/SAL (removidos do funil)
+  const mtdItems: MtdItem[] = isOdontoLegacy
+    ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql }]
+    : [
+        { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
+        { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
+        { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
+      ]
 
   // ── MQLs por faixa de capital de investimento ────────────────────────────────
   // Agrupa valores equivalentes (ex.: "50k_100k" e "De R$ 50 mil a R$ 100 mil"
@@ -832,7 +841,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCards.length}, 1fr)`, gap: 10 }}>
           {kpiCards.map(card => (
             <div key={card.label} style={{
               background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
@@ -892,14 +901,16 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               accent={acc}
             />
           </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
-              CP-MQL
+          {!isOdontoLegacy && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                CP-MQL
+              </div>
+              <div style={{ height: 110 }}>
+                <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
+              </div>
             </div>
-            <div style={{ height: 110 }}>
-              <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
-            </div>
-          </div>
+          )}
         </div>
         )}
 
@@ -1011,8 +1022,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           )}
         </div>
 
-        {/* Col 3: Funil inverso vs meta do período */}
-        {(() => {
+        {/* Col 3: Funil inverso — para Odonto Legacy, widget de qualidade da comunidade */}
+        {isOdontoLegacy ? (
+          <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
+        ) : (() => {
           const mesKey = dates.monthStart.slice(0, 7)
           const metaMes = getMetaVendas(slide.marca, mesKey)
           const [yStr, mStr] = mesKey.split('-')
@@ -1094,8 +1107,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         })()}
       </div>
 
-        {/* ── Horizontal Waterfall Funnel ── */}
-        {funnelStages.length > 0 && (
+        {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (foco em receita, não em SQL/SAL) ── */}
+        {!isOdontoLegacy && funnelStages.length > 0 && (
           <div style={{
             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', flexShrink: 0,

@@ -38,6 +38,7 @@ const VENDAS_SUB = [
   { key: 'performance-vendas',  label: 'Performance Detalhada' },
   { key: 'analise-perda',       label: 'Análise de Perda' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
+  { key: 'gp-setembro',         label: 'GP Setembro' },
 ]
 
 const NAV_ITEMS = [
@@ -85,12 +86,13 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/copa-b2b')) return 'copa'
   if (pathname.startsWith('/cadencias')) return 'cadencias'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro')) return 'vendas'
   if (pathname.startsWith('/analise-termos')) return 'analise-termos'
   return 'geral'
 }
 
 function getVendasActiveSub(pathname: string): string {
+  if (pathname.startsWith('/gp-setembro'))        return 'gp-setembro'
   if (pathname.startsWith('/analise-objecoes'))   return 'analise-objecoes'
   if (pathname.startsWith('/analise-perda'))      return 'analise-perda'
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
@@ -145,6 +147,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'performance-vendas') navigate('/performance-vendas')
     else if (key === 'analise-perda') navigate('/analise-perda')
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
+    else if (key === 'gp-setembro') navigate('/gp-setembro')
     else {
       setActiveBrand(key)
       navigate('/marca')

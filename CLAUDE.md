@@ -13,10 +13,12 @@ donos diferentes convivendo no mesmo app:
 
 | Área | Abas | Dono |
 |---|---|---|
-| Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, Cadências, S&OP Marketing, Análise de Termos | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance Detalhada, Análise de Perda, Análise de Objeções** | **Junior** |
+| Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
+| **Expansão / Vendas** | **Visão Macro, Performance Detalhada, Análise de Perda, Análise de Objeções, GP Setembro** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
+
+Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), não como página separada. Cadências foi removida em 28/08/2026 — não estava em uso ativo.
 
 - **Stack**: React 19 + TypeScript + Vite + Tailwind 4 + Supabase + React Router 7
 - **Produção**: https://dashboard.srv1816822.hstgr.cloud
@@ -298,6 +300,66 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-28 — Limpeza: removidas Cadências e Análise de Termos
+Cadências não estava em uso ativo; Análise de Termos era redundante com a aba
+"termos" dentro de Saúde da Marca (mesmo componente `TermosPanel`).
+
+Removidos: `src/pages/Cadencias.tsx`, `AnaliseTermos.tsx`, `useCadencias.ts`,
+`TouchpointDrawer.tsx`, tipos Fluxo/Motivo/Touchpoint/StatusExecucao/
+PrioridadeTp em `types.ts`, dep `@xyflow/react` (20 packages a menos).
+Total: 1.417 linhas + bundle Cadencias de ~201KB no chunk lazy.
+
+Rotas antigas `/cadencias` e `/analise-termos` viraram redirect (pra `/` e
+`/marca`) pra não 404 bookmarks e links no Slack.
+
+`TermosPanel` preservado — SaudeDaMarca continua usando na sub-aba termos por
+marca.
+
+### 2026-08-28 — SOP Odonto Legacy · duas superfícies, foco novo
+Card Odonto Legacy da SOP passou a focar em **receita + qualidade de execução
+da comunidade** (não meta unitária, SQL, SAL, CP-MQL). Aplicado em duas
+superfícies que precisam ficar em paridade:
+
+1. `public/sop-weekly.html` (estática, reunião) — CSS scope `.legacy-theme`
+   redefine `--teal` pra dourado; branch em `openBrand()` renderiza widget
+   de comunidade em vez de funil inverso quando `b.key === 'odonto'`.
+2. `src/pages/SopMarketing.tsx` (React, /sop-marketing) — quando
+   `slide.marca === 'Odonto Scale'`: KPI strip de 7 vira 3 (INVEST/LEADS/MQL),
+   MTD chart só MQL, sparkline CP-MQL oculto, Col 3 vira `ComunidadeLegacyPanel`,
+   waterfall funnel oculto. Accent do slide de `#0ea5e9` (azul solto) pra
+   `#7f0c72` (Legacy purple).
+
+Widget: 80 membros (73 Legacy + 4 iscas + 2 lista espera + 1 outros),
+quadrante dentista × clínica (ICP alto = dent+clin 24%, ~19 pessoas),
+alerta de 4 leads duplicados. Números em `src/constants/comunidadeLegacy.ts`
+pra Junior/Gabriel atualizarem semanalmente sem tocar em componente.
+
+Cores do site legacy.oralunic.com.br: `#7f0c72` primário + `#efbe5b`/`#CC993E`
+gold. Extraídas do CSS oficial do site (assets/styles-Dj8Jfko3.css).
+
+### 2026-08-28 — Nova aba GP Setembro (Vendas)
+Página estática de campanha de metas (tema Fórmula 1) como iframe em
+`/gp-setembro`, mesmo padrão da Análise de Objeções. HTML gerado como
+artifact Claude (bundler self-contained), copiado inteiro pra
+`public/gp-setembro.html`.
+
+Dados povoados: 5 closers reais de ago/2026 (Douglas, Jéssica, Aurélio,
+Vanessa Daniel, Rômulo), meta Set distribuída por closer usando
+mapping marca→closer observado em `DB_Metas_Performance` ago/2026 (Inpot→
+Douglas, Oral Unic→Aurélio, Lisô/B2Case/Eletrovias→Jéssica, Viva→Douglas,
+Legacy→Vanessa, Rômulo sem meta). Total time (soma): 32 un / R$ 769.752 —
+não bate exatamente com R$ 723.800 do xlsx WE SCALE (só Franquia), porque
+inclui Legacy da Vanessa. Se precisar segregar, avisar.
+
+Componente do artifact (bundle interno) foi patchado pra:
+- Renderizar unidades ao lado de R$ (card do time + card por piloto)
+- Safe divide quando closer tem `metaMes: 0` (evita NaN no ranking)
+
+Histórico mar-ago dos closers é real (% atingimento meta_financeira vs
+ganhos do `vw_funil_vendas`), não mock. `INFO` (dia/semana do mês) recomputa
+a cada carregamento — hoje mostra dia 0 pré-Setembro, começa a contar
+1/09.
 
 ### 2026-08-27 — Toggle Inbound × Prospecção Ativa nas três abas de Vendas
 Junior pediu para separar Visão Macro, Performance Detalhada e Análise de Perda

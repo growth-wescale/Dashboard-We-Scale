@@ -41,6 +41,8 @@ export interface FunnelRow {
   fonte_macro: string | null
   sub_fonte: string | null
   utm_source: string | null
+  /** Campo "Sub-Fonte" do RD CRM (payload->>'Sub-Fonte'). Fallback quando não há utm_source. */
+  sub_fonte_crm?: string | null
   utm_medium?: string | null
   utm_campaign?: string | null
 

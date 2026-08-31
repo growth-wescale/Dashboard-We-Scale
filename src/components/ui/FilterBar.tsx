@@ -10,7 +10,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { BRAND_LIST, opcoesMarcaDisponiveis } from '@/constants/brands'
-import { SUB_FONTE_GRUPOS } from '@/lib/fonteMapping'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { opcoesPara } from '@/lib/periodo'
 import type { OpcaoPeriodo, PeriodMode } from '@/lib/periodo'
@@ -106,15 +105,17 @@ export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFont
     [marcasDisponiveis, brandKeys],
   )
 
-  // Opções vindas dos dados. O que já está selecionado entra na lista mesmo que
-  // suma dos dados — senão o usuário fica com um filtro ativo que não consegue
-  // desmarcar. SUB_FONTE_GRUPOS entra como piso porque é um domínio fechado.
+  // Opções vindas dos dados — já cruzadas com os demais filtros ativos e o
+  // período (ver `opcoesFiltro` em FunilVendas). O que já está selecionado
+  // entra na lista mesmo que suma do recorte, senão o usuário fica com um
+  // filtro ativo que não consegue desmarcar. Sub-fonte deixou de ter piso
+  // fixo: com o fallback pro campo "Sub-Fonte" do RD não é mais domínio fechado.
   const opcoesFonte = useMemo(
     () => ordenarOpcoes([...new Set([...(fontesDisponiveis ?? []), ...fontes])]).map(v => ({ value: v, label: v })),
     [fontesDisponiveis, fontes],
   )
   const opcoesSubFonte = useMemo(
-    () => ordenarOpcoes([...new Set([...(subFontesDisponiveis ?? SUB_FONTE_GRUPOS), ...subFontes])]).map(v => ({ value: v, label: v })),
+    () => ordenarOpcoes([...new Set([...(subFontesDisponiveis ?? []), ...subFontes])]).map(v => ({ value: v, label: v })),
     [subFontesDisponiveis, subFontes],
   )
   const opcoesPeriodo: OpcaoPeriodo[] = useMemo(

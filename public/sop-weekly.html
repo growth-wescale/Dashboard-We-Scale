@@ -361,8 +361,8 @@
       <div class="acao-badge"><div class="k">15 cadências ativadas · leitura</div><div class="d">MTD 24 · Ago 2026</div></div>
     </div>
     <div class="astats">
-      <div class="astat"><div class="v">2.774 <small>entregues</small></div><div class="l">E-mails que chegaram na caixa</div></div>
-      <div class="astat"><div class="v">141 <small>abertos · 5,1%</small></div><div class="l">Aberturas únicas</div></div>
+      <div class="astat"><div class="v">3.263 <small>entregues</small></div><div class="l">E-mails que chegaram na caixa</div></div>
+      <div class="astat"><div class="v">337 <small>abertos · 11,55%</small></div><div class="l">Aberturas únicas</div></div>
       <div class="astat"><div class="v">— <small>cliques</small></div><div class="l">Ainda sem dados de clique</div></div>
       <div class="astat"><div class="v">01/09 <small>Franqueados + colaboradores</small></div><div class="l">Disparo do Mês da Indicação · Set/2026</div></div>
     </div>
@@ -383,13 +383,13 @@
       <div class="reguas-head">Réguas — visão consolidada</div>
       <div class="reguas-list">
         <div class="rg-row"><span class="rg-status ok">Ativa</span><span class="rg-nome">Reativação MQL 2026</span><span class="rg-det">11 e-mails · 3 segmentos (frios, no-shows, não fecharam) · portfólio (6 marcas)</span></div>
-        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Indicação Franqueados</span><span class="rg-det">Oral Unic, Lisô, Inpot (avaliação) · 4 e-mails (E1, E2, E3, mensal)</span></div>
-        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Indicação Colaboradores</span><span class="rg-det">We Scale + franquias · 2 e-mails (E1, E2)</span></div>
-        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Mês da Indicação · Set/2026</span><span class="rg-det">3 e-mails (lançamento, meio, última chamada) · disparo cross-portfólio</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica hoje</span><span class="rg-nome">Indicação Franqueados</span><span class="rg-det">Oral Unic, Lisô, Inpot (avaliação) · 4 e-mails (E1, E2, E3, mensal)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica hoje</span><span class="rg-nome">Indicação Colaboradores</span><span class="rg-det">We Scale + franquias · 2 e-mails (E1, E2)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica hoje</span><span class="rg-nome">Mês da Indicação · Set/2026</span><span class="rg-det">3 e-mails (lançamento, meio, última chamada) · disparo cross-portfólio</span></div>
       </div>
       <div class="rg-note">Prêmio por fechamento: <b>R$ 10.000 em setembro</b> (Mês da Indicação) · <b>R$ 5.000</b> nos demais meses. Régua de MQL segue rodando em paralelo.</div>
     </div>
-    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques da régua MQL (gatilho ainda não disparou) e publicar as 3 réguas de Indicação em 01/09.</span></div>
+    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques da régua MQL (gatilho ainda não disparou) e publicar as 3 réguas de Indicação hoje.</span></div>
   </section>
 
   <div class="frentes" id="frentes"></div>
@@ -419,30 +419,29 @@ const FRENTES=[
   ["Ops","Relatório diário unificado em construção."],
   ["Vendas/TI","IAs em teste: página de obrigado da B2Case + Odonto Legacy + Inpot."],
   ["Vendas","Início do teste da plataforma de disparos (RED)."],
-  ["Odonto","Reconstrução — ideal uma reunião dedicada à frente."],
-  ["Scale Partner","Provou o modelo de evento presencial."],
+  ["Scale Partner","Próximo evento agendado para 7 e 8 de outubro."],
 ];
 
 // Lanes ficam com o mesmo texto da última reunião — Gabriel atualiza semanalmente.
 const BRANDS=[
- {key:"b2case",name:"B2Case",tag:"Capinhas · atacado",status:"attn",badge:"3 de 4 un vendidas",dark:false,
-  lanes:{ctx:[["com","Bom bot na entrada, mas leads somem ao ver o preço"],["com","3 de 6 perdas por objeção de budget; advogados/funcionários públicos evoluem melhor"]],dev:[["mkt","Nova comunicação em teste + filtro de capital na abertura"],["mkt","Nova LP: lead chega sabendo o investimento"]],bkl:[],exe:[["mkt","Backlog de ajustes concluído — frente passou pra teste"]]},
-  meta:{mes:4,sem:23,risco:true},
-  mkt:[["Investimento","R$ 3.502","R$ 13.143"],["MQL","48","227"],["Leads","165","632"],["CP-MQL","R$ 73","R$ 58"]],
-  vnd:{f:[[240,""],[210,"87,5%"],[140,"66,7%"],[112,"80,0%"],[75,"67,0%"],[49,"65,3%"],[15,"30,6%"],[10,"66,7%"],[2,"20,0%"],[1,"50,0%"],[2,"200,0%"],[3,""]],ns:12,fonte:"Inbound 2 (67%) · Sem Classificação 1 (33%) · 2 negociações = 3 unidades",
+ {key:"b2case",name:"B2Case",tag:"Capinhas · atacado",status:"good",badge:"✓ 4 un vendidas · Meta batida",dark:false,
+  lanes:{ctx:[["com","3 de 6 perdas por objeção de budget; advogados/funcionários públicos evoluem melhor"]],dev:[],bkl:[],exe:[["mkt","Nova LP finalizada · lead chega sabendo o investimento"],["mkt","Ajuste no bot feito"],["mkt","Cadência de e-mail ativa"]]},
+  meta:{mes:4,sem:23,risco:false},
+  mkt:[["Investimento","R$ 3.257","R$ 16.400"],["MQL","66","293"],["Leads","165","632"],["CP-MQL","R$ 49","R$ 56"]],
+  vnd:{f:[[293,""],[210,"71,7%"],[140,"66,7%"],[112,"80,0%"],[75,"67,0%"],[49,"65,3%"],[38,"77,6%"],[12,"31,6%"],[2,"16,7%"],[1,"50,0%"],[2,"200,0%"],[4,""]],ns:12,fonte:"4 unidades vendidas · Meta ago batida",
    perdas:{total:172,top:[["Atingiu o fim da cadência",72,"42%"],["Parou de responder",27,"16%"],["Sem interesse / Não quis conversa",24,"14%"],["Sem resposta",11,"6%"],["Sem perfil (fora do ICP)",9,"5%"],["Sem Timing",6,"3%"],["Duplicado",4,"2%"],["Desistência após agendamento",3,"2%"],["Não é MQL (erro)",3,"2%"],["Sem contato após cadência SDR",2,"1%"]]}}},
 
- {key:"eletro",name:"Eletrovias",tag:"Eletropostos",status:"good",badge:"✓ Meta ago batida (3 un)",dark:false,
-  lanes:{ctx:[["com","4 reuniões de 14 agendadas — 3 viraram SAL"],["com","Perfil fotovoltaico acha que toca sozinho; segundo perfil vem sem capital"]],dev:[["com","SDRs qualificam e mandam material antes de agendar"],["mkt","Revisão de criativos + LP com foco no suporte da franqueadora"]],bkl:[["mkt","Nova LP focada nos benefícios da franquia"],["mkt","Formulário com IA + novos motes de criativos"]],exe:[["com","Corte de capital <R$50k: SQL +2%, conversão +7,4%"]]},
+ {key:"eletro",name:"Eletrovias",tag:"Eletropostos",status:"good",badge:"✓ 4 un vendidas · Meta ultrapassada",dark:false,
+  lanes:{ctx:[["com","4 reuniões de 14 agendadas — 3 viraram SAL"],["com","Perfil fotovoltaico acha que toca sozinho; segundo perfil vem sem capital"],["mkt","Melhor conversão após ajustes"]],dev:[["com","SDRs qualificam e mandam material antes de agendar"],["mkt","Nova LP em desenvolvimento"],["mkt","Formulário com bot em teste"]],bkl:[],exe:[["mkt","Revisão de criativos feita"]]},
   meta:{mes:3,sem:19,risco:false},
-  mkt:[["Investimento","R$ 2.050","R$ 5.863"],["MQL","64","149"],["Leads","270","816"],["CP-MQL","R$ 32","R$ 39"]],
-  vnd:{f:[[159,""],[126,"79,2%"],[92,"73,0%"],[97,"105,4%"],[53,"54,6%"],[42,"79,2%"],[19,"45,2%"],[9,"47,4%"],[5,"55,6%"],[3,"60,0%"],[3,"100,0%"],[3,""]],ns:10,fonte:"Inbound 3 (100%) · 2 negociações = 3 unidades",
+  mkt:[["Investimento","R$ 2.237","R$ 8.100"],["MQL","74","223"],["Leads","270","816"],["CP-MQL","R$ 30","R$ 36"]],
+  vnd:{f:[[223,""],[126,"56,5%"],[92,"73,0%"],[97,"105,4%"],[53,"54,6%"],[58,"109,4%"],[47,"81,0%"],[11,"23,4%"],[7,"63,6%"],[3,"42,9%"],[7,"233,3%"],[4,""]],ns:10,fonte:"4 unidades vendidas · Meta ago ultrapassada",
    perdas:{total:104,top:[["Sem contato após cadência SDR",30,"29%"],["Sem interesse / Não quis conversa",10,"10%"],["Parou de responder",8,"8%"],["Atingiu o fim da cadência",8,"8%"],["Sem Timing",6,"6%"],["No-Show sem retorno após reagendamento",6,"6%"],["Nossa solução não atende",5,"5%"],["Sem resposta",5,"5%"],["Sem perfil (fora do ICP)",4,"4%"],["Sem Budget - até 100k",4,"4%"]]}}},
 
- {key:"oral",name:"Oral Unic",tag:"Franquia odontológica",status:"attn",badge:"Atenção · sem SQL",dark:false,
-  lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[],bkl:[["mkt","Sobe hoje · Comunidade em formulário nativo (aprendizado do A/B)"],["mkt","Até 26/08 · Agente de IA em produção qualificando no WhatsApp"],["mkt","Em análise desde 20/08 · Odonto Legacy + Franquia via perfil We Scale (decisão pós-1 semana de funil)"],["mkt","Migrar investimento de aquisição de franquia para Ecossistema Oral Unic Legacy"]],exe:[["mkt","Novos roteiros na persona multiclínica"],["com","9 leads V4 perdidos: 5 inválidos, 2 fora de ICP"]]},
+ {key:"oral",name:"Oral Unic",tag:"Franquia odontológica",status:"attn",badge:"Atenção · 1 SQL / 1 reunião no mês",dark:false,
+  lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[["mkt","Agente de IA em teste · qualificando no WhatsApp"]],bkl:[],exe:[["mkt","Comunidade em formulário nativo publicado"],["mkt","Decisão tomada: Odonto Legacy + Franquia via perfil We Scale"],["mkt","Investimento migrado para Ecossistema Oral Unic Legacy"]]},
   meta:{mes:1,sem:7,risco:true},
-  mkt:[["Investimento","R$ 9.542","R$ 26.801"],["MQL","21","39"],["Leads","31","100"],["CP-MQL","R$ 454","R$ 687"]],
+  mkt:[["Investimento","R$ 22.999","R$ 49.800"],["MQL","29","68"],["Leads","31","100"],["CP-MQL","R$ 793","R$ 732"]],
   vnd:{f:[[473,""],[76,"16,1%"],[25,"32,9%"],[8,"32,0%"],[3,"37,5%"],[1,"33,3%"],[1,"100,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",
    perdas:{total:95,top:[["Sem contato após cadência",33,"35%"],["Sem perfil (fora do ICP)",15,"16%"],["Sem interesse / Não quis conversa",6,"6%"],["Atingiu o fim da cadência",5,"5%"],["Teste",5,"5%"],["Dados inválidos",5,"5%"],["Praça sem potencial",3,"3%"],["Sem contato após cadência SDR",3,"3%"],["Sem resposta",2,"2%"],["Sem Timing",2,"2%"]]}},
   extras:[
@@ -451,7 +450,7 @@ const BRANDS=[
   ]},
 
  {key:"odonto",name:"Odonto Legacy",tag:"Ecossistema odonto",status:"attn",badge:"R$ 35k de R$ 39,9k · 88%",dark:false,
-  lanes:{ctx:[["com","Realizado ago: R$ 35k (1 Odonto Club) · 88% da meta R$ 39,9k"],["mkt","Comunidade cresceu de 80 (27/08) para 107 (31/08) · +34% em 4 dias"]],dev:[["com","Agente de IA em produção qualificando os cadastros"],["mkt","Formulário nativo migrado · Comunidade em modelo definitivo"]],bkl:[["mkt","Configurar evento de conversão na campanha [CMD] no gerenciador (Meta otimiza sem sinal hoje)"]],exe:[["mkt","Campanha via perfil We Scale rodando desde 20/08 · [CMD] AQUISIÇÃO no ar"]]},
+  lanes:{ctx:[["com","Realizado ago: R$ 35k (1 Odonto Club) · 88% da meta R$ 39,9k"],["mkt","Comunidade cresceu de 80 (27/08) para 107 (31/08) · +34% em 4 dias"]],dev:[["mkt","Agente de IA em teste · qualificando cadastros"]],bkl:[],exe:[["mkt","Formulário nativo em execução"],["mkt","Campanha via perfil We Scale rodando · [CMD] AQUISIÇÃO"],["mkt","Evento de conversão ativo"]]},
   meta:{mes:"R$ 39,9k",sem:"—",risco:true,nota:"Foco: receita e qualidade de execução · não medimos por unidade"},
   mkt:[["Investimento","R$ 5.089","R$ 15.123"],["MQL","33","56"],["CP-MQL","R$ 154","R$ 270"],["Custo/membro","R$ 64","R$ 189"]],
   comunidade:{
@@ -479,23 +478,23 @@ const BRANDS=[
   ]},
 
  {key:"inpot",name:"Inpot",tag:"Franquia",status:"attn",badge:"Sem venda no mês",dark:true,
-  lanes:{ctx:[["mkt","MQLs +47% vs julho, mas SQL −27% e conversão −48%"]],dev:[["mkt","Formulário nativo em validação: 6 MQLs a CPMQL R$80"],["mkt","Novos públicos rodando + realocação de verba nas top performers"]],bkl:[],exe:[["mkt","LP otimizada; e-mail 3k contatos com 6% de abertura"],["com","9 conexões na semana; 4 perdidas por falta de perfil"]]},
+  lanes:{ctx:[["mkt","MQLs +47% vs julho · MQL→SQL 23,3% (era 14,5% no S1)"]],dev:[["mkt","Formulário nativo validado, sem grande volume ainda"],["mkt","Novos públicos rodando + realocação de verba nas top performers"]],bkl:[],exe:[["mkt","LP otimizada; e-mail 3k contatos com 6% de abertura"]]},
   meta:{mes:3,sem:15,risco:true},
-  mkt:[["Investimento","R$ 4.419","R$ 18.602"],["MQL","18","69"],["Leads","71","253"],["CP-MQL","R$ 245","R$ 270"]],
+  mkt:[["Investimento","R$ 5.698","R$ 24.300"],["MQL","21","90"],["Leads","71","253"],["CP-MQL","R$ 271","R$ 270"]],
   vnd:{f:[[92,""],[77,"83,7%"],[39,"50,6%"],[7,"17,9%"],[26,"371,4%"],[17,"65,4%"],[8,"47,1%"],[6,"75,0%"],[1,"16,7%"],[1,"100,0%"],[2,"200,0%"],[0,"0,0%"]],ns:10,fonte:"Sem vendas no período",
    perdas:{total:81,top:[["Sem resposta",13,"16%"],["Sem perfil (fora do ICP)",12,"15%"],["Parou de responder",7,"9%"],["Sem interesse / Não quis conversa",7,"9%"],["Sem contato após cadência SDR",5,"6%"],["Sem Timing",4,"5%"],["Teste",4,"5%"],["Momento atual até 6 meses",3,"4%"],["Praça indisponível",3,"4%"],["Dados inválidos",3,"4%"]]}}},
 
- {key:"liso",name:"Lisô Laser",tag:"Depilação a laser",status:"attn",badge:"Atenção · sem SQL",dark:false,
-  lanes:{ctx:[["mkt","Maior volume de MQLs desde maio; CTR e Connect Rate baixos"]],dev:[["mkt","Nova estrutura de campanha em validação"],["com","Captação do evento 28-29/10 começa esta semana (30+ franqueados)"]],bkl:[["mkt","Nova LP com ajustes de vendas"],["mkt","Nova leva de criativos para elevar CTR"]],exe:[]},
+ {key:"liso",name:"Lisô Laser",tag:"Depilação a laser",status:"attn",badge:"Atenção · 1 SQL / 1 reunião · connect ↑",dark:false,
+  lanes:{ctx:[["mkt","Continua com maior volume; Connect Rate melhorou"]],dev:[["mkt","Nova estrutura de campanha rodando · validação da tese"],["mkt","Nova LP e criativos em finalização de desenvolvimento"]],bkl:[],exe:[]},
   meta:{mes:2,sem:6,risco:true},
-  mkt:[["Investimento","R$ 4.159","R$ 20.649"],["MQL","12","32"],["Leads","51","127"],["CP-MQL","R$ 347","R$ 645"]],
+  mkt:[["Investimento","R$ 5.551","R$ 26.200"],["MQL","18","50"],["Leads","51","127"],["CP-MQL","R$ 308","R$ 525"]],
   vnd:{f:[[133,""],[38,"28,6%"],[18,"47,4%"],[8,"44,4%"],[2,"25,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",
    perdas:{total:31,top:[["Sem perfil (fora do ICP)",16,"52%"],["Dados inválidos",3,"10%"],["Teste",3,"10%"],["Atingiu o fim da cadência",2,"6%"],["Sem interesse / Não quis conversa",2,"6%"],["Sem contato após cadência SDR",1,"3%"],["Perfil de operador, sem capital",1,"3%"],["Sem resposta",1,"3%"],["Parou de responder",1,"3%"],["Não é MQL (erro)",1,"3%"]]}}},
 
- {key:"viva",name:"Viva",tag:"Nicho · baixa busca",status:"attn",badge:"Sem SAL no mês",dark:false,
-  lanes:{ctx:[["mkt","Volume estável, leve melhora de qualidade; Connect Rate baixo"],["com","Perfil recorrente ruim: construtor com capital sem intenção de operar"]],dev:[["mkt","Formulário em teste: 7 MQLs, 2 viraram SAL"]],bkl:[["com","Proposta em análise: unir perfil investidor com operacional"]],exe:[["mkt","Vídeo em público frio trouxe lead qualificado da semana"]]},
+ {key:"viva",name:"Viva",tag:"Nicho · baixa busca",status:"attn",badge:"Atenção · 2 SAL / sem oport",dark:false,
+  lanes:{ctx:[["mkt","Volume estável, perfil melhor"],["mkt","Formulário apresentou melhor qualificação"]],dev:[["com","Proposta em desenvolvimento: unir perfil investidor com operador"]],bkl:[],exe:[]},
   meta:{mes:1,sem:2,risco:true,nota:"Meta em set/nov — arrastada p/ ago"},
-  mkt:[["Investimento","R$ 2.866","R$ 10.064"],["MQL","9","40"],["Leads","10","61"],["CP-MQL","R$ 318","R$ 252"]],
+  mkt:[["Investimento","R$ 2.436","R$ 12.500"],["MQL","8","48"],["Leads","10","61"],["CP-MQL","R$ 305","R$ 260"]],
   vnd:{f:[[41,""],[39,"95,1%"],[28,"71,8%"],[11,"39,3%"],[8,"72,7%"],[6,"75,0%"],[4,"66,7%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",
    perdas:{total:27,top:[["Dados inválidos",5,"19%"],["Nossa solução não atende",4,"15%"],["Sem perfil (fora do ICP)",4,"15%"],["Atingiu o fim da cadência",3,"11%"],["Sem interesse / Não quis conversa",2,"7%"],["Benchmark",2,"7%"],["Sócio futuro",1,"4%"],["Sem Timing",1,"4%"],["Perfil de operador, sem capital",1,"4%"],["Sem resposta",1,"4%"]]}}}
 ];

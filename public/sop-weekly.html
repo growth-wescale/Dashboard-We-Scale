@@ -383,13 +383,13 @@
       <div class="reguas-head">Réguas — visão consolidada</div>
       <div class="reguas-list">
         <div class="rg-row"><span class="rg-status ok">Ativa</span><span class="rg-nome">Reativação MQL 2026</span><span class="rg-det">11 e-mails · 3 segmentos (frios, no-shows, não fecharam) · portfólio (6 marcas)</span></div>
-        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Indicação Franqueados</span><span class="rg-det">Oral Unic, Lisô, Inpot (avaliação) · 4 e-mails (E1, E2, E3, mensal)</span></div>
-        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Indicação Colaboradores</span><span class="rg-det">We Scale + franquias · 2 e-mails (E1, E2)</span></div>
-        <div class="rg-row"><span class="rg-status pending">Publica 01/09</span><span class="rg-nome">Mês da Indicação · Set/2026</span><span class="rg-det">3 e-mails (lançamento, meio, última chamada) · disparo cross-portfólio</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica hoje</span><span class="rg-nome">Indicação Franqueados</span><span class="rg-det">Oral Unic, Lisô, Inpot (avaliação) · 4 e-mails (E1, E2, E3, mensal)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica hoje</span><span class="rg-nome">Indicação Colaboradores</span><span class="rg-det">We Scale + franquias · 2 e-mails (E1, E2)</span></div>
+        <div class="rg-row"><span class="rg-status pending">Publica hoje</span><span class="rg-nome">Mês da Indicação · Set/2026</span><span class="rg-det">3 e-mails (lançamento, meio, última chamada) · disparo cross-portfólio</span></div>
       </div>
       <div class="rg-note">Prêmio por fechamento: <b>R$ 10.000 em setembro</b> (Mês da Indicação) · <b>R$ 5.000</b> nos demais meses. Régua de MQL segue rodando em paralelo.</div>
     </div>
-    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques da régua MQL (gatilho ainda não disparou) e publicar as 3 réguas de Indicação em 01/09.</span></div>
+    <div class="acao-next"><b>Próximo passo</b><span>Aguardar cliques da régua MQL (gatilho ainda não disparou) e publicar as 3 réguas de Indicação hoje.</span></div>
   </section>
 
   <div class="frentes" id="frentes"></div>
@@ -419,28 +419,27 @@ const FRENTES=[
   ["Ops","Relatório diário unificado em construção."],
   ["Vendas/TI","IAs em teste: página de obrigado da B2Case + Odonto Legacy + Inpot."],
   ["Vendas","Início do teste da plataforma de disparos (RED)."],
-  ["Odonto","Reconstrução — ideal uma reunião dedicada à frente."],
-  ["Scale Partner","Provou o modelo de evento presencial."],
+  ["Scale Partner","Próximo evento agendado para 7 e 8 de outubro."],
 ];
 
 // Lanes ficam com o mesmo texto da última reunião — Gabriel atualiza semanalmente.
 const BRANDS=[
- {key:"b2case",name:"B2Case",tag:"Capinhas · atacado",status:"attn",badge:"3 de 4 un vendidas",dark:false,
-  lanes:{ctx:[["com","Bom bot na entrada, mas leads somem ao ver o preço"],["com","3 de 6 perdas por objeção de budget; advogados/funcionários públicos evoluem melhor"]],dev:[["mkt","Nova comunicação em teste + filtro de capital na abertura"],["mkt","Nova LP: lead chega sabendo o investimento"]],bkl:[],exe:[["mkt","Backlog de ajustes concluído — frente passou pra teste"]]},
+ {key:"b2case",name:"B2Case",tag:"Capinhas · atacado",status:"good",badge:"✓ 4 un vendidas · Meta batida",dark:false,
+  lanes:{ctx:[["com","3 de 6 perdas por objeção de budget; advogados/funcionários públicos evoluem melhor"]],dev:[],bkl:[],exe:[["mkt","Nova LP finalizada · lead chega sabendo o investimento"],["mkt","Ajuste no bot feito"],["mkt","Cadência de e-mail ativa"]]},
   meta:{mes:4,sem:23,risco:true},
   mkt:[["Investimento","R$ 3.502","R$ 13.143"],["MQL","48","227"],["Leads","165","632"],["CP-MQL","R$ 73","R$ 58"]],
   vnd:{f:[[240,""],[210,"87,5%"],[140,"66,7%"],[112,"80,0%"],[75,"67,0%"],[49,"65,3%"],[15,"30,6%"],[10,"66,7%"],[2,"20,0%"],[1,"50,0%"],[2,"200,0%"],[3,""]],ns:12,fonte:"Inbound 2 (67%) · Sem Classificação 1 (33%) · 2 negociações = 3 unidades",
    perdas:{total:172,top:[["Atingiu o fim da cadência",72,"42%"],["Parou de responder",27,"16%"],["Sem interesse / Não quis conversa",24,"14%"],["Sem resposta",11,"6%"],["Sem perfil (fora do ICP)",9,"5%"],["Sem Timing",6,"3%"],["Duplicado",4,"2%"],["Desistência após agendamento",3,"2%"],["Não é MQL (erro)",3,"2%"],["Sem contato após cadência SDR",2,"1%"]]}}},
 
- {key:"eletro",name:"Eletrovias",tag:"Eletropostos",status:"good",badge:"✓ Meta ago batida (3 un)",dark:false,
-  lanes:{ctx:[["com","4 reuniões de 14 agendadas — 3 viraram SAL"],["com","Perfil fotovoltaico acha que toca sozinho; segundo perfil vem sem capital"]],dev:[["com","SDRs qualificam e mandam material antes de agendar"],["mkt","Revisão de criativos + LP com foco no suporte da franqueadora"]],bkl:[["mkt","Nova LP focada nos benefícios da franquia"],["mkt","Formulário com IA + novos motes de criativos"]],exe:[["com","Corte de capital <R$50k: SQL +2%, conversão +7,4%"]]},
+ {key:"eletro",name:"Eletrovias",tag:"Eletropostos",status:"good",badge:"✓ 4 un vendidas · Meta ultrapassada",dark:false,
+  lanes:{ctx:[["com","4 reuniões de 14 agendadas — 3 viraram SAL"],["com","Perfil fotovoltaico acha que toca sozinho; segundo perfil vem sem capital"],["mkt","Melhor conversão após ajustes"]],dev:[["com","SDRs qualificam e mandam material antes de agendar"],["mkt","Nova LP em desenvolvimento"],["mkt","Formulário com bot em teste"]],bkl:[],exe:[["mkt","Revisão de criativos feita"]]},
   meta:{mes:3,sem:19,risco:false},
   mkt:[["Investimento","R$ 2.050","R$ 5.863"],["MQL","64","149"],["Leads","270","816"],["CP-MQL","R$ 32","R$ 39"]],
   vnd:{f:[[159,""],[126,"79,2%"],[92,"73,0%"],[97,"105,4%"],[53,"54,6%"],[42,"79,2%"],[19,"45,2%"],[9,"47,4%"],[5,"55,6%"],[3,"60,0%"],[3,"100,0%"],[3,""]],ns:10,fonte:"Inbound 3 (100%) · 2 negociações = 3 unidades",
    perdas:{total:104,top:[["Sem contato após cadência SDR",30,"29%"],["Sem interesse / Não quis conversa",10,"10%"],["Parou de responder",8,"8%"],["Atingiu o fim da cadência",8,"8%"],["Sem Timing",6,"6%"],["No-Show sem retorno após reagendamento",6,"6%"],["Nossa solução não atende",5,"5%"],["Sem resposta",5,"5%"],["Sem perfil (fora do ICP)",4,"4%"],["Sem Budget - até 100k",4,"4%"]]}}},
 
  {key:"oral",name:"Oral Unic",tag:"Franquia odontológica",status:"attn",badge:"Atenção · sem SQL",dark:false,
-  lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[],bkl:[["mkt","Sobe hoje · Comunidade em formulário nativo (aprendizado do A/B)"],["mkt","Até 26/08 · Agente de IA em produção qualificando no WhatsApp"],["mkt","Em análise desde 20/08 · Odonto Legacy + Franquia via perfil We Scale (decisão pós-1 semana de funil)"],["mkt","Migrar investimento de aquisição de franquia para Ecossistema Oral Unic Legacy"]],exe:[["mkt","Novos roteiros na persona multiclínica"],["com","9 leads V4 perdidos: 5 inválidos, 2 fora de ICP"]]},
+  lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[["mkt","Agente de IA em teste · qualificando no WhatsApp"]],bkl:[],exe:[["mkt","Comunidade em formulário nativo publicado"],["mkt","Decisão tomada: Odonto Legacy + Franquia via perfil We Scale"],["mkt","Investimento migrado para Ecossistema Oral Unic Legacy"]]},
   meta:{mes:1,sem:7,risco:true},
   mkt:[["Investimento","R$ 9.542","R$ 26.801"],["MQL","21","39"],["Leads","31","100"],["CP-MQL","R$ 454","R$ 687"]],
   vnd:{f:[[473,""],[76,"16,1%"],[25,"32,9%"],[8,"32,0%"],[3,"37,5%"],[1,"33,3%"],[1,"100,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",

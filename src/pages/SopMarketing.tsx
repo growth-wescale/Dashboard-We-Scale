@@ -10,8 +10,19 @@ import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
 import type { Lead, Marca } from '@/lib/types'
 import { InverseFunnel } from '@/components/ui/InverseFunnel'
-import { getMetaVendas, getVendasRealizadasOverride, getFunilTaxas } from '@/constants/metasVendas'
+import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
+import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
+import { COMUNIDADE_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { resolveStage, STAGE_LABEL, type StageKey } from '@/lib/metrics'
+
+/** Subconjunto de 8 etapas da Visão Macro — usado no card CRM do Odonto Legacy. */
+const MACRO_STAGES_SOP: StageKey[] = [
+  'MQL', 'Contato Efetivo', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF', 'Fechamento',
+]
+const MACRO_STAGE_LABEL_SOP: Partial<Record<StageKey, string>> = {
+  'Oportunidade COF': 'Oportunidade',
+}
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -162,6 +173,11 @@ interface Funnel {
   perdido: { mql: number; sql: number; diagnostico: number; sal: number }
 }
 
+function unidadesVendidas(r: VwMarketingFunil): number {
+  const q = Number(r.quantidade_unidades)
+  return Number.isFinite(q) && q > 0 ? q : 1
+}
+
 function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
@@ -169,7 +185,9 @@ function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
     sql:  d.filter(r => inPeriod(r.data_sql, di, df)).length,
     diag: d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
     sal:  d.filter(r => inPeriod(r.data_sal, di, df)).length,
-    fech: d.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length,
+    fech: d
+      .filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
+      .reduce((sum, r) => sum + unidadesVendidas(r), 0),
     perdido: {
       mql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_mql, di, df) && !inPeriod(r.data_sql, di, df)).length,
       sql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_diagnostico, di, df)).length,
@@ -218,7 +236,7 @@ const SLIDES: SlideConfig[] = [
   { id: 'liso',          label: 'Lisô Laser',   marca: 'Lisô Laser',   accent: '#FF6643' },
   { id: 'viva',          label: 'Viva',         marca: 'Viva',         accent: '#FF0069' },
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
-  { id: 'odonto-scale',  label: 'Odonto Scale', marca: 'Odonto Scale', accent: '#0ea5e9' },
+  { id: 'odonto-scale',  label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#7f0c72' },
 ]
 
 // ── SVG Charts ─────────────────────────────────────────────────────────────────
@@ -648,9 +666,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     label: string; value: string
     semAnt: { txt: string; col: string }
     mtdAnt: { txt: string; col: string }
+    /** Métrica secundária opcional (ex.: Custo/membro no card CP-MQL do Odonto Legacy). */
+    extra?: { label: string; value: string }
   }
 
-  const kpiCards: KpiCard[] = [
+  const kpiCardsAll: KpiCard[] = [
     {
       label: 'INVEST.',
       value: fmtBRL(w4.invest),
@@ -694,13 +714,51 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       mtdAnt: deltaLabel(funnelMtd.sal, funnelMtdP.sal),
     },
   ]
+  // Odonto Legacy: 3 cards — Invest · MQL · (CP-MQL + Custo/membro comunidade).
+  // Custo/membro = Invest MTD ÷ total de membros hardcoded em COMUNIDADE_LEGACY_ATUAL.
+  const kpiCards: KpiCard[] = isOdontoLegacy
+    ? kpiCardsAll
+        .filter(c => ['INVEST.', 'MQL', 'CP-MQL'].includes(c.label))
+        .map(c => c.label === 'CP-MQL'
+          ? { ...c, extra: {
+              label: 'CUSTO/MEMBRO',
+              value: COMUNIDADE_LEGACY_ATUAL.total > 0
+                ? fmtBRL(mtdInvest / COMUNIDADE_LEGACY_ATUAL.total)
+                : '—',
+            } }
+          : c)
+    : kpiCardsAll
 
   // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
-  const mtdItems: MtdItem[] = [
-    { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
-    { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
-    { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
-  ]
+  // Odonto Legacy: foco em receita/qualidade, sem SQL/SAL (removidos do funil)
+  const mtdItems: MtdItem[] = isOdontoLegacy
+    ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql }]
+    : [
+        { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
+        { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
+        { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
+      ]
+
+  // ── Volume por etapa do CRM (snapshot atual) — só Odonto Legacy ─────────────
+  // Deals ativos hoje, agrupados pelas 8 etapas da Visão Macro (topo do funil
+  // = MQL, fim = Fechamento). Fonte: rawCrmAll (vw_marketing_funil) já filtrado
+  // por marca pelo hook. `resolveStage` normaliza os aliases do CRM ("Novo MQL",
+  // "Diagnóstico (1 dia)", "Negociação SAL", etc).
+  const stageVolumesOdonto = useMemo(() => {
+    if (!isOdontoLegacy) return null
+    const counts = new Map<StageKey, number>(MACRO_STAGES_SOP.map(s => [s, 0]))
+    for (const r of rawCrmAll) {
+      if (r.status_atual !== 'Em andamento') continue
+      const stage = resolveStage(r.etapa_funil)
+      if (!stage || !counts.has(stage)) continue
+      counts.set(stage, (counts.get(stage) ?? 0) + 1)
+    }
+    return MACRO_STAGES_SOP.map(s => ({
+      stage: s,
+      label: MACRO_STAGE_LABEL_SOP[s] ?? STAGE_LABEL[s],
+      count: counts.get(s) ?? 0,
+    }))
+  }, [isOdontoLegacy, rawCrmAll])
 
   // ── MQLs por faixa de capital de investimento ────────────────────────────────
   // Agrupa valores equivalentes (ex.: "50k_100k" e "De R$ 50 mil a R$ 100 mil"
@@ -734,12 +792,15 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   }, [chartCurLeads, chartPrevLeads])
 
   // ── Funnel stages ─────────────────────────────────────────────────────────────
+  // Fechado: usa override manual quando existir (RD Marketing não popula
+  // `quantidade_unidades` — todo deal grava 1; override reflete unidades reais)
+  const fechOverride = getUnidadesVendidasOverride(slide.marca, dates.monthStart.slice(0, 7))
   const funnelStages: FunnelStage[] = [
     { label: 'MQL',         count: mtdMql },
     { label: 'SQL',         count: funnelMtd.sql },
     { label: 'Diagnóstico', count: funnelMtd.diag },
     { label: 'SAL',         count: funnelMtd.sal },
-    { label: 'Fechado',     count: funnelMtd.fech },
+    { label: 'Fechado',     count: fechOverride ?? funnelMtd.fech },
   ]
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -822,7 +883,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiCards.length}, 1fr)`, gap: 10 }}>
           {kpiCards.map(card => (
             <div key={card.label} style={{
               background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
@@ -842,6 +903,16 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                   {card.mtdAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>vs {compareRange.label}</span>
                 </div>
               </div>
+              {card.extra && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 3 }}>
+                    {card.extra.label}
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>
+                    {card.extra.value}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -882,14 +953,40 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               accent={acc}
             />
           </div>
-          <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
-              CP-MQL
+          {!isOdontoLegacy && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
+                CP-MQL
+              </div>
+              <div style={{ height: 110 }}>
+                <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
+              </div>
             </div>
-            <div style={{ height: 110 }}>
-              <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
+          )}
+          {isOdontoLegacy && stageVolumesOdonto && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+                Volume por etapa do CRM · deals ativos
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {stageVolumesOdonto.map(({ stage, label, count }) => (
+                  <div key={stage} style={{
+                    display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline',
+                    padding: '5px 8px', borderRadius: 6,
+                    background: count > 0 ? `${acc}0a` : 'transparent',
+                    borderLeft: count > 0 ? `2px solid ${acc}` : '2px solid transparent',
+                  }}>
+                    <span style={{ fontSize: 11.5, color: count > 0 ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)' }}>
+                      {label}
+                    </span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: count > 0 ? acc : 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                      {count}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         )}
 
@@ -1001,8 +1098,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           )}
         </div>
 
-        {/* Col 3: Funil inverso vs meta do período */}
-        {(() => {
+        {/* Col 3: Funil inverso — para Odonto Legacy, widget de qualidade da comunidade */}
+        {isOdontoLegacy ? (
+          <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
+        ) : (() => {
           const mesKey = dates.monthStart.slice(0, 7)
           const metaMes = getMetaVendas(slide.marca, mesKey)
           const [yStr, mStr] = mesKey.split('-')
@@ -1018,14 +1117,19 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             : isSemana ? metaMes / 4 : metaMes
           const pctPeriod = isSemana ? 1 : pctMes
           const periodLabel = isSemana ? 'semana' : 'mês'
-          // Override manual de vendas apenas em modo mês fechado + período mês
-          // (números confirmados manualmente porque a base do CRM tem lacunas)
-          const vendasOverride = dates.isClosed && !isSemana
-            ? getVendasRealizadasOverride(slide.marca, mesKey)
-            : null
+          // Override manual de vendas (só em período mês):
+          // - Mês fechado → getVendasRealizadasOverride (números confirmados manualmente)
+          // - Mês corrente → getUnidadesVendidasOverride (RD Marketing não popula quantidade_unidades)
+          const vendasOverride = isSemana
+            ? null
+            : dates.isClosed
+              ? getVendasRealizadasOverride(slide.marca, mesKey)
+              : getUnidadesVendidasOverride(slide.marca, mesKey)
 
           return (
-            <div style={{ ...cardStyle, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
+            <div style={dates.isClosed
+              ? { ...cardStyle, overflow: 'hidden' }
+              : { ...cardStyle, overflowY: 'auto' }}>
               <div style={{
                 marginBottom: 6, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
@@ -1054,7 +1158,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                   )}
                 </div>
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible' }}>
+              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible', flexShrink: 0 }}>
                 {dates.isClosed && !isSemana ? (
                   <ClosedInverseFunnel
                     marca={slide.marca}
@@ -1081,8 +1185,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         })()}
       </div>
 
-        {/* ── Horizontal Waterfall Funnel ── */}
-        {funnelStages.length > 0 && (
+        {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (foco em receita, não em SQL/SAL) ── */}
+        {!isOdontoLegacy && funnelStages.length > 0 && (
           <div style={{
             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', flexShrink: 0,

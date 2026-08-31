@@ -14,10 +14,10 @@ export const META_VENDAS: Record<string, Partial<Record<Marca, number>>> = {
   },
   '2026-08': {
     'Odonto Scale': 7,
-    'Inpot': 5,
+    'Inpot': 3,
     'B2Case': 4,
     'Eletrovias': 3,
-    'Oral Unic': 2,
+    'Oral Unic': 1,
     'Lisô Laser': 2,
     'Viva': 1,
   },
@@ -44,6 +44,22 @@ export const VENDAS_REALIZADAS_OVERRIDE: Record<string, Partial<Record<Marca, nu
 
 export function getVendasRealizadasOverride(marca: Marca, mesKey: string): number | null {
   const v = VENDAS_REALIZADAS_OVERRIDE[mesKey]?.[marca]
+  return v == null ? null : v
+}
+
+// Override manual de unidades vendidas por marca por mês (chave: YYYY-MM).
+// Usado no funil MTD do S&OP (etapa 'Fechado') quando `quantidade_unidades` do CRM
+// não reflete a realidade (ex.: RD Marketing não tem esse campo, todo deal grava 1).
+// Quando definido, SUBSTITUI a soma derivada do CRM.
+export const UNIDADES_VENDIDAS_OVERRIDE: Record<string, Partial<Record<Marca, number>>> = {
+  '2026-08': {
+    'Eletrovias': 3,
+    'B2Case': 4,
+  },
+}
+
+export function getUnidadesVendidasOverride(marca: Marca, mesKey: string): number | null {
+  const v = UNIDADES_VENDIDAS_OVERRIDE[mesKey]?.[marca]
   return v == null ? null : v
 }
 

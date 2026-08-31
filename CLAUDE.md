@@ -13,10 +13,12 @@ donos diferentes convivendo no mesmo app:
 
 | Área | Abas | Dono |
 |---|---|---|
-| Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, Cadências, S&OP Marketing, Análise de Termos | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance Detalhada, Análise de Perda, Análise de Objeções** | **Junior** |
+| Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
+| **Expansão / Vendas** | **Visão Macro, Performance Detalhada, Análise de Perda, Análise de Objeções, GP Setembro** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
+
+Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), não como página separada. Cadências foi removida em 28/08/2026 — não estava em uso ativo.
 
 - **Stack**: React 19 + TypeScript + Vite + Tailwind 4 + Supabase + React Router 7
 - **Produção**: https://dashboard.srv1816822.hstgr.cloud
@@ -357,6 +359,103 @@ filtros próprios e não foi afetada.
 Verificado: `npm run build` (tsc -b) + `npx vitest run` (139 testes) via
 `~/ws-dashboard-build`, e a lógica conferida em SQL contra a base real. App
 exige login, então não foi visto renderizado.
+
+### 2026-08-28 — Odonto Legacy na SOP: rename, KPI strip novo, volume por etapa CRM, funil inverso scrollable
+Junior pediu quatro coisas no slide Odonto Legacy da SOP, aplicadas nas duas
+superfícies (React `SopMarketing.tsx` + estática `sop-weekly.html`):
+
+1. **Rename**. Label da aba passa de "Odonto Scale" (React) / "Oral Unic Legacy"
+   (HTML) pra `Odonto Legacy` nos dois. `marca: 'Odonto Scale'` continua no
+   banco (regra `feedback_odonto_vocabulario.md`).
+2. **KPI strip vira 3 cards**: `Invest · MQL · (CP-MQL + Custo/membro
+   comunidade)`. Removi LEADS. O 3º card ficou duplo: `KpiCard` ganhou campo
+   opcional `extra?: { label; value }` renderizado abaixo dos deltas com
+   divisor. Custo/membro = `mtdInvest / COMUNIDADE_LEGACY_ATUAL.total` (80,
+   hardcoded no constants). No HTML a `mkt` table equivalente passou de
+   `[Invest, MQL, Leads]` pra `[Invest, MQL, CP-MQL, Custo/membro]` — sem os
+   dois valores (semana/MTD) sendo divididos por 80 (semana R$ 64 é meio sem
+   sentido, mas mantém a paridade visual do layout).
+3. **Volume por etapa do CRM** abaixo do gráfico MQL Semanal (Col 1) — só
+   Odonto Legacy. Snapshot: deals ativos hoje agrupados pelas 8 etapas da
+   Visão Macro (`MACRO_STAGES_SOP` local ao arquivo, mesma sequência do
+   `MACRO_STAGES` de `FunilVendas.tsx`). Usa `resolveStage` do `metrics.ts`
+   sobre `rawCrmAll` já filtrado por marca pelo `useVendasFunil`. No HTML
+   virou um bloco `extras` novo com valores hardcoded do snapshot 28/08
+   (MQL 2 · Contato efetivo 1 · SQL 1 · Diagnóstico 1 · SAL 2 · resto 0);
+   16 deals em Tentando Contato ficam de fora (não estão na Visão Macro).
+4. **Funil Inverso scrollable** (mês corrente): `overflow: 'visible'` →
+   `overflowY: 'auto'` no card da Col 3, mesmo padrão do card "MTD vs MTD"
+   (Col 2). Caso mês fechado mantém `overflow: 'hidden'` porque o
+   `ClosedInverseFunnel` tem layout fixo. Antes cortava embaixo quando o
+   funil ficava mais alto que a coluna.
+
+Deploy manual via rsync pra VPS (fora do fluxo padrão de PR). Commits
+`e75eb8f` e `11d1c3b` ficaram na `deploy-local`, ainda não abertos em PR.
+
+**Cuidado herdado** revelado no processo: a rotina de verificação diária
+comparava `main` local com `origin/main`, achando que `deploy-local` estava
+12 commits atrás. Não estava — `deploy-local` já continha os PRs #27-31 há
+tempos. Ver `feedback_deploy_check_deploy_local_nao_main.md`.
+
+### 2026-08-28 — Limpeza: removidas Cadências e Análise de Termos
+Cadências não estava em uso ativo; Análise de Termos era redundante com a aba
+"termos" dentro de Saúde da Marca (mesmo componente `TermosPanel`).
+
+Removidos: `src/pages/Cadencias.tsx`, `AnaliseTermos.tsx`, `useCadencias.ts`,
+`TouchpointDrawer.tsx`, tipos Fluxo/Motivo/Touchpoint/StatusExecucao/
+PrioridadeTp em `types.ts`, dep `@xyflow/react` (20 packages a menos).
+Total: 1.417 linhas + bundle Cadencias de ~201KB no chunk lazy.
+
+Rotas antigas `/cadencias` e `/analise-termos` viraram redirect (pra `/` e
+`/marca`) pra não 404 bookmarks e links no Slack.
+
+`TermosPanel` preservado — SaudeDaMarca continua usando na sub-aba termos por
+marca.
+
+### 2026-08-28 — SOP Odonto Legacy · duas superfícies, foco novo
+Card Odonto Legacy da SOP passou a focar em **receita + qualidade de execução
+da comunidade** (não meta unitária, SQL, SAL, CP-MQL). Aplicado em duas
+superfícies que precisam ficar em paridade:
+
+1. `public/sop-weekly.html` (estática, reunião) — CSS scope `.legacy-theme`
+   redefine `--teal` pra dourado; branch em `openBrand()` renderiza widget
+   de comunidade em vez de funil inverso quando `b.key === 'odonto'`.
+2. `src/pages/SopMarketing.tsx` (React, /sop-marketing) — quando
+   `slide.marca === 'Odonto Scale'`: KPI strip de 7 vira 3 (INVEST/LEADS/MQL),
+   MTD chart só MQL, sparkline CP-MQL oculto, Col 3 vira `ComunidadeLegacyPanel`,
+   waterfall funnel oculto. Accent do slide de `#0ea5e9` (azul solto) pra
+   `#7f0c72` (Legacy purple).
+
+Widget: 80 membros (73 Legacy + 4 iscas + 2 lista espera + 1 outros),
+quadrante dentista × clínica (ICP alto = dent+clin 24%, ~19 pessoas),
+alerta de 4 leads duplicados. Números em `src/constants/comunidadeLegacy.ts`
+pra Junior/Gabriel atualizarem semanalmente sem tocar em componente.
+
+Cores do site legacy.oralunic.com.br: `#7f0c72` primário + `#efbe5b`/`#CC993E`
+gold. Extraídas do CSS oficial do site (assets/styles-Dj8Jfko3.css).
+
+### 2026-08-28 — Nova aba GP Setembro (Vendas)
+Página estática de campanha de metas (tema Fórmula 1) como iframe em
+`/gp-setembro`, mesmo padrão da Análise de Objeções. HTML gerado como
+artifact Claude (bundler self-contained), copiado inteiro pra
+`public/gp-setembro.html`.
+
+Dados povoados: 5 closers reais de ago/2026 (Douglas, Jéssica, Aurélio,
+Vanessa Daniel, Rômulo), meta Set distribuída por closer usando
+mapping marca→closer observado em `DB_Metas_Performance` ago/2026 (Inpot→
+Douglas, Oral Unic→Aurélio, Lisô/B2Case/Eletrovias→Jéssica, Viva→Douglas,
+Legacy→Vanessa, Rômulo sem meta). Total time (soma): 32 un / R$ 769.752 —
+não bate exatamente com R$ 723.800 do xlsx WE SCALE (só Franquia), porque
+inclui Legacy da Vanessa. Se precisar segregar, avisar.
+
+Componente do artifact (bundle interno) foi patchado pra:
+- Renderizar unidades ao lado de R$ (card do time + card por piloto)
+- Safe divide quando closer tem `metaMes: 0` (evita NaN no ranking)
+
+Histórico mar-ago dos closers é real (% atingimento meta_financeira vs
+ganhos do `vw_funil_vendas`), não mock. `INFO` (dia/semana do mês) recomputa
+a cada carregamento — hoje mostra dia 0 pré-Setembro, começa a contar
+1/09.
 
 ### 2026-08-27 — Override de origem para 2 deals contaminados por artefato técnico
 Junior reportou pelo link do RD: o deal "Nunzio Juliano Latterza" (B2Case,

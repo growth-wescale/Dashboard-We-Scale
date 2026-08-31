@@ -19,18 +19,21 @@ import { getCreativeAsset } from '@/lib/creativeAssets'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { TermosPanel } from '@/components/ui/TermosPanel'
 import { SocialPanel } from '@/components/ui/SocialPanel'
+import { EmailMarketingPanel } from '@/components/ui/EmailMarketingPanel'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
-import { isMediaLegacy, isMediaOdontoLegacy, isMediaFranquia, isPausedStrategy } from '@/lib/oralUnicMapping'
+import { isMediaLegacy, isMediaOdontoLegacy, isMediaFranquia, isMediaV4, isPausedStrategy } from '@/lib/oralUnicMapping'
 import { isMediaEventoInpot, isMediaFranquiaInpot, isLeadEventoInpot, isCrmEventoInpot } from '@/lib/inpotMapping'
 import { EsteiraOralUnic } from '@/pages/EsteiraOralUnic'
 
 // ── Oral Unic frentes ────────────────────────────────────────────────────────
-type OuSubView = 'geral' | 'franquia' | 'legacy' | 'odonto_legacy' | 'esteira'
+type OuSubView = 'geral' | 'franquia' | 'v4' | 'legacy' | 'odonto_legacy' | 'esteira'
+const isLeadV4 = (utm_campaign: string | null | undefined) =>
+  (utm_campaign ?? '').toUpperCase().includes('[V4]')
 type InpSubView = 'geral' | 'franquia' | 'evento'
 function pausedStrategyLabel(campanha: string | null, conjunto: string | null): string {
   const c = (campanha ?? '').toUpperCase()
@@ -593,6 +596,7 @@ const SM_TABS = [
   { key:'anuncios',   label:'Anúncios' },
   { key:'termos',     label:'Termos' },
   { key:'social',     label:'Social Media' },
+  { key:'email',      label:'E-mail Marketing' },
   { key:'radar',      label:'Radar' },
 ]
 
@@ -613,6 +617,7 @@ function SMTabs({ value, onChange, hide }: { value:string; onChange:(k:string)=>
 const OU_SUB_TABS: { key: OuSubView; label: string }[] = [
   { key: 'geral',         label: 'Visão Geral' },
   { key: 'franquia',      label: 'Franquia' },
+  { key: 'v4',            label: 'V4' },
   { key: 'legacy',        label: 'Comunidade' },
   { key: 'odonto_legacy', label: 'Odonto Legacy' },
   { key: 'esteira',       label: 'Esteira' },
@@ -1852,7 +1857,8 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'evento')   return leadsData.filter(isLeadEventoInpot)
     if (isInpot && inpSubView === 'franquia') return leadsData.filter(l => !isLeadEventoInpot(l))
     if (!isOralUnic || ouSubView === 'geral') return leadsData
-    if (ouSubView === 'franquia')      return leadsData.filter(l => l.formulario === 'oralunic_multistep')
+    if (ouSubView === 'franquia')      return leadsData.filter(l => l.formulario === 'oralunic_multistep' && !isLeadV4(l.utm_campaign))
+    if (ouSubView === 'v4')            return leadsData.filter(l => isLeadV4(l.utm_campaign))
     if (ouSubView === 'legacy')        return leadsData.filter(l => l.formulario === 'comunidade_multistep')
     if (ouSubView === 'odonto_legacy') return osLeadsRaw
     return leadsData
@@ -1866,6 +1872,7 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'franquia') return active.filter(r => isMediaFranquiaInpot(r.campanha))
     if (!isOralUnic || ouSubView === 'geral') return active
     if (ouSubView === 'franquia')      return active.filter(r => isMediaFranquia(r.campanha))
+    if (ouSubView === 'v4')            return active.filter(r => isMediaV4(r.campanha))
     if (ouSubView === 'legacy')        return active.filter(r => isMediaLegacy(r.campanha))
     if (ouSubView === 'odonto_legacy') return [...active.filter(r => isMediaOdontoLegacy(r.campanha)), ...osMediaRaw]
     return active
@@ -1875,7 +1882,8 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'evento')   return leadsCompareRaw.filter(isLeadEventoInpot)
     if (isInpot && inpSubView === 'franquia') return leadsCompareRaw.filter(l => !isLeadEventoInpot(l))
     if (!isOralUnic || ouSubView === 'geral') return leadsCompareRaw
-    if (ouSubView === 'franquia')      return leadsCompareRaw.filter(l => l.formulario === 'oralunic_multistep')
+    if (ouSubView === 'franquia')      return leadsCompareRaw.filter(l => l.formulario === 'oralunic_multistep' && !isLeadV4(l.utm_campaign))
+    if (ouSubView === 'v4')            return leadsCompareRaw.filter(l => isLeadV4(l.utm_campaign))
     if (ouSubView === 'legacy')        return leadsCompareRaw.filter(l => l.formulario === 'comunidade_multistep')
     if (ouSubView === 'odonto_legacy') return osLeadsCompareRaw
     return leadsCompareRaw
@@ -1887,6 +1895,7 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'franquia') return active.filter(r => isMediaFranquiaInpot(r.campanha))
     if (!isOralUnic || ouSubView === 'geral') return active
     if (ouSubView === 'franquia')      return active.filter(r => isMediaFranquia(r.campanha))
+    if (ouSubView === 'v4')            return active.filter(r => isMediaV4(r.campanha))
     if (ouSubView === 'legacy')        return active.filter(r => isMediaLegacy(r.campanha))
     if (ouSubView === 'odonto_legacy') return [...active.filter(r => isMediaOdontoLegacy(r.campanha)), ...osMediaCompareRaw]
     return active
@@ -1931,9 +1940,16 @@ export function SaudeDaMarca() {
   // - CEOs (tipo=ceo) só têm Social (o resto não faz sentido — não têm ads/funil/etc)
   // - Comunidade e Odonto Legacy do Oral Unic não têm Social/Radar
   const isCeo = def.tipo === 'ceo'
-  const hiddenTabs = isCeo
-    ? ['overview', 'campanhas', 'conjuntos', 'anuncios', 'termos', 'radar']
-    : isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy') ? ['social', 'radar'] : []
+  const hiddenTabs: string[] = (() => {
+    if (isCeo) return ['overview', 'campanhas', 'conjuntos', 'anuncios', 'termos', 'radar', 'email']
+    const hidden: string[] = []
+    // E-mail Marketing é uma página única por marca — não aparece dentro de sub-views (Oral Unic / Inpot)
+    if (isOralUnic && ouSubView !== 'geral') hidden.push('email')
+    if (isInpot && inpSubView !== 'geral') hidden.push('email')
+    // Oral Unic Comunidade e Odonto Legacy não têm Social/Radar
+    if (isOralUnic && (ouSubView === 'legacy' || ouSubView === 'odonto_legacy')) hidden.push('social', 'radar')
+    return hidden
+  })()
   // Sub-view "special": bypassa as tabs SM_TABS e renderiza um componente próprio (ex.: Esteira)
   const isOuSpecialView = isOralUnic && ouSubView === 'esteira'
 
@@ -1953,6 +1969,7 @@ export function SaudeDaMarca() {
       case 'anuncios':  return <SaudeAnuncios  b={b} campaigns={campaigns} />
       case 'termos':    return <TermosPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
       case 'social':    return <SocialPanel    marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
+      case 'email':     return <EmailMarketingPanel marca={b.label} dataInicio={dataInicio} dataFim={dataFim} />
       case 'radar':     return <SaudeRadar     b={b} />
       default:          return <SMOverview     b={b} bCompare={bCompare} compareLabel={compareLabel} compareEnabled={compareState.enabled} channels={channels} acqFunnel={acqFunnel} onMqlClick={() => setMqlDrawerOpen(true)} mqlLeads={mqlLeads} crmData={crmData} crmAllData={crmAllData} di={dataInicio} df={dataFim} mediaData={activeMediaData} leadsData={activeLeadsData} pausedData={pausedData} />
     }

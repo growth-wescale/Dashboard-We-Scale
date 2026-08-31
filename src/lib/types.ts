@@ -76,56 +76,6 @@ export interface BaselineFunil {
   criado_em: string
 }
 
-// === CADÊNCIAS ===
-export type StatusExecucao =
-  | 'a_fazer'
-  | 'copy_escrita'
-  | 'testeira'
-  | 'revisao'
-  | 'aprovado'
-  | 'publicado'
-
-export type PrioridadeTp = 'p1_critico' | 'p2_importante' | 'p3_base'
-
-export interface Fluxo {
-  id: string
-  marca: string
-  titulo: string
-  fnota: string | null
-  prioridade_default: PrioridadeTp
-  ordem: number
-}
-
-export interface Motivo {
-  id: string
-  fluxo_id: string
-  titulo: string | null
-  origem: string | null
-  fnota: string | null
-  ordem: number
-}
-
-export interface Touchpoint {
-  id: string
-  fluxo_id: string
-  motivo_id: string | null
-  dia: string | null
-  canal: string | null
-  tag: string | null
-  ttitle: string | null
-  objetivo: string | null
-  copy_original: string | null
-  copy_atual: string | null
-  criativo_status: 'ok' | 'todo' | null
-  criativo_nota: string | null
-  status: StatusExecucao
-  prioridade: PrioridadeTp | null
-  responsavel: string | null
-  atualizado_em: string
-  atualizado_por: string | null
-  ordem: number
-}
-
 export interface StatusHistorico {
   id: string
   touchpoint_id: string

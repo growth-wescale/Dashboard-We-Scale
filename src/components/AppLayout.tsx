@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, ListChecks, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Search } from 'lucide-react'
+import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp } from 'lucide-react'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
@@ -38,6 +38,7 @@ const VENDAS_SUB = [
   { key: 'performance-vendas',  label: 'Performance Detalhada' },
   { key: 'analise-perda',       label: 'Análise de Perda' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
+  { key: 'gp-setembro',         label: 'GP Setembro' },
 ]
 
 const NAV_ITEMS = [
@@ -58,11 +59,6 @@ const NAV_ITEMS = [
     icon: <Trophy size={16} />,
   },
   {
-    key: 'cadencias',
-    label: 'Cadências',
-    icon: <ListChecks size={16} />,
-  },
-  {
     key: 'sop',
     label: 'S&OP Marketing',
     icon: <PresentationIcon size={16} />,
@@ -73,24 +69,18 @@ const NAV_ITEMS = [
     icon: <TrendingUp size={16} />,
     subItems: VENDAS_SUB,
   },
-  {
-    key: 'analise-termos',
-    label: 'Análise de Termos',
-    icon: <Search size={16} />,
-  },
 ]
 
 function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/copa-b2b')) return 'copa'
-  if (pathname.startsWith('/cadencias')) return 'cadencias'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes')) return 'vendas'
-  if (pathname.startsWith('/analise-termos')) return 'analise-termos'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro')) return 'vendas'
   return 'geral'
 }
 
 function getVendasActiveSub(pathname: string): string {
+  if (pathname.startsWith('/gp-setembro'))        return 'gp-setembro'
   if (pathname.startsWith('/analise-objecoes'))   return 'analise-objecoes'
   if (pathname.startsWith('/analise-perda'))      return 'analise-perda'
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
@@ -134,10 +124,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (key === 'geral') navigate('/')
     else if (key === 'saude') navigate('/marca')
     else if (key === 'copa') navigate('/copa-b2b')
-    else if (key === 'cadencias') navigate('/cadencias')
     else if (key === 'sop') navigate('/sop-marketing')
     else if (key === 'vendas') navigate('/funil-vendas')
-    else if (key === 'analise-termos') navigate('/analise-termos')
   }
 
   function handleSubNav(key: string) {
@@ -145,6 +133,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'performance-vendas') navigate('/performance-vendas')
     else if (key === 'analise-perda') navigate('/analise-perda')
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
+    else if (key === 'gp-setembro') navigate('/gp-setembro')
     else {
       setActiveBrand(key)
       navigate('/marca')

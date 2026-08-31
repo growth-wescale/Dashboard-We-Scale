@@ -38,7 +38,7 @@ const VENDAS_SUB = [
   { key: 'performance-vendas',  label: 'Performance Detalhada' },
   { key: 'analise-perda',       label: 'Análise de Perda' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
-  { key: 'gp-setembro',         label: 'GP Setembro' },
+  { key: 'gp-setembro',         label: 'Campanha de Metas' },
 ]
 
 const NAV_ITEMS = [

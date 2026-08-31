@@ -66,7 +66,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
 | `vw_deal_etapa_periodos` | entrada/saída por etapa — base do modo Aging |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
-| `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo` |
+| `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
 `vw_marketing_funil` é a view **antiga**; ainda serve Performance Detalhada e
 Análise de Perda até elas serem migradas. Não usar em código novo.
@@ -113,6 +113,19 @@ Fechamento e a conversão global é 0%.
 
 Qualquer relatório novo (n8n, RPC, e-mail) tem que ler `origem_comercial` das
 views, nunca reimplementar a regra.
+
+**Override manual para artefato técnico.** A regra lê `deal_eventos` ao pé da
+letra: qualquer linha com `nome_funil = 'Prospecção Ativa'` contamina, mesmo
+que não seja prospecção de verdade. Achado em 27/08: `from_rdsm_integration`
+(criação automática de deal via RD Marketing) às vezes cria o deal direto
+numa etapa de Prospecção Ativa e o move pro funil certo segundos depois — sem
+nenhuma ação humana. Não dá para apagar essa entrada no RD (a API não expõe
+edição/exclusão de `deal_stage_histories`, só teve confirmado por
+`404` em `GET /deals/:id/deal_stage_histories`), então `atribuicao_manual`
+ganhou a coluna `origem_override`, com prioridade sobre a regra em
+`vw_deal_origem_comercial` — mesmo padrão de `sdr_override`/`closer_override`.
+Usar só para casos confirmados como artefato, nunca para "esconder" um deal
+de Prospecção Ativa de verdade.
 
 ### Event Sourcing dirigido por configuração
 
@@ -397,6 +410,45 @@ Histórico mar-ago dos closers é real (% atingimento meta_financeira vs
 ganhos do `vw_funil_vendas`), não mock. `INFO` (dia/semana do mês) recomputa
 a cada carregamento — hoje mostra dia 0 pré-Setembro, começa a contar
 1/09.
+### 2026-08-27 — Override de origem para 2 deals contaminados por artefato técnico
+Junior reportou pelo link do RD: o deal "Nunzio Juliano Latterza" (B2Case,
+`6a870ab4c5cd95000121cc95`) aparecia em Prospecção Ativa com Fonte Macro
+Inbound, e pelo histórico dele no CRM nunca tinha sido prospectado de verdade.
+
+Investigação cruzando `deal_eventos` com a API oficial do RD (não é
+divergência de sync — os dois concordam): o deal foi **criado direto** em
+`Prospecção Ativa > Reunião Agendada SQL` às 20/08 11:09:57 (BRT), e movido
+pro funil certo (`SDR > Interesse Reunião`) **15 segundos depois**.
+`from_rdsm_integration: true` no JSON do RD — criação automática via
+integração com RD Marketing, não ação humana. `utm_source=meta`,
+`utm_medium=Instagram_Stories`: lead pago de mídia de verdade, não
+prospecção. Achado um segundo deal idêntico (`6a881eeec881770001479615`,
+Ademir Bicesto), mesma marca, mesma campanha RD ("B2Case > CRM (Limpo) -
+Prosp Ativa", criada 19/08), mesmo padrão (bounce em 105s). Consultei a API
+filtrando por essa campanha: **são exatamente esses 2 deals no total** — não
+é problema sistêmico na fonte Meta (1.221 leads Meta de B2Case, só esses 2
+tocaram Prospecção Ativa).
+
+**Não dá para corrigir isso no RD.** Testado direto: `GET
+/deals/:id/deal_stage_histories` devolve `404` — a API não expõe edição nem
+exclusão de entrada de histórico de etapa. A única forma documentada de o RD
+reescrever uma entrada é como efeito colateral de o deal **revisitar de
+verdade** aquela etapa (ver `historico-rd-nao-e-imutavel` na memória) — e
+forçar isso só pra "limpar" o dado poluiria o CRM de produção e nem
+resolveria (a nova entrada ainda diria `nome_funil = 'Prospecção Ativa'`).
+
+Fix ficou no nosso banco: `atribuicao_manual` ganhou a coluna
+`origem_override` (mesmo padrão de `sdr_override`/`closer_override`, mesma
+tabela, com `motivo` documentando a investigação), e
+`vw_deal_origem_comercial` passou a dar prioridade a ela sobre a regra
+(`COALESCE(ov.origem_override, <regra de sempre>)`). Nenhuma das 4 views que
+leem dela (`vw_funil_vendas`, `vw_funil_etapas_v2`, `vw_funil_compat`,
+`vw_marketing_funil`, `vw_perdas`) precisou ser tocada — herdaram a mudança
+de graça. Os 2 deals passaram a `Inbound`; Prospecção Ativa caiu de 1.249
+para 1.247 ciclos em `vw_funil_vendas`, exatamente -2.
+
+**Uso do override é exceção, não regra geral.** Só pra casos confirmados
+como artefato técnico (como este), nunca pra esconder prospecção real.
 
 ### 2026-08-27 — Toggle Inbound × Prospecção Ativa nas três abas de Vendas
 Junior pediu para separar Visão Macro, Performance Detalhada e Análise de Perda

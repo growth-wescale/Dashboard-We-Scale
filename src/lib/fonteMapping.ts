@@ -47,9 +47,28 @@ const MAPA: Record<string, SubFonteGrupo> = {
 /** Valores que significam "não sabemos", incluindo macro de UTM não resolvida. */
 const VAZIOS = new Set(['', '{{site_source_name}}', 'null', 'undefined', 'desconhecido'])
 
-export function normalizeSubFonte(utmSource: string | null | undefined): SubFonteGrupo {
+/**
+ * Grupo canônico da sub-fonte a partir do `utm_source`.
+ *
+ * Fallback (pedido do Junior, 31/08): quando o `utm_source` está vazio ou é um
+ * template de UTM não resolvido, usa o campo "Sub-Fonte" do RD CRM
+ * (`subFonteCrm`, vindo de `payload->>'Sub-Fonte'`) — CRU, sem agrupar, porque
+ * são nomes de lista/evento/repasse ("Feira de Franquias 2026", "Busca
+ * Orgânica", "SBC Repasse") que não mapeiam nos grupos de tráfego. Só quando
+ * nem isso existe é que cai em "Não identificado".
+ *
+ * O retorno deixou de ser a união fechada `SubFonteGrupo` por causa desses
+ * valores livres do RD.
+ */
+export function normalizeSubFonte(
+  utmSource: string | null | undefined,
+  subFonteCrm?: string | null,
+): string {
   const raw = (utmSource ?? '').trim().toLowerCase()
-  if (VAZIOS.has(raw)) return 'Não identificado'
+  if (VAZIOS.has(raw)) {
+    const crm = (subFonteCrm ?? '').trim()
+    return crm || 'Não identificado'
+  }
   return MAPA[raw] ?? 'Outros'
 }
 

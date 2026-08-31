@@ -592,7 +592,7 @@ export interface ScopeOptions {
   marcas?: string[]
   /** Valores de fonte_macro. */
   fontes?: string[]
-  /** Grupos já normalizados de utm_source — ver fonteMapping. */
+  /** Sub-fontes normalizadas (grupo de utm_source ou valor cru do "Sub-Fonte" do RD) — ver fonteMapping. */
   subFontes?: string[]
   sdrs?: string[]
   closers?: string[]
@@ -607,7 +607,7 @@ export function buildScopeFilter(opts: ScopeOptions): (r: FunnelRow) => boolean 
     if (origem && (r.origem_comercial ?? 'Inbound') !== origem) return false
     if (marcas.length && !marcas.includes(r.marca ?? '')) return false
     if (fontes.length && !fontes.includes(normalizeFonteMacro(r.fonte_macro))) return false
-    if (subFontes.length && !subFontes.includes(normalizeSubFonte(r.utm_source))) return false
+    if (subFontes.length && !subFontes.includes(normalizeSubFonte(r.utm_source, r.sub_fonte_crm))) return false
     if (sdrs.length && !sdrs.includes(r.nome_sdr ?? '')) return false
     if (closers.length && !closers.includes(r.nome_closer ?? '')) return false
     return true

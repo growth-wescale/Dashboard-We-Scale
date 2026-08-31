@@ -30,6 +30,24 @@ describe('normalizeSubFonte', () => {
     expect(normalizeSubFonte('{{site_source_name}}')).toBe('Não identificado')
   })
 
+  it('sem utm_source, usa o campo "Sub-Fonte" do RD CRM cru', () => {
+    expect(normalizeSubFonte(null, 'Feira de Franquias 2026')).toBe('Feira de Franquias 2026')
+    expect(normalizeSubFonte('', 'Busca Orgânica')).toBe('Busca Orgânica')
+    expect(normalizeSubFonte('  ', '  SBC Repasse  ')).toBe('SBC Repasse')
+    // Template de UTM não resolvido também dispara o fallback.
+    expect(normalizeSubFonte('{{site_source_name}}', 'Lista Oral Unic David')).toBe('Lista Oral Unic David')
+  })
+
+  it('com utm_source resolvível, ignora o campo do RD CRM', () => {
+    expect(normalizeSubFonte('meta', 'Feira de Franquias 2026')).toBe('Meta')
+    expect(normalizeSubFonte('portaldofranchising', 'Busca Orgânica')).toBe('Outros')
+  })
+
+  it('sem utm_source e sem campo do RD CRM, continua Não identificado', () => {
+    expect(normalizeSubFonte(null, null)).toBe('Não identificado')
+    expect(normalizeSubFonte('', '   ')).toBe('Não identificado')
+  })
+
   it('joga valor desconhecido em Outros, sem descartar', () => {
     expect(normalizeSubFonte('portaldofranchising')).toBe('Outros')
     expect(normalizeSubFonte('chatgpt.com')).toBe('Outros')

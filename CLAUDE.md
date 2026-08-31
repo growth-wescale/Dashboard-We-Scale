@@ -72,7 +72,7 @@ Análise de Perda até elas serem migradas. Não usar em código novo.
 ### Campos que importam
 
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
-- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro
+- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD. O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 só pro toggle de vendas (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
@@ -214,7 +214,7 @@ src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (
 | **Origem** (ao lado do título, não na barra) | Inbound × Prospecção Ativa. Filtrado **no servidor** — as opções de todos os outros filtros passam a derivar só do recorte ativo |
 | Marca | multi-seleção estilo Excel. Todas marcadas == Consolidado. 2+ marcas: busca sem filtro no servidor e filtra no cliente |
 | Período | granularidade (dia/mês/trimestre/ano) + quais períodos (multi-seleção estilo Excel, exceto no modo Dia) |
-| Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado. **Opções vêm dos dados, nunca de lista fixa** |
+| Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado (Sub-Fonte cai no campo do RD quando `utm_source` é vazio). **Opções vêm dos dados, nunca de lista fixa** — e desde 31/08 **cruzadas** com os demais filtros ativos (Marca, Fonte, a outra) **+ a janela de período**: só aparece o valor que produz ≥1 deal no funil do recorte atual. O valor já selecionado sempre fica na lista (escape hatch) |
 | Vendas | Negócios × Unidades |
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
@@ -311,6 +311,52 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-08-31 — Sub-fonte: fallback pro campo do RD + opções cruzadas com os demais filtros
+Junior reportou dois problemas no filtro de Sub-fonte da Visão Macro: (1) em
+Prospecção Ativa + Ago/2026 + Fonte "Prospecção Ativa", o dropdown de Sub-fonte
+oferecia "Meta" e "Google" — e selecionar os dois zerava o funil, ou seja, essas
+opções nem deviam estar lá; (2) `utm_source` vazio virava "Não identificado"
+mesmo quando o deal tinha o campo "Sub-Fonte" preenchido no RD CRM.
+
+**Correção 2 (feita primeiro, a 1 depende dela).** `vw_funil_vendas` ganhou
+`LEFT JOIN deal_snapshot s ON s.id_deal = d.id_lead` e a coluna
+`sub_fonte_crm = NULLIF(btrim(s.payload->>'Sub-Fonte'),'')` no fim —
+`CREATE OR REPLACE VIEW`, **matview não tocada**. Join por PK, 1:1; checksum
+idêntico antes/depois (6.252 linhas, 5.940 ciclo atual, 41 ganhos,
+R$ 1.935.827,98, 4.499 perdidos, 1.712 em andamento). 1.344 deals da view
+passam a ter sub-fonte real vinda do RD (antes todos em "Não identificado").
+`normalizeSubFonte(utmSource, subFonteCrm?)` (`fonteMapping.ts`): com
+`utm_source` vazio ou template de UTM não resolvido, devolve o valor **cru** do
+RD (`Lista Oral Unic David`, `Feira de Franquias 2026`, `Busca Orgânica`,
+`SBC Repasse`…), sem agrupar — são nomes de lista/evento/repasse que não mapeiam
+nos grupos de tráfego. Retorno deixou de ser a união fechada `SubFonteGrupo`;
+`SUB_FONTE_GRUPOS` sobra só como semente da lista, e saiu do piso das opções em
+`FilterBar`. `sub_fonte_crm` entrou em `FunnelRow`, no `COLS` de
+`useFunilVendas` e no `buildScopeFilter` de `metrics.ts`.
+
+**Correção 1.** As listas `marcasDisponiveis` / `fontesDisponiveis` /
+`subFontesDisponiveis` em `FunilVendas.tsx` viraram um `opcoesFiltro` único que
+cruza os três: cada lista aplica **todos os outros** filtros ativos (origem já
+vem no fetch + marca + fonte + sub-fonte) **e** a janela de período — menos o
+próprio filtro. "Deal na janela" = tem alguma data de etapa (`STAGE_DATE_FIELD`,
+as 12 do funil) dentro de `win`, ou só o MQL no modo safra. Reproduz o cenário
+do Junior: no recorte Prospecção Ativa + Ago/2026 + Fonte "Prospecção Ativa" o
+dropdown de Sub-fonte agora mostra só `Lista Oral Unic David` (695) e
+`Não identificado` (18) — Meta e Google somem porque não têm deal no funil de
+agosto. Inbound + Ago/2026 continua com Meta (881), Google (78) e agora também
+`Feira de Franquias 2026` (71), `Busca Orgânica` (5) etc., antes diluídos em
+"Não identificado" (que caiu pra 121).
+
+**Ressalva pré-existente, não regride:** com **exatamente 1 marca** selecionada,
+o fetch já filtra no servidor, então o dropdown de Marca só mostra aquela marca
+(era assim antes). No Consolidado (padrão) e com 2+ marcas o cruzamento de Marca
+funciona pleno. Só a Visão Macro tem essa barra — Performance Detalhada usa
+filtros próprios e não foi afetada.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (139 testes) via
+`~/ws-dashboard-build`, e a lógica conferida em SQL contra a base real. App
+exige login, então não foi visto renderizado.
 
 ### 2026-08-27 — Override de origem para 2 deals contaminados por artefato técnico
 Junior reportou pelo link do RD: o deal "Nunzio Juliano Latterza" (B2Case,

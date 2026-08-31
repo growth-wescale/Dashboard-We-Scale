@@ -24,8 +24,8 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_DATE_FIELD, STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage, rowsInLoss,
-  rowsInStage, sumRevenue, toWindow,
+  countStageEvents, dealsInStage, groupRepeatedDeals, isInWindow, isSale, repeatedDealsInStage, resolveStage,
+  rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
@@ -449,25 +449,43 @@ export function FunilVendas() {
   /** Mesmo recorte, sem restrição de marca — usado só pra quebra por marca. */
   const scopedSemMarca = useMemo(() => rows.filter(scopeSemMarca), [rows, scopeSemMarca])
 
-  // Opções dos filtros de origem saem dos próprios dados, nunca de lista fixa:
-  // valor novo no CRM (como "Prospecção Ativa") precisa aparecer sozinho.
-  // Derivadas de `rows`, não de `scoped`, senão filtrar esconde as demais opções.
-  const fontesDisponiveis = useMemo(
-    () => [...new Set(rows.map(r => normalizeFonteMacro(r.fonte_macro)))],
-    [rows],
+  // Opções dos filtros de Marca, Fonte e Sub-fonte: cada lista reflete os
+  // DEMAIS filtros já ativos (origem já vem no fetch) + a janela de período,
+  // menos o próprio filtro. É o "estilo Excel" que o usuário espera —
+  // Prospecção Ativa + Ago/2026 + Fonte "Prospecção Ativa" não deve deixar
+  // "Meta"/"Google" na lista de Sub-fonte se nenhum deal desse recorte tem
+  // funil em agosto. O valor já selecionado sempre permanece na lista (escape
+  // hatch em opcoesMarcaDisponiveis / FilterBar), pra nunca travar o filtro.
+  //
+  // "Deal na janela" = tem alguma data de etapa dentro de `win` (ou só o MQL,
+  // no modo safra) — a mesma regra que popula o funil.
+  const camposJanela = useMemo(
+    () => (viewModes.funnelView === 'cohort'
+      ? (['data_novo_mql'] as const)
+      : STAGE_ORDER.map(s => STAGE_DATE_FIELD[s])),
+    [viewModes.funnelView],
   )
-  const subFontesDisponiveis = useMemo(
-    () => [...new Set(rows.map(r => normalizeSubFonte(r.utm_source) as string))],
-    [rows],
+  const opcoesFiltro = useMemo(() => {
+    const subFonteDe = (r: FunnelRow) => normalizeSubFonte(r.utm_source, r.sub_fonte_crm)
+    const fonteDe = (r: FunnelRow) => normalizeFonteMacro(r.fonte_macro)
+    const naJanela = rows.filter(r => camposJanela.some(c => isInWindow(r[c] as string | null, win)))
+    const okMarca = (r: FunnelRow) => !marcasParaEscopo.length || marcasParaEscopo.includes(r.marca ?? '')
+    const okFonte = (r: FunnelRow) => !fontes.length || fontes.includes(fonteDe(r))
+    const okSub = (r: FunnelRow) => !subFontes.length || subFontes.includes(subFonteDe(r))
+    const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))]
+    return {
+      marcas: uniq(naJanela.filter(r => okFonte(r) && okSub(r)).map(r => r.marca ?? '')),
+      fontes: uniq(naJanela.filter(r => okMarca(r) && okSub(r)).map(fonteDe)),
+      subFontes: uniq(naJanela.filter(r => okMarca(r) && okFonte(r)).map(subFonteDe)),
+    }
+  }, [rows, camposJanela, win, marcasParaEscopo, fontes, subFontes])
+
+  const fontesDisponiveis = opcoesFiltro.fontes
+  const subFontesDisponiveis = opcoesFiltro.subFontes
+  const marcasDisponiveis = useMemo(
+    () => BRAND_LIST.filter(b => b.marca && opcoesFiltro.marcas.includes(b.marca)).map(b => b.key),
+    [opcoesFiltro.marcas],
   )
-  // Marca, ao contrário de Fonte/Sub-Fonte, era lista fixa (BRAND_LIST inteira)
-  // — não tinha efeito nenhum do toggle de origem. Eletrovias, Viva e Premium
-  // Club não têm nenhum deal em Prospecção Ativa; sem isso o dropdown deixava
-  // selecionar uma marca que sempre voltava vazia nesse toggle.
-  const marcasDisponiveis = useMemo(() => {
-    const presentes = new Set(rows.map(r => r.marca).filter((v): v is string => !!v))
-    return BRAND_LIST.filter(b => b.marca && presentes.has(b.marca)).map(b => b.key)
-  }, [rows])
 
   // ── Funil ───────────────────────────────────────────────────────────────────
   // Só usado no modo Performance — Aging e Atual usam EtapaLeadtimeList (abaixo).

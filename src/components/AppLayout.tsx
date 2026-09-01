@@ -6,6 +6,7 @@ import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
+import { GpIntro } from '@/components/gp/GpIntro'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -292,6 +293,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         <AiChat />
+        {gpAtivo && <GpIntro />}
       </div>
     </MarcaContext.Provider>
   )

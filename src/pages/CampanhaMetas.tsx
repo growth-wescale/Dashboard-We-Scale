@@ -1,17 +1,27 @@
 import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
+import { useMetasClosers, CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
+import type { CloserMeta } from '@/hooks/useMetasClosers'
+import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHistoricoAtingimento'
 import { useMetasMarca, upsertMetaMarca, MARCAS_FRANQUIA, USE_MOCK, type MetaMarca } from '@/hooks/useMetasMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { money, pct } from '@/lib/format'
 
-const MESES_DISPONIVEIS = [
-  { key: '2026-09-01', label: 'Setembro 2026', short: 'Set' },
-  { key: '2026-10-01', label: 'Outubro 2026',  short: 'Out' },
-  { key: '2026-11-01', label: 'Novembro 2026', short: 'Nov' },
-  { key: '2026-12-01', label: 'Dezembro 2026', short: 'Dez' },
-] as const
+const MES_ATIVO = '2026-09-01'
+const MES_LABEL = 'Setembro 2026'
+const MES_SHORT = 'Setembro 2026'
+const MES_INICIO = new Date(2026, 8, 1)   // 1º set 2026
+const MES_FIM = new Date(2026, 8, 30)     // 30 set 2026
+const DIAS_MES = 30
+const POOL_PREMIOS = 12000
 
-// Cores da marca (herança da paleta do dashboard) + F1 red no header
+const VOLTAS = [
+  { num: 1, inicio: 1,  fim: 7,  label: 'Volta 1 · 1–7 set' },
+  { num: 2, inicio: 8,  fim: 14, label: 'Volta 2 · 8–14 set' },
+  { num: 3, inicio: 15, fim: 21, label: 'Volta 3 · 15–21 set' },
+  { num: 4, inicio: 22, fim: 30, label: 'Volta 4 · 22–30 set' },
+]
+
 const MARCA_COR: Record<string, string> = {
   'Oral Unic':  '#7F0C72',
   'Inpot':      '#C6D32D',
@@ -21,8 +31,6 @@ const MARCA_COR: Record<string, string> = {
   'Viva':       '#FF0069',
 }
 
-const POOL_PREMIOS = 12000
-
 function moneyCompact(n: number): string {
   const abs = Math.abs(n)
   if (abs >= 1_000_000) return 'R$ ' + (n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'M'
@@ -30,118 +38,107 @@ function moneyCompact(n: number): string {
   return money(n)
 }
 
-function ultimoDia(mesReferencia: string): Date {
-  const d = new Date(mesReferencia + 'T00:00:00')
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0)
+function diaDoMes(): number {
+  const hoje = new Date()
+  if (hoje < MES_INICIO) return 0
+  if (hoje > MES_FIM) return DIAS_MES
+  return hoje.getDate()
 }
 
-function diaDoMes(mesReferencia: string): { atual: number; total: number } {
-  const inicio = new Date(mesReferencia + 'T00:00:00')
-  const fim = ultimoDia(mesReferencia)
-  const hoje = new Date()
-  const total = fim.getDate()
-  if (hoje < inicio) return { atual: 0, total }
-  if (hoje > fim) return { atual: total, total }
-  return { atual: hoje.getDate(), total }
+function voltaAtual(dia: number): number {
+  if (dia <= 7) return 1
+  if (dia <= 14) return 2
+  if (dia <= 21) return 3
+  return 4
 }
 
 export function CampanhaMetas() {
-  const [mesRef, setMesRef] = useState<string>('2026-09-01')
-  const [editando, setEditando] = useState<MetaMarca | null>(null)
+  const [ciclo, setCiclo] = useState<'semanal' | 'mensal'>('semanal')
+  const dia = diaDoMes()
+  const [voltaSelecionada, setVoltaSelecionada] = useState<number>(voltaAtual(dia))
 
-  const { metas, loading: loadingMetas, reload } = useMetasMarca(mesRef)
-  const { porMarca: realizadoMap, loading: loadingReal } = useRealizadoPorMarca(mesRef)
-  const loading = loadingMetas || loadingReal
+  const { closers, loading: loadingClosers, metasCadastradas } = useMetasClosers(MES_ATIVO)
+  const { historico, loading: loadingHist } = useHistoricoAtingimento()
 
-  const linhas = useMemo(() => {
-    // Garante 1 linha por marca canônica, mesmo que não tenha meta cadastrada
-    return MARCAS_FRANQUIA.map(marca => {
-      const meta = metas.find(m => m.marca === marca)
-      const real = realizadoMap.get(marca)
-      const metaQtd = meta?.metaQtd ?? 0
-      const metaFat = meta?.metaFaturamento ?? 0
-      const realQtd = real?.qtd ?? 0
-      const realFat = real?.faturamento ?? 0
-      return {
-        marca,
-        cor: MARCA_COR[marca] ?? '#888',
-        metaQtd,
-        metaFat,
-        realQtd,
-        realFat,
-        pctQtd: metaQtd > 0 ? (realQtd / metaQtd) * 100 : 0,
-        pctFat: metaFat > 0 ? (realFat / metaFat) * 100 : 0,
-        meta,  // referência original pra edição
-      }
-    })
-  }, [metas, realizadoMap])
+  // Ranking ordenado por % atingimento desc, empate por realizado desc
+  const ranking = useMemo(
+    () => [...closers].sort((a, b) => b.pctAtingimento - a.pctAtingimento || b.realizado - a.realizado),
+    [closers],
+  )
+  const pole = ranking[0] ?? null
 
-  const total = useMemo(() => {
-    return linhas.reduce(
-      (acc, l) => ({
-        metaQtd: acc.metaQtd + l.metaQtd,
-        metaFat: acc.metaFat + l.metaFat,
-        realQtd: acc.realQtd + l.realQtd,
-        realFat: acc.realFat + l.realFat,
+  // Totais do time
+  const totais = useMemo(() => {
+    return closers.reduce(
+      (acc, c) => ({
+        metaFin: acc.metaFin + c.metaFinanceira,
+        metaQtd: acc.metaQtd + c.metaQtdVendas,
+        realFin: acc.realFin + c.realizado,
+        realQtd: acc.realQtd + c.realizadoQtd,
       }),
-      { metaQtd: 0, metaFat: 0, realQtd: 0, realFat: 0 },
+      { metaFin: 0, metaQtd: 0, realFin: 0, realQtd: 0 },
     )
-  }, [linhas])
+  }, [closers])
 
-  const pctTotal = total.metaFat > 0 ? (total.realFat / total.metaFat) * 100 : 0
-  const dia = diaDoMes(mesRef)
-  const pctEsperado = dia.total > 0 ? (dia.atual / dia.total) * 100 : 0
+  const pctTotal = totais.metaFin > 0 ? (totais.realFin / totais.metaFin) * 100 : 0
+  const pctEsperado = (dia / DIAS_MES) * 100
+  const diasRestantes = Math.max(0, DIAS_MES - dia)
+  const volta = voltaAtual(dia)
 
   return (
-    <div style={{ padding: '24px 32px' }}>
+    <div style={{ padding: '24px 32px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
       <PageTop
         title="Campanha de Metas"
-        subtitle={`Metas mensais por marca de franquia · dia ${dia.atual}/${dia.total}`}
+        subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${DIAS_MES}`}
         titleAside={
-          <span style={{ padding: '4px 12px', borderRadius: 999, background: '#E10600', color: '#fff', fontSize: 13, fontWeight: 500 }}>
-            {MESES_DISPONIVEIS.find(m => m.key === mesRef)?.short} 2026
+          <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--ws-brand)', color: '#fff', fontSize: 13, fontWeight: 500 }}>
+            {MES_SHORT}
           </span>
         }
       />
 
-      {USE_MOCK && (
+      {!metasCadastradas && !loadingClosers && (
         <div style={{
           padding: '10px 14px', marginBottom: 16, borderRadius: 8,
           background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 13,
         }}>
-          ⚠️ <b>Modo mock:</b> tabela <code>DB_Metas_Marca</code> ainda não existe no Supabase Expansão.
-          Metas vêm de fallback local (planilha). Edições não persistem até o time criar a tabela.
+          ⚠️ <b>Metas de setembro ainda não cadastradas em DB_Metas_Performance.</b>
+          Ranking, cards de piloto e meta do time aparecem zerados até o time cadastrar.
         </div>
       )}
 
-      <HeroBanner mesRef={mesRef} dia={dia} />
+      <HeroBanner volta={volta} diasRestantes={diasRestantes} pole={pole} />
 
-      <MesSelector mesRef={mesRef} setMesRef={setMesRef} />
-
-      <MetaTimeCard
-        loading={loading}
-        realFat={total.realFat}
-        metaFat={total.metaFat}
-        realQtd={total.realQtd}
-        metaQtd={total.metaQtd}
-        pctAtingido={pctTotal}
-        pctEsperado={pctEsperado}
+      <CicloVoltas
+        ciclo={ciclo}
+        setCiclo={setCiclo}
+        voltaSelecionada={voltaSelecionada}
+        setVoltaSelecionada={setVoltaSelecionada}
       />
 
-      <MetasTable
-        linhas={linhas}
-        onEdit={setEditando}
-        total={total}
-      />
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 20, marginTop: 20 }}>
+        <ClassificacaoCard ranking={ranking} voltaLabel={VOLTAS[voltaSelecionada - 1].label} />
 
-      {editando && (
-        <MetaEditorModal
-          meta={editando}
-          mesRef={mesRef}
-          onClose={() => setEditando(null)}
-          onSaved={() => { setEditando(null); reload() }}
-        />
-      )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <MetaTimeCard
+            loading={loadingClosers}
+            realFin={totais.realFin}
+            metaFin={totais.metaFin}
+            realQtd={totais.realQtd}
+            metaQtd={totais.metaQtd}
+            pctAtingido={pctTotal}
+            pctEsperado={pctEsperado}
+          />
+
+          <PremiosGrid />
+
+          <PilotosGrid closers={closers} historico={historico} loading={loadingClosers || loadingHist} />
+        </div>
+      </div>
+
+      <HistoricoTable historico={historico} loading={loadingHist} />
+
+      <MetasMarcaSection />
     </div>
   )
 }
@@ -154,36 +151,25 @@ const CHECKERED_BG =
   "<rect x='8' y='8' width='8' height='8' fill='%23ffffff' fill-opacity='0.05'/>" +
   "</svg>\")"
 
-function HeroBanner({ mesRef, dia }: { mesRef: string; dia: { atual: number; total: number } }) {
-  const mesInfo = MESES_DISPONIVEIS.find(m => m.key === mesRef)!
-  const diasRestantes = Math.max(0, dia.total - dia.atual)
-  const semanaAtual = dia.atual <= 7 ? 1 : dia.atual <= 14 ? 2 : dia.atual <= 21 ? 3 : 4
-
+function HeroBanner({ volta, diasRestantes, pole }: { volta: number; diasRestantes: number; pole: CloserMeta | null }) {
   return (
-    <div
-      style={{
-        position: 'relative',
-        background: '#141419',
-        borderRadius: 16,
-        overflow: 'hidden',
-        padding: '28px 32px',
-        marginBottom: 20,
-      }}
-    >
+    <div style={{
+      position: 'relative', background: '#141419', borderRadius: 16, overflow: 'hidden',
+      padding: '28px 32px', marginBottom: 20,
+      display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center',
+    }}>
       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: '#E10600' }} />
-      <div
-        style={{
-          position: 'absolute', top: 0, right: 0, bottom: 0, width: '55%',
-          backgroundImage: CHECKERED_BG,
-          maskImage: 'linear-gradient(to right, transparent 0%, black 30%)',
-          WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 30%)',
-          pointerEvents: 'none',
-        }}
-      />
+      <div style={{
+        position: 'absolute', top: 0, right: 0, bottom: 0, width: '55%',
+        backgroundImage: CHECKERED_BG,
+        maskImage: 'linear-gradient(to right, transparent 0%, black 30%)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 30%)',
+        pointerEvents: 'none',
+      }} />
 
       <div style={{ position: 'relative', zIndex: 1 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#E10600', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-          Fórmula 1 · {mesInfo.label}
+          Fórmula 1 · {MES_LABEL}
         </div>
         <h1 style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', fontSize: 42, fontWeight: 500, color: '#fff', lineHeight: 1.05 }}>
           GP We Scale
@@ -193,11 +179,13 @@ function HeroBanner({ mesRef, dia }: { mesRef: string; dia: { atual: number; tot
         </div>
 
         <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <HeroChip dot="#E10600">Volta {semanaAtual} de 4</HeroChip>
+          <HeroChip dot="#E10600">Volta {volta} de 4</HeroChip>
           <HeroChip>{diasRestantes} dias para a bandeirada</HeroChip>
           <HeroChip>Pool de prêmios · {moneyCompact(POOL_PREMIOS)}</HeroChip>
         </div>
       </div>
+
+      <PolePositionCard pole={pole} />
     </div>
   )
 }
@@ -205,12 +193,9 @@ function HeroBanner({ mesRef, dia }: { mesRef: string; dia: { atual: number; tot
 function HeroChip({ children, dot }: { children: React.ReactNode; dot?: string }) {
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 8,
-      padding: '8px 14px', borderRadius: 999,
-      background: 'rgba(255,255,255,0.06)',
-      border: '1px solid rgba(255,255,255,0.08)',
-      color: 'rgba(255,255,255,0.85)',
-      fontSize: 13,
+      display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 999,
+      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+      color: 'rgba(255,255,255,0.85)', fontSize: 13,
     }}>
       {dot && <span style={{ width: 6, height: 6, borderRadius: 999, background: dot }} />}
       {children}
@@ -218,47 +203,147 @@ function HeroChip({ children, dot }: { children: React.ReactNode; dot?: string }
   )
 }
 
-/* ── Seletor de mês ─────────────────────────────────────────────────────── */
-
-function MesSelector({ mesRef, setMesRef }: { mesRef: string; setMesRef: (m: string) => void }) {
+function PolePositionCard({ pole }: { pole: CloserMeta | null }) {
   return (
-    <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-      {MESES_DISPONIVEIS.map(m => {
-        const ativo = m.key === mesRef
-        return (
-          <button
-            key={m.key}
-            onClick={() => setMesRef(m.key)}
-            style={{
-              padding: '8px 16px', borderRadius: 999,
-              border: '1px solid ' + (ativo ? 'var(--ws-brand)' : 'var(--ws-border)'),
-              background: ativo ? 'var(--ws-brand)' : 'var(--ws-surface)',
+    <div style={{
+      position: 'relative', zIndex: 1,
+      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+      borderRadius: 12, padding: '14px 18px', minWidth: 220,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+        Pole position · mês
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 999,
+          background: pole?.cor ?? 'rgba(255,255,255,0.15)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
+        }}>
+          {pole?.iniciais ?? '—'}
+        </div>
+        <div>
+          <div style={{ color: '#fff', fontSize: 15, fontWeight: 500 }}>{pole?.nome ?? '—'}</div>
+          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 }}>
+            {pole ? `${pct(pole.pctAtingimento, 0)} da meta · ${money(pole.realizado)}` : 'sem dados'}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Toggle Ciclo + Voltas ──────────────────────────────────────────────── */
+
+function CicloVoltas({
+  ciclo, setCiclo, voltaSelecionada, setVoltaSelecionada,
+}: {
+  ciclo: 'semanal' | 'mensal'
+  setCiclo: (c: 'semanal' | 'mensal') => void
+  voltaSelecionada: number
+  setVoltaSelecionada: (v: number) => void
+}) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'inline-flex', background: '#fff', border: '1px solid var(--ws-border)',
+        borderRadius: 999, padding: 4,
+      }}>
+        {(['semanal', 'mensal'] as const).map(c => {
+          const ativo = ciclo === c
+          return (
+            <button key={c} onClick={() => setCiclo(c)} style={{
+              padding: '6px 16px', borderRadius: 999, border: 'none', cursor: 'pointer',
+              background: ativo ? 'var(--ws-brand)' : 'transparent',
               color: ativo ? '#fff' : 'var(--ws-text-primary)',
-              fontSize: 13, fontWeight: ativo ? 500 : 400, cursor: 'pointer',
-              transition: 'all 0.15s',
-            }}
-          >
-            {m.label}
-          </button>
+              fontSize: 13, fontWeight: ativo ? 500 : 400,
+            }}>
+              Ciclo {c}
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {VOLTAS.map(v => {
+          const ativo = v.num === voltaSelecionada
+          return (
+            <button key={v.num} onClick={() => setVoltaSelecionada(v.num)} style={{
+              padding: '8px 14px', borderRadius: 999,
+              border: '1px solid ' + (ativo ? 'var(--ws-brand)' : 'var(--ws-border)'),
+              background: ativo ? 'var(--ws-brand)' : '#fff',
+              color: ativo ? '#fff' : 'var(--ws-text-primary)',
+              fontSize: 12, fontWeight: ativo ? 500 : 400, cursor: 'pointer',
+            }}>
+              {v.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ── Classificação (col esquerda dark) ─────────────────────────────────── */
+
+function ClassificacaoCard({ ranking, voltaLabel }: { ranking: CloserMeta[]; voltaLabel: string }) {
+  return (
+    <div style={{
+      background: '#141419', borderRadius: 16, padding: '20px 0',
+      color: '#fff', height: 'fit-content',
+    }}>
+      <div style={{ padding: '0 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 8, height: 8, background: '#E10600' }} />
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+            Classificação
+          </span>
+        </div>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{voltaLabel}</span>
+      </div>
+
+      {ranking.map((c, i) => {
+        const pos = i + 1
+        return (
+          <div key={c.nome} style={{
+            display: 'grid', gridTemplateColumns: '36px 4px 1fr auto',
+            gap: 12, padding: '12px 20px', alignItems: 'center',
+            borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.05)',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>P{pos}</div>
+            <div style={{ width: 4, height: 40, background: c.cor, borderRadius: 2 }} />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: c.cor, letterSpacing: 0.5 }}>{c.iniciais}</span>
+                <span style={{ fontSize: 13, color: '#fff' }}>{c.nome}</span>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{money(c.realizado)}</div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
+                {c.metaFinanceira > 0 ? `${pct(c.pctAtingimento, 0)} da meta` : 'sem meta'}
+              </div>
+            </div>
+          </div>
         )
       })}
     </div>
   )
 }
 
-/* ── Card Meta do time ──────────────────────────────────────────────────── */
+/* ── Meta do time ───────────────────────────────────────────────────────── */
 
 interface MetaTimeCardProps {
   loading: boolean
-  realFat: number
-  metaFat: number
+  realFin: number
+  metaFin: number
   realQtd: number
   metaQtd: number
   pctAtingido: number
   pctEsperado: number
 }
 
-function MetaTimeCard({ loading, realFat, metaFat, realQtd, metaQtd, pctAtingido, pctEsperado }: MetaTimeCardProps) {
+function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido, pctEsperado }: MetaTimeCardProps) {
   const status: 'abaixo' | 'no' | 'acima' =
     pctAtingido < pctEsperado - 5 ? 'abaixo' : pctAtingido > pctEsperado + 5 ? 'acima' : 'no'
   const statusMap = {
@@ -269,25 +354,19 @@ function MetaTimeCard({ loading, realFat, metaFat, realQtd, metaQtd, pctAtingido
   const pctBar = Math.max(0, Math.min(100, pctAtingido))
 
   return (
-    <div style={{
-      background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
-      borderRadius: 16, padding: 24, marginBottom: 20,
-      boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-    }}>
+    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 16, padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
-            Meta do time
+            Meta do time · {MES_LABEL}
           </h2>
           <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            Soma das 6 marcas de franquia
+            Soma das metas individuais dos closers
           </div>
         </div>
         <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '4px 10px', borderRadius: 999,
-          background: statusMap.bg, color: statusMap.fg,
-          fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
+          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999,
+          background: statusMap.bg, color: statusMap.fg, fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
         }}>
           <span style={{ width: 6, height: 6, borderRadius: 999, background: statusMap.dot }} />
           {statusMap.label}
@@ -296,10 +375,10 @@ function MetaTimeCard({ loading, realFat, metaFat, realQtd, metaQtd, pctAtingido
 
       <div style={{ marginTop: 20, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 500, color: 'var(--ws-brand)', lineHeight: 1 }}>
-          {loading ? '—' : money(realFat)}
+          {loading ? '—' : money(realFin)}
         </span>
         <span style={{ fontSize: 15, color: 'var(--ws-text-secondary)' }}>
-          de {moneyCompact(metaFat)} · {realQtd}/{metaQtd} un · {pct(pctAtingido, 0)}
+          de {moneyCompact(metaFin)} · {realQtd}/{metaQtd} un · {pct(pctAtingido, 0)}
         </span>
       </div>
 
@@ -309,119 +388,272 @@ function MetaTimeCard({ loading, realFat, metaFat, realQtd, metaQtd, pctAtingido
 
       <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
         <span>ritmo esperado · {pct(pctEsperado, 0)} do mês</span>
+        <span>bandeirada · 30 · set</span>
       </div>
     </div>
   )
 }
 
-/* ── Tabela por marca ───────────────────────────────────────────────────── */
+/* ── Prêmios (3 cards) ──────────────────────────────────────────────────── */
 
-interface LinhaMarca {
-  marca: string
-  cor: string
-  metaQtd: number
-  metaFat: number
-  realQtd: number
-  realFat: number
-  pctQtd: number
-  pctFat: number
-  meta: MetaMarca | undefined
+const PREMIOS = [
+  {
+    titulo: 'Pole Position',
+    desc: 'Primeiro a cruzar a meta da semana',
+    premio: 'R$ 500 + pole no ranking',
+    status: 'Volta 1 · em disputa',
+  },
+  {
+    titulo: 'Volta Mais Rápida',
+    desc: 'Maior contrato único do mês',
+    premio: 'Jantar premium para 2',
+    status: 'Em disputa',
+  },
+  {
+    titulo: 'Pit Stop Perfeito',
+    desc: '100% dos leads respondidos em menos de 5 min na semana',
+    premio: 'Day off na sexta',
+    status: 'Em disputa',
+  },
+]
+
+function PremiosGrid() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+      {PREMIOS.map(p => (
+        <div key={p.titulo} style={{
+          background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12,
+          padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 8, height: 8, background: '#E10600' }} />
+            <span style={{ fontSize: 14, fontWeight: 500 }}>{p.titulo}</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>{p.desc}</div>
+          <div style={{ fontSize: 13 }}>🏆 {p.premio}</div>
+          <div style={{
+            marginTop: 4, padding: '6px 10px', borderRadius: 6,
+            background: '#F9FAFB', fontSize: 11, color: 'var(--ws-text-secondary)',
+          }}>
+            {p.status}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
-function MetasTable({
-  linhas, onEdit, total,
+/* ── Pilotos grid (4 cards) ─────────────────────────────────────────────── */
+
+function PilotosGrid({
+  closers, historico, loading,
 }: {
-  linhas: LinhaMarca[]
-  onEdit: (m: MetaMarca) => void
-  total: { metaQtd: number; metaFat: number; realQtd: number; realFat: number }
+  closers: CloserMeta[]
+  historico: ReturnType<typeof useHistoricoAtingimento>['historico']
+  loading: boolean
+}) {
+  const ranking = useMemo(
+    () => [...closers].sort((a, b) => b.pctAtingimento - a.pctAtingimento || b.realizado - a.realizado),
+    [closers],
+  )
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+      {ranking.map((c, i) => {
+        const posicao = i + 1
+        const hist = historico.find(h => h.nome === c.nome)
+        return (
+          <PilotoCard key={c.nome} closer={c} posicao={posicao} historico={hist?.meses ?? []} loading={loading} />
+        )
+      })}
+    </div>
+  )
+}
+
+function PilotoCard({
+  closer, posicao, historico, loading,
+}: {
+  closer: CloserMeta
+  posicao: number
+  historico: ReturnType<typeof useHistoricoAtingimento>['historico'][number]['meses']
+  loading: boolean
+}) {
+  const status: 'abaixo' | 'no' | 'acima' | 'sem' =
+    closer.metaFinanceira === 0 ? 'sem'
+    : closer.pctAtingimento < 30 ? 'abaixo'
+    : closer.pctAtingimento < 80 ? 'no'
+    : 'acima'
+  const statusMap = {
+    abaixo: { label: 'abaixo do ritmo', color: '#EF4444' },
+    no:     { label: 'em ritmo',        color: '#3B82F6' },
+    acima:  { label: 'acima do ritmo',  color: '#22C55E' },
+    sem:    { label: 'sem meta',        color: '#9CA3AF' },
+  }[status]
+
+  const pillBg = status === 'sem' ? '#F3F4F6' : status === 'abaixo' ? '#FEE2E2' : status === 'no' ? '#DBEAFE' : '#DCFCE7'
+  const pillFg = status === 'sem' ? '#6B7280' : status === 'abaixo' ? '#B91C1C' : status === 'no' ? '#1E40AF' : '#166534'
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
+      {/* Foto placeholder — futuro: img real */}
+      <div style={{
+        background: '#141419', height: 140, position: 'relative', overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: CHECKERED_BG }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: closer.cor }} />
+        <div style={{
+          position: 'relative', zIndex: 1,
+          width: 60, height: 60, borderRadius: 999,
+          background: closer.cor, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, fontWeight: 600, letterSpacing: 1,
+          border: '3px solid rgba(255,255,255,0.15)',
+        }}>
+          {closer.iniciais}
+        </div>
+        <div style={{
+          position: 'absolute', bottom: 8, left: 12, right: 12,
+          fontSize: 11, color: 'rgba(255,255,255,0.6)',
+        }}>
+          Foto · {closer.nome}
+        </div>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{closer.nome}</div>
+            <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
+              P{posicao} no ciclo semanal
+            </div>
+          </div>
+          <span style={{
+            padding: '2px 8px', borderRadius: 999,
+            background: pillBg, color: pillFg,
+            fontSize: 11, fontWeight: 500,
+          }}>
+            {closer.metaFinanceira > 0 ? pct(closer.pctAtingimento, 0) : '—'}
+          </span>
+        </div>
+
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12 }}>
+          <span>
+            <span style={{ fontWeight: 500 }}>{loading ? '—' : money(closer.realizado)}</span>
+            <span style={{ color: 'var(--ws-text-secondary)' }}> de {moneyCompact(closer.metaFinanceira)} · </span>
+            <span style={{ fontWeight: 500 }}>{closer.realizadoQtd}/{closer.metaQtdVendas}</span>
+            <span style={{ color: 'var(--ws-text-secondary)' }}> un</span>
+          </span>
+          <span style={{ fontSize: 11, color: statusMap.color, fontWeight: 500 }}>{statusMap.label}</span>
+        </div>
+
+        {/* 6 barras histórico mar-ago */}
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+            {historico.length === 6 ? historico.map((h, i) => (
+              <div key={i} title={`${h.mes}: ${pct(h.pctAtingimento, 0)}`}>
+                <BarraHistorico pct={h.pctAtingimento} temMeta={h.metaFinanceira > 0} />
+              </div>
+            )) : Array.from({ length: 6 }).map((_, i) => (
+              <BarraHistorico key={i} pct={0} temMeta={false} />
+            ))}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 10, color: 'var(--ws-text-secondary)', letterSpacing: 0.5 }}>
+            Histórico de atingimento · mar-ago
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BarraHistorico({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
+  const cor = !temMeta ? '#D1D5DB' : valor >= 100 ? '#14B8A6' : valor >= 50 ? '#F59E0B' : '#FCA5A5'
+  const altura = !temMeta ? 12 : Math.max(12, Math.min(40, valor * 0.4))
+  return (
+    <div style={{ height: 40, display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{
+        width: '100%', height: altura, background: cor, borderRadius: 4,
+        transition: 'height 300ms ease',
+      }} />
+    </div>
+  )
+}
+
+/* ── Tabela Histórico de resultados ─────────────────────────────────────── */
+
+function HistoricoTable({
+  historico, loading,
+}: {
+  historico: ReturnType<typeof useHistoricoAtingimento>['historico']
+  loading: boolean
 }) {
   return (
     <div style={{
-      background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
-      borderRadius: 16, overflow: 'hidden', marginBottom: 20,
+      marginTop: 20, background: '#fff', border: '1px solid var(--ws-border)',
+      borderRadius: 12, overflow: 'hidden',
     }}>
-      <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--ws-border)' }}>
-        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
-          Metas por marca
+      <div style={{ padding: '16px 20px' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 500 }}>
+          Histórico de resultados
         </h3>
+        <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
+          Atingimento da meta mensal por pessoa · últimos 6 meses
+        </div>
       </div>
+
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ background: 'var(--ws-bg)', borderBottom: '1px solid var(--ws-border)' }}>
-              <th style={thStyle}>Marca</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>Meta un</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>Realizado un</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>Meta R$</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>Realizado R$</th>
-              <th style={{ ...thStyle, textAlign: 'right' }}>% atingido</th>
-              <th style={{ ...thStyle, textAlign: 'center' }}>Ação</th>
+            <tr style={{ background: 'var(--ws-bg)', borderTop: '1px solid var(--ws-border)', borderBottom: '1px solid var(--ws-border)' }}>
+              <th style={{ ...thHist, textAlign: 'left' }}>PILOTO</th>
+              {MESES_HISTORICO_LABELS.map(m => (
+                <th key={m} style={thHist}>{m}</th>
+              ))}
+              <th style={{ ...thHist, background: '#F3F4F6' }}>MÉDIA</th>
             </tr>
           </thead>
           <tbody>
-            {linhas.map(l => (
-              <tr key={l.marca} style={{ borderBottom: '1px solid var(--ws-border)' }}>
-                <td style={{ ...tdStyle, borderLeft: `3px solid ${l.cor}`, paddingLeft: 20, fontWeight: 500 }}>
-                  {l.marca}
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>{l.metaQtd}</td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>{l.realQtd}</td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>{money(l.metaFat)}</td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>{money(l.realFat)}</td>
-                <td style={{ ...tdStyle, textAlign: 'right' }}>
-                  <PctPill valor={l.pctFat} />
-                </td>
-                <td style={{ ...tdStyle, textAlign: 'center' }}>
-                  <button
-                    onClick={() => {
-                      const meta: MetaMarca = l.meta ?? {
-                        marca: l.marca,
-                        mesReferencia: '',  // vai ser sobrescrito no modal via mesRef prop
-                        metaQtd: 0,
-                        metaFaturamento: 0,
-                        taxaPadrao: null,
-                      }
-                      onEdit(meta)
-                    }}
-                    style={{
-                      padding: '4px 10px', border: '1px solid var(--ws-border)',
-                      background: 'var(--ws-surface)', borderRadius: 6, fontSize: 12,
-                      cursor: 'pointer', color: 'var(--ws-text-primary)',
-                    }}
-                  >
-                    Editar
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {loading ? (
+              <tr><td colSpan={8} style={{ ...tdHist, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>Carregando…</td></tr>
+            ) : historico.map(h => {
+              const cor = CLOSERS_ATIVOS.find(c => c.nome === h.nome)?.cor ?? '#888'
+              return (
+                <tr key={h.nome} style={{ borderTop: '1px solid var(--ws-border)' }}>
+                  <td style={{ ...tdHist, textAlign: 'left' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 999, background: cor }} />
+                      {h.nome}
+                    </span>
+                  </td>
+                  {h.meses.map(m => (
+                    <td key={m.mes} style={tdHist}>
+                      <PctBadge pct={m.pctAtingimento} temMeta={m.metaFinanceira > 0} />
+                    </td>
+                  ))}
+                  <td style={{ ...tdHist, fontWeight: 600, background: '#F9FAFB' }}>
+                    {pct(h.media, 0)}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
-          <tfoot>
-            <tr style={{ background: 'var(--ws-bg)', borderTop: '2px solid var(--ws-brand)' }}>
-              <td style={{ ...tdStyle, fontWeight: 600 }}>WE SCALE (total)</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{total.metaQtd}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{total.realQtd}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{money(total.metaFat)}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{money(total.realFat)}</td>
-              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>
-                <PctPill valor={total.metaFat > 0 ? (total.realFat / total.metaFat) * 100 : 0} />
-              </td>
-              <td style={tdStyle}></td>
-            </tr>
-          </tfoot>
         </table>
       </div>
     </div>
   )
 }
 
-const thStyle: React.CSSProperties = {
-  padding: '10px 16px', textAlign: 'left',
-  fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
-  color: 'var(--ws-text-secondary)',
+const thHist: React.CSSProperties = {
+  padding: '10px 12px', textAlign: 'center',
+  fontSize: 10, fontWeight: 600, letterSpacing: 0.8, color: 'var(--ws-text-secondary)',
 }
-const tdStyle: React.CSSProperties = { padding: '12px 16px', color: 'var(--ws-text-primary)' }
+const tdHist: React.CSSProperties = { padding: '10px 12px', textAlign: 'center' }
 
-function PctPill({ valor }: { valor: number }) {
+function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
+  if (!temMeta) {
+    return <span style={{ fontSize: 11, color: '#9CA3AF' }}>—</span>
+  }
   const tier = valor >= 100 ? 'ok' : valor >= 50 ? 'mid' : 'low'
   const map = {
     ok:  { bg: '#DCFCE7', fg: '#166534' },
@@ -431,15 +663,154 @@ function PctPill({ valor }: { valor: number }) {
   return (
     <span style={{
       display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-      background: map.bg, color: map.fg, fontSize: 12, fontWeight: 500,
-      minWidth: 50, textAlign: 'center',
+      background: map.bg, color: map.fg, fontSize: 11, fontWeight: 500,
+      minWidth: 46, textAlign: 'center',
     }}>
       {pct(valor, 0)}
     </span>
   )
 }
 
-/* ── Modal editor ───────────────────────────────────────────────────────── */
+/* ── Seção separada: metas por marca (editor) ───────────────────────────── */
+
+function MetasMarcaSection() {
+  const [editando, setEditando] = useState<MetaMarca | null>(null)
+  const [mesMarcaRef, setMesMarcaRef] = useState<string>('2026-09-01')
+  const { metas, loading: loadingMetas, reload } = useMetasMarca(mesMarcaRef)
+  const { porMarca: realizadoMap, loading: loadingReal } = useRealizadoPorMarca(mesMarcaRef)
+  const loading = loadingMetas || loadingReal
+
+  const linhas = useMemo(() => {
+    return MARCAS_FRANQUIA.map(marca => {
+      const meta = metas.find(m => m.marca === marca)
+      const real = realizadoMap.get(marca)
+      const metaQtd = meta?.metaQtd ?? 0
+      const metaFat = meta?.metaFaturamento ?? 0
+      const realQtd = real?.qtd ?? 0
+      const realFat = real?.faturamento ?? 0
+      return {
+        marca, cor: MARCA_COR[marca] ?? '#888',
+        metaQtd, metaFat, realQtd, realFat,
+        pctFat: metaFat > 0 ? (realFat / metaFat) * 100 : 0,
+        meta,
+      }
+    })
+  }, [metas, realizadoMap])
+
+  const total = useMemo(() => linhas.reduce(
+    (acc, l) => ({ metaQtd: acc.metaQtd + l.metaQtd, metaFat: acc.metaFat + l.metaFat, realQtd: acc.realQtd + l.realQtd, realFat: acc.realFat + l.realFat }),
+    { metaQtd: 0, metaFat: 0, realQtd: 0, realFat: 0 },
+  ), [linhas])
+
+  const MESES = [
+    { key: '2026-09-01', label: 'Setembro' },
+    { key: '2026-10-01', label: 'Outubro' },
+    { key: '2026-11-01', label: 'Novembro' },
+    { key: '2026-12-01', label: 'Dezembro' },
+  ]
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500 }}>
+            Metas por marca (franqueadora)
+          </h2>
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
+            Base da planilha "Meta - Venda de Franquia". Editar aqui atualiza a fonte oficial da meta por marca.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {MESES.map(m => (
+            <button key={m.key} onClick={() => setMesMarcaRef(m.key)} style={{
+              padding: '6px 12px', borderRadius: 999,
+              border: '1px solid ' + (mesMarcaRef === m.key ? 'var(--ws-brand)' : 'var(--ws-border)'),
+              background: mesMarcaRef === m.key ? 'var(--ws-brand)' : '#fff',
+              color: mesMarcaRef === m.key ? '#fff' : 'var(--ws-text-primary)',
+              fontSize: 12, cursor: 'pointer',
+            }}>{m.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {USE_MOCK && (
+        <div style={{
+          padding: '8px 12px', marginBottom: 12, borderRadius: 8,
+          background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 12,
+        }}>
+          ⚠️ Tabela <code>DB_Metas_Marca</code> ainda não existe. Metas em fallback local · edições não persistem.
+        </div>
+      )}
+
+      <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: 'var(--ws-bg)' }}>
+                <th style={thMarca}>Marca</th>
+                <th style={{ ...thMarca, textAlign: 'right' }}>Meta un</th>
+                <th style={{ ...thMarca, textAlign: 'right' }}>Real un</th>
+                <th style={{ ...thMarca, textAlign: 'right' }}>Meta R$</th>
+                <th style={{ ...thMarca, textAlign: 'right' }}>Real R$</th>
+                <th style={{ ...thMarca, textAlign: 'right' }}>% atingido</th>
+                <th style={{ ...thMarca, textAlign: 'center' }}>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map(l => (
+                <tr key={l.marca} style={{ borderTop: '1px solid var(--ws-border)' }}>
+                  <td style={{ ...tdMarca, borderLeft: `3px solid ${l.cor}`, paddingLeft: 20, fontWeight: 500 }}>{l.marca}</td>
+                  <td style={{ ...tdMarca, textAlign: 'right' }}>{l.metaQtd}</td>
+                  <td style={{ ...tdMarca, textAlign: 'right' }}>{loading ? '—' : l.realQtd}</td>
+                  <td style={{ ...tdMarca, textAlign: 'right' }}>{money(l.metaFat)}</td>
+                  <td style={{ ...tdMarca, textAlign: 'right' }}>{loading ? '—' : money(l.realFat)}</td>
+                  <td style={{ ...tdMarca, textAlign: 'right' }}><PctBadge pct={l.pctFat} temMeta={l.metaFat > 0} /></td>
+                  <td style={{ ...tdMarca, textAlign: 'center' }}>
+                    <button
+                      onClick={() => {
+                        const meta: MetaMarca = l.meta ?? {
+                          marca: l.marca, mesReferencia: mesMarcaRef, metaQtd: 0, metaFaturamento: 0, taxaPadrao: null,
+                        }
+                        setEditando(meta)
+                      }}
+                      style={{
+                        padding: '4px 10px', border: '1px solid var(--ws-border)',
+                        background: '#fff', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                      }}>Editar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: 'var(--ws-bg)', borderTop: '2px solid var(--ws-brand)' }}>
+                <td style={{ ...tdMarca, fontWeight: 600 }}>WE SCALE (total)</td>
+                <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>{total.metaQtd}</td>
+                <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>{total.realQtd}</td>
+                <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>{money(total.metaFat)}</td>
+                <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>{money(total.realFat)}</td>
+                <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>
+                  <PctBadge pct={total.metaFat > 0 ? (total.realFat / total.metaFat) * 100 : 0} temMeta={total.metaFat > 0} />
+                </td>
+                <td style={tdMarca}></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {editando && (
+        <MetaEditorModal meta={editando} mesRef={mesMarcaRef} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); reload() }} />
+      )}
+    </div>
+  )
+}
+
+const thMarca: React.CSSProperties = {
+  padding: '10px 16px', textAlign: 'left',
+  fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
+  color: 'var(--ws-text-secondary)',
+}
+const tdMarca: React.CSSProperties = { padding: '12px 16px' }
 
 function MetaEditorModal({
   meta, mesRef, onClose, onSaved,
@@ -455,91 +826,50 @@ function MetaEditorModal({
   const [msg, setMsg] = useState<string | null>(null)
 
   async function salvar() {
-    setSaving(true)
-    setMsg(null)
+    setSaving(true); setMsg(null)
     const result = await upsertMetaMarca({
-      marca: meta.marca,
-      mesReferencia: mesRef,
-      metaQtd: Number(qtd) || 0,
-      metaFaturamento: Number(fat) || 0,
+      marca: meta.marca, mesReferencia: mesRef,
+      metaQtd: Number(qtd) || 0, metaFaturamento: Number(fat) || 0,
       taxaPadrao: meta.taxaPadrao,
     })
     setSaving(false)
-    if (!result.ok) {
-      setMsg(`Erro: ${result.error}`)
-      return
-    }
-    if (result.mocked) {
-      setMsg('⚠️ Modo mock — não persistiu no banco (tabela ainda não existe)')
-      return
-    }
+    if (!result.ok) { setMsg(`Erro: ${result.error}`); return }
+    if (result.mocked) { setMsg('⚠️ Modo mock — não persistiu no banco'); return }
     onSaved()
   }
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: 'var(--ws-surface)', borderRadius: 12, padding: 24,
-          width: '90%', maxWidth: 400,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-        }}
-      >
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: '#fff', borderRadius: 12, padding: 24, width: '90%', maxWidth: 400,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+      }}>
         <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18 }}>
           Editar meta — {meta.marca}
         </h3>
-        <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-          Mês: {MESES_DISPONIVEIS.find(m => m.key === mesRef)?.label}
-        </div>
-
-        <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Meta de unidades</span>
-            <input
-              type="number" min="0" step="1" value={qtd}
-              onChange={e => setQtd(e.target.value)}
-              style={inputStyle}
-            />
+            <input type="number" min="0" value={qtd} onChange={e => setQtd(e.target.value)} style={inputStyle} />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Meta de faturamento (R$)</span>
-            <input
-              type="number" min="0" step="100" value={fat}
-              onChange={e => setFat(e.target.value)}
-              style={inputStyle}
-            />
+            <input type="number" min="0" step="100" value={fat} onChange={e => setFat(e.target.value)} style={inputStyle} />
           </label>
-          {meta.taxaPadrao && (
-            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-              Ticket padrão: {money(meta.taxaPadrao)} · sugestão faturamento: {money(Number(qtd) * meta.taxaPadrao)}
-            </div>
-          )}
         </div>
-
         {msg && (
           <div style={{
             marginTop: 12, padding: '8px 12px', borderRadius: 6,
             background: msg.startsWith('Erro') ? '#FEE2E2' : '#FEF3C7',
-            color: msg.startsWith('Erro') ? '#B91C1C' : '#92400E',
-            fontSize: 12,
-          }}>
-            {msg}
-          </div>
+            color: msg.startsWith('Erro') ? '#B91C1C' : '#92400E', fontSize: 12,
+          }}>{msg}</div>
         )}
-
         <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onClose} disabled={saving} style={btnGhost}>Cancelar</button>
-          <button onClick={salvar} disabled={saving} style={btnPrimary}>
-            {saving ? 'Salvando…' : 'Salvar'}
-          </button>
+          <button onClick={salvar} disabled={saving} style={btnPrimary}>{saving ? 'Salvando…' : 'Salvar'}</button>
         </div>
       </div>
     </div>
@@ -548,12 +878,11 @@ function MetaEditorModal({
 
 const inputStyle: React.CSSProperties = {
   padding: '8px 12px', border: '1px solid var(--ws-border)', borderRadius: 6,
-  background: 'var(--ws-bg)', color: 'var(--ws-text-primary)', fontSize: 14,
-  fontFamily: 'inherit',
+  background: '#fff', fontSize: 14, fontFamily: 'inherit',
 }
 const btnGhost: React.CSSProperties = {
   padding: '8px 16px', border: '1px solid var(--ws-border)', background: 'transparent',
-  borderRadius: 6, cursor: 'pointer', fontSize: 13, color: 'var(--ws-text-primary)',
+  borderRadius: 6, cursor: 'pointer', fontSize: 13,
 }
 const btnPrimary: React.CSSProperties = {
   padding: '8px 16px', border: 'none', background: 'var(--ws-brand)',

@@ -11,8 +11,9 @@ import { supabase } from '@/lib/supabase'
  * apresentados). Quando a tabela existir, `USE_MOCK` vira `false`.
  */
 
-// Flip para `false` quando `okrs_h2` existir no Supabase de Marketing.
-const USE_MOCK = true
+// Tabela `okrs_h2` criada em 01/09/2026 no Supabase de Marketing
+// (jmuluoksnlqrvzbcltim) via MCP. Persistência ativa.
+const USE_MOCK = false
 
 export interface Okr {
   id: string                    // slug único

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useMetasClosers, CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
 import type { CloserMeta } from '@/hooks/useMetasClosers'
+import { useMetasSDRs, type SdrMeta } from '@/hooks/useMetasSDRs'
 import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHistoricoAtingimento'
 import { useMetasMarca, upsertMetaMarca, MARCAS_FRANQUIA, USE_MOCK, type MetaMarca } from '@/hooks/useMetasMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
@@ -137,6 +138,8 @@ export function CampanhaMetas() {
       </div>
 
       <HistoricoTable historico={historico} loading={loadingHist} />
+
+      <SdrsSection />
 
       <MetasMarcaSection />
     </div>
@@ -502,30 +505,7 @@ function PilotoCard({
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
-      {/* Foto placeholder — futuro: img real */}
-      <div style={{
-        background: '#141419', height: 140, position: 'relative', overflow: 'hidden',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: CHECKERED_BG }} />
-        <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: closer.cor }} />
-        <div style={{
-          position: 'relative', zIndex: 1,
-          width: 60, height: 60, borderRadius: 999,
-          background: closer.cor, color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, fontWeight: 600, letterSpacing: 1,
-          border: '3px solid rgba(255,255,255,0.15)',
-        }}>
-          {closer.iniciais}
-        </div>
-        <div style={{
-          position: 'absolute', bottom: 8, left: 12, right: 12,
-          fontSize: 11, color: 'rgba(255,255,255,0.6)',
-        }}>
-          Foto · {closer.nome}
-        </div>
-      </div>
+      <VendedorFoto foto={closer.foto} iniciais={closer.iniciais} cor={closer.cor} nome={closer.nome} escuderia={closer.escuderia} />
 
       <div style={{ padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -569,6 +549,85 @@ function PilotoCard({
             Histórico de atingimento · mar-ago
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Renderiza foto real do vendedor quando `foto` existe; fallback pras iniciais
+ *  em círculo colorido sobre fundo carbono + bandeirada. Usado por PilotoCard
+ *  (closers) e SdrCard (SDRs). */
+function VendedorFoto({
+  foto, iniciais, cor, nome, escuderia, altura = 200,
+}: {
+  foto?: string
+  iniciais: string
+  cor: string
+  nome: string
+  escuderia?: string
+  altura?: number
+}) {
+  if (foto) {
+    return (
+      <div style={{
+        position: 'relative',
+        height: altura,
+        overflow: 'hidden',
+        background: '#141419',
+      }}>
+        <img
+          src={foto}
+          alt={nome}
+          style={{
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center 20%',
+          }}
+        />
+        <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: cor }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(to top, rgba(20,20,25,0.65) 0%, transparent 45%)',
+          pointerEvents: 'none',
+        }} />
+        {escuderia && (
+          <div style={{
+            position: 'absolute', bottom: 8, left: 14, right: 14,
+            fontSize: 10, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.75)',
+          }}>
+            {escuderia}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Fallback: iniciais coloridas sobre fundo carbono + bandeirada
+  return (
+    <div style={{
+      background: '#141419', height: altura, position: 'relative', overflow: 'hidden',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: CHECKERED_BG }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: cor }} />
+      <div style={{
+        position: 'relative', zIndex: 1,
+        width: 60, height: 60, borderRadius: 999,
+        background: cor, color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 18, fontWeight: 600, letterSpacing: 1,
+        border: '3px solid rgba(255,255,255,0.15)',
+      }}>
+        {iniciais}
+      </div>
+      <div style={{
+        position: 'absolute', bottom: 8, left: 12, right: 12,
+        fontSize: 11, color: 'rgba(255,255,255,0.6)',
+      }}>
+        Foto · {nome}
       </div>
     </div>
   )
@@ -675,6 +734,137 @@ function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
     }}>
       {pct(valor, 0)}
     </span>
+  )
+}
+
+/* ── Grid dos SDRs ──────────────────────────────────────────────────────── */
+
+function SdrsSection() {
+  const { sdrs, loading, metasCadastradas } = useMetasSDRs(MES_ATIVO)
+
+  return (
+    <section style={{ marginTop: 32 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#E10600', letterSpacing: '.14em', textTransform: 'uppercase' }}>
+            Grid dos SDRs
+          </div>
+          <h2 style={{ margin: '4px 0 0', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
+            Quem gera o ritmo da corrida
+          </h2>
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
+            Meta de SQL, agendamento e reunião realizada por SDR — Setembro/2026
+          </div>
+        </div>
+      </div>
+
+      {!metasCadastradas && !loading && (
+        <div style={{
+          padding: '8px 12px', marginBottom: 12, borderRadius: 8,
+          background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 12,
+        }}>
+          ⚠️ Metas de setembro/2026 dos SDRs ainda não cadastradas em <code>DB_Metas_Performance</code>.
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+        {sdrs.map(sdr => (
+          <SdrCard key={sdr.nome} sdr={sdr} loading={loading} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function SdrCard({ sdr, loading }: { sdr: SdrMeta; loading: boolean }) {
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
+      <VendedorFoto foto={sdr.foto} iniciais={sdr.iniciais} cor={sdr.cor} nome={sdr.nome} escuderia={sdr.escuderia} />
+
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{sdr.nome}</div>
+            <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+              SDR
+            </div>
+          </div>
+          <span style={{
+            padding: '2px 8px', borderRadius: 999,
+            background: '#F3F4F6', color: '#6B7280',
+            fontSize: 10, fontWeight: 500, letterSpacing: '.06em',
+          }}>
+            AGUARDANDO
+          </span>
+        </div>
+
+        {/* Métricas SDR */}
+        <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <MetricaLinha
+            label="SQL"
+            realizado={sdr.realizadoSql}
+            meta={sdr.metaSql}
+            loading={loading}
+          />
+          <MetricaLinha
+            label="Reunião realizada"
+            realizado={sdr.realizadoReuniao}
+            meta={sdr.metaReuniao}
+            loading={loading}
+          />
+          <MetricaLinha
+            label="Agendamento"
+            realizado={0}
+            meta={sdr.metaAgendamento}
+            loading={loading}
+            semRealizado
+          />
+        </div>
+
+        <div style={{ marginTop: 10, fontSize: 10, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>
+          Realizado em definição com o time — cards ficam prontos assim que fonte for confirmada.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MetricaLinha({
+  label, realizado, meta, loading, semRealizado = false,
+}: {
+  label: string
+  realizado: number
+  meta: number
+  loading: boolean
+  semRealizado?: boolean
+}) {
+  const pctVal = meta > 0 ? (realizado / meta) * 100 : 0
+  const barWidth = Math.min(100, Math.max(0, pctVal))
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, marginBottom: 4 }}>
+        <span style={{ color: 'var(--ws-text-secondary)' }}>{label}</span>
+        <span>
+          {semRealizado ? (
+            <span style={{ color: 'var(--ws-text-secondary)' }}>meta {loading ? '—' : meta}</span>
+          ) : (
+            <>
+              <span style={{ fontWeight: 500 }}>{loading ? '—' : realizado}</span>
+              <span style={{ color: 'var(--ws-text-secondary)' }}> / {meta}</span>
+            </>
+          )}
+        </span>
+      </div>
+      {!semRealizado && (
+        <div style={{ height: 4, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
+          <div style={{
+            width: `${barWidth}%`, height: '100%',
+            background: pctVal >= 100 ? '#14B8A6' : pctVal >= 50 ? '#F59E0B' : '#CBD5E1',
+            transition: 'width 300ms ease',
+          }} />
+        </div>
+      )}
+    </div>
   )
 }
 

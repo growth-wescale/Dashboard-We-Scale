@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play } from 'lucide-react'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
+import { useGpMode } from '@/hooks/useGpMode'
+import { GpIntro } from '@/components/gp/GpIntro'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -100,6 +102,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     try { return localStorage.getItem('sidebarOpen') !== 'false' } catch { return true }
   })
   const [syncing, setSyncing] = useState(false)
+  const { gpAtivo, toggleGp, replayIntro } = useGpMode()
 
   const handleSync = useCallback(() => {
     if (syncing) return
@@ -244,6 +247,24 @@ export function AppLayout({ children }: AppLayoutProps) {
                 }}
               />
             </button>
+            <button
+              onClick={toggleGp}
+              className="gp-toggle-btn"
+              data-active={gpAtivo}
+              title={gpAtivo ? 'Modo GP ativo · clique para desativar' : 'Ativar Modo GP · Fórmula 1'}
+              aria-pressed={gpAtivo}
+            >
+              <Flag size={17} />
+            </button>
+            {gpAtivo && (
+              <button
+                onClick={replayIntro}
+                title="Rever abertura GP"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}
+              >
+                <Play size={16} />
+              </button>
+            )}
             <ThemeToggle />
             <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
               <Bell size={18} />
@@ -272,6 +293,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         <AiChat />
+        {gpAtivo && <GpIntro />}
       </div>
     </MarcaContext.Provider>
   )

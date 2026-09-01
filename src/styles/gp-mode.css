@@ -1,0 +1,265 @@
+/* ══════════════════════════════════════════════════════════════════════════
+ * Modo GP — tema Fórmula 1 (setembro/2026).
+ * Ativa via `html[data-gp="f1"]`. Persistência em localStorage `ws-gp-mode`.
+ * Portado do handoff `_handoff_gp_mode/reference/gp-mode.jsx`. Escopo 100% visual.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+html[data-gp="f1"] {
+  --brand-accent: #E10600;
+  --brand-accent-2: #E10600;
+  --brand-accent-contrast: #FFFFFF;
+  --ws-vinho-a: #141419;
+  --ws-vinho-b: #E10600;
+}
+
+/* Tracejado 3px no topo — branco/vermelho a cada 26px */
+html[data-gp="f1"] body::before {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 40;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, #E10600 0 26px, transparent 26px 52px);
+  opacity: 0.55;
+}
+
+/* ── Liveries por marca (só com Modo GP ligado) ──────────────────────── */
+html[data-gp="f1"] [data-brand="oral-unic"]  { --brand-accent: #6C2BD9; --brand-dark: #2E1065; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="inpot"]      { --brand-accent: #229971; --brand-dark: #0B3120; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="eletrovias"] { --brand-accent: #FF8000; --brand-dark: #47250A; --brand-accent-contrast: #141419; }
+html[data-gp="f1"] [data-brand="liso-laser"] { --brand-accent: #DC0000; --brand-dark: #4A0505; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="b2case"]     { --brand-accent: #1E41FF; --brand-dark: #0E1B66; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="viva"]       { --brand-accent: #F50A8C; --brand-dark: #55052F; --brand-accent-contrast: #fff; }
+
+/* ── Botão da bandeira ativo ────────────────────────────────────────── */
+.gp-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ws-text-secondary);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.gp-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.gp-toggle-btn[data-active="true"] {
+  background: #E10600;
+  color: #fff;
+}
+.gp-toggle-btn[data-active="true"]:hover {
+  background: #C90500;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+ * GpIntro — animação de abertura fullscreen
+ * Portado do handoff (_handoff_gp_mode/reference/gp-mode.jsx).
+ * ══════════════════════════════════════════════════════════════════════ */
+
+.gp-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0C0C10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.gp-intro.gp-out {
+  animation: gpFade 0.45s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+@keyframes gpFade {
+  to { opacity: 0; visibility: hidden; }
+}
+
+.gp-intro__checker {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: repeating-conic-gradient(#fff 0% 25%, transparent 0% 50%) 0 0 / 34px 34px;
+  -webkit-mask-image: linear-gradient(100deg, transparent 60%, #000 82%, transparent 98%);
+  mask-image: linear-gradient(100deg, transparent 60%, #000 82%, transparent 98%);
+  animation: gpChecker 0.8s ease 0.1s forwards;
+}
+@keyframes gpChecker {
+  to { opacity: 0.08; }
+}
+
+.gp-intro__streak {
+  position: absolute;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #E10600 30%, #FF3B30);
+  left: -40%;
+  width: 46%;
+  animation: gpStreak 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes gpStreak {
+  60%  { transform: translateX(220%); opacity: 1; }
+  100% { transform: translateX(340%); opacity: 0; }
+}
+
+.gp-intro__stage {
+  position: relative;
+  text-align: center;
+}
+
+.gp-intro__word {
+  font-family: var(--font-display, var(--font-body));
+  font-weight: 600;
+  font-size: clamp(54px, 9vw, 110px);
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+.gp-intro__word span {
+  display: inline-block;
+  opacity: 0;
+  animation: gpLetter 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.gp-intro__word span.gp-intro__sp {
+  width: 0.34em;
+}
+@keyframes gpLetter {
+  from {
+    opacity: 0;
+    transform: translateX(-1.4em) skewX(-18deg);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.gp-intro__swoosh {
+  position: absolute;
+  left: 50%;
+  bottom: -20px;
+  width: 0;
+  height: 6px;
+  background: #E10600;
+  transform: translateX(-50%) skewX(-30deg);
+  animation: gpSwoosh 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.5s forwards;
+}
+@keyframes gpSwoosh {
+  to { width: min(72vw, 560px); }
+}
+
+.gp-intro__tag {
+  margin-top: 46px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #E10600;
+  opacity: 0;
+  animation: gpUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 2s forwards;
+}
+
+.gp-intro__sub {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  animation: gpUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 2.15s forwards;
+}
+
+@keyframes gpUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.gp-intro__actions {
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  opacity: 0;
+  animation: gpUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 2.5s forwards;
+}
+
+.gp-intro__enter {
+  border: none;
+  cursor: pointer;
+  background: #E10600;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 13px 30px;
+  border-radius: 999px;
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.18s;
+  box-shadow: 0 8px 28px rgba(225, 6, 0, 0.35);
+}
+.gp-intro__enter:hover {
+  box-shadow: 0 10px 34px rgba(225, 6, 0, 0.5);
+}
+.gp-intro__enter:active {
+  transform: scale(0.965);
+}
+
+.gp-intro__skipwrap {
+  position: absolute;
+  top: 26px;
+  right: 30px;
+}
+
+.gp-intro__ghost {
+  border: none;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 999px;
+}
+.gp-intro__ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.gp-intro__nomore {
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  padding: 9px 4px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.gp-intro__nomore:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-intro * {
+    animation-duration: 0.01s !important;
+    animation-delay: 0s !important;
+  }
+}
+
+/* Respeitar prefers-reduced-motion — parar animações no tema GP */
+@media (prefers-reduced-motion: reduce) {
+  html[data-gp="f1"] * {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

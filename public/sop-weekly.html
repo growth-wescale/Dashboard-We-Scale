@@ -221,6 +221,21 @@
   .mkttab td.wk{font-family:var(--disp);font-weight:800;font-size:17px;color:var(--tinta)}
   .mkttab td.md{font-family:var(--disp);font-weight:700;font-size:15px;color:var(--roxo-medio);padding-left:14px}
   .pending{color:var(--tinta-suave);font-style:italic;font-size:12.5px;padding:10px 0}
+  /* Comparativo MQL semanal — no painel Marketing · números */
+  .mqlcmp{margin-top:14px;padding-top:12px;border-top:1px dashed var(--linha)}
+  .mqlcmp-head{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-suave);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .mqlcmp-head:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--teal)}
+  .mqlcmp-rows{display:flex;flex-direction:column;gap:10px}
+  .mqlcmp-row{display:grid;grid-template-columns:50px 1fr 62px;gap:10px;align-items:center}
+  .mqlcmp-lab{font-size:11px;color:var(--tinta-suave);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .mqlcmp-track{height:22px;border-radius:6px;background:color-mix(in srgb,var(--roxo-medio) 6%,transparent);overflow:hidden;position:relative}
+  .mqlcmp-bar{height:100%;border-radius:6px;min-width:8px;display:flex;align-items:center;padding-left:8px;font-family:var(--mono);font-weight:700;font-size:11.5px;color:#fff}
+  .mqlcmp-bar.jul{background:var(--tinta-suave);opacity:.65}
+  .mqlcmp-bar.ago{background:var(--teal)}
+  .mqlcmp-delta{font-family:var(--mono);font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+  .mqlcmp-delta.up{color:var(--teal-esc)}
+  .mqlcmp-delta.down{color:#c53030}
+  .mqlcmp-note{margin-top:8px;font-size:10.5px;color:var(--tinta-suave);font-style:italic}
   .funnel{display:flex;flex-direction:column;gap:5px;margin-bottom:4px}
   .fn-row{display:grid;grid-template-columns:140px 1fr auto;gap:10px;align-items:center}
   .fn-lab{font-size:12px;color:var(--tinta);font-weight:500}
@@ -531,6 +546,48 @@ BRANDS.forEach((b,idx)=>{
   wrap.appendChild(art);
 });
 
+// MQL por marca — comparativo última seg-dom completa de cada mês
+// Julho: 20-26/07/2026 (Mon-Sun) · Agosto: 24-30/08/2026 (Mon-Sun)
+// Dados via query em `leads` (Supabase Marketing) com lead_type MQL
+// (COALESCE lead_type + lead_type_original pra pegar Odonto Legacy).
+const MQL_SEM = {
+  'b2case': {jul: 47, ago: 59},
+  'eletro': {jul: 39, ago: 73},
+  'oral':   {jul: 5,  ago: 28},
+  'odonto': {jul: 9,  ago: 49},
+  'inpot':  {jul: 14, ago: 20},
+  'liso':   {jul: 6,  ago: 17},
+  'viva':   {jul: 13, ago: 7}
+};
+
+function mqlComparativoHTML(bkey){
+  const d = MQL_SEM[bkey];
+  if(!d) return '';
+  const max = Math.max(d.jul, d.ago, 1);
+  const wJul = Math.max(6, (d.jul / max) * 100);
+  const wAgo = Math.max(6, (d.ago / max) * 100);
+  const delta = d.jul > 0 ? ((d.ago - d.jul) / d.jul) * 100 : (d.ago > 0 ? 100 : 0);
+  const deltaFmt = (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%';
+  const deltaCls = delta >= 0 ? 'up' : 'down';
+  const arrow = delta >= 0 ? '▲' : '▼';
+  return `<div class="mqlcmp">
+    <div class="mqlcmp-head">MQL · última semana</div>
+    <div class="mqlcmp-rows">
+      <div class="mqlcmp-row">
+        <span class="mqlcmp-lab">20–26 Jul</span>
+        <div class="mqlcmp-track"><div class="mqlcmp-bar jul" style="width:${wJul}%">${d.jul}</div></div>
+        <span class="mqlcmp-delta"></span>
+      </div>
+      <div class="mqlcmp-row">
+        <span class="mqlcmp-lab">24–30 Ago</span>
+        <div class="mqlcmp-track"><div class="mqlcmp-bar ago" style="width:${wAgo}%">${d.ago}</div></div>
+        <span class="mqlcmp-delta ${deltaCls}">${arrow} ${deltaFmt}</span>
+      </div>
+    </div>
+    <div class="mqlcmp-note">Semana ISO cheia (seg-dom) · fonte: leads Marketing</div>
+  </div>`;
+}
+
 function funnelHTML(v){
   const max=v.f[0][0]||1;
   const rows=v.f.map((r,i)=>[r,i]).filter(x=>x[0][0]>0).map(x=>{const i=x[1];const[n,c]=x[0];const w=Math.max(6,(n/max)*100);
@@ -618,7 +675,7 @@ function openBrand(idx){
       <button class="close" aria-label="Fechar" onclick="closeModal()">✕</button>
     </div>
     <div class="panels">
-      <div class="panel"><div class="ph ph-mkt"><span class="dot"></span>Marketing · números</div>${stats}</div>
+      <div class="panel"><div class="ph ph-mkt"><span class="dot"></span>Marketing · números</div>${stats}${mqlComparativoHTML(b.key)}</div>
       ${rightPanel}
     </div>
     ${extrasBlock}`;

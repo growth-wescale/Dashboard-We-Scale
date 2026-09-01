@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
 import { GpIntro } from '@/components/gp/GpIntro'
+import { GpStrip } from '@/components/gp/GpStrip'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -287,6 +288,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </header>
 
+          {gpAtivo && !location.pathname.startsWith('/gp-setembro') && <GpStrip />}
           <main style={{ flex: 1, minWidth: 0 }}>
             {children}
           </main>

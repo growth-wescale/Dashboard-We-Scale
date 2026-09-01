@@ -1,0 +1,66 @@
+/* ══════════════════════════════════════════════════════════════════════════
+ * Modo GP — tema Fórmula 1 (setembro/2026).
+ * Ativa via `html[data-gp="f1"]`. Persistência em localStorage `ws-gp-mode`.
+ * Portado do handoff `_handoff_gp_mode/reference/gp-mode.jsx`. Escopo 100% visual.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+html[data-gp="f1"] {
+  --brand-accent: #E10600;
+  --brand-accent-2: #E10600;
+  --brand-accent-contrast: #FFFFFF;
+  --ws-vinho-a: #141419;
+  --ws-vinho-b: #E10600;
+}
+
+/* Tracejado 3px no topo — branco/vermelho a cada 26px */
+html[data-gp="f1"] body::before {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  z-index: 40;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, #E10600 0 26px, transparent 26px 52px);
+  opacity: 0.55;
+}
+
+/* ── Liveries por marca (só com Modo GP ligado) ──────────────────────── */
+html[data-gp="f1"] [data-brand="oral-unic"]  { --brand-accent: #6C2BD9; --brand-dark: #2E1065; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="inpot"]      { --brand-accent: #229971; --brand-dark: #0B3120; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="eletrovias"] { --brand-accent: #FF8000; --brand-dark: #47250A; --brand-accent-contrast: #141419; }
+html[data-gp="f1"] [data-brand="liso-laser"] { --brand-accent: #DC0000; --brand-dark: #4A0505; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="b2case"]     { --brand-accent: #1E41FF; --brand-dark: #0E1B66; --brand-accent-contrast: #fff; }
+html[data-gp="f1"] [data-brand="viva"]       { --brand-accent: #F50A8C; --brand-dark: #55052F; --brand-accent-contrast: #fff; }
+
+/* ── Botão da bandeira ativo ────────────────────────────────────────── */
+.gp-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ws-text-secondary);
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.gp-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.gp-toggle-btn[data-active="true"] {
+  background: #E10600;
+  color: #fff;
+}
+.gp-toggle-btn[data-active="true"]:hover {
+  background: #C90500;
+}
+
+/* Respeitar prefers-reduced-motion — parar animações no tema GP */
+@media (prefers-reduced-motion: reduce) {
+  html[data-gp="f1"] * {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

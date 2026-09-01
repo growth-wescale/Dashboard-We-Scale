@@ -20,17 +20,21 @@ export const CLOSERS_ATIVOS: ReadonlyArray<{
   nome: string
   iniciais: string
   cor: string
+  foto?: string
+  escuderia?: string
 }> = [
-  { nome: 'Jéssica',         iniciais: 'JES', cor: '#2563EB' }, // azul
-  { nome: 'Douglas',         iniciais: 'DOU', cor: '#E10600' }, // F1 red
-  { nome: 'Aurélio Briano',  iniciais: 'AUR', cor: '#F97316' }, // laranja
-  { nome: 'Bruna',           iniciais: 'BRU', cor: '#C6D32D' }, // verde-limão
+  { nome: 'Jéssica',         iniciais: 'JES', cor: '#00D2BE', foto: '/assets/vendedores/jessica.png', escuderia: 'Mercedes AMG Petronas' },
+  { nome: 'Douglas',         iniciais: 'DOU', cor: '#006F62', foto: '/assets/vendedores/douglas.png', escuderia: 'Aston Martin' },
+  { nome: 'Aurélio Briano',  iniciais: 'AUR', cor: '#005AFF', foto: '/assets/vendedores/aurelio.png', escuderia: 'Williams Racing' },
+  { nome: 'Bruna',           iniciais: 'BRU', cor: '#FF8000', escuderia: 'McLaren' },
 ]
 
 export interface CloserMeta {
   nome: string
   iniciais: string
   cor: string
+  foto?: string
+  escuderia?: string
   metaFinanceira: number
   metaQtdVendas: number
   realizado: number
@@ -127,6 +131,8 @@ function aggregate(
       nome: c.nome,
       iniciais: c.iniciais,
       cor: c.cor,
+      foto: c.foto,
+      escuderia: c.escuderia,
       metaFinanceira: meta.fin,
       metaQtdVendas: meta.qtd,
       realizado: real.fin,

@@ -154,6 +154,11 @@
   .fx-mkt{background:var(--teal-claro);color:var(--teal-esc);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--teal) 22%,transparent)}
   .fx-com{background:color-mix(in srgb,var(--roxo-medio) 10%,transparent);color:var(--roxo-medio);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--roxo-medio) 18%,transparent)}
   .itxt{font-size:13.5px;color:var(--tinta);line-height:1.48}
+  /* Bloco único de bullets (substitui as 4 lanes tradicionais quando `bullets` existe) */
+  .bulletblock{position:relative;padding:14px 18px 16px;background:linear-gradient(145deg,color-mix(in srgb,var(--teal) 5%,var(--card)),var(--card));border-radius:14px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--teal) 18%,transparent)}
+  .bulletblock-head{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--teal-esc);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .bulletblock-head:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal)}
+  .bulletblock ul{list-style:none;display:flex;flex-direction:column;gap:9px}
 
   footer{display:flex;align-items:center;justify-content:space-between;margin-top:32px;padding:0 6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--tinta-suave);text-transform:uppercase;flex-wrap:wrap;gap:8px}
   footer .conf{color:var(--roxo-medio);font-weight:700}
@@ -441,6 +446,11 @@ const FRENTES=[
 const BRANDS=[
  {key:"b2case",name:"B2Case",tag:"Capinhas · atacado",status:"good",badge:"✓ 4 un vendidas · Meta batida",dark:false,
   lanes:{ctx:[["com","3 de 6 perdas por objeção de budget; advogados/funcionários públicos evoluem melhor"]],dev:[],bkl:[],exe:[["mkt","Nova LP finalizada · lead chega sabendo o investimento"],["mkt","Ajuste no bot feito"],["mkt","Cadência de e-mail ativa"]]},
+  bullets:[
+    ["mkt","B2B seguindo com R$ 20k de budget · buscar canais alternativos é prioridade"],
+    ["mkt","MQL semanal +25% vs julho — ritmo de aquisição consistente"],
+    ["mkt","Nova LP + ajuste no bot + cadência de e-mail rodando desde ago"],
+  ],
   meta:{mes:4,sem:23,risco:false},
   mkt:[["Investimento","R$ 3.257","R$ 16.400"],["MQL","66","293"],["Leads","165","632"],["CP-MQL","R$ 49","R$ 56"]],
   vnd:{f:[[293,""],[210,"71,7%"],[140,"66,7%"],[112,"80,0%"],[75,"67,0%"],[49,"65,3%"],[38,"77,6%"],[12,"31,6%"],[2,"16,7%"],[1,"50,0%"],[2,"200,0%"],[4,""]],ns:12,fonte:"4 unidades vendidas · Meta ago batida",
@@ -448,6 +458,12 @@ const BRANDS=[
 
  {key:"eletro",name:"Eletrovias",tag:"Eletropostos",status:"good",badge:"✓ 4 un vendidas · Meta ultrapassada",dark:false,
   lanes:{ctx:[["com","4 reuniões de 14 agendadas — 3 viraram SAL"],["com","Perfil fotovoltaico acha que toca sozinho; segundo perfil vem sem capital"],["mkt","Melhor conversão após ajustes"]],dev:[["com","SDRs qualificam e mandam material antes de agendar"],["mkt","Nova LP em desenvolvimento"],["mkt","Formulário com bot em teste"]],bkl:[],exe:[["mkt","Revisão de criativos feita"]]},
+  bullets:[
+    ["com","Setembro começou forte: 3 unidades em negociação já no funil"],
+    ["mkt","MQL semanal +87% (39 → 73) vs julho — melhor conversão após ajustes"],
+    ["mkt","Nova LP em desenvolvimento + formulário com bot em teste"],
+    ["com","SDRs qualificando e mandando material antes de agendar (nova rotina)"],
+  ],
   meta:{mes:3,sem:19,risco:false},
   mkt:[["Investimento","R$ 2.237","R$ 8.100"],["MQL","74","223"],["Leads","270","816"],["CP-MQL","R$ 30","R$ 36"]],
   vnd:{f:[[223,""],[126,"56,5%"],[92,"73,0%"],[97,"105,4%"],[53,"54,6%"],[58,"109,4%"],[47,"81,0%"],[11,"23,4%"],[7,"63,6%"],[3,"42,9%"],[7,"233,3%"],[4,""]],ns:10,fonte:"4 unidades vendidas · Meta ago ultrapassada",
@@ -455,6 +471,14 @@ const BRANDS=[
 
  {key:"oral",name:"Oral Unic",tag:"Franquia odontológica",status:"attn",badge:"Atenção · 1 SQL / 1 reunião no mês",dark:false,
   lanes:{ctx:[["com","Persona validada: dentista com 2-3 clínicas que não escala"],["com","28 leads V4: 57% em contato, 11% com interesse, 32% perdidos"]],dev:[["mkt","Agente de IA em teste · qualificando no WhatsApp"]],bkl:[],exe:[["mkt","Comunidade em formulário nativo publicado"],["mkt","Decisão tomada: Odonto Legacy + Franquia via perfil We Scale"],["mkt","Investimento migrado para Ecossistema Oral Unic Legacy"]]},
+  bullets:[
+    ["com","Programa de indicação lançado em setembro para criar senso de urgência"],
+    ["com","Consultores empolgados ao descobrir que podiam indicar e ganhar"],
+    ["com","Estratégia de visitas presenciais com close junto ao consultor (levar lead à operação Oralunic)"],
+    ["mkt","MQL semanal +460% (5 → 28) — resposta imediata ao novo posicionamento"],
+    ["mkt","Alerta de mercado: Semexato migrou 100% para off (congressos, revistas) e reporta leads mais qualificados"],
+    ["mkt","Prioridade: migrar orçamento para congressos, eventos odonto e feiras · Feira ABF foi horrível pro concorrente e reforça diversificar canais"],
+  ],
   meta:{mes:1,sem:7,risco:true},
   mkt:[["Investimento","R$ 22.999","R$ 49.800"],["MQL","29","68"],["Leads","31","100"],["CP-MQL","R$ 793","R$ 732"]],
   vnd:{f:[[473,""],[76,"16,1%"],[25,"32,9%"],[8,"32,0%"],[3,"37,5%"],[1,"33,3%"],[1,"100,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",
@@ -466,6 +490,14 @@ const BRANDS=[
 
  {key:"odonto",name:"Odonto Legacy",tag:"Ecossistema odonto",status:"attn",badge:"R$ 35k de R$ 39,9k · 88%",dark:false,
   lanes:{ctx:[["com","Realizado ago: R$ 35k (1 Odonto Club) · 88% da meta R$ 39,9k"],["mkt","Comunidade cresceu de 80 (27/08) para 107 (31/08) · +34% em 4 dias"]],dev:[["mkt","Agente de IA em teste · qualificando cadastros"]],bkl:[],exe:[["mkt","Formulário nativo em execução"],["mkt","Campanha via perfil We Scale rodando · [CMD] AQUISIÇÃO"],["mkt","Evento de conversão ativo"]]},
+  bullets:[
+    ["com","Meta de receita R$ 49k batida em ago (venda R$ 30–35k + R$ 12k) — lição validada: mudar de qtd pra receita mudou a percepção da reunião"],
+    ["mkt","Comunidade +34% em 4 dias (80 → 107) — melhor crescimento até aqui"],
+    ["mkt","MQL semanal +444% (9 → 49) vs julho — resposta orgânica à mudança de posicionamento"],
+    ["mkt","Revisar LP e anúncios — deixar claro que produto forma gestores, não compartilha know-how da franqueadora"],
+    ["mkt","Posicionamento sugerido: 'transformar dentista em gestor de consultório'"],
+    ["com","Objetivo: dar segurança ao franqueado para indicar o produto sem sentir que está criando concorrência"],
+  ],
   meta:{mes:"R$ 39,9k",sem:"—",risco:true,nota:"Foco: receita e qualidade de execução · não medimos por unidade"},
   mkt:[["Investimento","R$ 5.089","R$ 15.123"],["MQL","33","56"],["CP-MQL","R$ 154","R$ 270"],["Custo/membro","R$ 64","R$ 189"]],
   comunidade:{
@@ -501,6 +533,12 @@ const BRANDS=[
 
  {key:"liso",name:"Lisô Laser",tag:"Depilação a laser",status:"attn",badge:"Atenção · 1 SQL / 1 reunião · connect ↑",dark:false,
   lanes:{ctx:[["mkt","Continua com maior volume; Connect Rate melhorou"]],dev:[["mkt","Nova estrutura de campanha rodando · validação da tese"],["mkt","Nova LP e criativos em finalização de desenvolvimento"]],bkl:[],exe:[]},
+  bullets:[
+    ["mkt","Influencer B2C funcionou muito bem — caso Curitiba: triplicou/quadruplicou faturamento num dia"],
+    ["mkt","Campanha forte de Black Friday planejada para estourar o sellout"],
+    ["mkt","MQL semanal +183% (6 → 17) vs julho — Connect Rate melhor após nova estrutura"],
+    ["mkt","Nova LP e criativos em finalização · próximos a subir"],
+  ],
   meta:{mes:2,sem:6,risco:true},
   mkt:[["Investimento","R$ 5.551","R$ 26.200"],["MQL","18","50"],["Leads","51","127"],["CP-MQL","R$ 308","R$ 525"]],
   vnd:{f:[[133,""],[38,"28,6%"],[18,"47,4%"],[8,"44,4%"],[2,"25,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"],[0,"0,0%"]],ns:0,fonte:"Sem vendas no período",
@@ -522,18 +560,25 @@ BRANDS.forEach((b,idx)=>{
   const art=document.createElement('button');
   art.className='brand'+(b.status==='attn'?' attn':'')+(b.badge.startsWith('✓')?' won':'');
   art.setAttribute('aria-haspopup','dialog');
-  const laneBlocks=[
-    ['ctx','n-ctx','s-ctx','Contexto e estado atual',b.lanes.ctx],
-    ['dev','n-dev','s-dev','Em desenvolvimento',b.lanes.dev],
-    ['exe','exe','s-exe','Executado',b.lanes.exe],
-    ['bkl','n-bkl','s-bkl','Backlog · próximo passo',b.lanes.bkl],
-  ].filter(l=>l[4]&&l[4].length).map(l=>{
-    const icon = l[0]==='exe'?ICON.exe:ICON[l[0]];
-    const nodeCls = l[0]==='exe'?'n-exe':l[1];
-    return `<div class="lane ${l[2]}"><span class="node ${nodeCls}">${icon}</span>
-      <div class="lane-h">${l[3]}</div>
-      <ul>${l[4].map(it=>`<li class="item"><span class="fx fx-${it[0]}">${it[0]==='mkt'?'Marketing':'Comercial'}</span><span class="itxt">${it[1]}</span></li>`).join('')}</ul></div>`;
-  }).join('');
+  // Se `bullets` existir na marca, renderiza 1 bloco único e ignora as 4 lanes tradicionais.
+  // Caso contrário, mantém o layout de 4 lanes (Contexto / Em desenvolvimento / Executado / Backlog).
+  const laneBlocks = b.bullets && b.bullets.length
+    ? `<div class="bulletblock">
+        <div class="bulletblock-head">Movimentos da semana</div>
+        <ul>${b.bullets.map(it=>`<li class="item"><span class="fx fx-${it[0]}">${it[0]==='mkt'?'Marketing':'Comercial'}</span><span class="itxt">${it[1]}</span></li>`).join('')}</ul>
+       </div>`
+    : [
+        ['ctx','n-ctx','s-ctx','Contexto e estado atual',b.lanes.ctx],
+        ['dev','n-dev','s-dev','Em desenvolvimento',b.lanes.dev],
+        ['exe','exe','s-exe','Executado',b.lanes.exe],
+        ['bkl','n-bkl','s-bkl','Backlog · próximo passo',b.lanes.bkl],
+      ].filter(l=>l[4]&&l[4].length).map(l=>{
+        const icon = l[0]==='exe'?ICON.exe:ICON[l[0]];
+        const nodeCls = l[0]==='exe'?'n-exe':l[1];
+        return `<div class="lane ${l[2]}"><span class="node ${nodeCls}">${icon}</span>
+          <div class="lane-h">${l[3]}</div>
+          <ul>${l[4].map(it=>`<li class="item"><span class="fx fx-${it[0]}">${it[0]==='mkt'?'Marketing':'Comercial'}</span><span class="itxt">${it[1]}</span></li>`).join('')}</ul></div>`;
+      }).join('');
   const badgeCls = b.status==='attn' ? 'attn' : (b.badge.startsWith('✓') || b.badge.includes('venda') ? 'ok' : '');
   art.innerHTML=`
     <div class="bside">

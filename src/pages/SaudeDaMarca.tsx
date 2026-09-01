@@ -13,6 +13,7 @@ import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { useLeads } from '@/hooks/useLeads'
+import { useAdCreatives } from '@/hooks/useAdCreatives'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
 import { SLUG_TO_MARCA, monthLabel, todayLocal, isoDate } from '@/lib/dateUtils'
 import { getCreativeAsset } from '@/lib/creativeAssets'
@@ -106,7 +107,7 @@ interface Ad { id: string; name: string; type?: string; spend: number; impressio
 interface AdSet { id: string; name: string; publico: string; spend: number; impressions: number; clicks: number; ctr: number; cpm: number; mql: number; sql: number; cpmql: number; freq: number; ads: Ad[] }
 interface Campaign { id: string; name: string; status: string; objetivo: string; spend: number; impressions: number; clicks: number; ctr: number; cpm: number; cpc: number; lpv: number; leads: number; mql: number; sql: number; cpmql: number; cpsql: number; adsets: AdSet[] }
 
-function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: number, totalLeadsReal: number, marca: string): Campaign[] {
+function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: number, totalLeadsReal: number, marca: string, adCreativesUrlByName?: Map<string, string>): Campaign[] {
   const totalMediaLeads = media.reduce((s, r) => s + r.leads, 0)
   const totalSpend = media.reduce((s, r) => s + r.spend_brl, 0)
   // Use real leads from leads table; fall back to media leads if table has none
@@ -187,7 +188,10 @@ function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: numb
         const aCtr = aImp > 0 ? (aClk / aImp) * 100 : 0
         const aCpmql = aMql > 0 ? aSpend / aMql : 0
         const asset = getCreativeAsset(marca, adName)
-        ads.push({ id: `c${ci}-a${ai}-k${ki}`, name: adName, type: asset?.type, spend: aSpend, impressions: aImp, clicks: aClk, ctr: +aCtr.toFixed(2), mql: aMql, cpmql: Math.round(aCpmql), hue: (ci * 73 + ai * 37 + ki * 17) % 360, preview_url: asset?.postUrl })
+        // Prioriza URL do banco (ad_creatives, atualizado diariamente) e cai
+        // pro mapa estático `creativeAssets.ts` se banco não tiver.
+        const preview_url = adCreativesUrlByName?.get(adName) ?? asset?.postUrl
+        ads.push({ id: `c${ci}-a${ai}-k${ki}`, name: adName, type: asset?.type, spend: aSpend, impressions: aImp, clicks: aClk, ctr: +aCtr.toFixed(2), mql: aMql, cpmql: Math.round(aCpmql), hue: (ci * 73 + ai * 37 + ki * 17) % 360, preview_url })
         ki++
       }
 
@@ -1914,7 +1918,8 @@ export function SaudeDaMarca() {
     : `${formatCompareLabel(effectiveCompareRange)} (mês anterior)`
 
   const mqlLeads = useMemo(() => deduplicateLeads(activeLeadsData).filter(isLeadMql), [activeLeadsData])
-  const campaigns = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '')
+  const { urlByName: adCreativesUrlByName } = useAdCreatives()
+  const campaigns = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesUrlByName)
   const daily = buildDailySeries(activeMediaData)
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)
   const acqFunnel = buildAcqFunnel(b, activeMediaData)

@@ -394,9 +394,9 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
   )
 }
 
-/* ── Prêmios (3 cards) ──────────────────────────────────────────────────── */
+/* ── Prêmios (4 cards, incluindo Troféu Senna) ─────────────────────────── */
 
-const PREMIOS = [
+const PREMIOS: Array<{ titulo: string; desc: string; premio: string; status: string; cor?: string }> = [
   {
     titulo: 'Pole Position',
     desc: 'Primeiro a cruzar a meta da semana',
@@ -415,6 +415,13 @@ const PREMIOS = [
     premio: 'Day off na sexta',
     status: 'Em disputa',
   },
+  {
+    titulo: "Troféu Senna · Mônaco '88",
+    desc: 'Volta perfeita: bater a meta nas 4 voltas do mês — como Senna, imbatível em Mônaco',
+    premio: 'Troféu Senna + R$ 1.000',
+    status: 'Em aberto · 4 pilotos na disputa',
+    cor: '#FFD400',
+  },
 ]
 
 function PremiosGrid() {
@@ -426,7 +433,7 @@ function PremiosGrid() {
           padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, background: '#E10600' }} />
+            <span style={{ width: 8, height: 8, background: p.cor ?? '#E10600' }} />
             <span style={{ fontSize: 14, fontWeight: 500 }}>{p.titulo}</span>
           </div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>{p.desc}</div>

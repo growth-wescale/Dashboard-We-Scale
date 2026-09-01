@@ -58,8 +58,8 @@ const NAV_ITEMS = [
     subItems: BRANDS_SUB,
   },
   {
-    key: 'copa',
-    label: 'Acompanhamento Meta',
+    key: 'okrs',
+    label: 'Meta & OKRs',
     icon: <Trophy size={16} />,
   },
   {
@@ -77,7 +77,7 @@ const NAV_ITEMS = [
 
 function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
-  if (pathname.startsWith('/copa-b2b')) return 'copa'
+  if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
   if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro')) return 'vendas'
   return 'geral'
@@ -128,7 +128,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   function handleNav(key: string) {
     if (key === 'geral') navigate('/')
     else if (key === 'saude') navigate('/marca')
-    else if (key === 'copa') navigate('/copa-b2b')
+    else if (key === 'okrs') navigate('/okrs')
     else if (key === 'sop') navigate('/sop-marketing')
     else if (key === 'vendas') navigate('/funil-vendas')
   }

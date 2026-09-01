@@ -1,6 +1,7 @@
 @import url('https://api.fontshare.com/v2/css?f[]=clash-display@500,600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
 @import url('./styles/v2/refined.css');
+@import url('./styles/gp-mode.css');
 
 :root {
   /* ---- Base We Scale ---- */

@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
 import { GpIntro } from '@/components/gp/GpIntro'
 import { GpStrip } from '@/components/gp/GpStrip'
+import { SennaCard } from '@/components/gp/SennaCard'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -150,30 +151,33 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   const footer = (
-    <button
-      onClick={handleSignOut}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '9px 12px',
-        border: 'none',
-        borderRadius: 'var(--radius-sm)',
-        cursor: 'pointer',
-        background: 'transparent',
-        color: 'var(--ws-text-on-dark-muted)',
-        fontFamily: 'var(--font-body)',
-        fontSize: 14,
-        textAlign: 'left',
-        transition: 'all .15s',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-    >
-      <LogOut size={16} />
-      Sair
-    </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {gpAtivo && <SennaCard />}
+      <button
+        onClick={handleSignOut}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '9px 12px',
+          border: 'none',
+          borderRadius: 'var(--radius-sm)',
+          cursor: 'pointer',
+          background: 'transparent',
+          color: 'var(--ws-text-on-dark-muted)',
+          fontFamily: 'var(--font-body)',
+          fontSize: 14,
+          textAlign: 'left',
+          transition: 'all .15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.06)' }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+      >
+        <LogOut size={16} />
+        Sair
+      </button>
+    </div>
   )
 
   return (

@@ -9,7 +9,7 @@ import { SharedFiltersProvider } from '@/contexts/SharedFiltersContext'
 // Lazy imports: cada rota vira um chunk próprio, reduz bundle inicial ~40%
 const VisaoGeral        = lazy(() => import('@/pages/VisaoGeral').then(m => ({ default: m.VisaoGeral })))
 const SaudeDaMarca      = lazy(() => import('@/pages/SaudeDaMarca').then(m => ({ default: m.SaudeDaMarca })))
-const MetaCopaB2B       = lazy(() => import('@/pages/MetaCopaB2B').then(m => ({ default: m.MetaCopaB2B })))
+const Okrs              = lazy(() => import('@/pages/Okrs').then(m => ({ default: m.Okrs })))
 const SopMarketing      = lazy(() => import('@/pages/SopMarketing').then(m => ({ default: m.SopMarketing })))
 const FunilVendas       = lazy(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
 const PerformanceVendas = lazy(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
@@ -36,7 +36,8 @@ function RoutedContent() {
         <Routes>
           <Route path="/"              element={<VisaoGeral />} />
           <Route path="/marca"         element={<SaudeDaMarca />} />
-          <Route path="/copa-b2b"      element={<MetaCopaB2B />} />
+          <Route path="/okrs"          element={<Okrs />} />
+          <Route path="/copa-b2b"      element={<Navigate to="/okrs" replace />} />
           <Route path="/sop-marketing" element={<SopMarketing />} />
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />

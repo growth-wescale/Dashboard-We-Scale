@@ -695,18 +695,29 @@ export interface GapAncoras {
   diverge: boolean
 }
 
-const TOLERANCIA_GAP = 0.005 // 0.5 ponto percentual
+const TOLERANCIA_GAP = 0.003 // diferença ABSOLUTA entre taxas (0-1), não relativa
 
 /**
  * Para cada par de âncoras fixas (em ordem de funil), calcula a taxa
- * implícita entre elas. Quando existe uma cadeia 100% derivada conectando as
- * duas (nenhuma etapa desligada ou faltando no meio), calcula também o
- * produto das taxas configuradas e compara — diverge quando a diferença
- * passa da tolerância. Sem cadeia completa, mostra só a implícita
- * (informativo, nada pra discordar).
+ * implícita entre elas. Quando `topo` é a origem configurada de uma cadeia
+ * de etapas derivadas (uma deriva da outra em sequência), calcula também o
+ * produto dessas taxas e compara — diverge quando a diferença ABSOLUTA passa
+ * da tolerância. Sem nenhuma etapa derivando de `topo`, mostra só a
+ * implícita (informativo, nada pra discordar).
+ *
+ * A cadeia caminha PRA FRENTE a partir de `topo` (quem deriva de `topo`,
+ * depois quem deriva dessa, etc.) — nunca de trás pra frente a partir de
+ * `fundo`. `fundo` é sempre uma âncora `fixo` (é assim que `ancoras` é
+ * filtrado, logo abaixo) e uma etapa `fixo` nunca tem `modo: 'derivado'`,
+ * então tentar caminhar A PARTIR de `fundo` esperando achar `modo:'derivado'`
+ * nela mesma nunca funcionaria — sempre devolveria cadeia incompleta.
  */
 export function detectarGaps(configs: ConfigEtapa[], resolucao: ResolucaoFunil): GapAncoras[] {
-  const porEtapa = new Map(configs.map(c => [c.etapa, c]))
+  const consumidorPorOrigem = new Map<EtapaMeta, ConfigEtapa>()
+  for (const c of configs) {
+    if (c.modo === 'derivado' && c.etapaOrigem) consumidorPorOrigem.set(c.etapaOrigem, c)
+  }
+
   const ancoras = configs
     .filter(c => c.modo === 'fixo' && resolucao.valores[c.etapa] != null)
     .map(c => c.etapa)
@@ -722,23 +733,28 @@ export function detectarGaps(configs: ConfigEtapa[], resolucao: ResolucaoFunil):
     if (valorTopo === 0) continue
     const taxaImplicita = valorFundo / valorTopo
 
-    // Tenta reconstruir uma cadeia 100% derivada entre topo e fundo.
-    let etapaAtual: EtapaMeta = fundo
+    // Caminha pra frente a partir de topo: quem deriva de topo, depois quem
+    // deriva dessa, etc. — até a cadeia acabar (etapa sem consumidor) ou
+    // faltar taxa. Guarda de visitados evita loop infinito num ciclo mal
+    // configurado (o motor de resolverFunilMarca já rejeitaria esse ciclo
+    // pra fins de cálculo, mas detectarGaps roda sobre os `configs` crus,
+    // então precisa da própria proteção).
+    let atual: EtapaMeta = topo
     let produtoTaxas = 1
-    let cadeiaCompleta = true
-    while (etapaAtual !== topo) {
-      const cfg = porEtapa.get(etapaAtual)
-      if (!cfg || cfg.modo !== 'derivado' || !cfg.etapaOrigem || cfg.taxa == null) {
-        cadeiaCompleta = false
-        break
-      }
-      const origemAntes = INDICE_ETAPA[cfg.etapaOrigem] < INDICE_ETAPA[etapaAtual]
-      produtoTaxas *= origemAntes ? cfg.taxa : 1 / cfg.taxa
-      etapaAtual = cfg.etapaOrigem
-      if (INDICE_ETAPA[etapaAtual] < INDICE_ETAPA[topo]) { cadeiaCompleta = false; break }
+    let achouAlgumaEtapa = false
+    const visitados = new Set<EtapaMeta>([topo])
+
+    while (consumidorPorOrigem.has(atual)) {
+      const cfg = consumidorPorOrigem.get(atual)!
+      if (cfg.taxa == null) break // cadeia incompleta — falta taxa nessa etapa
+      produtoTaxas *= cfg.taxa // sempre multiplica: estamos andando de origem pra quem deriva dela, ou seja, descendo o funil
+      achouAlgumaEtapa = true
+      atual = cfg.etapa
+      if (visitados.has(atual)) break // ciclo — para, não repete
+      visitados.add(atual)
     }
 
-    const taxaConfigurada = cadeiaCompleta ? produtoTaxas : null
+    const taxaConfigurada = achouAlgumaEtapa ? produtoTaxas : null
     const diverge = taxaConfigurada != null && Math.abs(taxaConfigurada - taxaImplicita) > TOLERANCIA_GAP
 
     gaps.push({ etapaTopo: topo, etapaFundo: fundo, taxaImplicita, taxaConfigurada, diverge })

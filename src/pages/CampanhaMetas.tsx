@@ -4,8 +4,12 @@ import { useMetasClosers, CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
 import type { CloserMeta } from '@/hooks/useMetasClosers'
 import { useMetasSDRs, type SdrMeta } from '@/hooks/useMetasSDRs'
 import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHistoricoAtingimento'
-import { useMetasMarca, upsertMetaMarca, MARCAS_FRANQUIA, USE_MOCK, type MetaMarca } from '@/hooks/useMetasMarca'
+import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
+
+// Ordem canônica das marcas na seção "Metas por Marca" (mesmo recorte que a
+// seção sempre teve — sem Odonto Scale, que não é franquia).
+const MARCAS_FRANQUIA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 'Eletrovias'] as const
 import { money, pct } from '@/lib/format'
 
 const MES_ATIVO = '2026-09-01'
@@ -871,15 +875,14 @@ function MetricaLinha({
 /* ── Seção separada: metas por marca (editor) ───────────────────────────── */
 
 function MetasMarcaSection() {
-  const [editando, setEditando] = useState<MetaMarca | null>(null)
   const [mesMarcaRef, setMesMarcaRef] = useState<string>('2026-09-01')
-  const { metas, loading: loadingMetas, reload } = useMetasMarca(mesMarcaRef)
+  const { porMarca: metasMap, loading: loadingMetas } = useMetaPorMarca(mesMarcaRef)
   const { porMarca: realizadoMap, loading: loadingReal } = useRealizadoPorMarca(mesMarcaRef)
   const loading = loadingMetas || loadingReal
 
   const linhas = useMemo(() => {
     return MARCAS_FRANQUIA.map(marca => {
-      const meta = metas.find(m => m.marca === marca)
+      const meta = metasMap.get(marca)
       const real = realizadoMap.get(marca)
       const metaQtd = meta?.metaQtd ?? 0
       const metaFat = meta?.metaFaturamento ?? 0
@@ -889,10 +892,9 @@ function MetasMarcaSection() {
         marca, cor: MARCA_COR[marca] ?? '#888',
         metaQtd, metaFat, realQtd, realFat,
         pctFat: metaFat > 0 ? (realFat / metaFat) * 100 : 0,
-        meta,
       }
     })
-  }, [metas, realizadoMap])
+  }, [metasMap, realizadoMap])
 
   const total = useMemo(() => linhas.reduce(
     (acc, l) => ({ metaQtd: acc.metaQtd + l.metaQtd, metaFat: acc.metaFat + l.metaFat, realQtd: acc.realQtd + l.realQtd, realFat: acc.realFat + l.realFat }),
@@ -911,10 +913,10 @@ function MetasMarcaSection() {
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500 }}>
-            Metas por marca (franqueadora)
+            Metas por Marca
           </h2>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            Base da planilha "Meta - Venda de Franquia". Editar aqui atualiza a fonte oficial da meta por marca.
+            Meta e realizado do mês, por marca — mesma meta cadastrada que alimenta o resto da página.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -930,15 +932,6 @@ function MetasMarcaSection() {
         </div>
       </div>
 
-      {USE_MOCK && (
-        <div style={{
-          padding: '8px 12px', marginBottom: 12, borderRadius: 8,
-          background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 12,
-        }}>
-          ⚠️ Tabela <code>DB_Metas_Marca</code> ainda não existe. Metas em fallback local · edições não persistem.
-        </div>
-      )}
-
       <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -950,7 +943,6 @@ function MetasMarcaSection() {
                 <th style={{ ...thMarca, textAlign: 'right' }}>Meta R$</th>
                 <th style={{ ...thMarca, textAlign: 'right' }}>Real R$</th>
                 <th style={{ ...thMarca, textAlign: 'right' }}>% atingido</th>
-                <th style={{ ...thMarca, textAlign: 'center' }}>Ação</th>
               </tr>
             </thead>
             <tbody>
@@ -962,19 +954,6 @@ function MetasMarcaSection() {
                   <td style={{ ...tdMarca, textAlign: 'right' }}>{money(l.metaFat)}</td>
                   <td style={{ ...tdMarca, textAlign: 'right' }}>{loading ? '—' : money(l.realFat)}</td>
                   <td style={{ ...tdMarca, textAlign: 'right' }}><PctBadge pct={l.pctFat} temMeta={l.metaFat > 0} /></td>
-                  <td style={{ ...tdMarca, textAlign: 'center' }}>
-                    <button
-                      onClick={() => {
-                        const meta: MetaMarca = l.meta ?? {
-                          marca: l.marca, mesReferencia: mesMarcaRef, metaQtd: 0, metaFaturamento: 0, taxaPadrao: null,
-                        }
-                        setEditando(meta)
-                      }}
-                      style={{
-                        padding: '4px 10px', border: '1px solid var(--ws-border)',
-                        background: '#fff', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                      }}>Editar</button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -988,16 +967,11 @@ function MetasMarcaSection() {
                 <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>
                   <PctBadge pct={total.metaFat > 0 ? (total.realFat / total.metaFat) * 100 : 0} temMeta={total.metaFat > 0} />
                 </td>
-                <td style={tdMarca}></td>
               </tr>
             </tfoot>
           </table>
         </div>
       </div>
-
-      {editando && (
-        <MetaEditorModal meta={editando} mesRef={mesMarcaRef} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); reload() }} />
-      )}
     </div>
   )
 }
@@ -1008,80 +982,3 @@ const thMarca: React.CSSProperties = {
   color: 'var(--ws-text-secondary)',
 }
 const tdMarca: React.CSSProperties = { padding: '12px 16px' }
-
-function MetaEditorModal({
-  meta, mesRef, onClose, onSaved,
-}: {
-  meta: MetaMarca
-  mesRef: string
-  onClose: () => void
-  onSaved: () => void
-}) {
-  const [qtd, setQtd] = useState<string>(String(meta.metaQtd))
-  const [fat, setFat] = useState<string>(String(meta.metaFaturamento))
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
-
-  async function salvar() {
-    setSaving(true); setMsg(null)
-    const result = await upsertMetaMarca({
-      marca: meta.marca, mesReferencia: mesRef,
-      metaQtd: Number(qtd) || 0, metaFaturamento: Number(fat) || 0,
-      taxaPadrao: meta.taxaPadrao,
-    })
-    setSaving(false)
-    if (!result.ok) { setMsg(`Erro: ${result.error}`); return }
-    if (result.mocked) { setMsg('⚠️ Modo mock — não persistiu no banco'); return }
-    onSaved()
-  }
-
-  return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-    }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: '#fff', borderRadius: 12, padding: 24, width: '90%', maxWidth: 400,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-      }}>
-        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 18 }}>
-          Editar meta — {meta.marca}
-        </h3>
-        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Meta de unidades</span>
-            <input type="number" min="0" value={qtd} onChange={e => setQtd(e.target.value)} style={inputStyle} />
-          </label>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Meta de faturamento (R$)</span>
-            <input type="number" min="0" step="100" value={fat} onChange={e => setFat(e.target.value)} style={inputStyle} />
-          </label>
-        </div>
-        {msg && (
-          <div style={{
-            marginTop: 12, padding: '8px 12px', borderRadius: 6,
-            background: msg.startsWith('Erro') ? '#FEE2E2' : '#FEF3C7',
-            color: msg.startsWith('Erro') ? '#B91C1C' : '#92400E', fontSize: 12,
-          }}>{msg}</div>
-        )}
-        <div style={{ marginTop: 20, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} disabled={saving} style={btnGhost}>Cancelar</button>
-          <button onClick={salvar} disabled={saving} style={btnPrimary}>{saving ? 'Salvando…' : 'Salvar'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const inputStyle: React.CSSProperties = {
-  padding: '8px 12px', border: '1px solid var(--ws-border)', borderRadius: 6,
-  background: '#fff', fontSize: 14, fontFamily: 'inherit',
-}
-const btnGhost: React.CSSProperties = {
-  padding: '8px 16px', border: '1px solid var(--ws-border)', background: 'transparent',
-  borderRadius: 6, cursor: 'pointer', fontSize: 13,
-}
-const btnPrimary: React.CSSProperties = {
-  padding: '8px 16px', border: 'none', background: 'var(--ws-brand)',
-  color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500,
-}

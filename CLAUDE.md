@@ -314,6 +314,74 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-02 — Ad creatives via Meta API (substitui mapa manual)
+Cobertura de links de anúncios na Saúde da Marca estava em **2%** pra Oral
+Unic e 33-68% nas outras marcas — `src/lib/creativeAssets.ts` é um mapa
+manual (99 entradas) que ninguém mantinha atualizado enquanto o portfólio
+escalou pra 215 anúncios ativos.
+
+Nova infra automática:
+- Tabela `public.ad_creatives` (Marketing) com 2.448 registros: ad_id,
+  ad_name, marca, page_id, post_id, post_url, effective_object_story_id.
+- Edge Function `ingest-meta-creatives` puxa `/act_<id>/ads?fields=id,
+  name,creative{effective_object_story_id}` das 8 contas Meta e monta
+  post_url a partir do story_id (`<page_id>_<post_id>` → `facebook.com/
+  <page>/posts/<post>`). Token vem de `META_ACCESS_TOKEN` no Vault.
+- Novo hook `useAdCreatives` retorna Map<ad_name, post_url> paginado.
+- `SaudeDaMarca.buildCampaigns` prioriza URL do banco, cai pro mapa
+  estático como fallback (retrocompatível).
+
+Cobertura pós-migração (30d, anúncios Meta ativos):
+- Oral Unic 2% → 93%
+- Inpot 40% → 90% · B2Case 33% → 93% · Viva 41% → 93%
+- Eletrovias 67% → 94% · Lisô 68% → 91%
+- Odonto Scale e Scale Partners continuam 0% (sem anúncios Meta ativos
+  nas contas mapeadas — usam Google Ads / RSA que nunca tiveram postUrl)
+
+**Pendência:** agendar `ingest-meta-creatives` via `pg_cron` (não incluído
+neste PR). Enquanto não roda diariamente, anúncios criados depois de
+01/09 ficam sem link até rodar manual.
+
+### 2026-09-02 — Página /okrs (Meta & OKRs H2 2026) substitui Copa B2B
+Página `MetaCopaB2B` (protótipo trainee de julho, sem uso) foi removida.
+Substituída por `/okrs` com 3 blocos: (1) 'Como funciona o bônus' com
+split 50% empresa / 30% OKRs / 20% avaliação, (2) simulado Cleitinho com
+analista R\$ 5k, (3) 2 OKRs editáveis (5% MQLs owned + reduzir CP-MQL 20%).
+
+Editor persiste em tabela nova `public.okrs_h2` no Supabase Marketing
+(criada via MCP em 01/09). RLS: leitura + escrita pra authenticated.
+Hook `useOkrs` + `updateOkrValor` cuidam da leitura/upsert.
+
+Rota `/copa-b2b` vira redirect pra `/okrs` (bookmarks preservados). Menu
+'Acompanhamento Meta' vira 'Meta & OKRs'.
+
+### 2026-09-01 — Modo GP (tema F1) no dashboard inteiro
+4 PRs incrementais entregaram o 'Modo GP' — tema visual F1 pra setembro:
+1. Tema base: `data-gp='f1'` no `<html>`, brand-accent vermelho F1
+   (#E10600), tracejado 3px no topo, sidebar carbono, liveries por
+   marca (Oral Unic roxo Mercedes, Inpot verde, Eletrovias laranja,
+   etc.). Toggle bandeira 🏁 na topbar + botão ▶ pra reexibir intro.
+   Default LIGADO em setembro/2026, DESLIGADO em outros meses.
+   Hook `useGpMode` + CSS em `src/styles/gp-mode.css`.
+2. `GpIntro` — animação fullscreen de abertura com wordmark 'WE SCALE'
+   letra a letra (stagger 0.09s), swoosh vermelho, chips e ações.
+   Roda em toda sessão até user clicar 'Não mostrar novamente'
+   (localStorage `ws-gp-intro`).
+3. `GpStrip` — faixa carbono de corrida em todas as páginas exceto
+   `/gp-setembro`. Chips: volta atual, P1 do ranking (dados reais de
+   `useMetasClosers`), dias pra bandeirada, pool R$ 12k.
+4. `SennaCard` no rodapé da sidebar (foto real `public/assets/senna-
+   monaco.png`, 1MB) + prêmio 'Troféu Senna · Mônaco 88' nos incentivos
+   da Campanha de Metas.
+
+Página `/gp-setembro` rebuild nativo (React) — antes era iframe pro HTML
+Claude artifact de 2MB. Estrutura F1 completa: hero, toggle Ciclo, 4
+voltas, coluna Classificação P1-P4 (Jéssica, Douglas, Aurélio, Bruna),
+Meta do time, 4 cards de prêmios (incluindo Troféu Senna), grid de
+pilotos com foto real (jessica.png, douglas.png, aurelio.png), tabela
+histórico mar-ago, Grid dos SDRs (Sarah, Thiago, Xayane, Vanessa Daniel)
+e seção Metas por marca (planilha franqueadora).
+
 ### 2026-08-31 — Sub-fonte: fallback pro campo do RD + opções cruzadas com os demais filtros
 Junior reportou dois problemas no filtro de Sub-fonte da Visão Macro: (1) em
 Prospecção Ativa + Ago/2026 + Fonte "Prospecção Ativa", o dropdown de Sub-fonte

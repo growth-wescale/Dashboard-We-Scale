@@ -8,8 +8,9 @@ import { supabaseVendas } from '@/lib/supabaseVendas'
  * mês. Também busca realizado (vendas) por closer via `vw_funil_vendas`.
  *
  * Não confundir com `useMetasPerformance` (que é a base geral, sem filtrar
- * closers específicos e sem agregar por pessoa) ou `useMetasMarca` (que é
- * meta por marca da franqueadora — dimensão diferente).
+ * closers específicos e sem agregar por pessoa) ou `useMetaPorMarca` (que é
+ * meta por marca da franqueadora — dimensão diferente, agrega por marca em
+ * vez de por pessoa).
  */
 
 /** Lista canônica de closers ativos (setembro/2026). Ver

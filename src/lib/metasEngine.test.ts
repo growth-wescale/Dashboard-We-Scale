@@ -31,7 +31,7 @@ describe('gerarSemanas', () => {
   })
 })
 
-import { resolverFunilMarca, type ConfigEtapa } from './metasEngine'
+import { resolverFunilMarca, type ConfigEtapa, detectarGaps } from './metasEngine'
 
 describe('resolverFunilMarca', () => {
   it('duas âncoras fixas nas pontas — cada etapa mantém seu próprio valor, sem inventar nada no meio', () => {
@@ -142,5 +142,48 @@ describe('resolverFunilMarca', () => {
     const r = resolverFunilMarca(configs, 0)
     expect(r.valores['MQL']).toBeUndefined()
     expect(r.erros.some(e => e.tipo === 'sem_ancora' && e.mensagem.includes('taxa ainda não foi definida'))).toBe(true)
+  })
+})
+
+describe('detectarGaps', () => {
+  it('duas âncoras sem cadeia derivada entre elas — mostra taxa implícita, sem divergência (nada pra comparar)', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1558 },
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 },
+    ]
+    const resolucao = resolverFunilMarca(configs, 0)
+    const gaps = detectarGaps(configs, resolucao)
+    expect(gaps).toHaveLength(1)
+    expect(gaps[0].etapaTopo).toBe('Ligações')
+    expect(gaps[0].etapaFundo).toBe('Fechamento')
+    expect(gaps[0].taxaImplicita).toBeCloseTo(5 / 1558)
+    expect(gaps[0].taxaConfigurada).toBeNull()
+    expect(gaps[0].diverge).toBe(false)
+  })
+
+  it('cadeia derivada completa que concorda com a taxa implícita — sem divergência', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'SAL', modo: 'fixo', valorFixo: 100 },
+      { etapa: 'Oportunidade COF', modo: 'derivado', etapaOrigem: 'SAL', taxa: 0.4 },
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 40 }, // 40/100 = 40%, bate com a cadeia
+    ]
+    const resolucao = resolverFunilMarca(configs, 0)
+    const gaps = detectarGaps(configs, resolucao)
+    const gap = gaps.find(g => g.etapaTopo === 'SAL' && g.etapaFundo === 'Fechamento')!
+    expect(gap.diverge).toBe(false)
+  })
+
+  it('cadeia derivada completa que DISCORDA da taxa implícita — sinaliza divergência', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'SAL', modo: 'fixo', valorFixo: 86.9 },
+      { etapa: 'Oportunidade COF', modo: 'derivado', etapaOrigem: 'SAL', taxa: 0.25 }, // = 21.7
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 22 }, // implícita: 22/86.9 = 25.3%, cadeia diz 25%×algo — força divergência clara
+    ]
+    const resolucao = resolverFunilMarca(configs, 0)
+    const gaps = detectarGaps(configs, resolucao)
+    const gap = gaps.find(g => g.etapaTopo === 'SAL' && g.etapaFundo === 'Fechamento')!
+    expect(gap.taxaConfigurada).toBeCloseTo(0.25)
+    expect(gap.taxaImplicita).toBeCloseTo(22 / 86.9)
+    expect(gap.diverge).toBe(true)
   })
 })

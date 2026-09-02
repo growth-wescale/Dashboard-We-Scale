@@ -218,3 +218,94 @@ export function resolverFunilMarca(configs: ConfigEtapa[], ticketMedio: number):
 
   return { valores, faturamento, erros }
 }
+
+export interface GapAncoras {
+  etapaTopo: EtapaMeta
+  etapaFundo: EtapaMeta
+  taxaImplicita: number
+  taxaConfigurada: number | null
+  diverge: boolean
+}
+
+const TOLERANCIA_GAP = 0.01 // 1% de diferença relativa
+
+/**
+ * Para cada par de âncoras fixas (em ordem de funil), calcula a taxa
+ * implícita entre elas. Quando existe uma cadeia 100% derivada conectando as
+ * duas (nenhuma etapa desligada ou faltando no meio), calcula também o
+ * produto das taxas configuradas e compara — diverge quando a diferença
+ * passa da tolerância. Sem cadeia completa, mostra só a implícita
+ * (informativo, nada pra discordar).
+ */
+export function detectarGaps(configs: ConfigEtapa[], resolucao: ResolucaoFunil): GapAncoras[] {
+  const porEtapa = new Map(configs.map(c => [c.etapa, c]))
+  const ancoras = configs
+    .filter(c => c.modo === 'fixo' && resolucao.valores[c.etapa] != null)
+    .map(c => c.etapa)
+    .sort((a, b) => INDICE_ETAPA[a] - INDICE_ETAPA[b])
+
+  const gaps: GapAncoras[] = []
+
+  for (let i = 0; i < ancoras.length - 1; i++) {
+    const topo = ancoras[i]
+    const fundo = ancoras[i + 1]
+    const valorTopo = resolucao.valores[topo]!
+    const valorFundo = resolucao.valores[fundo]!
+    if (valorTopo === 0) continue
+    const taxaImplicita = valorFundo / valorTopo
+
+    // Tenta reconstruir uma cadeia 100% derivada entre topo e fundo.
+    // Começa em fundo e anda para trás, pulando etapas não-configuradas até
+    // encontrar a primeira etapa derivada.
+    let etapaAtual: EtapaMeta = fundo
+    let produtoTaxas = 1
+    let cadeiaCompleta = true
+
+    // Pula para trás enquanto a etapa não for derivada
+    while (etapaAtual !== topo) {
+      const cfg = porEtapa.get(etapaAtual)
+      if (cfg && cfg.modo === 'derivado') break
+
+      // Move para a etapa anterior
+      const idx = INDICE_ETAPA[etapaAtual]
+      const prevIdx = idx - 1
+      if (prevIdx < 0) {
+        cadeiaCompleta = false
+        break
+      }
+      etapaAtual = ETAPAS_META_ORDEM[prevIdx] as EtapaMeta
+      if (INDICE_ETAPA[etapaAtual] < INDICE_ETAPA[topo]) {
+        cadeiaCompleta = false
+        break
+      }
+    }
+
+    // Se pulamos tudo e chegamos ao topo sem encontrar derivado, marca incompleto
+    if (etapaAtual === topo && cadeiaCompleta) {
+      const cfg = porEtapa.get(topo)
+      if (!cfg || cfg.modo !== 'derivado') {
+        cadeiaCompleta = false
+      }
+    }
+
+    // Agora anda para trás de etapaAtual até topo, multiplicando as taxas
+    while (etapaAtual !== topo && cadeiaCompleta) {
+      const cfg = porEtapa.get(etapaAtual)
+      if (!cfg || cfg.modo !== 'derivado' || !cfg.etapaOrigem || cfg.taxa == null) {
+        cadeiaCompleta = false
+        break
+      }
+      const origemAntes = INDICE_ETAPA[cfg.etapaOrigem] < INDICE_ETAPA[etapaAtual]
+      produtoTaxas *= origemAntes ? cfg.taxa : 1 / cfg.taxa
+      etapaAtual = cfg.etapaOrigem
+      if (INDICE_ETAPA[etapaAtual] < INDICE_ETAPA[topo]) { cadeiaCompleta = false; break }
+    }
+
+    const taxaConfigurada = cadeiaCompleta ? produtoTaxas : null
+    const diverge = taxaConfigurada != null && Math.abs(taxaConfigurada - taxaImplicita) / taxaImplicita > TOLERANCIA_GAP
+
+    gaps.push({ etapaTopo: topo, etapaFundo: fundo, taxaImplicita, taxaConfigurada, diverge })
+  }
+
+  return gaps
+}

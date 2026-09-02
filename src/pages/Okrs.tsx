@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Target, TrendingUp, Award, Users, Zap, Mail, TrendingDown } from 'lucide-react'
+import { Target, TrendingUp, Award, Users, Zap, Mail, TrendingDown, BarChart3 } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useOkrs, updateOkrValor, USE_MOCK, type Okr } from '@/hooks/useOkrs'
+import { useVendasSemestre, type VendaMarca, type VendaMes } from '@/hooks/useVendasSemestre'
 import { money, pct } from '@/lib/format'
 
 const SALARIO_ANALISTA = 5000
@@ -74,6 +75,7 @@ export function Okrs() {
 
       <BonusExplainer />
       <CleitinhoExample />
+      <VendasSemestreBloco />
       <OkrsList okrs={okrs} loading={loading} onEditar={setEditando} />
 
       {editando && (
@@ -323,7 +325,169 @@ function CleitinhoRow({ pct, label }: { pct: string; label: string }) {
   )
 }
 
-/* ── Bloco 3: OKRs (2 metas) ────────────────────────────────────────────── */
+/* ── Bloco 3: Vendas do semestre (H2 2026) ──────────────────────────────── */
+
+function VendasSemestreBloco() {
+  const { data, loading, error } = useVendasSemestre()
+  const [visao, setVisao] = useState<'receita' | 'qtd'>('receita')
+
+  return (
+    <section style={{ marginBottom: 40 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-vinho-b)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 8 }}>
+        Vendas · H2 2026
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
+          Vendas do semestre
+        </h2>
+        <VisaoToggle visao={visao} onChange={setVisao} />
+      </div>
+      <p style={{ marginTop: 6, marginBottom: 0, fontSize: 13, color: 'var(--ws-text-secondary)' }}>
+        Realizado por marca × mês, comparado com a meta cadastrada. Consolidado Inbound + Prospecção Ativa.
+      </p>
+
+      {loading ? (
+        <div style={{ color: 'var(--ws-text-secondary)', padding: 40, textAlign: 'center' }}>Carregando…</div>
+      ) : error ? (
+        <div style={{ padding: 20, color: 'var(--status-risco)', fontSize: 13 }}>
+          Erro ao carregar vendas: {error}
+        </div>
+      ) : (
+        <VendasTabela data={data} visao={visao} />
+      )}
+    </section>
+  )
+}
+
+function VisaoToggle({ visao, onChange }: { visao: 'receita' | 'qtd'; onChange: (v: 'receita' | 'qtd') => void }) {
+  const btn = (ativo: boolean): React.CSSProperties => ({
+    padding: '6px 14px',
+    border: 'none',
+    background: ativo ? 'var(--ws-verde)' : 'transparent',
+    color: ativo ? '#fff' : 'var(--ws-text-secondary)',
+    fontSize: 12,
+    fontWeight: 500,
+    cursor: 'pointer',
+    borderRadius: 6,
+    transition: 'all .15s',
+  })
+  return (
+    <div style={{ display: 'inline-flex', gap: 2, padding: 3, background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 8 }}>
+      <button style={btn(visao === 'receita')} onClick={() => onChange('receita')}>Receita</button>
+      <button style={btn(visao === 'qtd')} onClick={() => onChange('qtd')}>Vendas</button>
+    </div>
+  )
+}
+
+function VendasTabela({ data, visao }: { data: ReturnType<typeof useVendasSemestre>['data']; visao: 'receita' | 'qtd' }) {
+  const meses = data.total.meses
+  const cellHeader: React.CSSProperties = {
+    padding: '10px 8px', fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase',
+    color: 'var(--ws-text-secondary)', fontWeight: 600, textAlign: 'center', borderBottom: '1px solid var(--ws-border)',
+  }
+  const cellMarca: React.CSSProperties = {
+    padding: '12px 12px', fontSize: 13, fontWeight: 500, color: 'var(--ws-text-primary)', textAlign: 'left',
+    borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
+  }
+
+  return (
+    <div style={{ marginTop: 16, background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+          <thead>
+            <tr>
+              <th style={{ ...cellHeader, textAlign: 'left', paddingLeft: 14 }}>Marca</th>
+              {meses.map(m => (
+                <th key={m.mesKey} style={cellHeader}>{m.label}</th>
+              ))}
+              <th style={{ ...cellHeader, background: 'color-mix(in srgb, var(--ws-verde) 8%, transparent)' }}>H2 total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.porMarca.map(marca => (
+              <VendaLinha key={marca.marca} linha={marca} visao={visao} cellMarca={cellMarca} destaque={false} />
+            ))}
+            <VendaLinha linha={data.total} visao={visao} cellMarca={{ ...cellMarca, fontWeight: 600 }} destaque={true} />
+          </tbody>
+        </table>
+      </div>
+      <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--ws-text-secondary)', background: 'var(--ws-bg)', borderTop: '1px solid var(--ws-border)', display: 'flex', gap: 16, alignItems: 'center' }}>
+        <BarChart3 size={13} />
+        <span>Cada célula mostra o realizado · abaixo, a % vs meta cadastrada. Cinza = sem meta. Cores: verde ≥100%, âmbar 50-99%, vermelho &lt;50%.</span>
+      </div>
+    </div>
+  )
+}
+
+function VendaLinha({ linha, visao, cellMarca, destaque }: { linha: VendaMarca; visao: 'receita' | 'qtd'; cellMarca: React.CSSProperties; destaque: boolean }) {
+  const bg = destaque ? 'color-mix(in srgb, var(--ws-verde) 8%, transparent)' : 'transparent'
+  return (
+    <tr style={{ background: bg }}>
+      <td style={{ ...cellMarca, paddingLeft: 14 }}>{linha.marca}</td>
+      {linha.meses.map(m => (
+        <td key={m.mesKey} style={{ padding: '10px 8px', borderBottom: '1px solid var(--ws-border)', textAlign: 'center', verticalAlign: 'top' }}>
+          <VendaCelula mes={m} visao={visao} />
+        </td>
+      ))}
+      <td style={{ padding: '10px 8px', borderBottom: '1px solid var(--ws-border)', textAlign: 'center', verticalAlign: 'top', background: destaque ? 'transparent' : 'color-mix(in srgb, var(--ws-verde) 6%, transparent)' }}>
+        <VendaTotal linha={linha} visao={visao} />
+      </td>
+    </tr>
+  )
+}
+
+function VendaCelula({ mes, visao }: { mes: VendaMes; visao: 'receita' | 'qtd' }) {
+  const realizado = visao === 'receita' ? mes.receitaRealizada : mes.qtdRealizada
+  const meta = visao === 'receita' ? mes.metaReceita : mes.metaQtd
+  const pctAtingimento = meta > 0 ? (realizado / meta) * 100 : null
+
+  const corPct = pctAtingimento === null ? 'var(--ws-text-secondary)'
+    : pctAtingimento >= 100 ? 'var(--status-positivo)'
+    : pctAtingimento >= 50 ? 'var(--status-atencao)'
+    : 'var(--status-risco)'
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ws-text-primary)', fontFamily: 'var(--font-display)' }}>
+        {visao === 'receita' ? moneyCompact(realizado) : realizado.toLocaleString('pt-BR')}
+      </div>
+      <div style={{ fontSize: 11, color: corPct, fontWeight: 500 }}>
+        {pctAtingimento === null ? 'sem meta' : `${pctAtingimento.toFixed(0)}%`}
+      </div>
+    </div>
+  )
+}
+
+function VendaTotal({ linha, visao }: { linha: VendaMarca; visao: 'receita' | 'qtd' }) {
+  const realizado = visao === 'receita' ? linha.totalReceita : linha.totalQtd
+  const meta = visao === 'receita' ? linha.totalMetaReceita : linha.totalMetaQtd
+  const pctAtingimento = meta > 0 ? (realizado / meta) * 100 : null
+
+  const corPct = pctAtingimento === null ? 'var(--ws-text-secondary)'
+    : pctAtingimento >= 100 ? 'var(--status-positivo)'
+    : pctAtingimento >= 50 ? 'var(--status-atencao)'
+    : 'var(--status-risco)'
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ws-text-primary)', fontFamily: 'var(--font-display)' }}>
+        {visao === 'receita' ? moneyCompact(realizado) : realizado.toLocaleString('pt-BR')}
+      </div>
+      <div style={{ fontSize: 11, color: corPct, fontWeight: 600 }}>
+        {pctAtingimento === null ? 'sem meta' : `${pctAtingimento.toFixed(0)}%`}
+      </div>
+    </div>
+  )
+}
+
+function moneyCompact(v: number): string {
+  if (v === 0) return '—'
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`
+  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`
+  return money(v)
+}
+
+/* ── Bloco 4: OKRs (2 metas) ────────────────────────────────────────────── */
 
 function OkrsList({
   okrs, loading, onEditar,

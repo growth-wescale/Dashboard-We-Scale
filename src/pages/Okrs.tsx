@@ -1,9 +1,19 @@
 import { useState } from 'react'
-import { Target, TrendingUp, Award, Users, Zap, Mail, TrendingDown, BarChart3 } from 'lucide-react'
+import { Target, TrendingUp, Award, Users, Zap, Mail, TrendingDown, BarChart3, Trophy, Flag } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useOkrs, updateOkrValor, USE_MOCK, type Okr } from '@/hooks/useOkrs'
 import { useVendasSemestre, type VendaMarca, type VendaMes } from '@/hooks/useVendasSemestre'
 import { money, pct } from '@/lib/format'
+import { MetaCopaB2B } from '@/pages/MetaCopaB2B'
+
+type TabKey = 'copa' | 'vendas' | 'b2b' | 'okrs'
+
+const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
+  { key: 'copa',   label: 'Acompanhamento Meta', icon: Trophy },
+  { key: 'vendas', label: 'Meta de vendas',       icon: BarChart3 },
+  { key: 'b2b',    label: 'Meta B2B',             icon: Target },
+  { key: 'okrs',   label: 'OKRs',                 icon: Flag },
+]
 
 const SALARIO_ANALISTA = 5000
 const RESPONSAVEIS_B2B = ['Godoy', 'Marina', 'Gabriel', 'Lara', 'Victor', 'Nadine', 'Vanessa']
@@ -34,6 +44,17 @@ function calcAtingimento(okr: Okr): number {
 export function Okrs() {
   const { okrs, loading, reload } = useOkrs()
   const [editando, setEditando] = useState<Okr | null>(null)
+  const [tab, setTab] = useState<TabKey>('copa')
+
+  // Aba Acompanhamento Meta = página Copa completa (traz seu próprio PageTop)
+  if (tab === 'copa') {
+    return (
+      <div>
+        <TabsBar current={tab} onChange={setTab} />
+        <MetaCopaB2B />
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1280, margin: '0 auto' }}>
@@ -56,7 +77,9 @@ export function Okrs() {
         }
       />
 
-      {USE_MOCK && (
+      <TabsBar current={tab} onChange={setTab} inline />
+
+      {USE_MOCK && tab === 'b2b' && (
         <div
           style={{
             padding: '10px 14px',
@@ -73,10 +96,17 @@ export function Okrs() {
         </div>
       )}
 
-      <BonusExplainer />
-      <CleitinhoExample />
-      <VendasSemestreBloco />
-      <OkrsList okrs={okrs} loading={loading} onEditar={setEditando} />
+      {tab === 'vendas' && <VendasSemestreBloco />}
+
+      {tab === 'b2b' && (
+        <>
+          <BonusExplainer />
+          <CleitinhoExample />
+          <OkrsList okrs={okrs} loading={loading} onEditar={setEditando} />
+        </>
+      )}
+
+      {tab === 'okrs' && <OkrsB2cPlaceholder />}
 
       {editando && (
         <OkrEditorModal
@@ -86,6 +116,76 @@ export function Okrs() {
         />
       )}
     </div>
+  )
+}
+
+/* ── Barra de tabs ──────────────────────────────────────────────────────── */
+
+function TabsBar({ current, onChange, inline = false }: { current: TabKey; onChange: (t: TabKey) => void; inline?: boolean }) {
+  const wrap: React.CSSProperties = inline
+    ? { margin: '0 0 24px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }
+    : { padding: '16px 32px 0', maxWidth: 1280, margin: '0 auto', display: 'flex', gap: 8, flexWrap: 'wrap' }
+
+  return (
+    <div style={wrap}>
+      {TABS.map(({ key, label, icon: Icon }) => {
+        const ativo = key === current
+        return (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '9px 16px',
+              border: ativo ? '1px solid var(--ws-verde)' : '1px solid var(--ws-border)',
+              background: ativo ? 'var(--ws-verde)' : 'var(--ws-surface)',
+              color: ativo ? '#fff' : 'var(--ws-text-primary)',
+              borderRadius: 999, cursor: 'pointer',
+              fontSize: 13, fontWeight: 500,
+              transition: 'all .15s',
+            }}
+          >
+            <Icon size={15} />
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Placeholder OKRs (B2C futuro) ───────────────────────────────────────── */
+
+function OkrsB2cPlaceholder() {
+  return (
+    <section style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-vinho-b)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 8 }}>
+        OKRs · em breve
+      </div>
+      <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
+        OKRs consolidados (B2B + B2C)
+      </h2>
+
+      <div
+        style={{
+          marginTop: 20,
+          background: 'var(--ws-surface)',
+          border: '1px dashed var(--ws-border)',
+          borderRadius: 16,
+          padding: 40,
+          textAlign: 'center',
+          color: 'var(--ws-text-secondary)',
+        }}
+      >
+        <Flag size={32} style={{ opacity: 0.4, marginBottom: 12 }} />
+        <div style={{ fontSize: 15, color: 'var(--ws-text-primary)', fontWeight: 500 }}>
+          OKRs de B2C serão adicionados aqui em breve.
+        </div>
+        <div style={{ marginTop: 8, fontSize: 13 }}>
+          Enquanto isso, os OKRs do time B2B estão na aba <b>Meta B2B</b>.
+        </div>
+      </div>
+    </section>
   )
 }
 

@@ -309,3 +309,81 @@ export function ratearPorPeso(metaTotal: number, pessoas: PessoaComPeso[]): Reco
   }
   return resultado
 }
+
+export interface LinhaEspelho {
+  mes_referencia: string
+  marca: string
+  nome_colaborador: string
+  funcao: 'SDR' | 'Closer'
+  meta_sql: number | null
+  meta_agendamento: number | null
+  meta_reuniao_realizada: number | null
+  meta_cof: number | null
+  meta_financeira: number | null
+  meta_qtd_vendas: number | null
+}
+
+export interface PessoaComFuncao extends PessoaComPeso {
+  funcao: 'SDR' | 'Closer'
+}
+
+/**
+ * Gera as linhas no formato de `DB_Metas_Performance` (o espelho, §5.2 do
+ * spec) a partir da resolução de cada marca e de quem está alocado nela. Cada
+ * pessoa recebe sua fatia rateada por peso — nunca o total da marca inteira.
+ */
+export function gerarLinhasEspelho(
+  mesReferencia: string,
+  marcas: Array<{ marca: string; resolucao: ResolucaoFunil; pessoas: PessoaComFuncao[] }>,
+): LinhaEspelho[] {
+  const linhas: LinhaEspelho[] = []
+
+  for (const { marca, resolucao, pessoas } of marcas) {
+    const sdrs = pessoas.filter(p => p.funcao === 'SDR')
+    const closers = pessoas.filter(p => p.funcao === 'Closer')
+
+    const sql = resolucao.valores['Reunião Agendada SQL']
+    const reuniao = resolucao.valores['Reunião Realizada']
+    const cof = resolucao.valores['Oportunidade COF']
+    const fechamento = resolucao.valores['Fechamento']
+    const faturamento = resolucao.faturamento
+
+    const rateioSql = sql != null ? ratearPorPeso(sql, sdrs) : {}
+    const rateioReuniao = reuniao != null ? ratearPorPeso(reuniao, sdrs) : {}
+    const rateioCof = cof != null ? ratearPorPeso(cof, closers) : {}
+    const rateioFaturamento = faturamento != null ? ratearPorPeso(faturamento, closers) : {}
+    const rateioQtd = fechamento != null ? ratearPorPeso(fechamento, closers) : {}
+
+    for (const sdr of sdrs) {
+      linhas.push({
+        mes_referencia: mesReferencia,
+        marca,
+        nome_colaborador: sdr.nome,
+        funcao: 'SDR',
+        meta_sql: rateioSql[sdr.nome] ?? null,
+        meta_agendamento: rateioSql[sdr.nome] ?? null,
+        meta_reuniao_realizada: rateioReuniao[sdr.nome] ?? null,
+        meta_cof: null,
+        meta_financeira: null,
+        meta_qtd_vendas: null,
+      })
+    }
+
+    for (const closer of closers) {
+      linhas.push({
+        mes_referencia: mesReferencia,
+        marca,
+        nome_colaborador: closer.nome,
+        funcao: 'Closer',
+        meta_sql: null,
+        meta_agendamento: null,
+        meta_reuniao_realizada: null,
+        meta_cof: rateioCof[closer.nome] ?? null,
+        meta_financeira: rateioFaturamento[closer.nome] ?? null,
+        meta_qtd_vendas: rateioQtd[closer.nome] ?? null,
+      })
+    }
+  }
+
+  return linhas
+}

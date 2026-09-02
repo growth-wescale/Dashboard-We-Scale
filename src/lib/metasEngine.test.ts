@@ -234,3 +234,58 @@ describe('ratearPorPeso', () => {
     expect(ratearPorPeso(1000, [])).toEqual({})
   })
 })
+
+import { gerarLinhasEspelho } from './metasEngine'
+
+describe('gerarLinhasEspelho', () => {
+  it('reproduz a semente de setembro pro Inpot — 1 SDR, 1 Closer, valores rateados corretamente', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1557.6 },
+      { etapa: 'Reunião Agendada SQL', modo: 'fixo', valorFixo: 67.1 },
+      { etapa: 'Reunião Realizada', modo: 'fixo', valorFixo: 42.9 },
+      { etapa: 'SAL', modo: 'fixo', valorFixo: 26.4 },
+      { etapa: 'Oportunidade COF', modo: 'fixo', valorFixo: 10.6 },
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 },
+    ]
+    const resolucao = resolverFunilMarca(configs, 74900)
+    const linhas = gerarLinhasEspelho('2026-09-01', [{
+      marca: 'Inpot',
+      resolucao,
+      pessoas: [
+        { nome: 'Thiago', funcao: 'SDR', peso: 100 },
+        { nome: 'Douglas', funcao: 'Closer', peso: 100 },
+      ],
+    }])
+
+    const sdr = linhas.find(l => l.nome_colaborador === 'Thiago')!
+    expect(sdr.funcao).toBe('SDR')
+    expect(sdr.meta_sql).toBeCloseTo(67.1)
+    expect(sdr.meta_agendamento).toBeCloseTo(67.1)
+    expect(sdr.meta_reuniao_realizada).toBeCloseTo(42.9)
+    expect(sdr.meta_financeira).toBeNull()
+
+    const closer = linhas.find(l => l.nome_colaborador === 'Douglas')!
+    expect(closer.funcao).toBe('Closer')
+    expect(closer.meta_cof).toBeCloseTo(10.6)
+    expect(closer.meta_financeira).toBeCloseTo(5 * 74900)
+    expect(closer.meta_qtd_vendas).toBeCloseTo(5)
+    expect(closer.meta_sql).toBeNull()
+  })
+
+  it('2 SDRs 60/40 na mesma marca — cada linha recebe a fatia rateada, não o total cheio', () => {
+    const configs: ConfigEtapa[] = [{ etapa: 'Reunião Agendada SQL', modo: 'fixo', valorFixo: 100 }]
+    const resolucao = resolverFunilMarca(configs, 0)
+    const linhas = gerarLinhasEspelho('2026-09-01', [{
+      marca: 'Eletrovias',
+      resolucao,
+      pessoas: [
+        { nome: 'Sarah Padilha', funcao: 'SDR', peso: 60 },
+        { nome: 'Thiago', funcao: 'SDR', peso: 40 },
+      ],
+    }])
+    const sarah = linhas.find(l => l.nome_colaborador === 'Sarah Padilha')!
+    const thiago = linhas.find(l => l.nome_colaborador === 'Thiago')!
+    expect(sarah.meta_sql).toBeCloseTo(60)
+    expect(thiago.meta_sql).toBeCloseTo(40)
+  })
+})

@@ -176,27 +176,40 @@ export function resolverFunilMarca(configs: ConfigEtapa[], ticketMedio: number):
   // Detecta origem desligada e origem nunca configurada, pros derivados que sobraram sem valor.
   for (const cfg of configs) {
     if (cfg.modo !== 'derivado' || emCiclo.has(cfg.etapa) || valores[cfg.etapa] != null) continue
-    if (!cfg.etapaOrigem) continue
 
-    const origemCfg = porEtapa.get(cfg.etapaOrigem)
-    if (!origemCfg) {
-      erros.push({
-        tipo: 'origem_inexistente',
-        etapas: [cfg.etapa, cfg.etapaOrigem],
-        mensagem: `${cfg.etapa} deriva de ${cfg.etapaOrigem}, mas essa etapa não tem configuração nesta marca.`,
-      })
-    } else if (origemCfg.modo === 'desligado') {
-      erros.push({
-        tipo: 'origem_desligada',
-        etapas: [cfg.etapa, cfg.etapaOrigem],
-        mensagem: `${cfg.etapa} deriva de ${cfg.etapaOrigem}, que está desligada nesta marca.`,
-      })
-    } else {
+    if (!cfg.etapaOrigem) {
       erros.push({
         tipo: 'sem_ancora',
         etapas: [cfg.etapa],
-        mensagem: `${cfg.etapa} não alcança nenhuma âncora fixa pela cadeia de derivação configurada.`,
+        mensagem: `${cfg.etapa} está marcada como derivada, mas nenhuma etapa de origem foi escolhida.`,
       })
+    } else if (cfg.taxa == null) {
+      erros.push({
+        tipo: 'sem_ancora',
+        etapas: [cfg.etapa, cfg.etapaOrigem],
+        mensagem: `${cfg.etapa} deriva de ${cfg.etapaOrigem}, mas a taxa ainda não foi definida.`,
+      })
+    } else {
+      const origemCfg = porEtapa.get(cfg.etapaOrigem)
+      if (!origemCfg) {
+        erros.push({
+          tipo: 'origem_inexistente',
+          etapas: [cfg.etapa, cfg.etapaOrigem],
+          mensagem: `${cfg.etapa} deriva de ${cfg.etapaOrigem}, mas essa etapa não tem configuração nesta marca.`,
+        })
+      } else if (origemCfg.modo === 'desligado') {
+        erros.push({
+          tipo: 'origem_desligada',
+          etapas: [cfg.etapa, cfg.etapaOrigem],
+          mensagem: `${cfg.etapa} deriva de ${cfg.etapaOrigem}, que está desligada nesta marca.`,
+        })
+      } else {
+        erros.push({
+          tipo: 'sem_ancora',
+          etapas: [cfg.etapa],
+          mensagem: `${cfg.etapa} não alcança nenhuma âncora fixa pela cadeia de derivação configurada.`,
+        })
+      }
     }
   }
 

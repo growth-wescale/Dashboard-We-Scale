@@ -122,4 +122,25 @@ describe('resolverFunilMarca', () => {
     expect(r.faturamento).toBe(5 * 5597)
     expect(r.erros).toHaveLength(0)
   })
+
+  it('derivado sem etapaOrigem: erro sem_ancora (UI transiente)', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'MQL', modo: 'derivado' }, // sem etapaOrigem, sem taxa
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeUndefined()
+    expect(r.erros).toHaveLength(1)
+    expect(r.erros[0].tipo).toBe('sem_ancora')
+    expect(r.erros[0].mensagem).toContain('nenhuma etapa de origem foi escolhida')
+  })
+
+  it('derivado com etapaOrigem mas sem taxa: erro sem_ancora', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1000 },
+      { etapa: 'MQL', modo: 'derivado', etapaOrigem: 'Ligações' }, // taxa undefined
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeUndefined()
+    expect(r.erros.some(e => e.tipo === 'sem_ancora' && e.mensagem.includes('taxa ainda não foi definida'))).toBe(true)
+  })
 })

@@ -24,6 +24,19 @@ interface Payload {
   autor: string | null
 }
 
+// CORS: a chamada vem do navegador (origem do dashboard), com Authorization
+// customizado e cross-origin — o browser manda um preflight OPTIONS antes do
+// POST real. Sem esses headers em TODA resposta (inclusive erro), o preflight
+// falha e o POST nunca sai (causa documentada da Supabase pra esse exato caso).
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+function respond(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+}
+
 async function validarSessao(
   admin: ReturnType<typeof createClient>, token: string,
 ): Promise<{ ok: boolean; email?: string }> {
@@ -40,11 +53,12 @@ async function validarSessao(
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('method not allowed', { status: 405 })
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return respond({ error: 'method not allowed' }, 405)
 
   const authHeader = req.headers.get('Authorization') ?? ''
   const token = authHeader.replace('Bearer ', '')
-  if (!token) return new Response(JSON.stringify({ error: 'sem sessão' }), { status: 401 })
+  if (!token) return respond({ error: 'sem sessão' }, 401)
 
   // SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são injetadas automaticamente pela
   // plataforma pro projeto Expansão (o mesmo onde esta função é implantada) —
@@ -53,7 +67,7 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
   const { ok, email } = await validarSessao(admin, token)
-  if (!ok) return new Response(JSON.stringify({ error: 'sessão inválida' }), { status: 401 })
+  if (!ok) return respond({ error: 'sessão inválida' }, 401)
 
   const payload = (await req.json()) as Payload
 
@@ -64,7 +78,7 @@ Deno.serve(async (req) => {
     publicado_em: payload.acao === 'publicar' ? new Date().toISOString() : null,
     publicado_por: payload.acao === 'publicar' ? email : null,
   }, { onConflict: 'mes_referencia' })
-  if (erroMes) return new Response(JSON.stringify({ error: erroMes.message }), { status: 500 })
+  if (erroMes) return respond({ error: erroMes.message }, 500)
 
   // Semanas: apaga e reinsere (o gerente pode ter mudado o dia de virada no meio da montagem).
   await admin.from('meta_semana').delete().eq('mes_referencia', payload.mesReferencia)
@@ -72,7 +86,7 @@ Deno.serve(async (req) => {
     const { error: erroSemanas } = await admin.from('meta_semana').insert(
       payload.semanas.map(s => ({ mes_referencia: payload.mesReferencia, numero: s.numero, data_inicio: s.inicio, data_fim: s.fim })),
     )
-    if (erroSemanas) return new Response(JSON.stringify({ error: erroSemanas.message }), { status: 500 })
+    if (erroSemanas) return respond({ error: erroSemanas.message }, 500)
   }
 
   for (const m of payload.marcas) {
@@ -81,31 +95,33 @@ Deno.serve(async (req) => {
       .upsert({ mes_referencia: payload.mesReferencia, marca: m.marca, ticket_medio: m.ticketMedio }, { onConflict: 'mes_referencia,marca' })
       .select('id')
       .single()
-    if (erroMarca || !marcaRow) return new Response(JSON.stringify({ error: erroMarca?.message ?? 'falha ao gravar marca' }), { status: 500 })
+    if (erroMarca || !marcaRow) return respond({ error: erroMarca?.message ?? 'falha ao gravar marca' }, 500)
 
     await admin.from('meta_marca_etapa').delete().eq('meta_marca_id', marcaRow.id)
     if (m.etapas.length > 0) {
-      await admin.from('meta_marca_etapa').insert(
+      const { error: erroEtapas } = await admin.from('meta_marca_etapa').insert(
         m.etapas.map(e => ({
           meta_marca_id: marcaRow.id, etapa: e.etapa, modo: e.modo,
           valor_fixo: e.valorFixo ?? null, etapa_origem: e.etapaOrigem ?? null,
           taxa: e.taxa ?? null, taxa_origem: e.taxaOrigem ?? null,
         })),
       )
+      if (erroEtapas) return respond({ error: erroEtapas.message }, 500)
     }
 
     await admin.from('meta_pessoa').delete().eq('meta_marca_id', marcaRow.id)
     if (m.pessoas.length > 0) {
-      await admin.from('meta_pessoa').insert(
+      const { error: erroPessoas } = await admin.from('meta_pessoa').insert(
         m.pessoas.map(p => ({ meta_marca_id: marcaRow.id, nome: p.nome, funcao: p.funcao, peso: p.peso })),
       )
+      if (erroPessoas) return respond({ error: erroPessoas.message }, 500)
     }
   }
 
   if (payload.acao === 'publicar' && payload.linhasEspelho.length > 0) {
     await admin.from('DB_Metas_Performance').delete().eq('mes_referencia', payload.mesReferencia)
     const { error: erroEspelho } = await admin.from('DB_Metas_Performance').insert(payload.linhasEspelho)
-    if (erroEspelho) return new Response(JSON.stringify({ error: erroEspelho.message }), { status: 500 })
+    if (erroEspelho) return respond({ error: erroEspelho.message }, 500)
   }
 
   await admin.from('meta_log').insert({
@@ -118,5 +134,5 @@ Deno.serve(async (req) => {
     autor: email ?? null,
   })
 
-  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  return respond({ ok: true }, 200)
 })

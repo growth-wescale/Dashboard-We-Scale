@@ -355,7 +355,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `ETAPAS_META_ORDEM`, `EtapaMeta`, `ModoEtapa` (Task 2)
 - Produces:
-  `interface ConfigEtapa { etapa: EtapaMeta; modo: ModoEtapa; valorFixo?: number; etapaOrigem?: EtapaMeta; taxa?: number }`,
+  `interface ConfigEtapa { etapa: EtapaMeta; modo: ModoEtapa; valorFixo?: number; etapaOrigem?: EtapaMeta; taxa?: number; taxaOrigem?: 'mes_anterior' | 'historico_crm' | 'manual' }`,
   `interface ErroResolucao { tipo: 'ciclo' | 'origem_desligada' | 'origem_inexistente' | 'sem_ancora'; etapas: EtapaMeta[]; mensagem: string }`,
   `interface ResolucaoFunil { valores: Partial<Record<EtapaMeta, number>>; faturamento: number | null; erros: ErroResolucao[] }`,
   `resolverFunilMarca(configs: ConfigEtapa[], ticketMedio: number): ResolucaoFunil`
@@ -474,6 +474,10 @@ export interface ConfigEtapa {
   valorFixo?: number
   etapaOrigem?: EtapaMeta
   taxa?: number
+  /** De onde veio a taxa confirmada (D10) — não participa da resolução do
+   *  funil, é só proveniência exibida no Passo 2. Undefined = etapa não é
+   *  'derivado' ou a origem da taxa ainda não foi registrada. */
+  taxaOrigem?: 'mes_anterior' | 'historico_crm' | 'manual'
 }
 
 export interface ErroResolucao {
@@ -1055,15 +1059,61 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   function only validates the session and persists.
 - Produces: an HTTP endpoint the hook in Task 9 calls.
 
-- [ ] **Step 1: Write the function**
+**Preflight correction (caught before dispatch, not left for the implementer
+to discover):** the plan originally assumed the Expansão project's
+`service_role` key needed to be fetched from Vault at runtime, and that
+Marketing's URL/anon key would be "plain env vars" set through an unspecified
+mechanism. Both were wrong. Read straight from the **already-deployed**
+`espelhar-rd` function (via `mcp__supabase__get_edge_function`) before writing
+this task:
+
+- Supabase auto-injects `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as plain
+  Deno env vars into every deployed function, for the project it's deployed
+  to — no Vault needed for the function's *own* project. `espelhar-rd` proves
+  this: `const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!`.
+- Vault (`vault.create_secret` + the `get_secret` RPC) is for secrets that
+  aren't auto-injected — `espelhar-rd` uses it for the RD Station API token
+  (`rd_token`), a value that has nothing to do with any Supabase project's own
+  service role.
+- Marketing's URL/anon key are exactly this kind of "not auto-injected"
+  secret (they belong to a *different* Supabase project than the one this
+  function deploys to) — so they go into the **same Vault**, fetched through
+  the **same already-working `get_secret` RPC**, not a new, unproven
+  mechanism.
+- **Platform JWT verification defaults to `true`.** `espelhar-rd` is called by
+  `pg_cron`/`pg_net` using Expansão's own service key, so the default works
+  for it. `gravar-meta` is called by the **browser**, carrying a session token
+  issued by **Marketing** — a different project's JWT. Supabase's
+  platform-level check would reject that token before this function's own
+  code ever runs. `gravar-meta` must deploy with `verify_jwt: false` (Task 7
+  Step 3) — the `deploy_edge_function` tool's own guidance names exactly this
+  case: disable the platform check only when "the function body implements
+  custom authentication," which `validarSessao` below is.
+
+- [ ] **Step 1: Store the two secrets `gravar-meta` needs, that aren't already in Vault**
+
+Call `mcp__supabase__execute_sql` against the **Expansão** project (same
+mechanism `espelhar-rd` already uses for `rd_token` — confirm `get_secret`
+exists first with `select proname from pg_proc where proname = 'get_secret';`;
+it does, per `espelhar-rd`'s own code):
+
+```sql
+select vault.create_secret('<URL real do projeto de Marketing>', 'marketing_supabase_url');
+select vault.create_secret('<anon key real do projeto de Marketing>', 'marketing_supabase_anon_key');
+```
+
+Get these two values from `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` in this
+repo's own `.env` (Marketing is the dashboard's default/login Supabase client,
+`src/lib/supabase.ts`) — they're already public-facing values (the anon key is
+shipped to every browser that loads the dashboard), so storing them in Vault
+here is about having one proven fetch mechanism (`get_secret`), not about
+secrecy.
+
+- [ ] **Step 2: Write the function**
 
 ```typescript
 // supabase/functions/gravar-meta/index.ts
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-
-const EXPANSAO_URL = Deno.env.get('SUPABASE_URL')!
-const MARKETING_URL = Deno.env.get('MARKETING_SUPABASE_URL')!
-const MARKETING_ANON_KEY = Deno.env.get('MARKETING_SUPABASE_ANON_KEY')!
 
 interface Payload {
   acao: 'salvar_rascunho' | 'publicar'
@@ -1088,9 +1138,15 @@ interface Payload {
   autor: string | null
 }
 
-async function validarSessao(token: string): Promise<{ ok: boolean; email?: string }> {
-  const resp = await fetch(`${MARKETING_URL}/auth/v1/user`, {
-    headers: { Authorization: `Bearer ${token}`, apikey: MARKETING_ANON_KEY },
+async function validarSessao(
+  admin: ReturnType<typeof createClient>, token: string,
+): Promise<{ ok: boolean; email?: string }> {
+  const { data: marketingUrl } = await admin.rpc('get_secret', { secret_name: 'marketing_supabase_url' })
+  const { data: marketingAnonKey } = await admin.rpc('get_secret', { secret_name: 'marketing_supabase_anon_key' })
+  if (!marketingUrl || !marketingAnonKey) return { ok: false }
+
+  const resp = await fetch(`${marketingUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: marketingAnonKey as string },
   })
   if (!resp.ok) return { ok: false }
   const user = await resp.json()
@@ -1104,13 +1160,16 @@ Deno.serve(async (req) => {
   const token = authHeader.replace('Bearer ', '')
   if (!token) return new Response(JSON.stringify({ error: 'sem sessão' }), { status: 401 })
 
-  const { ok, email } = await validarSessao(token)
+  // SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são injetadas automaticamente pela
+  // plataforma pro projeto Expansão (o mesmo onde esta função é implantada) —
+  // nenhum Vault aqui, mesmo padrão comprovado no espelhar-rd (index.ts,
+  // Deno.serve). Vault entra só pro que NÃO é auto-injetado (§ acima).
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
+  const { ok, email } = await validarSessao(admin, token)
   if (!ok) return new Response(JSON.stringify({ error: 'sessão inválida' }), { status: 401 })
 
   const payload = (await req.json()) as Payload
-
-  // service_role buscada do Vault em tempo de execução — nunca em texto plano.
-  const admin = createClient(EXPANSAO_URL, Deno.env.get('SERVICE_ROLE_KEY_EXPANSAO')!)
 
   const { error: erroMes } = await admin.from('meta_mes').upsert({
     mes_referencia: payload.mesReferencia,
@@ -1177,33 +1236,14 @@ Deno.serve(async (req) => {
 })
 ```
 
-- [ ] **Step 2: Store the two secrets the function needs**
+- [ ] **Step 3: Deploy the function with platform JWT verification off**
 
-Call `mcp__supabase__execute_sql` against the **Expansão** project:
-
-```sql
-select vault.create_secret('<valor real da service_role key da Expansão>', 'service_role_key_expansao');
-```
-
-(This mirrors exactly how `espelhar-rd` already stores its service role key —
-see CLAUDE.md §9, 2026-08-31. Ask Junior for the Marketing project's anon key
-and URL — those go into the function's environment as `MARKETING_SUPABASE_URL`
-and `MARKETING_SUPABASE_ANON_KEY`, which are **not secrets** — they're the same
-public values already in this repo's `.env` as
-`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` — set as plain Edge Function env
-vars, not Vault.)
-
-Then fetch the secret at request time — replace the `admin` client creation
-line above with a call to a small `security definer` SQL function
-(`get_secret`, already created per CLAUDE.md §9's espelhar-rd work — confirm
-it exists with
-`select proname from pg_proc where proname = 'get_secret';` before reusing it;
-if it doesn't exist yet, create it identically to how `espelhar-rd` did).
-
-- [ ] **Step 3: Deploy the function**
-
-Call `mcp__supabase__deploy_edge_function` with the function name `gravar-meta`
-and the file content from Step 1, targeting the Expansão project.
+Call `mcp__supabase__deploy_edge_function` with `name: "gravar-meta"`,
+`entrypoint_path: "index.ts"`, the file content from Step 2, and
+**`verify_jwt: false`** — required, not optional (see the preflight
+correction above: the caller's token is issued by a different Supabase
+project, so the platform's own JWT check would reject it before
+`validarSessao` runs).
 
 - [ ] **Step 4: Smoke-test with a rascunho payload**
 
@@ -1212,7 +1252,9 @@ payload and a real session token (get one via the dashboard's login in a
 browser, copy the access token from devtools) using `curl`. Confirm
 `meta_mes` gets a row with `status = 'rascunho'` via
 `mcp__supabase__execute_sql`. Confirm calling it **without** an
-`Authorization` header returns 401 and writes nothing.
+`Authorization` header returns 401 and writes nothing. Confirm calling it
+with a garbage/expired token also returns 401 (proves `validarSessao`, not
+just the platform gate we just turned off, is doing real work).
 
 - [ ] **Step 5: Commit**
 
@@ -1301,6 +1343,7 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
     etapas: (etapasRows ?? []).filter((e: any) => e.meta_marca_id === m.id).map((e: any) => ({
       etapa: e.etapa as EtapaMeta, modo: e.modo, valorFixo: e.valor_fixo ?? undefined,
       etapaOrigem: e.etapa_origem ?? undefined, taxa: e.taxa ?? undefined,
+      taxaOrigem: e.taxa_origem ?? undefined,
     })),
     pessoas: (pessoasRows ?? []).filter((p: any) => p.meta_marca_id === m.id).map((p: any) => ({
       nome: p.nome, funcao: p.funcao, peso: Number(p.peso) || 0,
@@ -1486,7 +1529,11 @@ import { PageTop } from '@/components/ui/PageTop'
 import { useMetaMes, type EstadoMes, type EstadoMesMarca, type DistribuicaoSemanalItem } from '@/hooks/useMetaMes'
 import type { DiaSemana, Semana } from '@/lib/metasEngine'
 
-const PASSOS = ['Abrir mês', 'Taxas', 'Funil por marca', 'Pessoas', 'Distribuição semanal', 'Revisar e publicar'] as const
+// 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
+// (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
+// os "6 passos" que a §4 do spec conta. Toda referência a `passo === N` nas
+// Tasks 11–16 usa esses mesmos índices — não renumerar sem atualizar as 6.
+const PASSOS = ['Abrir mês', 'Semanas', 'Taxas', 'Funil por marca', 'Pessoas', 'Distribuição semanal', 'Revisar e publicar'] as const
 
 function mesAtualKey(): string {
   const hoje = new Date()
@@ -1837,7 +1884,7 @@ function LinhaTaxa({
       setRascunho({
         ...rascunhoAtual,
         marcas: rascunhoAtual.marcas.map(m => m.marca !== marca ? m : {
-          ...m, etapas: m.etapas.map(e => e.etapa !== etapa ? e : { ...e, taxa, taxaOrigem: origem } as any),
+          ...m, etapas: m.etapas.map(e => e.etapa !== etapa ? e : { ...e, taxa, taxaOrigem: origem }),
         }),
       })
     }}
@@ -2331,13 +2378,9 @@ export function PassoRevisarPublicar({
 )}
 ```
 
-(Note: since Task 10's `PASSOS` array has 6 entries indexed 0–5, this task
-extends it — update `PASSOS` in `HubMetas.tsx` if the "Revisar e publicar"
-label isn't already the 6th/last entry; it is, per Task 10's array, so no
-change needed there, only make sure `passo === 5` is used consistently instead
-of `passo === 6` if the array is 0-indexed with 6 items total. Use
-`passo === 5` for this final step to match `PASSOS[5] === 'Revisar e
-publicar'`.)
+(`passo === 6` above is correct as written — `PASSOS[6] === 'Revisar e
+publicar'`, per Task 10's corrected 7-entry array. No change needed to
+`PASSOS` in this task.)
 
 - [ ] **Step 3: Verify the build**
 

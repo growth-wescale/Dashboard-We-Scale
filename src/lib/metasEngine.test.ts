@@ -30,3 +30,96 @@ describe('gerarSemanas', () => {
     expect(dias / 86_400_000 + 1).toBeLessThan(7)
   })
 })
+
+import { resolverFunilMarca, type ConfigEtapa } from './metasEngine'
+
+describe('resolverFunilMarca', () => {
+  it('duas âncoras fixas nas pontas — cada etapa mantém seu próprio valor, sem inventar nada no meio', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1000 },
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 },
+    ]
+    const r = resolverFunilMarca(configs, 74900)
+    expect(r.valores['Ligações']).toBe(1000)
+    expect(r.valores['Fechamento']).toBe(5)
+    expect(r.faturamento).toBe(5 * 74900)
+    expect(r.erros).toHaveLength(0)
+  })
+
+  it('cadeia derivada descendo o funil (origem antes do destino): multiplica', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1000 },
+      { etapa: 'MQL', modo: 'derivado', etapaOrigem: 'Ligações', taxa: 0.30 },
+      { etapa: 'SAL', modo: 'derivado', etapaOrigem: 'MQL', taxa: 0.40 },
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeCloseTo(300)
+    expect(r.valores['SAL']).toBeCloseTo(120)
+    expect(r.erros).toHaveLength(0)
+  })
+
+  it('cadeia derivada subindo o funil (origem depois do destino): divide', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 },
+      { etapa: 'SAL', modo: 'derivado', etapaOrigem: 'Fechamento', taxa: 0.25 }, // SAL = Fechamento / 25%
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['SAL']).toBeCloseTo(20) // 5 / 0.25
+  })
+
+  it('pode derivar de qualquer etapa, não só da vizinha (D1)', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1000 },
+      { etapa: 'SAL', modo: 'derivado', etapaOrigem: 'Ligações', taxa: 0.10 }, // pula MQL, Contato etc
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['SAL']).toBeCloseTo(100)
+  })
+
+  it('etapas não configuradas ficam de fora dos valores, sem erro', () => {
+    const configs: ConfigEtapa[] = [{ etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 }]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeUndefined()
+    expect(r.erros).toHaveLength(0)
+  })
+
+  it('detecta ciclo (A deriva de B, B deriva de A) e não calcula nenhum dos dois', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'MQL', modo: 'derivado', etapaOrigem: 'SAL', taxa: 0.5 },
+      { etapa: 'SAL', modo: 'derivado', etapaOrigem: 'MQL', taxa: 0.5 },
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeUndefined()
+    expect(r.valores['SAL']).toBeUndefined()
+    expect(r.erros.some(e => e.tipo === 'ciclo')).toBe(true)
+  })
+
+  it('detecta origem desligada', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'desligado' },
+      { etapa: 'MQL', modo: 'derivado', etapaOrigem: 'Ligações', taxa: 0.3 },
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeUndefined()
+    expect(r.erros.some(e => e.tipo === 'origem_desligada')).toBe(true)
+  })
+
+  it('detecta cadeia sem âncora alcançável (origem citada mas nunca configurada)', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'MQL', modo: 'derivado', etapaOrigem: 'Ligações', taxa: 0.3 },
+    ]
+    const r = resolverFunilMarca(configs, 0)
+    expect(r.valores['MQL']).toBeUndefined()
+    expect(r.erros.some(e => e.tipo === 'origem_inexistente')).toBe(true)
+  })
+
+  it('Odonto Scale: só Fechamento fixo, resto desligado — sem erro, faturamento calcula', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 },
+      ...(['Ligações', 'MQL', 'SAL'] as const).map(etapa => ({ etapa, modo: 'desligado' as const })),
+    ]
+    const r = resolverFunilMarca(configs, 5597)
+    expect(r.faturamento).toBe(5 * 5597)
+    expect(r.erros).toHaveLength(0)
+  })
+})

@@ -88,13 +88,31 @@ const JUL_26: CopaMesConfig = {
   budgetSplit: false,
 }
 
-// ── Configuração Agosto/26 (MTD) ─────────────────────────────────────────
+// ── Configuração Agosto/26 (fechado) ─────────────────────────────────────
 const AGO_26: CopaMesConfig = {
   key: '2026-08',
   label: 'Agosto 2026',
   dataInicio: '2026-08-01',
   dataFim: '2026-08-31',
   diasMes: 31,
+  fechado: true,
+  custo: CUSTO_BASELINE_MAIO,
+  sqlBaseline: SQL_BASELINE_MAIO,
+  volumeMarcas: ['Lisô Laser', 'Viva', 'Oral Unic'],
+  volumeMeta: VOLUME_META_MAIO,
+  leadsTrend: LEADS_TREND_JUN,
+  budget: BUDGET_MENSAL,
+  budgetSplit: false,
+}
+
+// ── Configuração Setembro/26 (MTD) ───────────────────────────────────────
+// Mantém o mesmo baseline maio/26 usado em jul e ago (decisão de 02/09/2026).
+const SET_26: CopaMesConfig = {
+  key: '2026-09',
+  label: 'Setembro 2026',
+  dataInicio: '2026-09-01',
+  dataFim: '2026-09-30',
+  diasMes: 30,
   fechado: false,
   custo: CUSTO_BASELINE_MAIO,
   sqlBaseline: SQL_BASELINE_MAIO,
@@ -109,13 +127,14 @@ const AGO_26: CopaMesConfig = {
 export const COPA_MESES: Record<string, CopaMesConfig> = {
   '2026-07': JUL_26,
   '2026-08': AGO_26,
+  '2026-09': SET_26,
 }
 
-export const COPA_MESES_ORDENADOS: CopaMesConfig[] = [AGO_26, JUL_26]
+export const COPA_MESES_ORDENADOS: CopaMesConfig[] = [SET_26, AGO_26, JUL_26]
 
 export function getMesCorrente(now: Date = new Date()): CopaMesConfig {
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const key = `${y}-${m}`
-  return COPA_MESES[key] ?? AGO_26
+  return COPA_MESES[key] ?? SET_26
 }

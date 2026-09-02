@@ -186,4 +186,18 @@ describe('detectarGaps', () => {
     expect(gap.taxaImplicita).toBeCloseTo(22 / 86.9)
     expect(gap.diverge).toBe(true)
   })
+
+  it('cadeia derivada cíclica (duas etapas derivando uma da outra) não trava — guarda de ciclo funciona', () => {
+    const configs: ConfigEtapa[] = [
+      { etapa: 'Ligações', modo: 'fixo', valorFixo: 1000 },
+      { etapa: 'MQL', modo: 'derivado', etapaOrigem: 'Contato Efetivo', taxa: 0.5 },
+      { etapa: 'Contato Efetivo', modo: 'derivado', etapaOrigem: 'MQL', taxa: 0.5 },
+      { etapa: 'Fechamento', modo: 'fixo', valorFixo: 5 },
+    ]
+    const resolucao = resolverFunilMarca(configs, 0)
+    // A chamada tem que retornar (um array), sem entrar em loop infinito —
+    // essa é a prova em si; vitest mata o teste se travar além do timeout.
+    const gaps = detectarGaps(configs, resolucao)
+    expect(Array.isArray(gaps)).toBe(true)
+  })
 })

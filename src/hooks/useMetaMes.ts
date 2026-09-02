@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import type { ConfigEtapa, DiaSemana, EtapaMeta, PessoaComFuncao, Semana } from '@/lib/metasEngine'
 
@@ -32,19 +32,24 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
   if (erroMes) return { estado: VAZIO, error: erroMes.message }
   if (!mesRow) return { estado: VAZIO, error: null }
 
-  const [{ data: semanasRows }, { data: marcasRows }] = await Promise.all([
+  const [{ data: semanasRows, error: erroSemanas }, { data: marcasRows, error: erroMarcas }] = await Promise.all([
     supabaseVendas.from('meta_semana').select('numero, data_inicio, data_fim').eq('mes_referencia', mesReferencia).order('numero'),
     supabaseVendas.from('meta_marca').select('id, marca, ticket_medio').eq('mes_referencia', mesReferencia),
   ])
+  if (erroSemanas) return { estado: VAZIO, error: erroSemanas.message }
+  if (erroMarcas) return { estado: VAZIO, error: erroMarcas.message }
 
   const marcaIds = (marcasRows ?? []).map(m => m.id)
-  const [{ data: etapasRows }, { data: pessoasRows }, { data: distribRows }] = await Promise.all([
-    marcaIds.length ? supabaseVendas.from('meta_marca_etapa').select('meta_marca_id, etapa, modo, valor_fixo, etapa_origem, taxa, taxa_origem').in('meta_marca_id', marcaIds) : Promise.resolve({ data: [] }),
-    marcaIds.length ? supabaseVendas.from('meta_pessoa').select('id, meta_marca_id, nome, funcao, peso').in('meta_marca_id', marcaIds) : Promise.resolve({ data: [] }),
+  const [{ data: etapasRows, error: erroEtapas }, { data: pessoasRows, error: erroPessoas }, { data: distribRows, error: erroDistrib }] = await Promise.all([
+    marcaIds.length ? supabaseVendas.from('meta_marca_etapa').select('meta_marca_id, etapa, modo, valor_fixo, etapa_origem, taxa, taxa_origem').in('meta_marca_id', marcaIds) : Promise.resolve({ data: [], error: null }),
+    marcaIds.length ? supabaseVendas.from('meta_pessoa').select('id, meta_marca_id, nome, funcao, peso').in('meta_marca_id', marcaIds) : Promise.resolve({ data: [], error: null }),
     marcaIds.length
       ? supabaseVendas.from('meta_pessoa_semana').select('etapa, valor, meta_pessoa_id, meta_semana_id, meta_pessoa!inner(nome, meta_marca_id), meta_semana!inner(numero)').in('meta_pessoa.meta_marca_id', marcaIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ])
+  if (erroEtapas) return { estado: VAZIO, error: erroEtapas.message }
+  if (erroPessoas) return { estado: VAZIO, error: erroPessoas.message }
+  if (erroDistrib) return { estado: VAZIO, error: erroDistrib.message }
 
   const marcas: EstadoMesMarca[] = (marcasRows ?? []).map(m => ({
     marca: m.marca,
@@ -80,16 +85,31 @@ export function useMetaMes(mesReferencia: string) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true); setError(null)
+  const fetchAll = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    setError(null)
     const { estado: e, error: err } = await buscar(mesReferencia)
-    if (err) setError(err)
+    if (err) { setError(err); if (showLoading) setLoading(false); return }
     setEstado(e)
-    setLoading(false)
+    if (showLoading) setLoading(false)
   }, [mesReferencia])
 
-  useEffect(() => { fetchAll().catch(() => {}) }, [fetchAll])
+  useEffect(() => {
+    let cancelled = false
+    const run = (showLoading: boolean) => { if (!cancelled) void fetchAll(showLoading) }
 
-  const stable = useMemo(() => estado, [estado])
-  return { estado: stable, loading, error, reload: fetchAll }
+    run(true)
+
+    const handleRefresh = () => { if (!cancelled) run(false) }
+    window.addEventListener('dashboard:refresh', handleRefresh)
+    const timer = setInterval(() => { if (!cancelled) run(false) }, 60_000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+      window.removeEventListener('dashboard:refresh', handleRefresh)
+    }
+  }, [fetchAll])
+
+  return { estado, loading, error, reload: () => void fetchAll(false) }
 }

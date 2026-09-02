@@ -67,7 +67,7 @@ written after this one ships, per its own dependency on `meta_semana`).
 - Produces: the 7 tables every later task reads/writes. Column names below are
   final — later tasks' TypeScript types are named to match them 1:1.
 
-- [ ] **Step 1: Apply the schema migration**
+- [x] **Step 1: Apply the schema migration**
 
 Call the Supabase MCP tool `apply_migration` with `name: "hub_metas_schema"`
 and this `query`:
@@ -160,7 +160,7 @@ create policy "leitura_dashboard" on meta_pessoa_semana for select to anon, auth
 create policy "leitura_dashboard" on meta_log for select to anon, authenticated using (true);
 ```
 
-- [ ] **Step 2: Verify the tables exist with the right shape**
+- [x] **Step 2: Verify the tables exist with the right shape**
 
 Call `mcp__supabase__list_tables` with `schemas: ["public"]`, `verbose: true`
 and confirm all 7 tables appear with the columns above. Then run:
@@ -174,7 +174,7 @@ order by tablename;
 Expected: exactly 7 rows, each `cmd = 'SELECT'`. No `INSERT`/`UPDATE`/`DELETE`
 policy exists anywhere — that's deliberate (Global Constraints).
 
-- [ ] **Step 3: Commit** (schema itself lives in Supabase, not git — commit
+- [x] **Step 3: Commit** (schema itself lives in Supabase, not git — commit
       only the confirmation note)
 
 ```bash

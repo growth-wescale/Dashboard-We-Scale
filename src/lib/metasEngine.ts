@@ -288,3 +288,24 @@ export function detectarGaps(configs: ConfigEtapa[], resolucao: ResolucaoFunil):
 
   return gaps
 }
+
+export interface PessoaComPeso {
+  nome: string
+  peso: number
+}
+
+/**
+ * Divide `metaTotal` entre `pessoas` proporcional ao peso de cada uma.
+ * Normaliza pelos pesos informados (não exige que somem 100) — sem limite de
+ * quantas pessoas (D3). A soma dos valores devolvidos sempre bate com
+ * `metaTotal` (a menos de arredondamento de ponto flutuante).
+ */
+export function ratearPorPeso(metaTotal: number, pessoas: PessoaComPeso[]): Record<string, number> {
+  const somaPesos = pessoas.reduce((s, p) => s + p.peso, 0)
+  if (somaPesos <= 0) return {}
+  const resultado: Record<string, number> = {}
+  for (const p of pessoas) {
+    resultado[p.nome] = metaTotal * (p.peso / somaPesos)
+  }
+  return resultado
+}

@@ -201,3 +201,36 @@ describe('detectarGaps', () => {
     expect(Array.isArray(gaps)).toBe(true)
   })
 })
+
+import { ratearPorPeso } from './metasEngine'
+
+describe('ratearPorPeso', () => {
+  it('2 pessoas, 60/40 — soma bate exatamente com o total', () => {
+    const r = ratearPorPeso(1558, [{ nome: 'Thiago', peso: 60 }, { nome: 'Xayane', peso: 40 }])
+    expect(r['Thiago']).toBeCloseTo(1558 * 0.6)
+    expect(r['Xayane']).toBeCloseTo(1558 * 0.4)
+    expect(r['Thiago'] + r['Xayane']).toBeCloseTo(1558)
+  })
+
+  it('1 pessoa sozinha — recebe 100% mesmo com peso configurado diferente', () => {
+    const r = ratearPorPeso(500, [{ nome: 'Douglas', peso: 100 }])
+    expect(r['Douglas']).toBeCloseTo(500)
+  })
+
+  it('3+ pessoas (D3 — sem limite de 2) — soma continua batendo', () => {
+    const r = ratearPorPeso(900, [
+      { nome: 'A', peso: 50 }, { nome: 'B', peso: 30 }, { nome: 'C', peso: 20 },
+    ])
+    expect(r['A'] + r['B'] + r['C']).toBeCloseTo(900)
+  })
+
+  it('pesos não somam 100 — normaliza proporcionalmente em vez de ignorar', () => {
+    const r = ratearPorPeso(100, [{ nome: 'A', peso: 1 }, { nome: 'B', peso: 1 }])
+    expect(r['A']).toBeCloseTo(50)
+    expect(r['B']).toBeCloseTo(50)
+  })
+
+  it('lista vazia devolve objeto vazio, sem lançar erro', () => {
+    expect(ratearPorPeso(1000, [])).toEqual({})
+  })
+})

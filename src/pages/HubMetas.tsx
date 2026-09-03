@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useMetaMes, type EstadoMes, type EstadoMesMarca, type DistribuicaoSemanalItem } from '@/hooks/useMetaMes'
 import type { DiaSemana, Semana } from '@/lib/metasEngine'
+import { PassoSemanas } from '@/components/metas/PassoSemanas'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -83,6 +84,14 @@ export function HubMetas() {
             })
           }}
           onIniciarVazio={() => setRascunho({ diaViradaSemana: 'terca', semanas: [], marcas: [], distribuicaoSemanal: [] })}
+        />
+      )}
+
+      {!loading && passo === 1 && rascunhoAtual && (
+        <PassoSemanas
+          mesReferencia={mesReferencia}
+          diaViradaSemana={rascunhoAtual.diaViradaSemana}
+          onMudar={(dia, semanas) => setRascunho({ ...rascunhoAtual, diaViradaSemana: dia, semanas })}
         />
       )}
 

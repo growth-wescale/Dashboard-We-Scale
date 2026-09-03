@@ -3,6 +3,7 @@ import { PageTop } from '@/components/ui/PageTop'
 import { useMetaMes, type EstadoMes, type EstadoMesMarca, type DistribuicaoSemanalItem } from '@/hooks/useMetaMes'
 import type { DiaSemana, Semana } from '@/lib/metasEngine'
 import { PassoSemanas } from '@/components/metas/PassoSemanas'
+import { PassoTaxas } from '@/components/metas/PassoTaxas'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -95,13 +96,28 @@ export function HubMetas() {
         />
       )}
 
+      {!loading && passo === 2 && rascunhoAtual && (
+        <PassoTaxas
+          marcas={rascunhoAtual.marcas}
+          mesAnterior={mesAnteriorKey(mesReferencia)}
+          onMudarTaxa={(marca, etapa, taxa, origem) => {
+            setRascunho({
+              ...rascunhoAtual,
+              marcas: rascunhoAtual.marcas.map(m => m.marca !== marca ? m : {
+                ...m, etapas: m.etapas.map(e => e.etapa !== etapa ? e : { ...e, taxa, taxaOrigem: origem }),
+              }),
+            })
+          }}
+        />
+      )}
+
       {!loading && passo > 0 && !rascunhoAtual && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
           Volte ao Passo 0 e abra o mês (copiando do anterior ou começando vazio) antes de continuar.
         </div>
       )}
 
-      {/* Passos 1–5 chegam nas Tasks 11–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
+      {/* Passos 2–5 chegam nas Tasks 12–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
     </div>
   )
 }

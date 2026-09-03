@@ -393,7 +393,7 @@ function VendasTabela({ data }: { data: ReturnType<typeof useVendasSemestre>['da
       </div>
       <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--ws-text-secondary)', background: 'var(--ws-bg)', borderTop: '1px solid var(--ws-border)', display: 'flex', gap: 16, alignItems: 'center' }}>
         <BarChart3 size={13} />
-        <span>Cada célula mostra vendas (topo) · receita · % vs meta. Cinza = sem meta. Cores: verde ≥100%, âmbar 50-99%, vermelho &lt;50%.</span>
+        <span>Cada célula mostra <b>Meta</b> (unidades) · <b>R$</b> (receita da meta) · <b>Vendidos</b> · <b>Acum</b> (meta do mês + gap dos meses anteriores). Coluna H2 total: totais do semestre + acumulado até dez.</span>
       </div>
     </div>
   )
@@ -402,20 +402,38 @@ function VendasTabela({ data }: { data: ReturnType<typeof useVendasSemestre>['da
 function VendaLinha({ linha, cellMarca, destaque }: { linha: VendaMarca; cellMarca: React.CSSProperties; destaque: boolean }) {
   const bg = destaque ? 'color-mix(in srgb, var(--ws-verde) 8%, transparent)' : 'transparent'
 
+  // Pré-calcula meta acumulada por índice do mês.
+  // Regra (Junior 03/09): meta_acum(M) = meta(M) + max(0, meta_acum_prev - vendas_prev)
+  // Ex: Ago meta 5 · vendi 3. Set meta 5 → acum = 5 + (5-3) = 7.
+  // O gap dos meses anteriores rola pra frente enquanto for positivo.
+  const metasAcum: number[] = []
+  linha.meses.forEach((m, i) => {
+    if (i === 0) {
+      metasAcum[i] = m.metaQtd
+    } else {
+      const gapAnterior = Math.max(0, metasAcum[i - 1] - linha.meses[i - 1].qtdRealizada)
+      metasAcum[i] = m.metaQtd + gapAnterior
+    }
+  })
+
+  // Total (H2): acumulado até o mês corrente = último mês com meta > 0 antes de dez.
+  // Se todos os meses tiveram meta cadastrada, acumulado final = último item de metasAcum.
+  const totalMetaAcum = metasAcum[metasAcum.length - 1]
+
   return (
     <tr style={{ background: bg }}>
       <td style={{ ...cellMarca, paddingLeft: 14 }}>{linha.marca}</td>
-      {linha.meses.map(m => (
+      {linha.meses.map((m, i) => (
         <td key={m.mesKey} style={{ padding: '10px 8px', borderBottom: '1px solid var(--ws-border)', textAlign: 'center', verticalAlign: 'top' }}>
-          <VendaCelula qtd={m.qtdRealizada} receita={m.receitaRealizada} metaQtd={m.metaQtd} metaReceita={m.metaReceita} bold={false} />
+          <VendaCelula qtd={m.qtdRealizada} metaQtd={m.metaQtd} metaReceita={m.metaReceita} metaAcum={metasAcum[i]} bold={false} />
         </td>
       ))}
       <td style={{ padding: '10px 8px', borderBottom: '1px solid var(--ws-border)', textAlign: 'center', verticalAlign: 'top', background: destaque ? 'transparent' : 'color-mix(in srgb, var(--ws-verde) 6%, transparent)' }}>
         <VendaCelula
           qtd={linha.totalQtd}
-          receita={linha.totalReceita}
           metaQtd={linha.totalMetaQtd}
           metaReceita={linha.totalMetaReceita}
+          metaAcum={totalMetaAcum}
           bold={true}
         />
       </td>
@@ -423,38 +441,39 @@ function VendaLinha({ linha, cellMarca, destaque }: { linha: VendaMarca; cellMar
   )
 }
 
-function VendaCelula({ qtd, receita, metaQtd, metaReceita, bold }: {
+function VendaCelula({ qtd, metaQtd, metaReceita, metaAcum, bold }: {
   qtd: number
-  receita: number
   metaQtd: number
   metaReceita: number
+  metaAcum: number
   bold: boolean
 }) {
-  // % de atingimento: prioriza qtd (métrica principal); se não houver meta de qtd, cai na de receita.
-  const pctQtd = metaQtd > 0 ? (qtd / metaQtd) * 100 : null
-  const pctRec = metaReceita > 0 ? (receita / metaReceita) * 100 : null
-  const pctAtingimento = pctQtd ?? pctRec
-
-  const corPct = pctAtingimento === null ? 'var(--ws-text-secondary)'
-    : pctAtingimento >= 100 ? 'var(--status-positivo)'
-    : pctAtingimento >= 50 ? 'var(--status-atencao)'
-    : 'var(--status-risco)'
-
   const weight = bold ? 600 : 500
+  const semMeta = metaQtd === 0 && metaReceita === 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-      <div style={{ fontSize: 15, fontWeight: weight, color: 'var(--ws-text-primary)', fontFamily: 'var(--font-display)' }}>
-        {qtd > 0 ? qtd.toLocaleString('pt-BR') : '—'}
-        <span style={{ fontSize: 11, fontWeight: 400, opacity: 0.6, marginLeft: 4 }}>
-          {qtd === 1 ? 'venda' : 'vendas'}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', fontFamily: 'var(--font-display)' }}>
+      {/* 1. Meta do mês (unidades) */}
+      <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        Meta: <span style={{ color: 'var(--ws-text-primary)', fontWeight: weight }}>
+          {semMeta ? '—' : `${metaQtd} un`}
         </span>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
-        {moneyCompact(receita)}
+      {/* 2. Meta de receita */}
+      <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        R$: <span style={{ color: 'var(--ws-text-primary)', fontWeight: weight }}>
+          {semMeta ? '—' : moneyCompact(metaReceita)}
+        </span>
       </div>
-      <div style={{ fontSize: 11, color: corPct, fontWeight: weight }}>
-        {pctAtingimento === null ? 'sem meta' : `${pctAtingimento.toFixed(0)}%`}
+      {/* 3. Vendidos (destaque, maior) */}
+      <div style={{ fontSize: 14, fontWeight: weight + 100, color: 'var(--ws-verde)' }}>
+        {qtd > 0 ? `${qtd} vend` : '— vend'}
+      </div>
+      {/* 4. Meta acumulada */}
+      <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        Acum: <span style={{ color: 'var(--ws-vinho-b)', fontWeight: weight }}>
+          {metaAcum > 0 ? `${metaAcum} un` : '—'}
+        </span>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-# Hub de Configuração de Metas — status (pausado, retomar depois)
+# Hub de Configuração de Metas — status (mesclado e em produção)
 
 > **Leia este arquivo primeiro.** Ele existe pra você (ou eu, numa sessão
 > futura) não precisar reconstruir o contexto do zero. Pra detalhe técnico
@@ -7,10 +7,18 @@
 > `.superpowers/sdd/2026-09-02-hub-configuracao-metas/progress.md` (mesma
 > pasta deste worktree; não vai pro git, é rascunho de execução).
 
-**Pausado em**: 02/09/2026, por pedido direto do Junior — prioridade virou
-"corrigir os cards da Corrida de Performance pra bater de verdade com a
-lógica de bonificação" (trabalho novo, fora deste plano). O Hub **não foi
-abandonado**, só adiado.
+**Concluído em 03/09/2026.** 16 das 18 tarefas do plano executadas e
+verificadas (Tasks 1-16). Task 17 (semear setembro/2026 pelo próprio Hub)
+foi pulada de propósito — ver seção 8. Task 18 virou "mesclar rápido",
+por pedido explícito do Junior pra testar direto em produção.
+
+**⚠️ Setembro/2026 NÃO está nas tabelas novas do Hub.** Os dados reais e
+corrigidos de setembro (25 vendas / R$981.385) só existem na tabela
+espelho antiga (`DB_Metas_Performance`), inseridos direto por SQL. Se você
+abrir `/metas`, selecionar setembro/2026 e publicar sem reproduzir esses
+números exatamente, o Hub vai SOBRESCREVER a tabela espelho. **Teste o
+Hub com outubro** (mês novo, sem risco) até decidir se vale pré-carregar
+setembro nas tabelas novas.
 
 ---
 
@@ -27,7 +35,7 @@ abandonado**, só adiado.
 Pra retomar: entrar no worktree, checar esse ledger, seguir a partir do
 "próximo passo exato" da seção 3 abaixo.
 
-## 2. O que já está pronto (Tasks 1–8 de 18)
+## 2. O que já está pronto (Tasks 1–16 de 18)
 
 Motor de cálculo **inteiro construído e testado** (26 testes, mais os 3
 que a Task 4 corrigiu e outros — total do arquivo `metasEngine.test.ts`
@@ -61,27 +69,37 @@ sobe conforme as tarefas avançam):
    proteção contra resposta atrasada) — ⚠️ **a revisão dessa correção
    ainda não rodou**, ver seção 3.
 
-## 3. Próximo passo exato ao retomar
+## 3. Próximo passo exato
 
-1. **Rodar a re-revisão da correção da Task 8** antes de qualquer coisa
-   nova — foi aplicada mas nunca revisada (a sessão foi interrompida por
-   outra prioridade no meio do caminho). Range: `c5ece80..ad234ce`.
-2. Depois: Task 9 em diante (lista completa abaixo).
+O Hub inteiro (Passos 0-6, tabelas, Edge Function) está pronto, buildado,
+testado (165/165) e mesclado em `main` — deploy automático dispara no
+merge do PR. Não tem "próximo passo de construção" — o que resta é uso
+real:
 
-## 4. O que falta (Tasks 9–18)
+1. Junior testa em produção (`/metas`), preferencialmente com **outubro**
+   primeiro (ver aviso no topo sobre setembro).
+2. Reportar ajustes encontrados — viram tasks novas, não reabertura deste
+   plano.
+3. Decidir se vale pré-carregar setembro/2026 nas tabelas novas do Hub
+   (hoje só existe na tabela espelho, via SQL direto).
+4. Construir a Corrida de Performance de verdade (pontuação real,
+   substituindo o ranking por %-atingimento) — aprovado pelo Junior,
+   nunca iniciado. Ver `docs/corrida-de-performance-logica.md`.
 
-| # | O que é |
-|---|---|
-| 9 | Hooks de escrita — `useSalvarMeta` (chama a Edge Function) + `useTaxaMesAnterior` (sugestão de taxa) |
-| 10 | Página do Hub — casca, rota `/metas`, item de menu, Passo 0 (abrir/copiar mês) |
-| 11 | Passo 1 — Semanas |
-| 12 | Passo 2 — Taxas de conversão (sugestão do mês anterior) |
-| 13 | Passo 3 — Funil por marca (fixo/derivado/desligado, cálculo ao vivo) |
-| 14 | Passo 4 — Pessoas por marca (sem limite de quantidade) |
-| 15 | Passo 5 — Distribuição semanal (manual, o sistema não rateia sozinho) |
-| 16 | Passo 6 — Revisar e publicar |
-| 17 | Semear setembro/2026 **pelo próprio Hub** (teste de aceitação da ferramenta) — ⚠️ **ver seção 5, os números mudaram** |
-| 18 | Verificação final, checksum de regressão, PR |
+## 4. Tasks 9–18 — status final
+
+| # | O que é | Status |
+|---|---|---|
+| 9 | Hooks de escrita — `useSalvarMeta` + `useTaxaMesAnterior` | ✅ feito |
+| 10 | Página do Hub — casca, rota `/metas`, item de menu, Passo 0 | ✅ feito |
+| 11 | Passo 1 — Semanas | ✅ feito |
+| 12 | Passo 2 — Taxas de conversão | ✅ feito |
+| 13 | Passo 3 — Funil por marca | ✅ feito |
+| 14 | Passo 4 — Pessoas por marca | ✅ feito |
+| 15 | Passo 5 — Distribuição semanal | ✅ feito (+ correção marca/função pós-revisão) |
+| 16 | Passo 6 — Revisar e publicar | ✅ feito |
+| 17 | Semear setembro/2026 pelo próprio Hub | ⏭️ pulada de propósito — ver seção 8 |
+| 18 | Verificação final, PR | ✅ feito — este PR |
 
 ## 5. ⚠️ Importante: setembro já foi corrigido manualmente — a Task 17 precisa usar os números novos, não os da planilha original
 
@@ -166,3 +184,19 @@ retomar.
   devem passar a usar `meta_semana`** (era o plano original, D13 do spec)
   — ver `docs/superpowers/specs/2026-09-02-hub-configuracao-metas-design.md`
   §12.5.
+
+## 8. Por que a Task 17 foi pulada
+
+Setembro/2026 já tem dado real e corrigido em `DB_Metas_Performance`
+(inserido por SQL direto, não pelo Hub — ver seção 5). Rodar a Task 17
+como planejada (semear setembro clicando pelo próprio wizard) exigiria
+reproduzir esses números exatos através da UI, e nenhum agente tem acesso
+de login/dev-server pra fazer isso de forma confiável. Como o objetivo era
+mesmo testar a ferramenta — e o Junior vai testar em produção pessoalmente
+— pular esse passo e ir direto pro merge foi a troca certa: mais rápido,
+sem risco de corromper o dado real de setembro por um seed malfeito.
+
+**Recomendação**: testar o Hub lançando **outubro/2026** primeiro (mês
+"limpo", sem dado legado pra proteger). Setembro só pelo Hub depois que
+alguém decidir se vale pré-carregar os números certos nas tabelas novas
+antes de publicar.

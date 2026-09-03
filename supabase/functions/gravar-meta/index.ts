@@ -19,7 +19,7 @@ interface Payload {
     }>
     pessoas: Array<{ nome: string; funcao: 'SDR' | 'Closer'; peso: number }>
   }>
-  distribuicaoSemanal: Array<{ nomePessoa: string; semanaNumero: number; etapa: string; valor: number }>
+  distribuicaoSemanal: Array<{ marca: string; nomePessoa: string; semanaNumero: number; etapa: string; valor: number }>
   linhasEspelho: Array<Record<string, unknown>>
   autor: string | null
 }
@@ -82,12 +82,16 @@ Deno.serve(async (req) => {
 
   // Semanas: apaga e reinsere (o gerente pode ter mudado o dia de virada no meio da montagem).
   await admin.from('meta_semana').delete().eq('mes_referencia', payload.mesReferencia)
+  const semanaIdPorNumero = new Map<number, number>()
   if (payload.semanas.length > 0) {
-    const { error: erroSemanas } = await admin.from('meta_semana').insert(
+    const { data: semanasInseridas, error: erroSemanas } = await admin.from('meta_semana').insert(
       payload.semanas.map(s => ({ mes_referencia: payload.mesReferencia, numero: s.numero, data_inicio: s.inicio, data_fim: s.fim })),
-    )
+    ).select('id, numero')
     if (erroSemanas) return respond({ error: erroSemanas.message }, 500)
+    for (const s of semanasInseridas ?? []) semanaIdPorNumero.set(s.numero, s.id)
   }
+
+  const pessoaRowsPorMarca = new Map<string, Array<{ id: number; nome: string; funcao: string }>>()
 
   for (const m of payload.marcas) {
     const { data: marcaRow, error: erroMarca } = await admin
@@ -111,11 +115,27 @@ Deno.serve(async (req) => {
 
     await admin.from('meta_pessoa').delete().eq('meta_marca_id', marcaRow.id)
     if (m.pessoas.length > 0) {
-      const { error: erroPessoas } = await admin.from('meta_pessoa').insert(
+      const { data: pessoasInseridas, error: erroPessoas } = await admin.from('meta_pessoa').insert(
         m.pessoas.map(p => ({ meta_marca_id: marcaRow.id, nome: p.nome, funcao: p.funcao, peso: p.peso })),
-      )
+      ).select('id, nome, funcao')
       if (erroPessoas) return respond({ error: erroPessoas.message }, 500)
+      pessoaRowsPorMarca.set(m.marca, pessoasInseridas ?? [])
+    } else {
+      pessoaRowsPorMarca.set(m.marca, [])
     }
+  }
+
+  const linhasDistribuicao: Array<{ meta_pessoa_id: number; meta_semana_id: number; etapa: string; valor: number }> = []
+  for (const d of payload.distribuicaoSemanal) {
+    const pessoasDaMarca = pessoaRowsPorMarca.get(d.marca) ?? []
+    const pessoa = pessoasDaMarca.find(p => p.nome === d.nomePessoa)
+    const semanaId = semanaIdPorNumero.get(d.semanaNumero)
+    if (!pessoa || !semanaId) continue // combinação não encontrada nesta publicação — não deveria acontecer se o payload é interno e consistente; ignorada em vez de falhar a publicação inteira por uma linha órfã
+    linhasDistribuicao.push({ meta_pessoa_id: pessoa.id, meta_semana_id: semanaId, etapa: d.etapa, valor: d.valor })
+  }
+  if (linhasDistribuicao.length > 0) {
+    const { error: erroDistrib } = await admin.from('meta_pessoa_semana').insert(linhasDistribuicao)
+    if (erroDistrib) return respond({ error: erroDistrib.message }, 500)
   }
 
   if (payload.acao === 'publicar' && payload.linhasEspelho.length > 0) {

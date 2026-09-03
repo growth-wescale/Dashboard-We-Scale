@@ -10,6 +10,7 @@ export interface EstadoMesMarca {
 }
 
 export interface DistribuicaoSemanalItem {
+  marca: string
   nomePessoa: string
   semanaNumero: number
   etapa: EtapaMeta
@@ -44,7 +45,7 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
     marcaIds.length ? supabaseVendas.from('meta_marca_etapa').select('meta_marca_id, etapa, modo, valor_fixo, etapa_origem, taxa, taxa_origem').in('meta_marca_id', marcaIds) : Promise.resolve({ data: [], error: null }),
     marcaIds.length ? supabaseVendas.from('meta_pessoa').select('id, meta_marca_id, nome, funcao, peso').in('meta_marca_id', marcaIds) : Promise.resolve({ data: [], error: null }),
     marcaIds.length
-      ? supabaseVendas.from('meta_pessoa_semana').select('etapa, valor, meta_pessoa_id, meta_semana_id, meta_pessoa!inner(nome, meta_marca_id), meta_semana!inner(numero)').in('meta_pessoa.meta_marca_id', marcaIds)
+      ? supabaseVendas.from('meta_pessoa_semana').select('etapa, valor, meta_pessoa_id, meta_semana_id, meta_pessoa!inner(nome, meta_marca_id, meta_marca!inner(marca)), meta_semana!inner(numero)').in('meta_pessoa.meta_marca_id', marcaIds)
       : Promise.resolve({ data: [], error: null }),
   ])
   if (erroEtapas) return { estado: VAZIO, error: erroEtapas.message }
@@ -65,7 +66,7 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
   }))
 
   const distribuicaoSemanal: DistribuicaoSemanalItem[] = (distribRows ?? []).map((d: any) => ({
-    nomePessoa: d.meta_pessoa.nome, semanaNumero: d.meta_semana.numero, etapa: d.etapa, valor: Number(d.valor) || 0,
+    marca: d.meta_pessoa.meta_marca.marca, nomePessoa: d.meta_pessoa.nome, semanaNumero: d.meta_semana.numero, etapa: d.etapa, valor: Number(d.valor) || 0,
   }))
 
   return {

@@ -148,9 +148,9 @@ export function HubMetas() {
           marcas={rascunhoAtual.marcas}
           semanas={rascunhoAtual.semanas}
           distribuicaoSemanal={rascunhoAtual.distribuicaoSemanal}
-          onMudarValor={(nomePessoa, semanaNumero, etapa, valor) => {
-            const semOEditado = rascunhoAtual.distribuicaoSemanal.filter(d => !(d.nomePessoa === nomePessoa && d.semanaNumero === semanaNumero && d.etapa === etapa))
-            setRascunho({ ...rascunhoAtual, distribuicaoSemanal: [...semOEditado, { nomePessoa, semanaNumero, etapa, valor }] })
+          onMudarValor={(marca, nomePessoa, semanaNumero, etapa, valor) => {
+            const semOEditado = rascunhoAtual.distribuicaoSemanal.filter(d => !(d.marca === marca && d.nomePessoa === nomePessoa && d.semanaNumero === semanaNumero && d.etapa === etapa))
+            setRascunho({ ...rascunhoAtual, distribuicaoSemanal: [...semOEditado, { marca, nomePessoa, semanaNumero, etapa, valor }] })
           }}
         />
       )}

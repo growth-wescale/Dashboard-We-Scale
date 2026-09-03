@@ -542,16 +542,42 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
-  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: compareRange.start,   dataFim: compareRange.end })
+
+  // Odonto Legacy usa janela dos últimos 7 dias corridos em vez de MTD do mês
+  // (Junior 03/09: MTD Set com só 3 dias distorce leitura). Comparativo passa a
+  // ser os 7 dias anteriores (21-27/08 vs 28/08-03/09). Outras marcas seguem MTD.
+  const mtdCurEnd = dates.mtdCurEnd
+  const mtdCurStart = useMemo(() => {
+    if (!isOdontoLegacy) return dates.mtdCurStart
+    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
+    return isoDate(new Date(end.getTime() - 6 * 86400000))
+  }, [isOdontoLegacy, dates.mtdCurStart, dates.mtdCurEnd])
+  const mtdPrevEnd = useMemo(() => {
+    if (!isOdontoLegacy) return dates.mtdPrevEnd
+    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
+    return isoDate(new Date(end.getTime() - 7 * 86400000))
+  }, [isOdontoLegacy, dates.mtdPrevEnd, dates.mtdCurEnd])
+  const mtdPrevStart = useMemo(() => {
+    if (!isOdontoLegacy) return dates.mtdPrevStart
+    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
+    return isoDate(new Date(end.getTime() - 13 * 86400000))
+  }, [isOdontoLegacy, dates.mtdPrevStart, dates.mtdCurEnd])
+
+  // Range de comparação: pra Odonto Legacy, usa mtdPrevStart/End (7d anteriores).
+  // Pra outras marcas, respeita o dropdown de mês (compareRange).
+  const prevRangeStart = isOdontoLegacy ? mtdPrevStart : compareRange.start
+  const prevRangeEnd   = isOdontoLegacy ? mtdPrevEnd   : compareRange.end
+
+  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const allMedia  = isOdontoLegacy ? mediaAllOdl.data  : mediaAllStd.data
   const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
-  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: dates.mtdCurStart,    dataFim: dates.mtdCurEnd })
-  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
+  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
+  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[4].start, dataFim: dates.weeks[4].end })
   const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[3].start, dataFim: dates.weeks[3].end })
   const crmAllRes  = useVendasFunil({ marca: slide.marca })
@@ -620,10 +646,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const funnelPrior = useMemo(() => buildFunnel(crmPrior, dates.weeks[3].start, dates.weeks[3].end), [crmPrior, dates.weeks])
 
   // ── MTD computations ─────────────────────────────────────────────────────────
-  const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= dates.mtdCurStart))), [allLeads, dates.mtdCurStart, filterLeads])
+  const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart))), [allLeads, mtdCurStart, filterLeads])
   const mtdPrevLeads = useMemo(() => filterLeads(deduplicateLeads(prevLeads)), [prevLeads, filterLeads])
 
-  const mtdInvest     = useMemo(() => activeMedia.filter(r => r.dia >= dates.mtdCurStart).reduce((s, r) => s + r.spend_brl, 0), [activeMedia, dates.mtdCurStart])
+  const mtdInvest     = useMemo(() => activeMedia.filter(r => r.dia >= mtdCurStart).reduce((s, r) => s + r.spend_brl, 0), [activeMedia, mtdCurStart])
   const mtdPrevInvest = useMemo(() => activePrevMedia.reduce((s, r) => s + r.spend_brl, 0), [activePrevMedia])
 
   const mtdLeadsCnt = mtdLeads.length
@@ -631,7 +657,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mtdPrevMql  = mtdPrevLeads.filter(isLeadMql).length
   const mtdPrevLeadsCnt = mtdPrevLeads.length
 
-  const funnelMtd  = useMemo(() => buildFunnel(crmCur, dates.mtdCurStart, dates.mtdCurEnd), [crmCur, dates.mtdCurStart, dates.mtdCurEnd])
+  const funnelMtd  = useMemo(() => buildFunnel(crmCur, mtdCurStart, mtdCurEnd), [crmCur, mtdCurStart, mtdCurEnd])
   const funnelMtdP = useMemo(() => buildFunnel(crmPrev, compareRange.start, compareRange.end), [crmPrev, compareRange.start, compareRange.end])
 
   // ── Chart-specific: sempre MTD-vs-MTD (mesmo em modo Julho fechado) ──────────
@@ -645,8 +671,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   }, [dates.monthStart])
 
   const chartCurLeads = useMemo(
-    () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= dates.mtdCurStart && l.dia <= chartCurEnd))),
-    [allLeads, dates.mtdCurStart, chartCurEnd, filterLeads],
+    () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart && l.dia <= chartCurEnd))),
+    [allLeads, mtdCurStart, chartCurEnd, filterLeads],
   )
   const chartPrevLeads = useMemo(
     () => filterLeads(deduplicateLeads(prevLeads.filter(l => l.dia >= compareRange.start && l.dia <= compareRange.end))),
@@ -657,8 +683,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const chartPrevMql = chartPrevLeads.filter(isLeadMql).length
 
   const chartFunnelCur  = useMemo(
-    () => buildFunnel(crmCur, dates.mtdCurStart, chartCurEnd),
-    [crmCur, dates.mtdCurStart, chartCurEnd],
+    () => buildFunnel(crmCur, mtdCurStart, chartCurEnd),
+    [crmCur, mtdCurStart, chartCurEnd],
   )
   const chartFunnelPrev = useMemo(
     () => buildFunnel(crmPrev, compareRange.start, compareRange.end),

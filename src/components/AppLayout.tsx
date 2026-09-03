@@ -43,6 +43,7 @@ const VENDAS_SUB = [
   { key: 'analise-perda',       label: 'Análise de Perda' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
+  { key: 'metas',               label: 'Metas' },
 ]
 
 const NAV_ITEMS = [
@@ -79,7 +80,7 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas')) return 'vendas'
   return 'geral'
 }
 
@@ -88,6 +89,7 @@ function getVendasActiveSub(pathname: string): string {
   if (pathname.startsWith('/analise-objecoes'))   return 'analise-objecoes'
   if (pathname.startsWith('/analise-perda'))      return 'analise-perda'
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
+  if (pathname.startsWith('/metas'))              return 'metas'
   return 'funil-vendas'
 }
 
@@ -139,6 +141,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'analise-perda') navigate('/analise-perda')
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
     else if (key === 'gp-setembro') navigate('/gp-setembro')
+    else if (key === 'metas') navigate('/metas')
     else {
       setActiveBrand(key)
       navigate('/marca')

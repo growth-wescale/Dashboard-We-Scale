@@ -16,6 +16,7 @@ const PerformanceVendas = lazy(() => import('@/pages/PerformanceVendas').then(m 
 const AnalisePerda      = lazy(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
 const AnaliseObjecoes   = lazy(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
 const GpSetembro        = lazy(() => import('@/pages/GpSetembro').then(m => ({ default: m.GpSetembro })))
+const HubMetas          = lazy(() => import('@/pages/HubMetas').then(m => ({ default: m.HubMetas })))
 
 // Fallback discreto durante carga do chunk (~100-300ms)
 function PageLoader() {
@@ -41,6 +42,7 @@ function RoutedContent() {
           <Route path="/sop-marketing" element={<SopMarketing />} />
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
+          <Route path="/metas"              element={<HubMetas />} />
           <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
           <Route path="/gp-setembro"        element={<GpSetembro />} />
           <Route path="/analise-perda"      element={<AnalisePerda />} />

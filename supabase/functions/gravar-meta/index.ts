@@ -37,6 +37,18 @@ function respond(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 }
 
+// Mesma partição de PassoDistribuicaoSemanal.tsx (ETAPAS_DISTRIBUIVEIS): 'Ligações'
+// e 'Reunião Agendada SQL' são etapas de SDR; 'Oportunidade COF' e 'Fechamento' são
+// de Closer. Uma pessoa pode ter as duas linhas em meta_pessoa pra mesma marca
+// (UNIQUE (meta_marca_id, nome, funcao) permite — ex.: "Vanessa Daniel", cargo
+// SDR/Closer em nome_cargo_foto), então casar só por nome não basta: a etapa diz
+// qual das duas linhas é a certa.
+function funcaoDaEtapa(etapa: string): 'SDR' | 'Closer' | null {
+  if (etapa === 'Ligações' || etapa === 'Reunião Agendada SQL') return 'SDR'
+  if (etapa === 'Oportunidade COF' || etapa === 'Fechamento') return 'Closer'
+  return null
+}
+
 async function validarSessao(
   admin: ReturnType<typeof createClient>, token: string,
 ): Promise<{ ok: boolean; email?: string }> {
@@ -125,10 +137,17 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (payload.acao === 'publicar' && payload.linhasEspelho.length > 0) {
+    await admin.from('DB_Metas_Performance').delete().eq('mes_referencia', payload.mesReferencia)
+    const { error: erroEspelho } = await admin.from('DB_Metas_Performance').insert(payload.linhasEspelho)
+    if (erroEspelho) return respond({ error: erroEspelho.message }, 500)
+  }
+
   const linhasDistribuicao: Array<{ meta_pessoa_id: number; meta_semana_id: number; etapa: string; valor: number }> = []
   for (const d of payload.distribuicaoSemanal) {
     const pessoasDaMarca = pessoaRowsPorMarca.get(d.marca) ?? []
-    const pessoa = pessoasDaMarca.find(p => p.nome === d.nomePessoa)
+    const funcaoEsperada = funcaoDaEtapa(d.etapa)
+    const pessoa = pessoasDaMarca.find(p => p.nome === d.nomePessoa && p.funcao === funcaoEsperada)
     const semanaId = semanaIdPorNumero.get(d.semanaNumero)
     if (!pessoa || !semanaId) continue // combinação não encontrada nesta publicação — não deveria acontecer se o payload é interno e consistente; ignorada em vez de falhar a publicação inteira por uma linha órfã
     linhasDistribuicao.push({ meta_pessoa_id: pessoa.id, meta_semana_id: semanaId, etapa: d.etapa, valor: d.valor })
@@ -136,12 +155,6 @@ Deno.serve(async (req) => {
   if (linhasDistribuicao.length > 0) {
     const { error: erroDistrib } = await admin.from('meta_pessoa_semana').insert(linhasDistribuicao)
     if (erroDistrib) return respond({ error: erroDistrib.message }, 500)
-  }
-
-  if (payload.acao === 'publicar' && payload.linhasEspelho.length > 0) {
-    await admin.from('DB_Metas_Performance').delete().eq('mes_referencia', payload.mesReferencia)
-    const { error: erroEspelho } = await admin.from('DB_Metas_Performance').insert(payload.linhasEspelho)
-    if (erroEspelho) return respond({ error: erroEspelho.message }, 500)
   }
 
   await admin.from('meta_log').insert({

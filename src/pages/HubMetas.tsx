@@ -117,7 +117,7 @@ export function HubMetas() {
         </div>
       )}
 
-      {/* Passos 2–5 chegam nas Tasks 12–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
+      {/* Passos 3–6 chegam nas Tasks 13–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
     </div>
   )
 }

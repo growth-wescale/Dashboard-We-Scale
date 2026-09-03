@@ -14,11 +14,11 @@ export function PassoTaxas({
       {marcas.map(m => (
         <div key={m.marca} style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 20 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>{m.marca}</h3>
-          {m.etapas.filter(e => e.modo === 'derivado').map(e => (
-            <LinhaTaxa key={e.etapa} marca={m.marca} etapa={e.etapa} etapaOrigem={e.etapaOrigem!}
+          {m.etapas.filter(e => e.modo === 'derivado' && e.etapaOrigem).map(e => (
+            <LinhaTaxa key={e.etapa} marca={m.marca} etapa={e.etapa} etapaOrigem={e.etapaOrigem as EtapaMeta}
               taxaAtual={e.taxa} mesAnterior={mesAnterior} onMudarTaxa={onMudarTaxa} />
           ))}
-          {m.etapas.filter(e => e.modo === 'derivado').length === 0 && (
+          {m.etapas.filter(e => e.modo === 'derivado' && e.etapaOrigem).length === 0 && (
             <p style={{ fontSize: 13, color: 'var(--ws-text-secondary)' }}>Nenhuma etapa derivada configurada ainda — volte ao Passo 3 pra definir o modo de cada etapa primeiro.</p>
           )}
         </div>

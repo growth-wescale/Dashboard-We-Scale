@@ -7,6 +7,7 @@ import { PassoTaxas } from '@/components/metas/PassoTaxas'
 import { PassoFunilMarca } from '@/components/metas/PassoFunilMarca'
 import { PassoPessoas } from '@/components/metas/PassoPessoas'
 import { PassoDistribuicaoSemanal } from '@/components/metas/PassoDistribuicaoSemanal'
+import { PassoRevisarPublicar } from '@/components/metas/PassoRevisarPublicar'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -29,9 +30,9 @@ export function HubMetas() {
   const [mesReferencia, setMesReferencia] = useState(mesAtualKey())
   const [passo, setPasso] = useState(0)
 
-  // `reload` chega das Tasks 11–16 (ex.: Passo 6 "Revisar e publicar" recarrega
-  // o estado do banco após publicar) — não usado ainda neste passo 0.
-  const { estado, loading } = useMetaMes(mesReferencia)
+  // `reload` é usado pelo Passo 6 "Revisar e publicar" pra recarregar o
+  // estado do banco depois de publicar.
+  const { estado, loading, reload } = useMetaMes(mesReferencia)
   const { estado: estadoAnterior } = useMetaMes(mesAnteriorKey(mesReferencia))
 
   const [rascunho, setRascunho] = useState<{
@@ -161,7 +162,17 @@ export function HubMetas() {
         </div>
       )}
 
-      {/* Passo 6 chega na Task 16, recebendo `rascunhoAtual` e `setRascunho` */}
+      {!loading && passo === 6 && rascunhoAtual && (
+        <PassoRevisarPublicar
+          mesReferencia={mesReferencia}
+          diaViradaSemana={rascunhoAtual.diaViradaSemana}
+          semanas={rascunhoAtual.semanas}
+          marcas={rascunhoAtual.marcas}
+          distribuicaoSemanal={rascunhoAtual.distribuicaoSemanal}
+          estadoMesAnterior={estadoAnterior as EstadoMes | null}
+          onPublicado={reload}
+        />
+      )}
     </div>
   )
 }

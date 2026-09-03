@@ -21,10 +21,11 @@ import { useMetaResumo } from '@/hooks/useMetasPerformance'
 import { computeAging, dealsInAging } from '@/lib/aging'
 import { fmtDias } from '@/components/ui/dealDrawerShared'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
-import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
+import { normalizeFonteMacro } from '@/lib/fonteMapping'
+import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   STAGE_DATE_FIELD, STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, currentStage, dealsInStage, groupRepeatedDeals, isInWindow, isSale, repeatedDealsInStage, resolveStage,
+  countStageEvents, currentStage, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
@@ -459,26 +460,15 @@ export function FunilVendas() {
   //
   // "Deal na janela" = tem alguma data de etapa dentro de `win` (ou só o MQL,
   // no modo safra) — a mesma regra que popula o funil.
-  const camposJanela = useMemo(
-    () => (viewModes.funnelView === 'cohort'
-      ? (['data_novo_mql'] as const)
-      : STAGE_ORDER.map(s => STAGE_DATE_FIELD[s])),
-    [viewModes.funnelView],
+  const opcoesFiltro = useMemo(
+    () => funilFilterOptions({
+      rows, win,
+      marcasParaEscopo,
+      fontes, subFontes,
+      cohort: viewModes.funnelView === 'cohort',
+    }),
+    [rows, win, marcasParaEscopo, fontes, subFontes, viewModes.funnelView],
   )
-  const opcoesFiltro = useMemo(() => {
-    const subFonteDe = (r: FunnelRow) => normalizeSubFonte(r.utm_source, r.sub_fonte_crm)
-    const fonteDe = (r: FunnelRow) => normalizeFonteMacro(r.fonte_macro)
-    const naJanela = rows.filter(r => camposJanela.some(c => isInWindow(r[c] as string | null, win)))
-    const okMarca = (r: FunnelRow) => !marcasParaEscopo.length || marcasParaEscopo.includes(r.marca ?? '')
-    const okFonte = (r: FunnelRow) => !fontes.length || fontes.includes(fonteDe(r))
-    const okSub = (r: FunnelRow) => !subFontes.length || subFontes.includes(subFonteDe(r))
-    const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))]
-    return {
-      marcas: uniq(naJanela.filter(r => okFonte(r) && okSub(r)).map(r => r.marca ?? '')),
-      fontes: uniq(naJanela.filter(r => okMarca(r) && okSub(r)).map(fonteDe)),
-      subFontes: uniq(naJanela.filter(r => okMarca(r) && okFonte(r)).map(subFonteDe)),
-    }
-  }, [rows, camposJanela, win, marcasParaEscopo, fontes, subFontes])
 
   const fontesDisponiveis = opcoesFiltro.fontes
   const subFontesDisponiveis = opcoesFiltro.subFontes

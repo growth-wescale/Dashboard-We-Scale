@@ -609,6 +609,138 @@ com o do snapshot (`ongoing`), gerando 174 falsos positivos; e não compara o
 `payload`, sendo cego justamente para campo personalizado. O `wf_8` grava alertas
 em `sync_dlq` com destino "PLACEHOLDER" — 2.130 acumulados desde 20/08, ninguém lê.
 
+### 2026-09-03 — /okrs: Vendas com toggle acumulado/fixo, células com 2 métricas, redução pra 3 abas
+Junior pediu 5 ajustes na `/okrs` (PR #54, um dia depois dos 4 PRs da
+sessão anterior):
+
+1. **Célula Vendas + Receita juntas** (sem toggle Receita/Vendas). Cada
+   célula mostra vendas no topo (com sufixo "venda(s)"), receita compacta
+   abaixo e % de atingimento colorida. % prioriza meta de quantidade; se
+   marca não tem `meta_qtd_vendas`, cai na de receita.
+2. **Toggle Meta fixa × Meta acumulada** (default Fixa). No modo
+   acumulado, cada mês compara realizado (jul + … + M) vs meta
+   (jul + … + M). Coluna "H2 total" é o semestre inteiro nos dois modos.
+   Acumulação é feita no componente via prefix-sum por linha — hook
+   `useVendasSemestre` não mudou.
+3. **Redução pra 3 abas** (Copa · Meta de vendas · OKRs). Aba "Meta B2B"
+   deixa de existir — bônus e OKRs B2B migram pra dentro da aba OKRs, que
+   agora tem 3 seções: Bônus + OKRs B2B + placeholder B2C. Meta B2C fica
+   junto pra usar a mesma UI editora quando os KRs forem definidos.
+4. **Cleitinho removido** (bloco + `CleitinhoExample`/`CleitinhoRow` +
+   `SALARIO_ANALISTA` + wrapper `OkrsList` — tudo código morto).
+5. **H2 total intacto**: Junior questionou se estava puxando o semestre
+   ou só o mês. Verificado — já vinha do semestre desde o PR #50 (soma
+   dos 6 meses), sem regressão.
+
+Diff líquido −100 linhas (código morto removido). Build 238ms, 139 testes.
+
+### 2026-09-02 — /okrs vira hub com 4 abas: Copa restaurada, Vendas do semestre e placeholder B2C
+4 PRs incrementais reorganizaram a `/okrs` (criada 01/09 com apenas Bônus +
+Cleitinho + 2 OKRs). Junior pediu separar coisas diferentes que estavam
+empilhadas na mesma página.
+
+- **PR #50 · Vendas do semestre.** Bloco novo antes dos OKRs: tabela
+  **marca × mês (jul-dez/2026)** com realizado × meta cadastrada, toggle
+  Receita ↔ Vendas, cores no atingimento (verde ≥100%, âmbar 50-99%,
+  vermelho <50%, cinza sem meta). Total consolidado na última linha.
+  Consolidado Inbound + Prospecção Ativa (PA tem 0 vendas hoje, mas
+  aparece automático quando começar a ganhar). Novo hook
+  `useVendasSemestre.ts`: 1 query em `DB_Metas_Performance` + 1 em
+  `vw_funil_vendas` (Supabase Expansão), agrega client-side — mesmo padrão
+  do `useHistoricoAtingimento`.
+- **PR #51 · 4 abas + restaura Copa.** Página em pill sticky no topo:
+  🏆 Acompanhamento Meta (default) · 📊 Meta de vendas · 🎯 Meta B2B · 🚩
+  OKRs. `MetaCopaB2B.tsx` (559 linhas, versão de 11/ago) tinha sido
+  deletado por engano em 01/09 quando a `/okrs` foi criada — restaurado
+  agora como aba interna. `constants/copab2b.ts` sempre esteve tracked, só
+  o componente foi removido. **Meta B2B** herdou o Bônus + Cleitinho + 2
+  OKRs. **OKRs** é placeholder (B2C entra em PR futuro).
+- **PR #52 · Setembro/26 na Copa.** `getMesCorrente()` caía no fallback
+  AGO_26 e a Copa abria em agosto mesmo estando 02/09. Adicionado
+  `SET_26: CopaMesConfig` (30 dias, `fechado=false`, mesmo baseline
+  maio/26 de jul/ago — decisão explícita do Junior de manter). `AGO_26`
+  marcado como `fechado=true`. Dropdown fica [Set, Ago, Jul] mais recente
+  primeiro; fallback aponta pra SET_26.
+- **PR #53 · Metas por Marca lê dado real** (feito pelo Junior + Claude
+  Sonnet 5, fora desta sessão). A seção "Metas por marca (franqueadora)"
+  da Campanha de Metas rodava mockada — dependia de `DB_Metas_Marca` que
+  nunca chegou a existir e mostrava números divergentes da fonte real
+  (Inpot 3/224.7k em vez de 5/374.5k). Trocado pra `DB_Metas_Performance`
+  (`funcao='Closer'`), agregado por marca — mesma tabela dos cards de
+  Closer e Grid dos SDRs. Novo `useMetaPorMarca.ts` substitui
+  `useMetasMarca.ts` (removido). Sai o aviso "tabela não existe", a
+  coluna Ação/Editar e o modal de edição — vira leitura pura. Renomeado
+  "Metas por marca (franqueadora)" → "Metas por Marca". Set/26 conferido
+  contra o SQL: Inpot 5/374500, Eletrovias 4/159600, B2Case 4/40000, Oral
+  Unic 2/149800, Lisô 1/39900, Viva 1/69900.
+
+### 2026-09-02 — Ad creatives via Meta API (substitui mapa manual)
+Cobertura de links de anúncios na Saúde da Marca estava em **2%** pra Oral
+Unic e 33-68% nas outras marcas — `src/lib/creativeAssets.ts` é um mapa
+manual (99 entradas) que ninguém mantinha atualizado enquanto o portfólio
+escalou pra 215 anúncios ativos.
+
+Nova infra automática:
+- Tabela `public.ad_creatives` (Marketing) com 2.448 registros: ad_id,
+  ad_name, marca, page_id, post_id, post_url, effective_object_story_id.
+- Edge Function `ingest-meta-creatives` puxa `/act_<id>/ads?fields=id,
+  name,creative{effective_object_story_id}` das 8 contas Meta e monta
+  post_url a partir do story_id (`<page_id>_<post_id>` → `facebook.com/
+  <page>/posts/<post>`). Token vem de `META_ACCESS_TOKEN` no Vault.
+- Novo hook `useAdCreatives` retorna Map<ad_name, post_url> paginado.
+- `SaudeDaMarca.buildCampaigns` prioriza URL do banco, cai pro mapa
+  estático como fallback (retrocompatível).
+
+Cobertura pós-migração (30d, anúncios Meta ativos):
+- Oral Unic 2% → 93% · Inpot 40% → 90% · B2Case 33% → 93% · Viva 41% → 93%
+- Eletrovias 67% → 94% · Lisô 68% → 91%
+- Odonto Scale e Scale Partners continuam 0% (sem anúncios Meta ativos
+  nas contas mapeadas — usam Google Ads / RSA que nunca tiveram postUrl)
+
+**Pendência:** agendar `ingest-meta-creatives` via `pg_cron` (não incluído
+neste PR). Enquanto não roda diariamente, anúncios criados depois de
+01/09 ficam sem link até rodar manual.
+
+### 2026-09-01 — Página /okrs (Meta & OKRs H2 2026) substitui Copa B2B, e Modo GP (tema F1) no dashboard inteiro
+Duas frentes no mesmo dia.
+
+**Página /okrs.** Página `MetaCopaB2B` (protótipo trainee de julho, sem
+uso) foi removida. Substituída por `/okrs` com 3 blocos originais: (1)
+'Como funciona o bônus' com split 50% empresa / 30% OKRs / 20% avaliação,
+(2) simulado Cleitinho com analista R$ 5k, (3) 2 OKRs editáveis (5% MQLs
+owned + reduzir CP-MQL 20%). Editor persiste em tabela nova
+`public.okrs_h2` no Supabase Marketing (criada via MCP em 01/09). RLS:
+leitura + escrita pra authenticated. Hook `useOkrs` + `updateOkrValor`
+cuidam da leitura/upsert. Rota `/copa-b2b` vira redirect pra `/okrs`
+(bookmarks preservados). Menu 'Acompanhamento Meta' vira 'Meta & OKRs'.
+*(A Copa voltou em 02/09 como aba interna — ver entrada acima.)*
+
+**Modo GP (tema F1).** 4 PRs incrementais entregaram o tema visual F1 pra
+setembro:
+1. Tema base: `data-gp='f1'` no `<html>`, brand-accent vermelho F1
+   (#E10600), tracejado 3px no topo, sidebar carbono, liveries por
+   marca (Oral Unic roxo Mercedes, Inpot verde, Eletrovias laranja,
+   etc.). Toggle bandeira 🏁 na topbar + botão ▶ pra reexibir intro.
+   Default LIGADO em setembro/2026, DESLIGADO em outros meses.
+   Hook `useGpMode` + CSS em `src/styles/gp-mode.css`.
+2. `GpIntro` — animação fullscreen de abertura com wordmark 'WE SCALE'
+   letra a letra (stagger 0.09s), swoosh vermelho, chips e ações.
+   Roda em toda sessão até user clicar 'Não mostrar novamente'
+   (localStorage `ws-gp-intro`).
+3. `GpStrip` — faixa carbono de corrida em todas as páginas exceto
+   `/gp-setembro`. Chips: volta atual, P1 do ranking (dados reais de
+   `useMetasClosers`), dias pra bandeirada, pool R$ 12k.
+4. `SennaCard` no rodapé da sidebar (foto real `public/assets/senna-
+   monaco.png`, 1MB) + prêmio 'Troféu Senna · Mônaco 88' nos incentivos
+   da Campanha de Metas.
+
+Página `/gp-setembro` rebuild nativo (React) — antes era iframe pro HTML
+Claude artifact de 2MB. Estrutura F1 completa: hero, toggle Ciclo, 4
+voltas, coluna Classificação P1-P4 (Jéssica, Douglas, Aurélio, Bruna),
+Meta do time, 4 cards de prêmios (incluindo Troféu Senna), grid de
+pilotos com foto real (jessica.png, douglas.png, aurelio.png), tabela
+histórico mar-ago, Grid dos SDRs (Sarah, Thiago, Xayane, Vanessa Daniel)
+e seção Metas por marca (planilha franqueadora).
 
 ### 2026-08-31 — Sub-fonte: fallback pro campo do RD + opções cruzadas com os demais filtros
 Junior reportou dois problemas no filtro de Sub-fonte da Visão Macro: (1) em

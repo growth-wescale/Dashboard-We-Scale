@@ -43,7 +43,7 @@ const MOCK_OKRS: Okr[] = [
     titulo: 'Reduzir o CP-MQL agregado em 20%',
     descricao: 'Custo por MQL agregado, -20% no semestre',
     valorMeta: 99.11,
-    valorAtual: 123.89,
+    valorAtual: 164,
     unidade: 'moeda',
     direcao: 'reduzir',
   },

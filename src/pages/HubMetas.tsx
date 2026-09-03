@@ -6,6 +6,7 @@ import { PassoSemanas } from '@/components/metas/PassoSemanas'
 import { PassoTaxas } from '@/components/metas/PassoTaxas'
 import { PassoFunilMarca } from '@/components/metas/PassoFunilMarca'
 import { PassoPessoas } from '@/components/metas/PassoPessoas'
+import { PassoDistribuicaoSemanal } from '@/components/metas/PassoDistribuicaoSemanal'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -142,13 +143,25 @@ export function HubMetas() {
         />
       )}
 
+      {!loading && passo === 5 && rascunhoAtual && (
+        <PassoDistribuicaoSemanal
+          marcas={rascunhoAtual.marcas}
+          semanas={rascunhoAtual.semanas}
+          distribuicaoSemanal={rascunhoAtual.distribuicaoSemanal}
+          onMudarValor={(nomePessoa, semanaNumero, etapa, valor) => {
+            const semOEditado = rascunhoAtual.distribuicaoSemanal.filter(d => !(d.nomePessoa === nomePessoa && d.semanaNumero === semanaNumero && d.etapa === etapa))
+            setRascunho({ ...rascunhoAtual, distribuicaoSemanal: [...semOEditado, { nomePessoa, semanaNumero, etapa, valor }] })
+          }}
+        />
+      )}
+
       {!loading && passo > 0 && !rascunhoAtual && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
           Volte ao Passo 0 e abra o mês (copiando do anterior ou começando vazio) antes de continuar.
         </div>
       )}
 
-      {/* Passos 5–6 chegam nas Tasks 15–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
+      {/* Passo 6 chega na Task 16, recebendo `rascunhoAtual` e `setRascunho` */}
     </div>
   )
 }

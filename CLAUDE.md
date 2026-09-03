@@ -155,6 +155,12 @@ procurando etapa no event sourcing.
 **"Reunião Agendada SQL" só conta no funil do Closer** (`69b1badfe1def700137f1b89`).
 A etapa existe também no SDR, e o handoff SDR→Closer gera dois eventos para a
 mesma reunião. Duas reuniões só quando o deal **reentra** na etapa do Closer.
+Nos modos de evento (Performance/Aging) a trava é `STAGE_ID_OBRIGATORIO` sobre
+`id_etapa` do evento. No modo **Funil Atual** (que olha a etapa corrente do
+deal, não o histórico) a mesma trava é `currentStage(row)` em `metrics.ts`,
+comparando `vw_funil_vendas.id_etapa_atual` (= `deal_snapshot.id_etapa`) —
+`resolveStage(etapa_funil)` sozinho não distingue SDR de Closer, só olha o
+nome. Deal parado na "Reunião Agendada SQL" do SDR some do balde no Atual.
 
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
@@ -313,6 +319,296 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-03 — Funil Atual: "Reunião Agendada SQL" só no funil do Closer
+Junior reportou (de novo) que no modo **Funil Atual** da Visão Macro a etapa
+"SQL · Reunião agendada" listava deals do funil do **SDR**, não só do Closer.
+
+**Causa raiz.** Os modos de evento (Performance/Aging) já aplicavam a trava
+`STAGE_ID_OBRIGATORIO` (`id_etapa` do evento === `69b1badfe1def700137f1b89`,
+o Closer). O modo Atual não olha o histórico de eventos — resolve a etapa
+corrente de cada deal com `resolveStage(r.etapa_funil)`, e `etapa_funil` só
+carrega o **nome** da etapa, idêntico ("Reunião Agendada SQL") no funil do SDR
+e no do Closer. `FunnelRow` nunca carregou o id da etapa corrente. Medido na
+base: 21 deals vivos nessa etapa no Closer (`69b1bad…`), 7 no SDR
+(`69380917e00ed10014daaa68`), 1 em Odonto Scale — os 7 do SDR eram os do print.
+
+**Fix.**
+- **Banco:** `vw_funil_vendas` ganhou `id_etapa_atual` (= `s.id_etapa`,
+  `deal_snapshot` já estava no JOIN pro `sub_fonte_crm`). `CREATE OR REPLACE
+  VIEW`, matview não tocada. Checksum idêntico antes/depois (7.013 linhas,
+  6.689 ciclo atual, 44 ganhos, R$ 1.983.779,98, 4.745 perdidos, 2.224 em
+  andamento); `id_etapa_atual` preenchido em 7.013/7.013 (0 nulo — nenhum
+  deal legítimo do Closer é descartado por falta de snapshot).
+- **Front:** `FunnelRow.id_etapa_atual` + coluna no `COLS` do `useFunilVendas`;
+  helper `currentStage(row)` novo em `metrics.ts` (resolve a etapa e, se ela
+  tem funil obrigatório, exige `id_etapa_atual` batendo); `dealsInStage(…,
+  'atual')` e o `atualLeadtime` de `FunilVendas.tsx` passaram a usá-lo no
+  lugar de `resolveStage(etapa_funil)`. Deal parado na "Reunião Agendada SQL"
+  do SDR agora sai do balde no Atual (não cai em etapa anterior — mesma
+  semântica que Performance, que já descartava esses eventos).
+- Só o modo Atual da Visão Macro mudou. `SopMarketing`/`BubbleMatrix` (lado
+  Marketing) usam `resolveStage(etapa_funil)` cru e ficaram como estavam.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (143 testes, +4
+travando o caso) via `~/ws-dashboard-build`, e a distribuição conferida em SQL
+contra a base real. App exige login — não visto renderizado.
+
+### 2026-09-01 (2) — Bug real de perda duplicada corrigido; script ganha prompt interativo
+Checagem pedida pelo Junior: `wf_6` corrigido foi importado no n8n (confirmado
+por ele). Corrigido também o bug do deal preso achado ontem no `espelho_rd_edge`.
+
+**Causa raiz do `duplicate key value violates unique constraint
+"ux_deal_eventos_perda_por_dia"`:** o `INSERT` de `tipo_evento='perda'` em
+`processar_deal_evento` só tinha `ON CONFLICT` pro índice de timestamp exato
+(`id_deal, tipo_evento, id_etapa, data_evento`). Existe um **segundo** índice
+único, `ux_deal_eventos_perda_por_dia` (parcial, por `id_deal` + dia
+calendário em `America/Sao_Paulo`, só `WHERE tipo_evento='perda'`) — e
+Postgres só aceita 1 alvo de conflito por `INSERT`. Deal perdido 2x no mesmo
+dia (reaberto e perdido de novo, ou como no caso real, uma tentativa de sync
+que colide com um evento de meses atrás no mesmo dia calendário) faz o
+segundo insert estourar em vez de ser ignorado — e como a função inteira
+falha, **o `UPDATE deal_snapshot` do fim nunca roda**, deixando o snapshot
+travado no estado antigo pra sempre, não só o evento.
+
+Caso real: `6a77d95d266e710001049644` — RD diz `win=false` desde 11/08, mas
+`deal_snapshot.status` ficou preso em `'ongoing'` porque toda tentativa de
+sync (várias, incluindo pelo `espelho_rd_edge` recém-ligado) morria na
+segunda inserção de `'perda'` (já existia 1 evento de perda naquele mesmo
+dia, via webhook). Confirmado com `select tipo_evento, data_evento,
+(data_evento at time zone 'America/Sao_Paulo')::date from deal_eventos where
+id_deal=... and tipo_evento='perda'` — 1 evento só, mesmo dia do `updated_at`
+do RD.
+
+**Fix:** envolvido só esse `INSERT` num bloco `BEGIN...EXCEPTION WHEN
+unique_violation THEN...END` — não duplica o evento, mas ainda marca
+`gerou_perda := true` (pra `registrar_fechamento` do caller seguir sendo
+chamado) e, principalmente, **deixa a função continuar até o fim**, então o
+snapshot atualiza. `CREATE OR REPLACE FUNCTION`, aplicado direto — resto da
+função idêntico.
+
+Testado chamando a RPC direto com os dados reais desse deal: sem erro,
+`gerou_perda: true`, `deal_snapshot.status` virou `'lost'` corretamente, e
+`deal_eventos` continua com só 1 linha de `'perda'` (não duplicou). Deal
+liberado — não vai mais aparecer como falha nos próximos ciclos do
+`espelho_rd_edge`.
+
+**`docs/scripts/espelhar_rd.py` ganhou prompt interativo pras 3 credenciais**
+(token do RD, URL e service key do Supabase), por pedido do Junior — ele
+achou mais fácil e mais seguro que `export` (que deixa o valor salvo no
+histórico do shell, `.zsh_history`/`.bash_history`). `getpass.getpass()`,
+sem eco na tela, nada gravado em arquivo. Se as variáveis de ambiente já
+estiverem definidas (uso em automação/CI), o script não pergunta — só
+prompta o que estiver faltando. Testado com stdin simulado, os 3 valores
+foram capturados certos.
+
+Ver [[espelho-rd-edge-function-modo-observe]].
+
+### 2026-09-01 — wf_6 corrigido (paginação, status normalizado, payload); achado erro recorrente no espelho live
+Checagem de saúde do `espelho_rd_edge` (ligado ontem): backlog caiu de 5.772
+para 5.051 durante a noite, maioria dos ciclos `success`. **Achado 1 erro
+recorrente:** deal `6a77d95d266e710001049644` falha toda tentativa com
+`duplicate key value violates unique constraint "ux_deal_eventos_perda_por_dia"`
+— é o bug já registrado na seção 8 (`processar_deal_evento` sem tratamento
+pra perda duplicada no mesmo dia). Não trava o resto do lote, só esse deal
+fica perpetuamente sem sincronizar. Ainda não corrigido — Junior avisado,
+decisão de prioridade em aberto.
+
+**wf_6 corrigido** (`docs/scripts/n8n/wf_6-corrigido.json`, entregue pro
+Junior importar no n8n — sem acesso direto à API do n8n nesta sessão). Três
+bugs do diagnóstico de 31/08, todos resolvidos:
+1. Lia `deal_snapshot` sem paginar — Supabase cortava em 1.000 de ~8.300
+   linhas, 88% da base nunca conferida. Agora pagina em blocos de 1.000.
+2. `status` derivado da listagem do RD (`open`/`lost`/`won` via `win`)
+   comparado cru contra o `status` do banco (`open`/`ongoing`/`won`/`lost`) —
+   `open` × `ongoing` são o mesmo estado e geravam ~174 alarmes falsos por
+   dia. Agora normaliza os dois pra `em_andamento` antes de comparar, mesma
+   `classeStatus()` da Edge Function.
+3. Nunca comparava `payload` — por isso nunca pegaria o caso original de
+   Fonte Macro. Agora compara campo a campo, mas grava **1 linha por deal**
+   em `divergencias_sync` (lista os campos divergentes), não 1 por campo —
+   pra não inflar a tabela com milhares de linhas por causa do backlog que
+   o `espelho_rd_edge` já está corrigindo sozinho.
+
+Sintaxe validada com `node --check` (função async envolvendo o código, mesmo
+padrão de execução do n8n). Lógica é a mesma já testada ao vivo na Edge
+Function — `comparar()`/`norm()`/`classeStatus()` idênticas, só reescritas
+pro runtime do n8n. Não aplicado em produção nesta sessão — depende do
+Junior importar o JSON.
+
+**Nota esperada:** nos primeiros ~2 dias (enquanto o backlog do
+`espelho_rd_edge` não zera), o wf_6 corrigido vai reportar os MESMOS ~5 mil
+deals como divergentes de payload todo dia — é o comportamento certo, some
+sozinho conforme o backlog é absorvido.
+
+Ver [[espelho-rd-edge-function-modo-observe]].
+
+### 2026-08-31 (3) — Modo live ligado: bug de memória achado e corrigido em produção
+Junior autorizou ligar o modo `live`. Primeira tentativa **quebrou** — achado,
+corrigido e revalidado na mesma sessão, documentado sem maquiagem.
+
+**O que aconteceu.** Ao trocar `espelho_rd_config.modo` pra `'live'`, o
+primeiro ciclo do `pg_cron` (21:45) travou com `WORKER_RESOURCE_LIMIT` (HTTP
+546) e **não escreveu nada** (confirmado: 0 eventos com
+`origem='api_espelho_edge'` antes da correção). O lock ficou preso — não é o
+`comPrazo`/`finally` que cobre esse caso, só o auto-release de 20 min do
+`deals_sync_tentar_lock`. Não esperei os 20 min: liberei manualmente e voltei
+`modo` pra `'observe'` na hora, pra não ficar tentando de novo e falhando em
+loop enquanto eu investigava.
+
+**Causa raiz.** As duas estruturas grandes da varredura (`rdDeals`, ~8.700
+objetos com até 90 campos cada; `snap`, ~8.300 do espelho) ficavam vivas na
+memória do worker durante **todo** o loop de escrita, porque a função só
+usava `.size` delas no retorno final — mas a referência inteira continuava
+presa até esse ponto, impedindo o coletor de lixo de liberar espaço bem na
+hora em que a escrita (GETs individuais ao RD, payload maior, mais lento)
+mais precisava dele.
+
+**Correção:** soltar as duas (`rdDeals.clear()`, `snap.clear()`) assim que
+`porCategoria`/`plano` são calculados, guardando só `.size` em variáveis
+primitivas (`rdTotal`, `snapTotal`) antes de entrar no loop de escrita.
+Também reduzido `max_escritas_por_execucao` de 150 pra **30**, de propósito
+conservador — evidência de que memória era a causa, não tempo, mas não custa
+começar devagar. Reimplantado (v7), testado de novo com `modo=live`: **66,5s,
+30 aplicados, 0 falhas, 59 eventos gerados**, todos com
+`origem='api_espelho_edge'`, log íntegro em `sync_execucao`.
+
+**Estado atual: `live`, rodando a cada 15 min, 30 por ciclo.** Restam ~5.772
+divergentes — no ritmo atual (30/15min), zera em ~2 dias sozinho. Se quiser
+mais rápido, `max_escritas_por_execucao` pode subir depois de ver alguns
+ciclos limpos seguidos (`select * from sync_execucao where
+job='espelho_rd_edge' order by iniciado_em desc`).
+
+**Duas ações de configuração (`espelho_rd_config`, `deals_sync_liberar_lock`)
+foram barradas pelo classificador de segurança do Claude Code** na primeira
+tentativa (troca pra `live`, e antes disso a gravação da `service_role_key`
+no Vault) — Junior liberou explicitamente as duas vezes. Reduzir
+`max_escritas_por_execucao` e voltar `modo` pra `observe` (direção de menos
+risco) passaram sem bloqueio.
+
+Ver [[espelho-rd-edge-function-modo-observe]] (nome desatualizado agora que
+saiu do modo observe, mas o conteúdo sobre timeouts/concorrência continua
+valendo).
+
+### 2026-08-31 (2) — Espelho automático via Edge Function + pg_cron (modo observe)
+Continuação do item anterior. Junior pediu a reforma virar automática, não só o
+script de terminal — mas primeiro cobrou garantia de que não ia pesar o banco.
+
+**Diagnóstico prévio corrigido.** O pedido original ("voltou a perder eventos de
+troca de responsável/marca") tinha premissa parcialmente errada: os eventos
+continuam nascendo (`troca_responsavel`, `mudanca_marca` seguem até hoje em
+`deal_eventos`). O que quebrou foi o **autor**: `origem='webhook'` tinha
+responsável em 6.989/6.989 eventos (100%); `origem='api_sync'` (desde a migração
+de 17/08, ver [[ingestao-por-cron-sem-autor-de-etapa]]) só em 1.148/3.450 (33%),
+e `api_backfill_stage_history` em 0/1.162 — a API do RD não expõe quem moveu
+etapa. **Voltar o webhook não resolveria** o problema original (Fonte Macro):
+medido, eventos `mudanca_fonte_macro` com `origem='webhook'` só existem nos 2
+dias do backfill por PUT (14/08, 17/08); em dia normal é zero, porque o
+`crm_deal_updated` também não dispara em edição isolada de campo.
+
+**Arquitetura:** Edge Function `espelhar-rd` (`supabase/functions/espelhar-rd/`,
+Deno/TS) + `pg_cron` a cada 15 min via `pg_net`, mesmo padrão que o Marketing já
+usa desde 13/08. Mesma lógica de diff do `docs/scripts/espelhar_rd.py` (varre RD
+por `/deal_pipelines` + listagem paginada, compara contra `deal_snapshot`,
+reescreve pelas mesmas RPCs do `wf_5`) — os dois são irmãos, não vão divergir de
+propósito.
+
+**Dois bugs achados só em teste ao vivo, ambos corrigidos antes de agendar:**
+1. `fetch()` do Deno não tem timeout por padrão — uma chamada ao RD travou e
+   prendeu o worker por minutos (`deals_sync_state.running` preso). Corrigido com
+   `AbortSignal.timeout(15s)` por request + um prazo global (`Promise.race`,
+   130s) cobrindo qualquer chamada, não só as do RD.
+2. A listagem do RD leva **~6s por página** a partir da Edge Function (rede até
+   o RD mais longa daqui que do Mac ou do n8n — não é lentidão do RD em si,
+   confirmado repetindo a medição 3x). Sequencial (padrão do `wf_5`) levaria
+   ~4-5min pras 44 páginas, estourando qualquer orçamento. Resolvido buscando 6
+   páginas em paralelo (`Promise.allSettled`, só leitura, sem risco de escrita
+   dupla) — cai pra ~35-43s medidos com 8.721 deals reais.
+
+**Um WORKER_RESOURCE_LIMIT (HTTP 546) visto 1x** num teste de ponta a ponta
+(depois resolvido sozinho — reprodução limpa em 42s logo em seguida). Quando
+acontece, a plataforma mata o worker à força e o `finally` não roda — o lock
+fica preso até o **auto-release de 20min** já existente em
+`deals_sync_tentar_lock` (não é 100% coberto pelo `comPrazo`/`finally`, só o
+timeout do lock cobre esse caso). Documentado no código como limitação
+conhecida, não escondido.
+
+**Segurança de credencial:** a `service_role_key` foi pro Vault
+(`vault.create_secret`, nome `service_role_key`) — o Claude Code bloqueou a
+primeira tentativa pelo classificador de segurança automático (ação sensível),
+Junior liberou explicitamente antes da segunda tentativa. `invocar_espelho_rd()`
+(SQL, `security definer`) busca a chave do Vault em tempo de execução — ela
+**nunca aparece em texto plano** em `cron.job.command` nem em nenhum arquivo.
+`get_secret()` (RPC criada no item anterior) só é executável por `service_role`.
+
+**Estado atual: modo `observe`.** `espelho_rd_config.modo='observe'` — a cada
+15 min ela varre, compara e loga em `sync_execucao` (job
+`espelho_rd_edge`), mas **não escreve nada**. Rodando de verdade, mediu: 8.721
+deals no RD, 8.352 no espelho, **5.801 divergentes** (mesma ordem de grandeza do
+`espelhar_rd.py` medido no item anterior — 647 ausentes, 161 marca, 158 etapa,
+1.030 funil, 97 status, 5.153 payload). Trocar pra `live` é 1 UPDATE
+(`update espelho_rd_config set valor='live' where chave='modo'`), sem
+reimplantar nada — Junior decide quando, depois de revisar uns dias de logs em
+modo observe. Uma vez live, ela mesma vai gradualmente absorver o backlog
+histórico (capada em `max_escritas_por_execucao`, hoje 150/ciclo — ~14 ciclos
+pra zerar os 5.801), tornando o backfill manual opcional, não obrigatório.
+
+Não verificado na tela — mudança é 100% de banco/infra, sem tocar no dashboard.
+
+Ver [[rd-nao-bumpa-updated-at-em-campo-personalizado]].
+
+### 2026-08-31 — Espelho do RD parou de acompanhar campo personalizado; script de backfill
+Junior reportou 2 deals (`6a919da7336ff5002855e2b0`, `6a85e0f17d2dd70029c42354`)
+com Fonte Macro "Franqueado" preenchida no RD e "Sem Classificação" no dashboard.
+
+**Causa raiz: o RD não altera `updated_at` quando um campo personalizado é
+editado.** Provado: o `deal_snapshot` gravou Fonte Macro vazia em 28/08 14:41 e
+19/08 17:01 UTC — carimbos idênticos ao `updated_at` do RD, que não se moveu
+depois da edição. Como o `wf_5` só lista deals com `updated_at > watermark`,
+esses deals ficaram abaixo da marca e nunca mais seriam olhados. Não é lag: o
+sync está saudável (3.405 execuções, zero falhas).
+
+**O webhook não resolveria.** Medido: eventos `mudanca_fonte_macro` com
+`origem='webhook'` só existem em 14/08 (134) e 17/08 (222) — os dias do backfill
+por PUT na API. Em dia normal, zero. O `crm_deal_updated` também não dispara em
+edição isolada de campo. Confirma [[ingestao-por-cron-sem-autor-de-etapa]]:
+não reativar o webhook.
+
+**O que o Junior sentiu ("perdi os eventos de troca de responsável/marca") é
+outra coisa, e é real:** os eventos continuam nascendo, mas perderam o autor.
+`origem='webhook'` tinha responsável em 6.989/6.989 (100%); `origem='api_sync'`
+tem em 1.148/3.450 (33%), e `api_backfill_stage_history` em 0/1.162 — porque
+`registrar_stage_history` não tem parâmetro de responsável. Some a isso que
+eventos de campo hoje só nascem de carona em outra mudança.
+
+**Escopo medido** (8.717 deals do RD × 8.348 do espelho, campo a campo):
+5.802 deals divergentes — 1.030 de funil, 647 nunca ingeridos, 161 de marca,
+158 de etapa, 97 de status, 5.154 com algum campo do payload. Impacto na Visão
+Macro: **+916 deals entram** (512 Prospecção Ativa, 211 Odonto Scale, 170 SDR,
+23 Closer; 711 Oral Unic; 5 são ganhos), **131 saem** (movidos para Lisô Laser
+no RD), e **170 deals visíveis hoje já foram apagados no RD**.
+
+**Entregue:** `docs/scripts/espelhar_rd.py` — varre o RD inteiro (44 páginas,
+a listagem já traz os campos personalizados), resolve o funil por um mapa
+etapa→funil de `/deal_pipelines` (1 request; conferido 8/8 contra o GET
+individual), compara contra `deal_snapshot` e reescreve só o divergente pelas
+MESMAS RPCs do `wf_5`, com `p_origem='api_espelho'`. Dry-run por padrão, segura
+o lock do `wf_5` (90 min) para não competir, libera sem avançar o watermark,
+faz backup do estado anterior em JSONL e tem checkpoint retomável. Nunca apaga:
+deals sumidos do RD saem em `saida/sumiram_do_rd.csv` para revisão. Credenciais
+só por variável de ambiente — o repo é público.
+
+Aplicado até agora **apenas nos 2 deals do report**, como validação: 2 eventos
+`mudanca_fonte_macro` gerados, e confirmado em `vw_funil_vendas` após o refresh
+da matview. O backfill completo (~5.802 deals, ~1h) é decisão do Junior.
+
+**Bugs achados no `wf_6` (reconciliação), ainda não corrigidos:** lê
+`deal_snapshot` sem paginar e o PostgREST corta em 1.000 de 8.348 linhas (88% da
+base nunca é conferida); compara `status` da listagem (`open`, derivado de `win`)
+com o do snapshot (`ongoing`), gerando 174 falsos positivos; e não compara o
+`payload`, sendo cego justamente para campo personalizado. O `wf_8` grava alertas
+em `sync_dlq` com destino "PLACEHOLDER" — 2.130 acumulados desde 20/08, ninguém lê.
+
 
 ### 2026-08-31 — Sub-fonte: fallback pro campo do RD + opções cruzadas com os demais filtros
 Junior reportou dois problemas no filtro de Sub-fonte da Visão Macro: (1) em

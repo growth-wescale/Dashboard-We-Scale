@@ -578,8 +578,17 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
   const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
-  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[4].start, dataFim: dates.weeks[4].end })
-  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[3].start, dataFim: dates.weeks[3].end })
+
+  // Semanal do slide Odonto Legacy: mesma janela do MTD (7 dias corridos)
+  // pra ficar consistente. Junior 03/09: KPI weekly de semana fechada (dom-sáb)
+  // pegava 24-30/08, agora acompanha os últimos 7 dias como o MTD.
+  const weekCurStart   = isOdontoLegacy ? mtdCurStart   : dates.weeks[4].start
+  const weekCurEnd     = isOdontoLegacy ? mtdCurEnd     : dates.weeks[4].end
+  const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : dates.weeks[3].start
+  const weekPriorEnd   = isOdontoLegacy ? mtdPrevEnd    : dates.weeks[3].end
+
+  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: weekCurStart,   dataFim: weekCurEnd })
+  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
   const crmAllRes  = useVendasFunil({ marca: slide.marca })
   const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
   const { data: allLeads } = leadsAll
@@ -633,17 +642,28 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // mqlLeads kept for potential downstream use
 
   // ── Weekly computations ──────────────────────────────────────────────────────
-  const weeklyData = useMemo(() => dates.weeks.map(w => {
+  // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser últimos 7d e 7d anteriores.
+  const effectiveWeeks = useMemo(() => {
+    if (!isOdontoLegacy) return dates.weeks
+    const label7d = (start: string, end: string) => weekLabel(start, end)
+    return [
+      dates.weeks[0], dates.weeks[1], dates.weeks[2],
+      { start: weekPriorStart, end: weekPriorEnd, label: label7d(weekPriorStart, weekPriorEnd) },
+      { start: weekCurStart,   end: weekCurEnd,   label: label7d(weekCurStart,   weekCurEnd) },
+    ]
+  }, [isOdontoLegacy, dates.weeks, weekCurStart, weekCurEnd, weekPriorStart, weekPriorEnd])
+
+  const weeklyData = useMemo(() => effectiveWeeks.map(w => {
     const wMedia = activeMedia.filter(r => r.dia >= w.start && r.dia <= w.end)
     const wLeads = filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= w.start && l.dia <= w.end)))
     const invest = wMedia.reduce((s, r) => s + r.spend_brl, 0)
     const leads  = wLeads.length
     const mql    = wLeads.filter(isLeadMql).length
     return { invest, leads, mql, cpmql: mql > 0 ? invest / mql : 0 }
-  }), [activeMedia, allLeads, dates.weeks, filterLeads])
+  }), [activeMedia, allLeads, effectiveWeeks, filterLeads])
 
-  const funnelWeek  = useMemo(() => buildFunnel(crmWeek, dates.weeks[4].start, dates.weeks[4].end), [crmWeek, dates.weeks])
-  const funnelPrior = useMemo(() => buildFunnel(crmPrior, dates.weeks[3].start, dates.weeks[3].end), [crmPrior, dates.weeks])
+  const funnelWeek  = useMemo(() => buildFunnel(crmWeek,  weekCurStart,   weekCurEnd),   [crmWeek,  weekCurStart,   weekCurEnd])
+  const funnelPrior = useMemo(() => buildFunnel(crmPrior, weekPriorStart, weekPriorEnd), [crmPrior, weekPriorStart, weekPriorEnd])
 
   // ── MTD computations ─────────────────────────────────────────────────────────
   const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart))), [allLeads, mtdCurStart, filterLeads])
@@ -887,7 +907,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-            {dates.recentWeekLabel} · visão executiva de performance e CRM
+            {effectiveWeeks[4].label} · visão executiva de performance e CRM
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
@@ -941,7 +961,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            Semana · {dates.recentWeekLabel}
+            Semana · {effectiveWeeks[4].label}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -1011,7 +1031,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           <div style={{ height: 180 }}>
             <WeeklyBarChart
               values={weeklyData.map(w => w.mql)}
-              labels={dates.weeks.map(w => w.label)}
+              labels={effectiveWeeks.map(w => w.label)}
               accent={acc}
             />
           </div>

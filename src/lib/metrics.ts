@@ -405,6 +405,27 @@ const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, string>> = {
   'Reunião Agendada SQL': '69b1badfe1def700137f1b89', // Closer
 }
 
+/**
+ * Etapa canônica CORRENTE de um deal, para o modo "Funil Atual".
+ *
+ * Vai além de `resolveStage(etapa_funil)`: quando a etapa tem regra de funil
+ * obrigatório (hoje só "Reunião Agendada SQL", que vale apenas no funil do
+ * Closer — a mesma etapa existe no SDR e o handoff duplicaria a contagem),
+ * o deal só conta nela se `id_etapa_atual` (etapa corrente no RD) for a do
+ * Closer. Um deal parado na "Reunião Agendada SQL" do SDR resolve para
+ * `null` e não entra nessa etapa do funil macro — mesma regra que
+ * `eventsInStage` aplica no histórico de eventos.
+ */
+export function currentStage(
+  row: Pick<FunnelRow, 'etapa_funil' | 'id_etapa_atual'>,
+): StageKey | null {
+  const stage = resolveStage(row.etapa_funil)
+  if (!stage) return null
+  const idObrigatorio = STAGE_ID_OBRIGATORIO[stage]
+  if (idObrigatorio && row.id_etapa_atual !== idObrigatorio) return null
+  return stage
+}
+
 export interface EventCountOptions {
   extra?: (e: FunnelEventRow) => boolean
   /** Safra: quando em modo coorte, conta só eventos destes deals. */
@@ -490,7 +511,7 @@ export function dealsInStage(
 
   if (modo === 'atual') {
     return scoped
-      .filter(r => r.eh_ciclo_atual && r.status_atual === 'Em andamento' && resolveStage(r.etapa_funil) === stage)
+      .filter(r => r.eh_ciclo_atual && r.status_atual === 'Em andamento' && currentStage(r) === stage)
       .map(row => ({ row, dataEtapa: row[STAGE_DATE_FIELD[stage]] }))
   }
 

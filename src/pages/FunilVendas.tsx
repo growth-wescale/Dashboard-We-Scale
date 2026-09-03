@@ -24,7 +24,7 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import {
   STAGE_DATE_FIELD, STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
-  countStageEvents, dealsInStage, groupRepeatedDeals, isInWindow, isSale, repeatedDealsInStage, resolveStage,
+  countStageEvents, currentStage, dealsInStage, groupRepeatedDeals, isInWindow, isSale, repeatedDealsInStage, resolveStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
@@ -562,7 +562,9 @@ export function FunilVendas() {
 
     for (const r of scoped) {
       if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') continue
-      const etapa = resolveStage(r.etapa_funil)
+      // currentStage (não resolveStage) para "Reunião Agendada SQL" contar
+      // só no funil do Closer — o SDR tem a etapa de mesmo nome.
+      const etapa = currentStage(r)
       if (!etapa) continue
 
       const bucket = porStageKey.get(etapa) ?? { deals: 0, etapaDias: [], andamentoDias: [] }

@@ -31,6 +31,13 @@ export interface FunnelRow {
   origem_comercial: OrigemComercial | null
   /** Etapa crua do RD; precisa passar por resolveStage() antes de contar. */
   etapa_funil: string | null
+  /**
+   * Id da etapa CORRENTE do deal no RD (de `deal_snapshot.id_etapa`).
+   * `etapa_funil` só carrega o nome, e "Reunião Agendada SQL" existe com o
+   * mesmo nome no funil do SDR e no do Closer — o modo "Funil Atual" usa este
+   * id para aplicar a mesma regra de funil obrigatório que os modos de evento.
+   */
+  id_etapa_atual?: string | null
   status_atual: 'Em andamento' | 'Ganho' | 'Perdido' | 'Excluído' | null
   /** Nome da negociação no RD — usado no popup de deals por etapa. */
   nome_negociacao: string | null

@@ -8,6 +8,7 @@ import {
   countSales,
   countStage,
   countStageEvents,
+  currentStage,
   dealKey,
   dealsInStage,
   groupRepeatedDeals,
@@ -164,6 +165,28 @@ describe('etapas', () => {
   it('devolve null para rótulo desconhecido', () => {
     expect(resolveStage('Etapa Que Não Existe')).toBeNull()
     expect(resolveStage(null)).toBeNull()
+  })
+})
+
+describe('currentStage', () => {
+  it('mantém as etapas sem regra de funil obrigatório', () => {
+    expect(currentStage({ etapa_funil: 'Negociação SAL (7 dias)', id_etapa_atual: 'qualquer' })).toBe('SAL')
+    expect(currentStage({ etapa_funil: 'Novo MQL', id_etapa_atual: null })).toBe('MQL')
+  })
+
+  it('"Reunião Agendada SQL" só resolve quando a etapa corrente é a do Closer', () => {
+    expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89' })).toBe('Reunião Agendada SQL')
+    // funil do SDR — mesmo nome de etapa, id diferente
+    expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69380917e00ed10014daaa68' })).toBeNull()
+    // alias "Reunião Agendada" (Odonto Scale) também não conta
+    expect(currentStage({ etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53' })).toBeNull()
+    // sem id da etapa corrente não dá pra afirmar que é o Closer
+    expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: null })).toBeNull()
+  })
+
+  it('devolve null para etapa desconhecida', () => {
+    expect(currentStage({ etapa_funil: 'Etapa Que Não Existe', id_etapa_atual: 'x' })).toBeNull()
+    expect(currentStage({ etapa_funil: null, id_etapa_atual: 'x' })).toBeNull()
   })
 })
 
@@ -542,6 +565,16 @@ describe('dealsInStage', () => {
     ]
     const out = dealsInStage(scoped, [], 'SAL', AGOSTO, modes(), 'atual')
     expect(out.map(d => d.row.id_lead)).toEqual(['a'])
+  })
+
+  it('modo Atual: "Reunião Agendada SQL" só conta no funil do Closer', () => {
+    const scoped = [
+      row({ id_lead: 'closer', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89' }),
+      row({ id_lead: 'sdr', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69380917e00ed10014daaa68' }),
+      row({ id_lead: 'odonto', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53' }),
+    ]
+    const out = dealsInStage(scoped, [], 'Reunião Agendada SQL', AGOSTO, modes(), 'atual')
+    expect(out.map(d => d.row.id_lead)).toEqual(['closer'])
   })
 
   it('modo Performance cruza o evento de volta com a linha completa do deal', () => {

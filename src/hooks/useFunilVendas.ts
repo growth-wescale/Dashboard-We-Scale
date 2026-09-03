@@ -25,7 +25,7 @@ const PAGE_SIZE = 1000
 /** Colunas explícitas: `select('*')` traria payload à toa e esconde quebras. */
 const COLS = [
   'id_lead', 'ciclo', 'eh_reciclagem', 'eh_ciclo_atual',
-  'marca', 'nome_funil', 'etapa_funil', 'status_atual',
+  'marca', 'nome_funil', 'etapa_funil', 'id_etapa_atual', 'status_atual',
   'nome_sdr', 'nome_closer', 'nome_negociacao',
   'fonte_macro', 'sub_fonte', 'sub_fonte_crm', 'utm_source', 'utm_medium', 'utm_campaign',
   'valor_contrato', 'quantidade_unidades', 'motivo_perda',

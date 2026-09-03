@@ -5,6 +5,7 @@ import type { ConfigEtapa, DiaSemana, EtapaMeta, Semana } from '@/lib/metasEngin
 import { PassoSemanas } from '@/components/metas/PassoSemanas'
 import { PassoTaxas } from '@/components/metas/PassoTaxas'
 import { PassoFunilMarca } from '@/components/metas/PassoFunilMarca'
+import { PassoPessoas } from '@/components/metas/PassoPessoas'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -132,13 +133,22 @@ export function HubMetas() {
         />
       )}
 
+      {!loading && passo === 4 && rascunhoAtual && (
+        <PassoPessoas
+          marcas={rascunhoAtual.marcas}
+          onMudarPessoas={(marca, pessoas) => {
+            setRascunho({ ...rascunhoAtual, marcas: rascunhoAtual.marcas.map(m => m.marca !== marca ? m : { ...m, pessoas }) })
+          }}
+        />
+      )}
+
       {!loading && passo > 0 && !rascunhoAtual && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
           Volte ao Passo 0 e abra o mês (copiando do anterior ou começando vazio) antes de continuar.
         </div>
       )}
 
-      {/* Passos 4–6 chegam nas Tasks 14–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
+      {/* Passos 5–6 chegam nas Tasks 15–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
     </div>
   )
 }

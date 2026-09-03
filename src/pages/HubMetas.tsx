@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useMetaMes, type EstadoMes, type EstadoMesMarca, type DistribuicaoSemanalItem } from '@/hooks/useMetaMes'
-import type { DiaSemana, Semana } from '@/lib/metasEngine'
+import type { ConfigEtapa, DiaSemana, EtapaMeta, Semana } from '@/lib/metasEngine'
 import { PassoSemanas } from '@/components/metas/PassoSemanas'
 import { PassoTaxas } from '@/components/metas/PassoTaxas'
+import { PassoFunilMarca } from '@/components/metas/PassoFunilMarca'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -111,13 +112,33 @@ export function HubMetas() {
         />
       )}
 
+      {!loading && passo === 3 && rascunhoAtual && (
+        <PassoFunilMarca
+          marcas={rascunhoAtual.marcas}
+          onMudarEtapa={(marca: string, etapa: EtapaMeta, config: Partial<ConfigEtapa>) => {
+            setRascunho({
+              ...rascunhoAtual,
+              marcas: rascunhoAtual.marcas.map(m => m.marca !== marca ? m : {
+                ...m,
+                etapas: m.etapas.some(e => e.etapa === etapa)
+                  ? m.etapas.map(e => e.etapa !== etapa ? e : { ...e, ...config })
+                  : [...m.etapas, { etapa, modo: 'desligado', ...config } as ConfigEtapa],
+              }),
+            })
+          }}
+          onMudarTicket={(marca: string, ticket: number) => {
+            setRascunho({ ...rascunhoAtual, marcas: rascunhoAtual.marcas.map(m => m.marca !== marca ? m : { ...m, ticketMedio: ticket }) })
+          }}
+        />
+      )}
+
       {!loading && passo > 0 && !rascunhoAtual && (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
           Volte ao Passo 0 e abra o mês (copiando do anterior ou começando vazio) antes de continuar.
         </div>
       )}
 
-      {/* Passos 3–6 chegam nas Tasks 13–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
+      {/* Passos 4–6 chegam nas Tasks 14–16, todos recebendo `rascunhoAtual` e `setRascunho` */}
     </div>
   )
 }

@@ -123,6 +123,32 @@ com 25 / R$ 981.385.
   Performance Detalhada, Visão Macro e Campanha de Metas continuam lendo
   dela sem mudança nenhuma.
 
+## 7.5 Meta semanal por Closer — nova tabela real, fora do Hub
+
+Antes de pausar de novo, o Junior pediu a meta semanal (achada na aba
+Closer da planilha, "FECHAMENTO POR SEMANA") pra viabilizar Pole Position
+e Troféu Senna sem esperar o Hub. Criada `meta_closer_semana` (mes_
+referencia, nome_colaborador, semana_numero 1-5, meta_qtd_vendas), RLS
+SELECT-only, dado real (não mock):
+
+| Closer | Sem.1 | Sem.2 | Sem.3 | Sem.4 | Total |
+|---|---|---|---|---|---|
+| Douglas | 1 | 2 | 1 | 1 | 5 |
+| Jéssica | 1 | 2 | 1 | 2 | 6 |
+| Bruna | 1 | 1 | 2 | 2 | 6 |
+| Aurélio Briano | 1 | 2 | 3 | 2 | 8 |
+
+Jéssica e Bruna já refletem as correções da seção 5 (Eletrovias 6, Lisô
+Laser movido pra Bruna) — a quebra semanal delas é nova, veio direto do
+Junior, não da planilha original (que só tinha os totais antigos).
+
+**O que NÃO foi feito ainda**: nenhuma tela lê essa tabela — ela só existe
+no banco. A pontuação real da Corrida de Performance (Volume × Velocidade,
+Pole Position calculado de verdade, etc.) continua pendente — o Junior
+pediu pra voltar pro Hub antes de construir isso. Ver
+`docs/corrida-de-performance-logica.md` pra lógica completa quando for
+retomar.
+
 ## 7. Coisa nova que aconteceu enquanto o Hub estava pausado (fora deste plano)
 
 - **"Metas por Marca"** (seção da Campanha de Metas) foi corrigida e já

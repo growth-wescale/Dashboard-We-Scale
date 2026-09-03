@@ -212,7 +212,11 @@ function fmtBRLshort(v: number) {
 // For CP metrics: lower is better → invert color
 function deltaLabel(cur: number, prev: number, lowerIsBetter = false) {
   if (prev === 0 && cur === 0) return { txt: '—', col: 'var(--ws-text-secondary)' }
-  if (prev === 0) return { txt: `+${cur}`, col: 'var(--status-positivo)' }
+  if (prev === 0) {
+    // Se cur é float (CP-MQL, invest), arredonda; se inteiro (MQL, SQL), mostra direto.
+    const rounded = Number.isInteger(cur) ? cur : Math.round(cur)
+    return { txt: `+${rounded}`, col: lowerIsBetter ? 'var(--status-risco)' : 'var(--status-positivo)' }
+  }
   const p = ((cur - prev) / prev) * 100
   const up = p >= 0
   const positive = lowerIsBetter ? !up : up
@@ -310,17 +314,19 @@ function SparkLine({ values, accent }: { values: number[]; accent: string }) {
   )
 }
 
-interface MtdItem { label: string; cur: number; prev: number }
+interface MtdItem { label: string; cur: number; prev: number; ref?: number; refLabel?: string }
 
 function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
   // Extra PAD_T so delta label (y=PAD_T-12) and bar value (y=PAD_T at max) never overlap
   const VW = 300, VH = 200, PAD_T = 52, PAD_B = 24
   const n = items.length
-  const max = Math.max(...items.flatMap(it => [it.cur, it.prev]), 1)
+  const hasRef = items.some(it => it.ref !== undefined)
+  const max = Math.max(...items.flatMap(it => [it.cur, it.prev, it.ref ?? 0]), 1)
   const chartH = VH - PAD_T - PAD_B
   const groupW = VW / n
-  const bW = groupW * 0.30
-  const gap = groupW * 0.06
+  const bW = hasRef ? groupW * 0.22 : groupW * 0.30
+  const gap = groupW * 0.04
+  const refLabel = items.find(it => it.refLabel)?.refLabel ?? 'Referência'
 
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%"
@@ -330,23 +336,39 @@ function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
       <text x={20} y={13} fontSize={10} fill="#64748b">Mês anterior</text>
       <rect x={90} y={4} width={10} height={10} fill={accent} rx={2} />
       <text x={104} y={13} fontSize={10} fill="#64748b">Mês atual</text>
+      {hasRef && (<>
+        <rect x={174} y={4} width={10} height={10} fill="#94A3B8" rx={2} opacity={0.5} />
+        <text x={188} y={13} fontSize={10} fill="#64748b">{refLabel}</text>
+      </>)}
 
       {items.map((it, gi) => {
         const cx = groupW * gi + groupW / 2
-        const curH = Math.max(3, (it.cur / max) * chartH)
+        const curH  = Math.max(3, (it.cur  / max) * chartH)
         const prevH = Math.max(3, (it.prev / max) * chartH)
-        const prevX = cx - bW - gap / 2
-        const curX = cx + gap / 2
+        const refH  = it.ref !== undefined ? Math.max(3, (it.ref / max) * chartH) : 0
+        const nBars = it.ref !== undefined ? 3 : 2
+        const totalW = bW * nBars + gap * (nBars - 1)
+        const startX = cx - totalW / 2
+        const prevX = startX
+        const curX  = startX + bW + gap
+        const refX  = startX + (bW + gap) * 2
         const delta = deltaLabel(it.cur, it.prev)
         return (
           <g key={gi}>
             <rect x={prevX} y={PAD_T + chartH - prevH} width={bW} height={prevH} fill="#CBD5E1" rx={2} />
             <rect x={curX}  y={PAD_T + chartH - curH}  width={bW} height={curH}  fill={accent}   rx={2} />
+            {it.ref !== undefined && (
+              <rect x={refX} y={PAD_T + chartH - refH} width={bW} height={refH} fill="#94A3B8" rx={2} opacity={0.5} />
+            )}
             {/* Values above bars */}
             <text x={prevX + bW/2} y={PAD_T + chartH - prevH - 4}
-              textAnchor="middle" fontSize={12} fill="#94a3b8">{it.prev}</text>
+              textAnchor="middle" fontSize={11} fill="#94a3b8">{it.prev}</text>
             <text x={curX + bW/2}  y={PAD_T + chartH - curH - 4}
-              textAnchor="middle" fontSize={13} fontWeight={700} fill={accent}>{it.cur}</text>
+              textAnchor="middle" fontSize={12} fontWeight={700} fill={accent}>{it.cur}</text>
+            {it.ref !== undefined && (
+              <text x={refX + bW/2} y={PAD_T + chartH - refH - 4}
+                textAnchor="middle" fontSize={11} fill="#64748b">{it.ref}</text>
+            )}
             {/* Delta — sits clearly above both bars with extra PAD_T */}
             <text x={cx} y={PAD_T - 14} textAnchor="middle" fontSize={13} fontWeight={700} fill={delta.col}>
               {delta.txt}
@@ -729,10 +751,24 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           : c)
     : kpiCardsAll
 
+  // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
+  // (não só até dia N como o MTD-vs-MTD normal) usando allLeads que já cobre
+  // 5 semanas. Útil quando MTD ant tem 0 leads mas o mês fechado teve N MQL.
+  const [prevMonthStart, prevMonthEnd] = useMemo(() => {
+    const [y, m] = compareRange.key.split('-').map(Number)
+    return [isoDate(new Date(y, m - 1, 1)), isoDate(new Date(y, m, 0))]
+  }, [compareRange.key])
+  const chartPrevFullMonthMql = useMemo(
+    () => isOdontoLegacy
+      ? filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= prevMonthStart && l.dia <= prevMonthEnd))).filter(isLeadMql).length
+      : 0,
+    [isOdontoLegacy, allLeads, prevMonthStart, prevMonthEnd, filterLeads],
+  )
+
   // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
   // Odonto Legacy: foco em receita/qualidade, sem SQL/SAL (removidos do funil)
   const mtdItems: MtdItem[] = isOdontoLegacy
-    ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql }]
+    ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql, ref: chartPrevFullMonthMql, refLabel: `${compareRange.label} fechado` }]
     : [
         { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
         { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },

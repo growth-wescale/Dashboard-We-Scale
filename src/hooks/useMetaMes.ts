@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import type { ConfigEtapa, DiaSemana, EtapaMeta, PessoaComFuncao, Semana } from '@/lib/metasEngine'
 
@@ -84,32 +84,35 @@ export function useMetaMes(mesReferencia: string) {
   const [estado, setEstado] = useState<EstadoMes | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const fetchAll = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true)
-    setError(null)
-    const { estado: e, error: err } = await buscar(mesReferencia)
-    if (err) { setError(err); if (showLoading) setLoading(false); return }
-    setEstado(e)
-    if (showLoading) setLoading(false)
-  }, [mesReferencia])
+  const runRef = useRef<(showLoading: boolean) => Promise<void>>(null!)
 
   useEffect(() => {
     let cancelled = false
-    const run = (showLoading: boolean) => { if (!cancelled) void fetchAll(showLoading) }
 
-    run(true)
+    async function run(showLoading: boolean) {
+      if (showLoading) setLoading(true)
+      setError(null)
+      const { estado: e, error: err } = await buscar(mesReferencia)
+      if (cancelled) return
+      if (err) { setError(err); setLoading(false); return }
+      setEstado(e)
+      setLoading(false)
+    }
 
-    const handleRefresh = () => { if (!cancelled) run(false) }
+    runRef.current = run
+
+    run(true).catch(() => {})
+
+    const handleRefresh = () => { if (!cancelled) void run(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) run(false) }, 60_000)
+    const timer = setInterval(() => { if (!cancelled) void run(false) }, 60_000)
 
     return () => {
       cancelled = true
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [fetchAll])
+  }, [mesReferencia])
 
-  return { estado, loading, error, reload: () => void fetchAll(false) }
+  return { estado, loading, error, reload: () => { void runRef.current?.(false) } }
 }

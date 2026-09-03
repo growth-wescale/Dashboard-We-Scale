@@ -320,6 +320,73 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-03 — Sessão marathon Odonto Legacy: backfill 198 leads, /okrs lê xlsx, SOP com janela 7d
+
+Sessão longa focada em Odonto Legacy + /okrs. 8 PRs mergeados (#58-#64) +
+mudanças diretas na base pra corrigir gap de captura.
+
+**Backfill Odonto Legacy (base, sem PR):**
+- **91 leads Meta Instant Form** recuperados via CSV — descoberto que campanhas
+  `[ODL] LEADS I SITE LEGACY` reportavam ~30 leads/dia no Meta mas 0 chegavam
+  na base (ver `project_meta_instant_form_bug.md`). Todos inseridos como
+  `marca=Odonto Scale`, `formulario=odontolegacy_meta_leadad`, com `dados_extras.origem_ingest`
+  pra rastreio. Junior decidiu datar os de agosto como 02/09 (só 2 de 01/09
+  mantiveram data original) — critério: "leads recuperados hoje viram
+  novidade da semana".
+- **107 leads Comunidade** inseridos (form `comunidade_multistep`, marca
+  Odonto Scale). Dedup por email mantendo mais recente.
+- **Critério MQL Consultoria (Junior):** dentista OU não-dentista dono/sócio.
+  Aplicado retroativamente: dos 91 Meta Instant → 25 MQL/66 LEAD. Dos 76 site
+  odontoscale_multistep antigos → 47 MQL/29 LEAD (29 "Gestor(a)" viraram LEAD
+  usando `motivo_franquia` como proxy).
+- **Comunidade não classifica MQL** — depois de eu classificar os 107, Junior
+  esclareceu que Comunidade é topo de funil, não conta MQL. Removi
+  `lead_type_original` dos 107. Só Consultoria (Legacy + site) mantém.
+
+**PR #61 · /okrs Vendas do semestre lê meta da xlsx:**
+- Nova constante `src/constants/metasVendaFranquia.ts` com meta 2026 inteiro
+  por marca × mês (6 marcas B2B), hardcoded da planilha `Meta - Venda de
+  Franquia.xlsx`. `useVendasSemestre` não lê mais `DB_Metas_Performance`
+  (isolamento — outras views seguem lendo do banco).
+- Removido toggle Fixa × Acumulada — visão única. Setembro passa a ter meta
+  cadastrada (antes vinha 0 do banco).
+
+**PR #62 · Vendas do semestre 4 linhas por célula:**
+- Layout novo: Meta un · R$ · Vendidos · Acum (meta acumulada com gap).
+- Fórmula acumulado (Junior): `meta_acum(M) = meta(M) + max(0, meta_acum(M-1) - vendas(M-1))`.
+  Gap rola pra frente enquanto positivo, zera quando supera.
+- **Deploy do #62 falhou** (secret SSH GitHub Actions transiente). Resolveu
+  quando #63 fez merge — deploy do #63 carregou main inteira incluindo #62.
+
+**PR #63 + #64 · SOP Odonto Legacy usa janela 7d:**
+- Slide Odonto Legacy tinha MTD Set com só 3 dias (distorcia leitura).
+  Override `mtdCurStart/End` pra últimos 7 dias corridos + prev 7d anteriores.
+- Também alinhado o weekly (era "última semana fechada dom-sáb", agora mesma
+  janela 7d que o MTD). `effectiveWeeks[3]/[4]` sobrescrevem `dates.weeks[3]/[4]`
+  só pra Odonto Legacy. Gráfico de 5 semanas fica mixed (3 primeiras dom-sáb,
+  2 últimas 7d).
+- Detalhes em `project_sop_odonto_legacy_janela_7d.md`.
+
+**PR #58, #59, #60 · SOP Odonto Legacy vários fixes:**
+- #58: reescreve slide com números do backfill (74 MQL semana, R$ 3.699 invest)
+  — depois teve que ser corrigido pelo #59 quando decisão MQL só Consultoria
+- #59: separa Consultoria vs Comunidade no KPI strip. Custo/membro passa a
+  vir do form comunidade_multistep (não divisão por 80 fixo).
+- #60: `deltaLabel` com `prev=0` mostrava float cru ("+58.266400000000004").
+  Agora arredonda com Math.round + respeita lowerIsBetter (colora vermelho
+  pra CP-MQL). Adicionada 3ª barra "Ago fechado" (referência) no gráfico
+  MTD-vs-MTD pra Odonto Legacy.
+
+**OKR CP-MQL atualizada (banco):**
+- `valor_atual` da OKR "Reduzir CP-MQL agregado em 20%" atualizado de
+  R$ 123,89 → R$ 164 direto na tabela `okrs_h2` (Marketing). Meta mantida
+  em R$ 99,11. Mock em `useOkrs.ts` também atualizado pra consistência.
+- Atingimento: ~60% (99.11 / 164).
+
+**PR #57 · docs sessão 01-03/set:**
+- CLAUDE.md atualizado com sessão anterior (01-02/set). Resolvi conflito com
+  entradas concorrentes de outras sessões.
+
 ### 2026-09-03 — Funil Atual: "Reunião Agendada SQL" só no funil do Closer
 Junior reportou (de novo) que no modo **Funil Atual** da Visão Macro a etapa
 "SQL · Reunião agendada" listava deals do funil do **SDR**, não só do Closer.

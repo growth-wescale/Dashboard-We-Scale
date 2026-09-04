@@ -7,6 +7,9 @@ import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FunilCompletoSection } from '@/components/ui/FunilCompletoSection'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
 import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
+import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
+import { TrapFunnel } from '@/components/ui/TrapFunnel'
+import type { FunnelStage } from '@/components/ui/TrapFunnel'
 import { SCard } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
@@ -20,8 +23,9 @@ import { buildPersonMetaRows, buildPersonSimplesRows } from '@/lib/metaBreakdown
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
-  rowsInStage, rowsInLoss,
+  rowsInStage, rowsInLoss, dealsInStage, STAGE_LABEL,
 } from '@/lib/metrics'
+import type { StageKey } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { businessMinutesBetween, formatBusinessDuration } from '@/lib/businessDuration'
 import { BRAND_LIST } from '@/constants/brands'
@@ -44,9 +48,16 @@ type MetaDrawerKey = 'sql' | 'rr' | 'sal' | 'cof' | 'fechamentos' | 'receita'
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
-const SDR_ACCENT    = '#EFA94A' // laranja
-const CLOSER_ACCENT = '#2ABCB5' // teal
-const GARGALO       = '#E4585B' // vermelho suave
+const SDR_ACCENT      = '#EFA94A' // laranja
+const SDR_ACCENT_DARK = '#8A5A1E' // laranja escuro — sombreado do funil (TrapFunnel)
+const CLOSER_ACCENT   = '#2ABCB5' // teal
+const GARGALO         = '#E4585B' // vermelho suave
+
+/** Funil da aba SDR: só as etapas que o SDR trabalha, de MQL até SAL —
+ *  Oportunidade·COF em diante é território do Closer. */
+const SDR_STAGES: StageKey[] = [
+  'MQL', 'Tentando Contato', 'Contato Efetivo', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL',
+]
 
 // ─── Abas SDR / Closer ─────────────────────────────────────────────────────
 // Separadas em abas (2026-09-04, pedido do Junior) — antes as duas seções
@@ -505,6 +516,21 @@ export function PerformanceVendas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [scoped, win, viewModes, primeiroMql])
 
+  // ── Funil SDR (MQL → SAL), clicável ─────────────────────────────────────────
+  const [clickedSdrStage, setClickedSdrStage] = useState<StageKey | null>(null)
+  const funilSdr: FunnelStage[] = useMemo(
+    () => SDR_STAGES.map(s => ({
+      key: s,
+      label: STAGE_LABEL[s],
+      value: countStageEvents(eventos, s, win, viewModes, evOpts),
+    })),
+    [eventos, win, viewModes, evOpts],
+  )
+  const dealsDoCliqueSdr = useMemo(
+    () => (clickedSdrStage ? dealsInStage(scoped, eventos, clickedSdrStage, win, viewModes, 'performance') : []),
+    [clickedSdrStage, scoped, eventos, win, viewModes],
+  )
+
   const convTopo = useMemo(() => [
     { label: 'MQL → Agendamento', val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
     { label: 'Agendamento → Reunião Realizada', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
@@ -597,6 +623,19 @@ export function PerformanceVendas() {
             <LeadtimeSection titulo="Entre etapas" itens={leadtimeEntreEtapas} />
             <LeadtimeSection titulo="Geral" itens={leadtimeGeral} />
           </div>
+
+          <div style={{ marginTop: 32 }}>
+            <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)', marginBottom: 4 }}>
+              Funil · MQL → SAL
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
+              Só as etapas do SDR — clique numa etapa pra ver os deals.
+            </div>
+            <SCard style={{ padding: '18px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+              <TrapFunnel stages={funilSdr} invest={0} accent={SDR_ACCENT} dark={SDR_ACCENT_DARK}
+                onStageClick={key => setClickedSdrStage(key as StageKey)} />
+            </SCard>
+          </div>
         </>
       )}
 
@@ -635,14 +674,24 @@ export function PerformanceVendas() {
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
           </div>
+
+          <FunilCompletoSection />
         </>
       )}
-
-      <FunilCompletoSection />
 
       <div style={{ marginTop: 40, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center' }}>
         {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>
       </div>
+
+      <StageDealsDrawer
+        open={clickedSdrStage !== null}
+        onClose={() => setClickedSdrStage(null)}
+        stage={clickedSdrStage}
+        stageLabel={clickedSdrStage ? STAGE_LABEL[clickedSdrStage] : ''}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        deals={dealsDoCliqueSdr}
+        accent={SDR_ACCENT}
+      />
 
       <MetaBreakdownDrawer
         open={metaDrawer === 'sql'} onClose={() => setMetaDrawer(null)}

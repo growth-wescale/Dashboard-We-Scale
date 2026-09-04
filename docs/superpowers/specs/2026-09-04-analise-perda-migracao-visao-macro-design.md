@@ -76,6 +76,7 @@ já usam (`status_atual === 'Perdido'`, ver CLAUDE.md §4 "Trava de venda").
 | Receita perdida | Novo KPI. Soma `valor_contrato` só dos perdidos com **`data_oportunidade` preenchida** (chegaram em Oportunidade ou depois) — evita contar como "receita perdida" um deal que nunca teve produto/valor real definido. |
 | Popups | **Praticamente em tudo**: as 2 KPIs escuras + Receita Perdida, cada linha de Motivo, Etapa, Responsável, Marca, e cada célula do heatmap. |
 | `motivosPerda.ts` | Resolver a fragilidade a acento/case **agora**, junto (pendência do CLAUDE.md §8). |
+| Filtro de SDR/Closer | **Herdar de graça.** Outra sessão já implementou e mergeou (`dc1ae63`, PR #72, 2026-09-04) os `MultiSelect` de SDR/Closer em `FilterBar`/`SharedFiltersContext`/`funilFilterOptions`, de propósito deixando Análise de Perda de fora pra essa migração absorver — ver seção 4.4. |
 
 ## 4. Camada de dados — trocar o stack
 
@@ -98,13 +99,13 @@ Mesma montagem de `FunilVendas.tsx`/`PerformanceVendas.tsx`, **sem**
 linha):
 
 ```ts
-const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
+const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
 // marcasSelecionadas / todasSelecionadas / scopeLabel / marcaFetch / marcasParaEscopo — copiado 1:1 de PerformanceVendas.tsx
 const { data: rows, error: rowsError } = useFunilVendas(origem, marcaFetch)
-const scope = buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes })
+const scope = buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers })
 const scoped = rows.filter(scope)
 const win = toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end })))
-const opcoes = funilFilterOptions({ rows, win, marcasParaEscopo, fontes, subFontes, cohort: viewModes.funnelView === 'cohort' })
+const opcoes = funilFilterOptions({ rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort: viewModes.funnelView === 'cohort' })
 const marcasDisponiveis = BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key)
 ```
 
@@ -115,13 +116,37 @@ const marcasDisponiveis = BRAND_LIST.filter(b => b.marca && opcoes.marcas.includ
   subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
   actions={<botão Exportar CSV do perdidos>} />
 <FilterBar marcasDisponiveis={marcasDisponiveis}
-  fontesDisponiveis={opcoes.fontes} subFontesDisponiveis={opcoes.subFontes} />
+  fontesDisponiveis={opcoes.fontes} subFontesDisponiveis={opcoes.subFontes}
+  sdrsDisponiveis={opcoes.sdrs} closersDisponiveis={opcoes.closers} />
 <QueryErrorBanner errors={[rowsError]} scope="Análise de Perda" />
 ```
 
 `subtitlePeriodo` segue a mesma regra da Visão Macro/Performance (multi-
 período → "N meses selecionados"; senão → "Ago 2026"). Rodapé da página:
 `Fonte: vw_funil_vendas` (troca a linha atual `vw_perdas + vw_funil_compat`).
+
+### 4.4 Filtro de SDR/Closer — herdado, não construído aqui
+
+Enquanto este spec era escrito, outra sessão implementou e mergeou (`dc1ae63`,
+PR #72, 2026-09-04) o filtro de SDR/Closer (dois `MultiSelect` na
+`FilterBar`, estado `sdrs`/`closers` em `SharedFiltersContext`, cruzamento
+em `funilFilterOptions`) pra Visão Macro e Performance, **deixando Análise de
+Perda de fora de propósito** — o commit deles registra: "outra sessão já está
+migrando essa aba... vai incluir o mesmo filtro como parte dessa migração".
+`buildScopeFilter` já aceitava `sdrs`/`closers` desde antes (só não estava
+exposto como filtro global). A wiring das seções 4.2/4.3 acima já reflete as
+assinaturas reais desse merge (`FilterBarProps.sdrsDisponiveis`/
+`closersDisponiveis`, `FunilFilterOptionsInput.sdrs`/`closers`) — nenhum
+trabalho extra de biblioteca compartilhada, só consumir o que já existe em
+`main`.
+
+**Não confundir com o toggle `respTab` (seção 7).** O filtro novo de
+SDR/Closer é por **pessoa** (nome específico, ex. "Xayane") e filtra o
+recorte inteiro da página, igual Marca/Fonte. `respTab` é por **camada**
+(papel SDR vs. Closer, não pessoa) e só existe dentro do card "Perda por
+responsável" — os dois convivem sem sobreposição: filtrar por SDR="Xayane" e
+depois olhar a aba "Todos" de `respTab` mostra só a Xayane; a aba "Closer" de
+`respTab` com esse mesmo filtro de pessoa ativo mostraria vazio (ela é SDR).
 
 ## 5. Módulo puro `src/lib/perdaRows.ts` (novo)
 

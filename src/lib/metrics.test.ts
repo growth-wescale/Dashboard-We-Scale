@@ -483,6 +483,14 @@ describe('buildScopeFilter', () => {
   it('combina critérios com AND', () => {
     expect(buildScopeFilter({ marcas: ['Inpot'], fontes: ['Resgate'] })(r)).toBe(false)
   })
+
+  it('filtra por SDR e Closer', () => {
+    const comCloser = row({ nome_sdr: 'Xayane', nome_closer: 'Douglas' })
+    expect(buildScopeFilter({ sdrs: ['Xayane'] })(comCloser)).toBe(true)
+    expect(buildScopeFilter({ sdrs: ['Thiago'] })(comCloser)).toBe(false)
+    expect(buildScopeFilter({ closers: ['Douglas'] })(comCloser)).toBe(true)
+    expect(buildScopeFilter({ closers: ['Jéssica'] })(comCloser)).toBe(false)
+  })
 })
 
 // ── Origem comercial: Inbound × Prospecção Ativa ───────────────────────────

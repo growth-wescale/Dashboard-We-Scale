@@ -243,7 +243,7 @@ function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: s
 // ─── Página ────────────────────────────────────────────────────────────────
 
 export function PerformanceVendas() {
-  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
 
   const marcasSelecionadas = useMemo(
     () => brandKeys.map(k => BRAND_LIST.find(b => b.key === k)).filter((b): b is BrandDef => !!b),
@@ -274,8 +274,8 @@ export function PerformanceVendas() {
   const { data: roster } = useRosterVendas()
 
   const scope = useMemo(
-    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes }),
-    [origem, marcasParaEscopo, fontes, subFontes],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
   )
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
   // `ranges` é a união exata dos períodos selecionados — nunca `range`.
@@ -291,10 +291,10 @@ export function PerformanceVendas() {
 
   const opcoes = useMemo(
     () => funilFilterOptions({
-      rows, win, marcasParaEscopo, fontes, subFontes,
+      rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers,
       cohort: viewModes.funnelView === 'cohort',
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, viewModes.funnelView],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),
@@ -436,6 +436,8 @@ export function PerformanceVendas() {
         marcasDisponiveis={marcasDisponiveis}
         fontesDisponiveis={opcoes.fontes}
         subFontesDisponiveis={opcoes.subFontes}
+        sdrsDisponiveis={opcoes.sdrs}
+        closersDisponiveis={opcoes.closers}
       />
 
       <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />

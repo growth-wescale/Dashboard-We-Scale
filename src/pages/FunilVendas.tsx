@@ -320,7 +320,7 @@ function DeltaSecundario({ delta, label }: { delta: number | null; label: string
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
+  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
@@ -408,13 +408,16 @@ export function FunilVendas() {
     [marcasSelecionadas],
   )
   const scope = useMemo(
-    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes }),
-    [origem, marcasParaEscopo, fontes, subFontes],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
   )
   // Mesmo escopo, mas sem restrição de marca — base pra quebrar KPIs por marca
   // no dropdown do card de Meta (funciona com o quanto de dado já veio: se
   // `marcaFetch` filtrou 1 marca no servidor, só tem aquela marca mesmo).
-  const scopeSemMarca = useMemo(() => buildScopeFilter({ origem, fontes, subFontes }), [origem, fontes, subFontes])
+  const scopeSemMarca = useMemo(
+    () => buildScopeFilter({ origem, fontes, subFontes, sdrs, closers }),
+    [origem, fontes, subFontes, sdrs, closers],
+  )
 
   // `ranges` é a união exata dos períodos selecionados (1 ou vários) — nunca
   // usar `range` (caixa delimitadora) aqui, senão multi-seleção não-contígua
@@ -464,14 +467,16 @@ export function FunilVendas() {
     () => funilFilterOptions({
       rows, win,
       marcasParaEscopo,
-      fontes, subFontes,
+      fontes, subFontes, sdrs, closers,
       cohort: viewModes.funnelView === 'cohort',
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, viewModes.funnelView],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView],
   )
 
   const fontesDisponiveis = opcoesFiltro.fontes
   const subFontesDisponiveis = opcoesFiltro.subFontes
+  const sdrsDisponiveis = opcoesFiltro.sdrs
+  const closersDisponiveis = opcoesFiltro.closers
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoesFiltro.marcas.includes(b.marca)).map(b => b.key),
     [opcoesFiltro.marcas],
@@ -829,7 +834,13 @@ export function FunilVendas() {
         }
       />
 
-      <FilterBar marcasDisponiveis={marcasDisponiveis} fontesDisponiveis={fontesDisponiveis} subFontesDisponiveis={subFontesDisponiveis} />
+      <FilterBar
+        marcasDisponiveis={marcasDisponiveis}
+        fontesDisponiveis={fontesDisponiveis}
+        subFontesDisponiveis={subFontesDisponiveis}
+        sdrsDisponiveis={sdrsDisponiveis}
+        closersDisponiveis={closersDisponiveis}
+      />
 
       <QueryErrorBanner errors={[error]} scope="Visão Macro" />
 

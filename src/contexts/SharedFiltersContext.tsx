@@ -113,6 +113,12 @@ interface SharedFilters {
   setFontes: (f: string[]) => void
   subFontes: string[]
   setSubFontes: (f: string[]) => void
+  /** Nomes de SDR (nome_sdr). Vazio = sem restrição. */
+  sdrs: string[]
+  setSdrs: (s: string[]) => void
+  /** Nomes de Closer (nome_closer). Vazio = sem restrição. */
+  closers: string[]
+  setClosers: (c: string[]) => void
 
   viewModes: ViewModes
   setSalesMode: (m: SalesMode) => void
@@ -153,6 +159,8 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
 
   const [fontes, setFontes] = usePersisted('fontes', isStringArray, [])
   const [subFontes, setSubFontes] = usePersisted('subFontes', isStringArray, [])
+  const [sdrs, setSdrs] = usePersisted('sdrs', isStringArray, [])
+  const [closers, setClosers] = usePersisted('closers', isStringArray, [])
 
   const [salesMode, setSalesMode] = usePersisted<SalesMode>(
     'salesMode', oneOf(['deals', 'units'] as const), DEFAULT_VIEW_MODES.salesMode,
@@ -194,7 +202,9 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     setPeriodValuesRaw([periodoAtual(MODE_PADRAO)])
     setFontes([])
     setSubFontes([])
-  }, [setOrigem, setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes])
+    setSdrs([])
+    setClosers([])
+  }, [setOrigem, setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes, setSdrs, setClosers])
 
   const value = useMemo<SharedFilters>(() => ({
     origem, setOrigem,
@@ -204,12 +214,14 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     ranges, range, setRange: setRangeDia,
     fontes, setFontes,
     subFontes, setSubFontes,
+    sdrs, setSdrs,
+    closers, setClosers,
     viewModes: { salesMode, funnelView, eventSource },
     setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   }), [
     origem, setOrigem, brandKeys, setBrandKeys, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
-    ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes,
+    ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes, sdrs, setSdrs, closers, setClosers,
     salesMode, funnelView, eventSource, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   ])

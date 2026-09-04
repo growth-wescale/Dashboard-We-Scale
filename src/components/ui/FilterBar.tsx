@@ -72,9 +72,13 @@ interface FilterBarProps {
   fontesDisponiveis?: string[]
   /** Grupos de sub-fonte presentes nos dados. */
   subFontesDisponiveis?: string[]
+  /** Nomes de SDR presentes nos dados. */
+  sdrsDisponiveis?: string[]
+  /** Nomes de Closer presentes nos dados. */
+  closersDisponiveis?: string[]
 }
 
-export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFontesDisponiveis }: FilterBarProps) {
+export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFontesDisponiveis, sdrsDisponiveis, closersDisponiveis }: FilterBarProps) {
   const {
     brandKeys, setBrandKeys,
     periodMode, setPeriodMode,
@@ -82,6 +86,8 @@ export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFont
     range, setRange,
     fontes, setFontes,
     subFontes, setSubFontes,
+    sdrs, setSdrs,
+    closers, setClosers,
     viewModes, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   } = useSharedFilters()
@@ -117,6 +123,14 @@ export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFont
   const opcoesSubFonte = useMemo(
     () => ordenarOpcoes([...new Set([...(subFontesDisponiveis ?? []), ...subFontes])]).map(v => ({ value: v, label: v })),
     [subFontesDisponiveis, subFontes],
+  )
+  const opcoesSdr = useMemo(
+    () => ordenarOpcoes([...new Set([...(sdrsDisponiveis ?? []), ...sdrs])]).map(v => ({ value: v, label: v })),
+    [sdrsDisponiveis, sdrs],
+  )
+  const opcoesCloser = useMemo(
+    () => ordenarOpcoes([...new Set([...(closersDisponiveis ?? []), ...closers])]).map(v => ({ value: v, label: v })),
+    [closersDisponiveis, closers],
   )
   const opcoesPeriodo: OpcaoPeriodo[] = useMemo(
     () => (periodMode === 'dia' ? [] : opcoesPara(periodMode)),
@@ -181,6 +195,14 @@ export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFont
 
         <Field label="Sub-fonte">
           <MultiSelect label="Origem do tráfego" options={opcoesSubFonte} selected={subFontes} onChange={setSubFontes} />
+        </Field>
+
+        <Field label="SDR">
+          <MultiSelect label="SDR" options={opcoesSdr} selected={sdrs} onChange={setSdrs} />
+        </Field>
+
+        <Field label="Closer">
+          <MultiSelect label="Closer" options={opcoesCloser} selected={closers} onChange={setClosers} />
         </Field>
 
         <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--ws-border)', margin: '0 2px' }} />

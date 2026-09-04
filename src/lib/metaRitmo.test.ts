@@ -28,7 +28,22 @@ describe('computeRitmo', () => {
     expect(r.metaDia).toBe(0)
     expect(r.pctRealizado).toBe(0)
     expect(r.deltaPct).toBe(0)
+    expect(r.pctDoEsperado).toBe(0)
     expect(r.noRitmo).toBe(true) // delta 0 >= -2
+  })
+
+  it('pctDoEsperado: 8 realizados de 10 esperados até hoje = 80% (não -20%)', () => {
+    // metaMensal=100, esperado até o dia = 10 exatos: dim=100 dias fictícios não dá pra forçar
+    // direto por mesKey/fimJanela reais, então cravamos via metaMensal=310 e dia 1/31 de ago/2026
+    // (dim=31, diaN=1) -> esperado = 310 * 1/31 = 10.
+    const r = computeRitmo({ realizado: 8, metaMensal: 310, mesKey: '2026-08', fimJanela: '2026-08-01' })
+    expect(r.esperado).toBeCloseTo(10, 5)
+    expect(r.pctDoEsperado).toBeCloseTo(80, 5)
+  })
+
+  it('pctDoEsperado pode passar de 100% quando o realizado supera o esperado', () => {
+    const r = computeRitmo({ realizado: 15, metaMensal: 310, mesKey: '2026-08', fimJanela: '2026-08-01' })
+    expect(r.pctDoEsperado).toBeCloseTo(150, 5)
   })
 
   it('dia da janela além do fim do mês satura no último dia', () => {

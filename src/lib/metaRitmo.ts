@@ -5,7 +5,11 @@ export interface Ritmo {
   metaDia: number
   pctRealizado: number
   pctEsperado: number
+  /** (realizado - esperado) / esperado — usado só pro limiar de `noRitmo`. */
   deltaPct: number
+  /** Realizado como % do esperado até hoje (não um delta): 8 de 10 = 80,
+   *  não -20%. Pode passar de 100 quando o realizado supera o esperado. */
+  pctDoEsperado: number
   noRitmo: boolean
 }
 
@@ -37,6 +41,7 @@ export function computeRitmo(args: {
   const pctRealizado = args.metaMensal > 0 ? Math.min(100, (args.realizado / args.metaMensal) * 100) : 0
   const pctEsperado = args.metaMensal > 0 ? Math.min(100, (esperado / args.metaMensal) * 100) : 0
   const deltaPct = esperado > 0 ? ((args.realizado - esperado) / esperado) * 100 : 0
+  const pctDoEsperado = esperado > 0 ? (args.realizado / esperado) * 100 : 0
 
-  return { esperado, metaDia, pctRealizado, pctEsperado, deltaPct, noRitmo: deltaPct >= -2 }
+  return { esperado, metaDia, pctRealizado, pctEsperado, deltaPct, pctDoEsperado, noRitmo: deltaPct >= -2 }
 }

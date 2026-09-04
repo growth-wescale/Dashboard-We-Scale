@@ -344,6 +344,47 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-04 — Performance: metas diárias clicáveis + meta de SAL (SDR)
+
+Junior pediu 4 ajustes nos cards de meta (SQL/RR/SAL/COF/Fechamentos/Receita)
+da aba Performance:
+
+1. **"Até hoje"** — os cards de meta diária (SQL, RR, SAL, COF) ganharam uma
+   3ª estatística ao lado de "Meta do dia"/"Meta do mês": quanto já deveria
+   ter sido feito no mês até a data de hoje (o número que já existia por
+   trás do "-X% vs. esperado até hoje", agora também exibido cru).
+2. **Cards clicáveis** — clicar num card com meta abre um popup
+   (`MetaBreakdownDrawer`) com o desdobramento por pessoa: SQL/RR/SAL/COF
+   mostram ritmo (barra + "esperado até hoje" + delta) e um anel com o
+   resultado de **hoje** (realizado hoje vs. meta do dia da pessoa);
+   Fechamentos/Receita mostram só Realizado × Meta do mês × % (não fazia
+   sentido "hoje" pra metas que não são divididas por dia — item 4).
+3. **Meta de SAL pro SDR** — descoberta ao investigar: `DB_Metas_Performance`
+   já tinha a coluna `meta_volume_sal` (texto) com dado real desde jun/2026,
+   só nunca tinha sido lida pelo dashboard (corrige a entrada de 03/09 acima,
+   que dizia "SAL sem meta — não existe no banco"). Setembro ainda não tinha
+   sido preenchido no momento desta mudança — o card mostra "—" até alguém
+   lançar a meta do mês, igual qualquer outra meta ausente. Por decisão do
+   Junior, só o SAL do **SDR** ganhou meta — o SAL do **Closer** (mesma
+   coluna, dado também existe pros dois papéis) continua só volume, sem meta
+   nem popup.
+4. **Receita e Fechamentos só com meta do mês** — esses dois nunca foram
+   pensados como "meta dividida por dia útil" (ritmo diário não faz sentido
+   pra eles), então saíram do tratamento de ritmo — sem barra, sem "meta do
+   dia", sem popup com "hoje".
+
+Implementação: `MetaRitmoCard` ganhou `granularity: 'daily' | 'monthly'` +
+`onClick`; `useMetasPerformance`/`useMetasTimeResumo` passaram a ler
+`meta_volume_sal` (a de `useMetasTimeResumo` soma só linhas `funcao='SDR'`,
+por decisão do item 3); novo módulo puro `src/lib/metaBreakdown.ts`
+(`buildPersonMetaRows`/`buildPersonSimplesRows`) combina o realizado do
+período e de hoje — os dois vêm de rodar `buildSdrRows`/`buildCloserRows`
+(já existentes) com janelas diferentes, sem duplicar a lógica de agregação —
+com a meta por pessoa. `SCard` (v2) ganhou `onClick` opcional.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (200 testes) via
+`~/ws-dashboard-build`. App exige login — não visto renderizado.
+
 ### 2026-09-03 (3) — Performance Detalhada vira "Performance" e migra pro stack da Visão Macro
 
 A aba saiu de `vw_funil_compat`/`usePerformanceEquipe` + filtros próprios e

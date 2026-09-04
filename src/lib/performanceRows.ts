@@ -33,20 +33,24 @@ export function buildSdrRows(
 ): SdrRow[] {
   const valid = rosterSet(roster, ['SDR', 'SDR/Closer'])
   const bucket = new Map<string, { mql: number; sql: number; rr: number; sal: number }>()
+  const nomeOriginal = new Map<string, string>()
 
   for (const r of rows) {
     if (r.status_atual === 'Excluído') continue
     const nome = r.nome_sdr?.trim()
     if (!nome || !valid.has(key(nome))) continue
-    const cur = bucket.get(nome) ?? { mql: 0, sql: 0, rr: 0, sal: 0 }
+    const normalized = key(nome)
+    const cur = bucket.get(normalized) ?? { mql: 0, sql: 0, rr: 0, sal: 0 }
     if (isInWindow(r.data_novo_mql, win)) cur.mql++
     if (isInWindow(r.data_agendamento_reuniao_sql, win)) cur.sql++
     if (isInWindow(r.data_reuniao_realizada, win)) cur.rr++
     if (isInWindow(r.data_sal, win)) cur.sal++
-    bucket.set(nome, cur)
+    bucket.set(normalized, cur)
+    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nome)
   }
 
-  return Array.from(bucket.entries()).map(([nome, v]) => {
+  return Array.from(bucket.entries()).map(([normalized, v]) => {
+    const nome = nomeOriginal.get(normalized)!
     const metaSql = findMeta(metas, nome, 'SDR')?.metaSql ?? 0
     return {
       nome, ...v,
@@ -62,12 +66,14 @@ export function buildCloserRows(
 ): CloserRow[] {
   const valid = rosterSet(roster, ['Closer', 'SDR/Closer'])
   const bucket = new Map<string, { rr: number; sal: number; cof: number; ganhos: number; faturamento: number }>()
+  const nomeOriginal = new Map<string, string>()
 
   for (const r of rows) {
     if (r.status_atual === 'Excluído') continue
     const nome = r.nome_closer?.trim()
     if (!nome || !valid.has(key(nome))) continue
-    const cur = bucket.get(nome) ?? { rr: 0, sal: 0, cof: 0, ganhos: 0, faturamento: 0 }
+    const normalized = key(nome)
+    const cur = bucket.get(normalized) ?? { rr: 0, sal: 0, cof: 0, ganhos: 0, faturamento: 0 }
     if (isInWindow(r.data_reuniao_realizada, win)) cur.rr++
     if (isInWindow(r.data_sal, win)) cur.sal++
     if (isInWindow(r.data_oportunidade, win)) cur.cof++
@@ -75,10 +81,12 @@ export function buildCloserRows(
       cur.ganhos++
       cur.faturamento += r.valor_contrato ?? 0
     }
-    bucket.set(nome, cur)
+    bucket.set(normalized, cur)
+    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nome)
   }
 
-  return Array.from(bucket.entries()).map(([nome, v]) => {
+  return Array.from(bucket.entries()).map(([normalized, v]) => {
+    const nome = nomeOriginal.get(normalized)!
     const metaFinanceira = findMeta(metas, nome, 'Closer')?.metaFinanceira ?? 0
     return {
       nome, ...v,

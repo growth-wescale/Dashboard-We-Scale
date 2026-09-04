@@ -59,6 +59,18 @@ describe('buildSdrRows', () => {
     ]
     expect(buildSdrRows(rows, win, metasSdr, roster)).toEqual([])
   })
+
+  it('agrega mesma pessoa com casing diferente em uma linha, preservando casing original', () => {
+    const rows = [
+      r({ nome_sdr: 'Xayane', data_novo_mql: '2026-08-05' }),
+      r({ nome_sdr: 'XAYANE', data_agendamento_reuniao_sql: '2026-08-10' }),
+    ]
+    const result = buildSdrRows(rows, win, metasSdr, roster)
+    expect(result).toHaveLength(1) // Deve ser 1 linha, não 2
+    expect(result[0].nome).toBe('Xayane') // Casing original da primeira ocorrência
+    expect(result[0].mql).toBe(1)
+    expect(result[0].sql).toBe(1)
+  })
 })
 
 describe('buildCloserRows', () => {
@@ -74,5 +86,19 @@ describe('buildCloserRows', () => {
     expect(row.faturamento).toBe(60_000)
     expect(row.pctAting).toBeCloseTo(60, 5) // 60000/100000
     expect(row.winRate).toBeCloseTo(100, 5) // 1 ganho / 1 rr
+  })
+
+  it('agrega mesma pessoa com casing diferente em uma linha, preservando casing original', () => {
+    const rows = [
+      r({ nome_closer: 'Douglas', data_reuniao_realizada: '2026-08-03', status_atual: 'Ganho', data_venda: '2026-08-15', valor_contrato: 50_000 }),
+      r({ nome_closer: 'DOUGLAS', data_sal: '2026-08-10', status_atual: 'Ganho', data_venda: '2026-08-20', valor_contrato: 30_000 }),
+    ]
+    const result = buildCloserRows(rows, win, metasCloser, roster)
+    expect(result).toHaveLength(1) // Deve ser 1 linha, não 2
+    expect(result[0].nome).toBe('Douglas') // Casing original da primeira ocorrência
+    expect(result[0].rr).toBe(1)
+    expect(result[0].sal).toBe(1)
+    expect(result[0].ganhos).toBe(2)
+    expect(result[0].faturamento).toBe(80_000)
   })
 })

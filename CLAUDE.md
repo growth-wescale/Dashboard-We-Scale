@@ -216,6 +216,9 @@ src/lib/periodo.ts            granularidade, range de período e multi-seleção
 src/lib/aging.ts              agregação do modo Aging (puro, testado)
 src/lib/fonteMapping.ts       normaliza utm_source em grupos
 src/lib/funnelTypes.ts        tipos de vw_funil_vendas
+src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
+src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
+src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
@@ -227,11 +230,13 @@ src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no
 src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "todas as etapas" (modo Passagens)
 src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
+src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
+src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 ```
 
 ### Os controles da barra
@@ -378,9 +383,11 @@ consome (`vw_funil_compat` intacta no banco).
 `PerformanceVendas.tsx`, `export function PerformanceVendas`). Só o `<h1>` e o
 label do menu viraram "Performance".
 
-Verificado: `npm run build` (tsc -b) + `npx vitest run` via
-`~/ws-dashboard-build`. App exige login — números conferidos por SQL contra a
-base real (strip da Performance == Visão Macro no mesmo recorte).
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (188 testes) via
+`~/ws-dashboard-build`. O strip usa as MESMAS funções de contagem de
+`metrics.ts` que a Visão Macro (`countStage`/`countStageEvents`/`countSales`/
+`sumRevenue`), mas o app exige login — não foi visto renderizado nem
+comparado por SQL contra a base.
 
 Spec: `docs/superpowers/specs/2026-09-03-performance-migracao-visao-macro-design.md`
 

@@ -24,12 +24,12 @@ export function computeRitmo(args: {
   fimJanela: string
 }): Ritmo {
   const dim = daysInMonth(args.mesKey)
-  const fimJanelaMesKey = args.fimJanela.substring(0, 7) // extract 'YYYY-MM'
+  const fimJanelaMesKey = args.fimJanela.substring(0, 7) // extrai 'YYYY-MM'
   const diaN = fimJanelaMesKey === args.mesKey
     ? dayOfMonth(args.fimJanela)
     : fimJanelaMesKey > args.mesKey
-      ? dim // fimJanela is after mesKey, so full month included
-      : dayOfMonth(args.fimJanela) // fimJanela is before mesKey (edge case)
+      ? dim // fimJanela é depois do mesKey, então o mês inteiro já passou
+      : 0 // fimJanela é de um mês ANTES do mesKey — nada do mês meta ainda decorreu
   const uteis = businessDaysInMonth(args.mesKey)
 
   const esperado = args.metaMensal * (diaN / dim)

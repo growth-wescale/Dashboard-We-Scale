@@ -120,14 +120,6 @@ export function findMeta(metas: MetaAgregada[], nome: string, funcao: FuncaoMeta
   return metas.find(m => m.funcao === funcao && m.nome.trim().toLowerCase() === nn) ?? null
 }
 
-// Totais do time (pra Meta de SQL / Meta de Faturamento agregada)
-export function metaTimeSdr(metas: MetaAgregada[]): number {
-  return metas.filter(m => m.funcao === 'SDR').reduce((s, m) => s + m.metaSql, 0)
-}
-export function metaTimeCloserFat(metas: MetaAgregada[]): number {
-  return metas.filter(m => m.funcao === 'Closer').reduce((s, m) => s + m.metaFinanceira, 0)
-}
-
 /* ── Meta somada de vários meses (card "Meta do período" da Visão Macro) ──── */
 
 export interface MetaResumo {

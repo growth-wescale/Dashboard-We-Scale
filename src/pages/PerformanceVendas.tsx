@@ -223,7 +223,7 @@ export function PerformanceVendas() {
     [marcasSelecionadas],
   )
 
-  const { data: rows, error: rowsError } = useFunilVendas(origem, marcaFetch)
+  const { data: rows, error: rowsError, loading } = useFunilVendas(origem, marcaFetch)
   const { data: eventos } = useFunilEventos({
     enabled: true,
     origem,
@@ -269,6 +269,8 @@ export function PerformanceVendas() {
 
   const strip = useMemo(() => ({
     mql: countStage(scoped, 'MQL', win, viewModes),
+    // denominador por evento p/ casar com tentando/ce/sql, que também são countStageEvents
+    mqlEvento: countStageEvents(eventos, 'MQL', win, viewModes, evOpts),
     sql: countStageEvents(eventos, 'Reunião Agendada SQL', win, viewModes, evOpts),
     rr:  countStageEvents(eventos, 'Diagnóstico', win, viewModes, evOpts),
     sal: countStageEvents(eventos, 'SAL', win, viewModes, evOpts),
@@ -283,7 +285,7 @@ export function PerformanceVendas() {
   const mesUnico = periodMode === 'mes' && periodValues.length === 1 ? periodValues[0] : null
   const fimJanela = ranges[0]?.end ?? range.end
 
-  const { porMarca: metaTime } = useMetasTimeResumo({ mesesKeys: mesUnico ? [mesUnico] : [] })
+  const { porMarca: metaTime, error: metaTimeError } = useMetasTimeResumo({ mesesKeys: mesUnico ? [mesUnico] : [] })
   const metaTimeSel = useMemo(() => {
     const acc = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0 }
     for (const b of marcasSelecionadas) {
@@ -300,17 +302,20 @@ export function PerformanceVendas() {
     mesKey: mesUnico ?? range.start.slice(0, 7),
     marca: marcaFetch,
   })
+  // Fora de um único mês (Trimestre/Ano/multi-mês) a meta mensal não faz sentido
+  // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
+  // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".
   const sdrRows: SdrRow[] = useMemo(
-    () => buildSdrRows(scoped, win, metasPessoa, roster),
-    [scoped, win, metasPessoa, roster],
+    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster),
+    [scoped, win, mesUnico, metasPessoa, roster],
   )
   const closerRows: CloserRow[] = useMemo(
-    () => buildCloserRows(scoped, win, metasPessoa, roster),
-    [scoped, win, metasPessoa, roster],
+    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster),
+    [scoped, win, mesUnico, metasPessoa, roster],
   )
 
   const convTopo = useMemo(() => [
-    { label: 'MQL → Tentando contato', val: strip.mql > 0 ? (strip.tentando / strip.mql) * 100 : 0 },
+    { label: 'MQL → Tentando contato', val: strip.mqlEvento > 0 ? (strip.tentando / strip.mqlEvento) * 100 : 0 },
     { label: 'Tentando contato → Contato efetivo', val: strip.tentando > 0 ? (strip.contatoEfetivo / strip.tentando) * 100 : 0 },
     { label: 'Contato efetivo → SQL · Reunião agendada', val: strip.contatoEfetivo > 0 ? (strip.sql / strip.contatoEfetivo) * 100 : 0 },
   ], [strip])
@@ -351,13 +356,13 @@ export function PerformanceVendas() {
         subFontesDisponiveis={opcoes.subFontes}
       />
 
-      <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance" />
+      <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
 
       {/* ── Seção 1 · SDR ─────────────────────────────────────────────── */}
       <SectionHeader n={1} accent={SDR_ACCENT} title="Executivos de Expansão (SDR)"
         sub="Do MQL à reunião agendada — cadência, contato efetivo e agendamento" />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
         <MetaRitmoCard label="MQL no período" realizado={strip.mql} metaMensal={0}
           mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
         <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
@@ -386,7 +391,7 @@ export function PerformanceVendas() {
           sub="Da reunião realizada ao fechamento — diagnóstico, SAL, oportunidade e receita" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
         <MetaRitmoCard label="Reuniões realizadas" realizado={strip.rr} metaMensal={0}
           mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
         <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}

@@ -12,6 +12,13 @@ const roster: MembroRoster[] = [
   { nome: 'Douglas', cargo: 'Closer', foto: null },
 ]
 
+const rosterMulti: MembroRoster[] = [
+  { nome: 'Xayane', cargo: 'SDR', foto: null },
+  { nome: 'Thiago', cargo: 'SDR', foto: null },
+  { nome: 'Douglas', cargo: 'Closer', foto: null },
+  { nome: 'Aurélio', cargo: 'Closer', foto: null },
+]
+
 const metasSdr: MetaAgregada[] = [
   { nome: 'Xayane', funcao: 'SDR', metaSql: 20, metaAgendamento: 0, metaReuniao: 10, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0 },
 ]
@@ -71,6 +78,17 @@ describe('buildSdrRows', () => {
     expect(result[0].mql).toBe(1)
     expect(result[0].sql).toBe(1)
   })
+
+  it('sem metas (array vazio), ordena por SQL desc em vez de ordem de inserção', () => {
+    const rows = [
+      r({ nome_sdr: 'Xayane', data_agendamento_reuniao_sql: '2026-08-10' }), // 1 SQL
+      r({ nome_sdr: 'Thiago', data_agendamento_reuniao_sql: '2026-08-11' }),
+      r({ nome_sdr: 'Thiago', data_agendamento_reuniao_sql: '2026-08-12' }), // 2 SQL
+    ]
+    const result = buildSdrRows(rows, win, [], rosterMulti)
+    expect(result.every(x => x.pctAting === 0)).toBe(true)
+    expect(result.map(x => x.nome)).toEqual(['Thiago', 'Xayane'])
+  })
 })
 
 describe('buildCloserRows', () => {
@@ -100,5 +118,15 @@ describe('buildCloserRows', () => {
     expect(result[0].sal).toBe(1)
     expect(result[0].ganhos).toBe(2)
     expect(result[0].faturamento).toBe(80_000)
+  })
+
+  it('sem metas (array vazio), ordena por faturamento desc em vez de ordem de inserção', () => {
+    const rows = [
+      r({ nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-10', valor_contrato: 20_000 }),
+      r({ nome_closer: 'Aurélio', status_atual: 'Ganho', data_venda: '2026-08-11', valor_contrato: 50_000 }),
+    ]
+    const result = buildCloserRows(rows, win, [], rosterMulti)
+    expect(result.every(x => x.pctAting === 0)).toBe(true)
+    expect(result.map(x => x.nome)).toEqual(['Aurélio', 'Douglas'])
   })
 })

@@ -58,7 +58,7 @@ export function buildSdrRows(
       pctAting: metaSql > 0 ? (v.sql / metaSql) * 100 : 0,
       mqlToSql: v.mql > 0 ? (v.sql / v.mql) * 100 : 0,
     }
-  }).sort((a, b) => b.pctAting - a.pctAting)
+  }).sort((a, b) => b.pctAting - a.pctAting || b.sql - a.sql)
 }
 
 export function buildCloserRows(
@@ -94,5 +94,5 @@ export function buildCloserRows(
       pctAting: metaFinanceira > 0 ? (v.faturamento / metaFinanceira) * 100 : 0,
       winRate: v.rr > 0 ? (v.ganhos / v.rr) * 100 : 0,
     }
-  }).sort((a, b) => b.pctAting - a.pctAting)
+  }).sort((a, b) => b.pctAting - a.pctAting || b.faturamento - a.faturamento)
 }

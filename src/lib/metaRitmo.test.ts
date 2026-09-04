@@ -35,4 +35,10 @@ describe('computeRitmo', () => {
     const r = computeRitmo({ realizado: 100, metaMensal: 100, mesKey: '2026-08', fimJanela: '2026-09-10' })
     expect(r.esperado).toBeCloseTo(100, 5) // 31/31
   })
+
+  it('fimJanela num mês ANTES do mesKey ainda não decorreu nada do mês meta', () => {
+    const r = computeRitmo({ realizado: 0, metaMensal: 100, mesKey: '2026-08', fimJanela: '2026-07-15' })
+    expect(r.esperado).toBe(0)
+    expect(r.pctEsperado).toBe(0)
+  })
 })

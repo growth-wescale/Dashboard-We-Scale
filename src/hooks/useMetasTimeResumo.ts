@@ -11,6 +11,8 @@ export interface RawMetaTimeRow {
   meta_cof: number | null
   meta_financeira: number | null
   meta_qtd_vendas: number | null
+  /** Coluna `text` no banco (ex.: "25") — precisa de Number() antes de somar. */
+  meta_volume_sal: string | null
 }
 
 export interface MetaTime {
@@ -19,10 +21,12 @@ export interface MetaTime {
   metaCof: number
   metaFinanceira: number
   metaQtdVendas: number
+  /** Só soma linhas de SDR — a meta de SAL do Closer não conta pro time aqui. */
+  metaSal: number
 }
 
 const MARCAS_EXCLUIR = new Set(['Geral', 'Outbound', 'Repasse'])
-const VAZIO: MetaTime = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0 }
+const VAZIO: MetaTime = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0, metaSal: 0 }
 
 /** Soma meta de SDR + Closer por marca real. Chamador filtra as marcas que precisa. */
 export function resumirTimePorMarca(rows: RawMetaTimeRow[]): Map<string, MetaTime> {
@@ -36,6 +40,9 @@ export function resumirTimePorMarca(rows: RawMetaTimeRow[]): Map<string, MetaTim
     cur.metaCof += r.meta_cof ?? 0
     cur.metaFinanceira += r.meta_financeira ?? 0
     cur.metaQtdVendas += r.meta_qtd_vendas ?? 0
+    // meta_volume_sal existe pra SDR e Closer na tabela, mas só a do SDR
+    // representa "meta de SAL do time" — Closer fica de fora de propósito.
+    if (r.funcao === 'SDR') cur.metaSal += Number(r.meta_volume_sal) || 0
     map.set(r.marca, cur)
   }
   return map
@@ -46,7 +53,7 @@ async function fetchMetas(mesesKeys: string[]): Promise<{ rows: RawMetaTimeRow[]
   const mesesInicio = mesesKeys.map(k => `${k}-01`)
   const { data, error } = await supabaseVendas
     .from('DB_Metas_Performance')
-    .select('nome_colaborador, marca, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas')
+    .select('nome_colaborador, marca, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal')
     .in('mes_referencia', mesesInicio)
     .in('funcao', ['SDR', 'Closer'])
   if (error) return { rows: [], error: error.message }

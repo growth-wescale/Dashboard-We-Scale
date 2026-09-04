@@ -4,7 +4,7 @@ import { supabaseVendas } from '@/lib/supabaseVendas'
 export type FuncaoMeta = 'SDR' | 'Closer'
 
 // Linha bruta em DB_Metas_Performance (só as colunas usadas)
-interface RawMetaRow {
+export interface RawMetaRow {
   nome_colaborador: string | null
   marca: string | null
   mes_referencia: string | null // 'YYYY-MM-DD'
@@ -15,6 +15,8 @@ interface RawMetaRow {
   meta_cof: number | null
   meta_financeira: number | null
   meta_qtd_vendas: number | null
+  /** Coluna `text` no banco (ex.: "25") — precisa de Number() antes de somar. */
+  meta_volume_sal: string | null
 }
 
 // Meta agregada por (colaborador, funcao) no mês solicitado
@@ -27,6 +29,7 @@ export interface MetaAgregada {
   metaCof: number
   metaFinanceira: number
   metaQtdVendas: number
+  metaSal: number
 }
 
 interface Filters {
@@ -48,7 +51,7 @@ async function fetchMetas(mesKey: string, marca?: string): Promise<{ rows: RawMe
   const mesInicio = `${mesKey}-01`
   let q = supabaseVendas
     .from('DB_Metas_Performance')
-    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas')
+    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal')
     .eq('mes_referencia', mesInicio)
     .in('funcao', ['SDR', 'Closer'])
   if (marca) q = q.eq('marca', marca)
@@ -57,7 +60,7 @@ async function fetchMetas(mesKey: string, marca?: string): Promise<{ rows: RawMe
   return { rows: (data ?? []) as RawMetaRow[], error: null }
 }
 
-function aggregate(rows: RawMetaRow[]): MetaAgregada[] {
+export function aggregate(rows: RawMetaRow[]): MetaAgregada[] {
   const bucket = new Map<string, MetaAgregada>()
   for (const r of rows) {
     if (!r.nome_colaborador || !r.funcao || r.funcao === 'Repasse') continue
@@ -68,7 +71,7 @@ function aggregate(rows: RawMetaRow[]): MetaAgregada[] {
       nome: r.nome_colaborador,
       funcao: r.funcao as FuncaoMeta,
       metaSql: 0, metaAgendamento: 0, metaReuniao: 0,
-      metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0,
+      metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0, metaSal: 0,
     }
     cur.metaSql         += r.meta_sql               ?? 0
     cur.metaAgendamento += r.meta_agendamento       ?? 0
@@ -76,6 +79,7 @@ function aggregate(rows: RawMetaRow[]): MetaAgregada[] {
     cur.metaCof         += r.meta_cof               ?? 0
     cur.metaFinanceira  += r.meta_financeira        ?? 0
     cur.metaQtdVendas   += r.meta_qtd_vendas        ?? 0
+    cur.metaSal         += Number(r.meta_volume_sal) || 0
     bucket.set(key, cur)
   }
   return Array.from(bucket.values())
@@ -132,7 +136,7 @@ async function fetchMetasMeses(mesesKeys: string[]): Promise<{ rows: RawMetaRow[
   const mesesInicio = mesesKeys.map(k => `${k}-01`)
   const { data, error } = await supabaseVendas
     .from('DB_Metas_Performance')
-    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas')
+    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal')
     .in('mes_referencia', mesesInicio)
     .in('funcao', ['SDR', 'Closer'])
   if (error) return { rows: [], error: error.message }

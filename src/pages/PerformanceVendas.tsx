@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
@@ -6,15 +6,17 @@ import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FunilCompletoSection } from '@/components/ui/FunilCompletoSection'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
+import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { SCard } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
-import { useMetasPerformance } from '@/hooks/useMetasPerformance'
+import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { useMetasTimeResumo } from '@/hooks/useMetasTimeResumo'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
 import type { SdrRow, CloserRow } from '@/lib/performanceRows'
+import { buildPersonMetaRows, buildPersonSimplesRows } from '@/lib/metaBreakdown'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
@@ -23,8 +25,19 @@ import { BRAND_LIST } from '@/constants/brands'
 import type { BrandDef } from '@/constants/brands'
 import type { Marca } from '@/lib/types'
 import { nf, pct, moneyK } from '@/lib/format'
-import { shortMonth } from '@/lib/dateUtils'
+import { shortMonth, todayLocal } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
+
+/** nome -> valor de uma coluna numérica de SdrRow/CloserRow — base dos Maps
+ *  período/hoje que os popups de desdobramento (MetaBreakdownDrawer) usam. */
+function mapaSdr(rows: SdrRow[], campo: 'sql' | 'rr' | 'sal'): Map<string, number> {
+  return new Map(rows.map(r => [r.nome, r[campo]]))
+}
+function mapaCloser(rows: CloserRow[], campo: 'cof' | 'ganhos' | 'faturamento'): Map<string, number> {
+  return new Map(rows.map(r => [r.nome, r[campo]]))
+}
+
+type MetaDrawerKey = 'sql' | 'rr' | 'sal' | 'cof' | 'fechamentos' | 'receita'
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
@@ -287,12 +300,12 @@ export function PerformanceVendas() {
 
   const { porMarca: metaTime, error: metaTimeError } = useMetasTimeResumo({ mesesKeys: mesUnico ? [mesUnico] : [] })
   const metaTimeSel = useMemo(() => {
-    const acc = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0 }
+    const acc = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0, metaSal: 0 }
     for (const b of marcasSelecionadas) {
       const m = b.marca ? metaTime.get(b.marca) : undefined
       if (!m) continue
       acc.metaSql += m.metaSql; acc.metaReuniao += m.metaReuniao; acc.metaCof += m.metaCof
-      acc.metaFinanceira += m.metaFinanceira; acc.metaQtdVendas += m.metaQtdVendas
+      acc.metaFinanceira += m.metaFinanceira; acc.metaQtdVendas += m.metaQtdVendas; acc.metaSal += m.metaSal
     }
     return acc
   }, [marcasSelecionadas, metaTime])
@@ -313,6 +326,46 @@ export function PerformanceVendas() {
     () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster),
     [scoped, win, mesUnico, metasPessoa, roster],
   )
+
+  // ── Popup de desdobramento por pessoa (clique num card com meta) ───────────
+  const [metaDrawer, setMetaDrawer] = useState<MetaDrawerKey | null>(null)
+  const winHoje = useMemo(() => toWindow(null, null, [{ from: todayLocal(), to: todayLocal() }]), [])
+  const sdrRowsHoje = useMemo(() => buildSdrRows(scoped, winHoje, [], roster), [scoped, winHoje, roster])
+  const closerRowsHoje = useMemo(() => buildCloserRows(scoped, winHoje, [], roster), [scoped, winHoje, roster])
+
+  const sqlBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
+    periodo: mapaSdr(sdrRows, 'sql'), hoje: mapaSdr(sdrRowsHoje, 'sql'),
+    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'SDR')?.metaSql ?? 0,
+    mesKey: mesUnico, fimJanela,
+  }), [mesUnico, sdrRows, sdrRowsHoje, metasPessoa, fimJanela])
+
+  const rrBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
+    periodo: mapaSdr(sdrRows, 'rr'), hoje: mapaSdr(sdrRowsHoje, 'rr'),
+    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'SDR')?.metaReuniao ?? 0,
+    mesKey: mesUnico, fimJanela,
+  }), [mesUnico, sdrRows, sdrRowsHoje, metasPessoa, fimJanela])
+
+  const salBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
+    periodo: mapaSdr(sdrRows, 'sal'), hoje: mapaSdr(sdrRowsHoje, 'sal'),
+    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'SDR')?.metaSal ?? 0,
+    mesKey: mesUnico, fimJanela,
+  }), [mesUnico, sdrRows, sdrRowsHoje, metasPessoa, fimJanela])
+
+  const cofBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
+    periodo: mapaCloser(closerRows, 'cof'), hoje: mapaCloser(closerRowsHoje, 'cof'),
+    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaCof ?? 0,
+    mesKey: mesUnico, fimJanela,
+  }), [mesUnico, closerRows, closerRowsHoje, metasPessoa, fimJanela])
+
+  const fechamentosBreakdown = useMemo(() => buildPersonSimplesRows({
+    periodo: mapaCloser(closerRows, 'ganhos'),
+    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaQtdVendas ?? 0,
+  }), [closerRows, metasPessoa])
+
+  const receitaBreakdown = useMemo(() => buildPersonSimplesRows({
+    periodo: mapaCloser(closerRows, 'faturamento'),
+    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaFinanceira ?? 0,
+  }), [closerRows, metasPessoa])
 
   const convTopo = useMemo(() => [
     { label: 'MQL → Tentando contato', val: strip.mqlEvento > 0 ? (strip.tentando / strip.mqlEvento) * 100 : 0 },
@@ -367,12 +420,16 @@ export function PerformanceVendas() {
           mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
         <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
           metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+          onClick={mesUnico && metaTimeSel.metaSql > 0 ? () => setMetaDrawer('sql') : undefined} />
         <MetaRitmoCard label="RR (reuniões realizadas)" realizado={strip.rr}
           metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
-        <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+          onClick={mesUnico && metaTimeSel.metaReuniao > 0 ? () => setMetaDrawer('rr') : undefined} />
+        <MetaRitmoCard label="SAL qualificados" realizado={strip.sal}
+          metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+          onClick={mesUnico && metaTimeSel.metaSal > 0 ? () => setMetaDrawer('sal') : undefined} />
       </div>
 
       <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
@@ -398,13 +455,18 @@ export function PerformanceVendas() {
           mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
         <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
           metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
+          onClick={mesUnico && metaTimeSel.metaCof > 0 ? () => setMetaDrawer('cof') : undefined} />
         <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
           metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
+          granularity="monthly"
+          onClick={mesUnico && metaTimeSel.metaQtdVendas > 0 ? () => setMetaDrawer('fechamentos') : undefined} />
         <MetaRitmoCard label="Receita gerada" realizado={strip.receita}
           metaMensal={mesUnico ? metaTimeSel.metaFinanceira : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT} />
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT}
+          granularity="monthly"
+          onClick={mesUnico && metaTimeSel.metaFinanceira > 0 ? () => setMetaDrawer('receita') : undefined} />
       </div>
 
       <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
@@ -422,6 +484,37 @@ export function PerformanceVendas() {
       <div style={{ marginTop: 40, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center' }}>
         {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>
       </div>
+
+      <MetaBreakdownDrawer
+        open={metaDrawer === 'sql'} onClose={() => setMetaDrawer(null)}
+        title="Meta SQL × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={SDR_ACCENT} formatter={nf} variant="daily" rows={sqlBreakdown}
+      />
+      <MetaBreakdownDrawer
+        open={metaDrawer === 'rr'} onClose={() => setMetaDrawer(null)}
+        title="Meta RR × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={SDR_ACCENT} formatter={nf} variant="daily" rows={rrBreakdown}
+      />
+      <MetaBreakdownDrawer
+        open={metaDrawer === 'sal'} onClose={() => setMetaDrawer(null)}
+        title="Meta SAL × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={SDR_ACCENT} formatter={nf} variant="daily" rows={salBreakdown}
+      />
+      <MetaBreakdownDrawer
+        open={metaDrawer === 'cof'} onClose={() => setMetaDrawer(null)}
+        title="Meta COF × Realizado — por dia — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={CLOSER_ACCENT} formatter={nf} variant="daily" rows={cofBreakdown}
+      />
+      <MetaBreakdownDrawer
+        open={metaDrawer === 'fechamentos'} onClose={() => setMetaDrawer(null)}
+        title="Meta Fechamentos × Realizado — por mês — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={CLOSER_ACCENT} formatter={nf} variant="monthly" rows={fechamentosBreakdown}
+      />
+      <MetaBreakdownDrawer
+        open={metaDrawer === 'receita'} onClose={() => setMetaDrawer(null)}
+        title="Meta Receita × Realizado — por mês — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={CLOSER_ACCENT} formatter={moneyK} variant="monthly" rows={receitaBreakdown}
+      />
     </div>
   )
 }

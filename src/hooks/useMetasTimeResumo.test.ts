@@ -5,19 +5,28 @@ import type { RawMetaTimeRow } from '@/hooks/useMetasTimeResumo'
 const base: RawMetaTimeRow = {
   nome_colaborador: 'Fulano', marca: 'Oral Unic', funcao: 'SDR',
   meta_sql: null, meta_agendamento: null, meta_reuniao_realizada: null,
-  meta_cof: null, meta_financeira: null, meta_qtd_vendas: null,
+  meta_cof: null, meta_financeira: null, meta_qtd_vendas: null, meta_volume_sal: null,
 }
 
 describe('resumirTimePorMarca', () => {
   it('soma SDR e Closer da mesma marca', () => {
     const rows: RawMetaTimeRow[] = [
-      { ...base, funcao: 'SDR', meta_sql: 30, meta_reuniao_realizada: 20 },
+      { ...base, funcao: 'SDR', meta_sql: 30, meta_reuniao_realizada: 20, meta_volume_sal: '15' },
       { ...base, funcao: 'Closer', meta_cof: 10, meta_financeira: 500_000, meta_qtd_vendas: 8 },
     ]
     const m = resumirTimePorMarca(rows)
     expect(m.get('Oral Unic')).toEqual({
-      metaSql: 30, metaReuniao: 20, metaCof: 10, metaFinanceira: 500_000, metaQtdVendas: 8,
+      metaSql: 30, metaReuniao: 20, metaCof: 10, metaFinanceira: 500_000, metaQtdVendas: 8, metaSal: 15,
     })
+  })
+
+  it('soma meta_volume_sal (texto) só de linhas SDR — Closer não conta pra meta de SAL do time', () => {
+    const rows: RawMetaTimeRow[] = [
+      { ...base, funcao: 'SDR', meta_volume_sal: '10' },
+      { ...base, funcao: 'Closer', meta_volume_sal: '999' },
+    ]
+    const m = resumirTimePorMarca(rows)
+    expect(m.get('Oral Unic')!.metaSal).toBe(10)
   })
 
   it('exclui marcas agregadas (Geral/Outbound/Repasse) e marca nula', () => {

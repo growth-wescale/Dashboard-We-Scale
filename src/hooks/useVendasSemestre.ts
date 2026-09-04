@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { METAS_VENDA_FRANQUIA, MARCAS_FRANQUIA, type MarcaFranquia, type MesKey } from '@/constants/metasVendaFranquia'
 
 /**
  * Vendas do H2 2026 (jul-dez) por marca × mês. Usado no bloco "Vendas do
- * semestre" da página /okrs. Consolidado (Inbound + Prospecção Ativa) —
- * PA tem 0 vendas hoje, então soma = Inbound, mas mantém a soma pra o dia
- * em que PA começar a ganhar.
+ * semestre" da página /okrs. Consolidado (Inbound + Prospecção Ativa).
  *
- * Estratégia idêntica ao useHistoricoAtingimento: 1 query em DB_Metas_Performance
- * + 1 em vw_funil_vendas, agrega client-side. Ambos no Supabase de Expansão.
+ * META vem da planilha "Meta - Venda de Franquia.xlsx" (hardcoded em
+ * `src/constants/metasVendaFranquia.ts`) — decisão do Junior em 03/09/2026.
+ * Isolado dessa página só, DB_Metas_Performance segue alimentando as
+ * outras views (Visão Macro, CampanhaMetas).
+ *
+ * REALIZADO continua vindo de vw_funil_vendas (status='Ganho') — a xlsx
+ * ainda não preenche vendas realizadas.
  */
 
 export const MESES_H2_2026 = [
@@ -43,31 +47,10 @@ export interface VendasSemestre {
   total: VendaMarca         // consolidado (soma de todas as marcas)
 }
 
-// Mesma exclusão do useMetasPerformance/useMetaResumo — evita dupla contagem.
-const MARCAS_EXCLUIR = new Set(['Geral', 'Outbound', 'Repasse'])
-
-interface RawMeta {
-  marca: string | null
-  mes_referencia: string
-  funcao: string | null
-  meta_financeira: number | null
-  meta_qtd_vendas: number | null
-}
-
 interface RawVenda {
   marca: string | null
   data_venda: string | null
   valor_contrato: number | null
-}
-
-async function fetchMetas(): Promise<{ rows: RawMeta[]; error: string | null }> {
-  const { data, error } = await supabaseVendas
-    .from('DB_Metas_Performance')
-    .select('marca, mes_referencia, funcao, meta_financeira, meta_qtd_vendas')
-    .in('mes_referencia', MESES_H2_2026.map(m => m.key))
-    .in('funcao', ['SDR', 'Closer'])
-  if (error) return { rows: [], error: error.message }
-  return { rows: (data ?? []) as RawMeta[], error: null }
 }
 
 async function fetchVendas(): Promise<{ rows: RawVenda[]; error: string | null }> {
@@ -105,30 +88,32 @@ function recalcTotais(v: VendaMarca): void {
   v.totalMetaReceita = v.meses.reduce((s, m) => s + m.metaReceita, 0)
 }
 
-function aggregate(metas: RawMeta[], vendas: RawVenda[]): VendasSemestre {
+function aggregate(vendas: RawVenda[]): VendasSemestre {
   const marcas = new Map<string, VendaMarca>()
 
-  for (const r of metas) {
-    if (!r.marca || MARCAS_EXCLUIR.has(r.marca)) continue
-    const mesKey = r.mes_referencia.substring(0, 7)
-    const mesIdx = MESES_H2_2026.findIndex(m => m.mesKey === mesKey)
-    if (mesIdx < 0) continue
-    const bucket = marcas.get(r.marca) ?? novaMarca(r.marca)
-    bucket.meses[mesIdx].metaQtd += Number(r.meta_qtd_vendas) || 0
-    bucket.meses[mesIdx].metaReceita += Number(r.meta_financeira) || 0
-    marcas.set(r.marca, bucket)
+  // 1. Meta: preenche todas as 6 marcas de franquia B2B com meta da planilha
+  for (const marca of MARCAS_FRANQUIA) {
+    const bucket = novaMarca(marca)
+    bucket.meses.forEach((mes, i) => {
+      const mesKey = MESES_H2_2026[i].mesKey as MesKey
+      const m = METAS_VENDA_FRANQUIA[marca as MarcaFranquia][mesKey]
+      mes.metaQtd = m?.meta_qtd ?? 0
+      mes.metaReceita = m?.meta_receita ?? 0
+    })
+    marcas.set(marca, bucket)
   }
 
+  // 2. Realizado: soma vendas do CRM (só marcas de franquia)
+  const marcasSet = new Set<string>(MARCAS_FRANQUIA)
   for (const v of vendas) {
-    if (!v.marca || MARCAS_EXCLUIR.has(v.marca) || !v.data_venda) continue
+    if (!v.marca || !v.data_venda || !marcasSet.has(v.marca)) continue
     const mesKey = mesKeyDaData(v.data_venda)
     if (!mesKey) continue
     const mesIdx = MESES_H2_2026.findIndex(m => m.mesKey === mesKey)
     if (mesIdx < 0) continue
-    const bucket = marcas.get(v.marca) ?? novaMarca(v.marca)
+    const bucket = marcas.get(v.marca)!
     bucket.meses[mesIdx].qtdRealizada += 1
     bucket.meses[mesIdx].receitaRealizada += Number(v.valor_contrato) || 0
-    marcas.set(v.marca, bucket)
   }
 
   const porMarca = Array.from(marcas.values())
@@ -165,10 +150,9 @@ export function useVendasSemestre(): UseVendasSemestreResult {
   const fetchAll = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
     setError(null)
-    const [m, v] = await Promise.all([fetchMetas(), fetchVendas()])
-    if (m.error) { setError(m.error); setLoading(false); return }
+    const v = await fetchVendas()
     if (v.error) { setError(v.error); setLoading(false); return }
-    setData(aggregate(m.rows, v.rows))
+    setData(aggregate(v.rows))
     setLoading(false)
   }, [])
 

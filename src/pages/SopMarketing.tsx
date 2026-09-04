@@ -212,7 +212,11 @@ function fmtBRLshort(v: number) {
 // For CP metrics: lower is better → invert color
 function deltaLabel(cur: number, prev: number, lowerIsBetter = false) {
   if (prev === 0 && cur === 0) return { txt: '—', col: 'var(--ws-text-secondary)' }
-  if (prev === 0) return { txt: `+${cur}`, col: 'var(--status-positivo)' }
+  if (prev === 0) {
+    // Se cur é float (CP-MQL, invest), arredonda; se inteiro (MQL, SQL), mostra direto.
+    const rounded = Number.isInteger(cur) ? cur : Math.round(cur)
+    return { txt: `+${rounded}`, col: lowerIsBetter ? 'var(--status-risco)' : 'var(--status-positivo)' }
+  }
   const p = ((cur - prev) / prev) * 100
   const up = p >= 0
   const positive = lowerIsBetter ? !up : up
@@ -310,17 +314,19 @@ function SparkLine({ values, accent }: { values: number[]; accent: string }) {
   )
 }
 
-interface MtdItem { label: string; cur: number; prev: number }
+interface MtdItem { label: string; cur: number; prev: number; ref?: number; refLabel?: string }
 
 function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
   // Extra PAD_T so delta label (y=PAD_T-12) and bar value (y=PAD_T at max) never overlap
   const VW = 300, VH = 200, PAD_T = 52, PAD_B = 24
   const n = items.length
-  const max = Math.max(...items.flatMap(it => [it.cur, it.prev]), 1)
+  const hasRef = items.some(it => it.ref !== undefined)
+  const max = Math.max(...items.flatMap(it => [it.cur, it.prev, it.ref ?? 0]), 1)
   const chartH = VH - PAD_T - PAD_B
   const groupW = VW / n
-  const bW = groupW * 0.30
-  const gap = groupW * 0.06
+  const bW = hasRef ? groupW * 0.22 : groupW * 0.30
+  const gap = groupW * 0.04
+  const refLabel = items.find(it => it.refLabel)?.refLabel ?? 'Referência'
 
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%"
@@ -330,23 +336,39 @@ function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
       <text x={20} y={13} fontSize={10} fill="#64748b">Mês anterior</text>
       <rect x={90} y={4} width={10} height={10} fill={accent} rx={2} />
       <text x={104} y={13} fontSize={10} fill="#64748b">Mês atual</text>
+      {hasRef && (<>
+        <rect x={174} y={4} width={10} height={10} fill="#94A3B8" rx={2} opacity={0.5} />
+        <text x={188} y={13} fontSize={10} fill="#64748b">{refLabel}</text>
+      </>)}
 
       {items.map((it, gi) => {
         const cx = groupW * gi + groupW / 2
-        const curH = Math.max(3, (it.cur / max) * chartH)
+        const curH  = Math.max(3, (it.cur  / max) * chartH)
         const prevH = Math.max(3, (it.prev / max) * chartH)
-        const prevX = cx - bW - gap / 2
-        const curX = cx + gap / 2
+        const refH  = it.ref !== undefined ? Math.max(3, (it.ref / max) * chartH) : 0
+        const nBars = it.ref !== undefined ? 3 : 2
+        const totalW = bW * nBars + gap * (nBars - 1)
+        const startX = cx - totalW / 2
+        const prevX = startX
+        const curX  = startX + bW + gap
+        const refX  = startX + (bW + gap) * 2
         const delta = deltaLabel(it.cur, it.prev)
         return (
           <g key={gi}>
             <rect x={prevX} y={PAD_T + chartH - prevH} width={bW} height={prevH} fill="#CBD5E1" rx={2} />
             <rect x={curX}  y={PAD_T + chartH - curH}  width={bW} height={curH}  fill={accent}   rx={2} />
+            {it.ref !== undefined && (
+              <rect x={refX} y={PAD_T + chartH - refH} width={bW} height={refH} fill="#94A3B8" rx={2} opacity={0.5} />
+            )}
             {/* Values above bars */}
             <text x={prevX + bW/2} y={PAD_T + chartH - prevH - 4}
-              textAnchor="middle" fontSize={12} fill="#94a3b8">{it.prev}</text>
+              textAnchor="middle" fontSize={11} fill="#94a3b8">{it.prev}</text>
             <text x={curX + bW/2}  y={PAD_T + chartH - curH - 4}
-              textAnchor="middle" fontSize={13} fontWeight={700} fill={accent}>{it.cur}</text>
+              textAnchor="middle" fontSize={12} fontWeight={700} fill={accent}>{it.cur}</text>
+            {it.ref !== undefined && (
+              <text x={refX + bW/2} y={PAD_T + chartH - refH - 4}
+                textAnchor="middle" fontSize={11} fill="#64748b">{it.ref}</text>
+            )}
             {/* Delta — sits clearly above both bars with extra PAD_T */}
             <text x={cx} y={PAD_T - 14} textAnchor="middle" fontSize={13} fontWeight={700} fill={delta.col}>
               {delta.txt}
@@ -520,18 +542,53 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
-  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: compareRange.start,   dataFim: compareRange.end })
+
+  // Odonto Legacy usa janela dos últimos 7 dias corridos em vez de MTD do mês
+  // (Junior 03/09: MTD Set com só 3 dias distorce leitura). Comparativo passa a
+  // ser os 7 dias anteriores (21-27/08 vs 28/08-03/09). Outras marcas seguem MTD.
+  const mtdCurEnd = dates.mtdCurEnd
+  const mtdCurStart = useMemo(() => {
+    if (!isOdontoLegacy) return dates.mtdCurStart
+    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
+    return isoDate(new Date(end.getTime() - 6 * 86400000))
+  }, [isOdontoLegacy, dates.mtdCurStart, dates.mtdCurEnd])
+  const mtdPrevEnd = useMemo(() => {
+    if (!isOdontoLegacy) return dates.mtdPrevEnd
+    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
+    return isoDate(new Date(end.getTime() - 7 * 86400000))
+  }, [isOdontoLegacy, dates.mtdPrevEnd, dates.mtdCurEnd])
+  const mtdPrevStart = useMemo(() => {
+    if (!isOdontoLegacy) return dates.mtdPrevStart
+    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
+    return isoDate(new Date(end.getTime() - 13 * 86400000))
+  }, [isOdontoLegacy, dates.mtdPrevStart, dates.mtdCurEnd])
+
+  // Range de comparação: pra Odonto Legacy, usa mtdPrevStart/End (7d anteriores).
+  // Pra outras marcas, respeita o dropdown de mês (compareRange).
+  const prevRangeStart = isOdontoLegacy ? mtdPrevStart : compareRange.start
+  const prevRangeEnd   = isOdontoLegacy ? mtdPrevEnd   : compareRange.end
+
+  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const allMedia  = isOdontoLegacy ? mediaAllOdl.data  : mediaAllStd.data
   const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
-  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: dates.mtdCurEnd })
-  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: dates.mtdCurStart,    dataFim: dates.mtdCurEnd })
-  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: compareRange.start,   dataFim: compareRange.end })
-  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[4].start, dataFim: dates.weeks[4].end })
-  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: dates.weeks[3].start, dataFim: dates.weeks[3].end })
+  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
+  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+
+  // Semanal do slide Odonto Legacy: mesma janela do MTD (7 dias corridos)
+  // pra ficar consistente. Junior 03/09: KPI weekly de semana fechada (dom-sáb)
+  // pegava 24-30/08, agora acompanha os últimos 7 dias como o MTD.
+  const weekCurStart   = isOdontoLegacy ? mtdCurStart   : dates.weeks[4].start
+  const weekCurEnd     = isOdontoLegacy ? mtdCurEnd     : dates.weeks[4].end
+  const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : dates.weeks[3].start
+  const weekPriorEnd   = isOdontoLegacy ? mtdPrevEnd    : dates.weeks[3].end
+
+  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: weekCurStart,   dataFim: weekCurEnd })
+  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
   const crmAllRes  = useVendasFunil({ marca: slide.marca })
   const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
   const { data: allLeads } = leadsAll
@@ -585,23 +642,34 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // mqlLeads kept for potential downstream use
 
   // ── Weekly computations ──────────────────────────────────────────────────────
-  const weeklyData = useMemo(() => dates.weeks.map(w => {
+  // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser últimos 7d e 7d anteriores.
+  const effectiveWeeks = useMemo(() => {
+    if (!isOdontoLegacy) return dates.weeks
+    const label7d = (start: string, end: string) => weekLabel(start, end)
+    return [
+      dates.weeks[0], dates.weeks[1], dates.weeks[2],
+      { start: weekPriorStart, end: weekPriorEnd, label: label7d(weekPriorStart, weekPriorEnd) },
+      { start: weekCurStart,   end: weekCurEnd,   label: label7d(weekCurStart,   weekCurEnd) },
+    ]
+  }, [isOdontoLegacy, dates.weeks, weekCurStart, weekCurEnd, weekPriorStart, weekPriorEnd])
+
+  const weeklyData = useMemo(() => effectiveWeeks.map(w => {
     const wMedia = activeMedia.filter(r => r.dia >= w.start && r.dia <= w.end)
     const wLeads = filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= w.start && l.dia <= w.end)))
     const invest = wMedia.reduce((s, r) => s + r.spend_brl, 0)
     const leads  = wLeads.length
     const mql    = wLeads.filter(isLeadMql).length
     return { invest, leads, mql, cpmql: mql > 0 ? invest / mql : 0 }
-  }), [activeMedia, allLeads, dates.weeks, filterLeads])
+  }), [activeMedia, allLeads, effectiveWeeks, filterLeads])
 
-  const funnelWeek  = useMemo(() => buildFunnel(crmWeek, dates.weeks[4].start, dates.weeks[4].end), [crmWeek, dates.weeks])
-  const funnelPrior = useMemo(() => buildFunnel(crmPrior, dates.weeks[3].start, dates.weeks[3].end), [crmPrior, dates.weeks])
+  const funnelWeek  = useMemo(() => buildFunnel(crmWeek,  weekCurStart,   weekCurEnd),   [crmWeek,  weekCurStart,   weekCurEnd])
+  const funnelPrior = useMemo(() => buildFunnel(crmPrior, weekPriorStart, weekPriorEnd), [crmPrior, weekPriorStart, weekPriorEnd])
 
   // ── MTD computations ─────────────────────────────────────────────────────────
-  const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= dates.mtdCurStart))), [allLeads, dates.mtdCurStart, filterLeads])
+  const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart))), [allLeads, mtdCurStart, filterLeads])
   const mtdPrevLeads = useMemo(() => filterLeads(deduplicateLeads(prevLeads)), [prevLeads, filterLeads])
 
-  const mtdInvest     = useMemo(() => activeMedia.filter(r => r.dia >= dates.mtdCurStart).reduce((s, r) => s + r.spend_brl, 0), [activeMedia, dates.mtdCurStart])
+  const mtdInvest     = useMemo(() => activeMedia.filter(r => r.dia >= mtdCurStart).reduce((s, r) => s + r.spend_brl, 0), [activeMedia, mtdCurStart])
   const mtdPrevInvest = useMemo(() => activePrevMedia.reduce((s, r) => s + r.spend_brl, 0), [activePrevMedia])
 
   const mtdLeadsCnt = mtdLeads.length
@@ -609,7 +677,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mtdPrevMql  = mtdPrevLeads.filter(isLeadMql).length
   const mtdPrevLeadsCnt = mtdPrevLeads.length
 
-  const funnelMtd  = useMemo(() => buildFunnel(crmCur, dates.mtdCurStart, dates.mtdCurEnd), [crmCur, dates.mtdCurStart, dates.mtdCurEnd])
+  const funnelMtd  = useMemo(() => buildFunnel(crmCur, mtdCurStart, mtdCurEnd), [crmCur, mtdCurStart, mtdCurEnd])
   const funnelMtdP = useMemo(() => buildFunnel(crmPrev, compareRange.start, compareRange.end), [crmPrev, compareRange.start, compareRange.end])
 
   // ── Chart-specific: sempre MTD-vs-MTD (mesmo em modo Julho fechado) ──────────
@@ -623,8 +691,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   }, [dates.monthStart])
 
   const chartCurLeads = useMemo(
-    () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= dates.mtdCurStart && l.dia <= chartCurEnd))),
-    [allLeads, dates.mtdCurStart, chartCurEnd, filterLeads],
+    () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart && l.dia <= chartCurEnd))),
+    [allLeads, mtdCurStart, chartCurEnd, filterLeads],
   )
   const chartPrevLeads = useMemo(
     () => filterLeads(deduplicateLeads(prevLeads.filter(l => l.dia >= compareRange.start && l.dia <= compareRange.end))),
@@ -635,8 +703,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const chartPrevMql = chartPrevLeads.filter(isLeadMql).length
 
   const chartFunnelCur  = useMemo(
-    () => buildFunnel(crmCur, dates.mtdCurStart, chartCurEnd),
-    [crmCur, dates.mtdCurStart, chartCurEnd],
+    () => buildFunnel(crmCur, mtdCurStart, chartCurEnd),
+    [crmCur, mtdCurStart, chartCurEnd],
   )
   const chartFunnelPrev = useMemo(
     () => buildFunnel(crmPrev, compareRange.start, compareRange.end),
@@ -729,10 +797,24 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           : c)
     : kpiCardsAll
 
+  // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
+  // (não só até dia N como o MTD-vs-MTD normal) usando allLeads que já cobre
+  // 5 semanas. Útil quando MTD ant tem 0 leads mas o mês fechado teve N MQL.
+  const [prevMonthStart, prevMonthEnd] = useMemo(() => {
+    const [y, m] = compareRange.key.split('-').map(Number)
+    return [isoDate(new Date(y, m - 1, 1)), isoDate(new Date(y, m, 0))]
+  }, [compareRange.key])
+  const chartPrevFullMonthMql = useMemo(
+    () => isOdontoLegacy
+      ? filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= prevMonthStart && l.dia <= prevMonthEnd))).filter(isLeadMql).length
+      : 0,
+    [isOdontoLegacy, allLeads, prevMonthStart, prevMonthEnd, filterLeads],
+  )
+
   // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
   // Odonto Legacy: foco em receita/qualidade, sem SQL/SAL (removidos do funil)
   const mtdItems: MtdItem[] = isOdontoLegacy
-    ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql }]
+    ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql, ref: chartPrevFullMonthMql, refLabel: `${compareRange.label} fechado` }]
     : [
         { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
         { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
@@ -825,7 +907,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-            {dates.recentWeekLabel} · visão executiva de performance e CRM
+            {effectiveWeeks[4].label} · visão executiva de performance e CRM
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
@@ -879,7 +961,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            Semana · {dates.recentWeekLabel}
+            Semana · {effectiveWeeks[4].label}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -949,7 +1031,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           <div style={{ height: 180 }}>
             <WeeklyBarChart
               values={weeklyData.map(w => w.mql)}
-              labels={dates.weeks.map(w => w.label)}
+              labels={effectiveWeeks.map(w => w.label)}
               accent={acc}
             />
           </div>

@@ -247,6 +247,7 @@ src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 | Marca | multi-seleção estilo Excel. Todas marcadas == Consolidado. 2+ marcas: busca sem filtro no servidor e filtra no cliente |
 | Período | granularidade (dia/mês/trimestre/ano) + quais períodos (multi-seleção estilo Excel, exceto no modo Dia) |
 | Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado (Sub-Fonte cai no campo do RD quando `utm_source` é vazio). **Opções vêm dos dados, nunca de lista fixa** — e desde 31/08 **cruzadas** com os demais filtros ativos (Marca, Fonte, a outra) **+ a janela de período**: só aparece o valor que produz ≥1 deal no funil do recorte atual. O valor já selecionado sempre fica na lista (escape hatch) |
+| SDR / Closer | `nome_sdr` / `nome_closer`, multi-seleção. Desde 04/09 também cruzados nesse mesmo esquema — inclusive um com o outro (escolher um SDR restringe as opções de Closer aos dele, e vice-versa) |
 | Vendas | Negócios × Unidades |
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
@@ -343,6 +344,41 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-04 (3) — Filtros de SDR e Closer em Visão Macro e Performance
+
+Junior pediu dois filtros novos na `FilterBar` compartilhada: **SDR** e
+**Closer**. `buildScopeFilter` (`metrics.ts`) já tinha os campos `sdrs`/
+`closers` prontos no `ScopeOptions` — declarados mas nunca usados fora do
+popup de etapa (`StageDealsDrawer`, que faz seu próprio filtro local). Só
+faltava expor isso como filtro global.
+
+Implementação seguiu o molde exato de Fonte/Sub-Fonte: `sdrs`/`closers`
+entraram como estado persistido no `SharedFiltersContext` (mesmo padrão de
+array vazio = sem restrição, incluídos no `resetFiltros`), dois `MultiSelect`
+novos na `FilterBar`, e `funilFilterOptions` ganhou `sdrs`/`closers` na
+entrada e na saída — cruzando cada lista com os demais filtros ativos + a
+janela de período, **inclusive um com o outro**: selecionar um SDR restringe
+as opções de Closer aos que já trabalharam deal dele, e vice-versa (mesma
+regra "estilo Excel" que já existia entre Marca/Fonte/Sub-fonte).
+
+Escopo ficou só em Visão Macro + Performance, as duas abas que já
+compartilham essa infra. Análise de Perda pediu coordenação: outra sessão do
+Claude Code já estava rodando em paralelo, migrando exatamente essa aba de
+`vw_marketing_funil` para `vw_funil_vendas` + `FilterBar` (a pendência da
+seção 8) — avisada via `send_message` pra incluir o mesmo filtro de
+SDR/Closer como parte dessa migração, evitando trabalho duplicado ou
+conflito de merge.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (209 testes, 7
+novos) num worktree separado (`git worktree add`, fora do OneDrive, sem
+interferir nas outras sessões rodando na mesma pasta) — e desta vez também
+**visto renderizado**: rota temporária sem autenticação (removida antes do
+commit, mesmo padrão da entrada de 19/08 sobre o `DateRangePicker`)
+confirmou os dois filtros populados com nomes reais, filtrando o funil
+corretamente, e o cruzamento SDR↔Closer funcionando (selecionar "Thiago"
+como SDR reduziu as opções de Closer a só "Jéssica"). PR #72, merge direto
+a pedido do Junior.
 
 ### 2026-09-04 (2) — Performance: % de conclusão em vez de delta; SAL do SDR arredondado e preenchido
 

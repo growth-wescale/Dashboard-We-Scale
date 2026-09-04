@@ -344,6 +344,43 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-04 (2) — Performance: % de conclusão em vez de delta; SAL do SDR arredondado e preenchido
+
+Dois ajustes rápidos em cima da entrada anterior (mesmo dia).
+
+**% de conclusão, não delta.** "vs. esperado até hoje" mostrava um delta
+assinado (ex.: "-18,6%"), que lê como déficit. Junior pediu o inverso: de 10
+esperados, 8 feitos → mostrar "80%" (quanto já foi cumprido), não "-20%".
+Novo `Ritmo.pctDoEsperado` (`realizado ÷ esperado × 100`, sem cap — passa de
+100% quando adianta o ritmo); `deltaPct` continua existindo só internamente,
+pro limiar do selo "no ritmo" (>= -2%), nunca mais exibido em texto. Aplicado
+no `MetaRitmoCard` e nas duas linhas do `MetaBreakdownDrawer` por pessoa (a
+segunda linha, "% da meta total", reaproveita `pctRealizado`, que já existia).
+
+**Sem vírgula em meta fracionária, e meta de SAL do SDR preenchida.**
+Rateio de meta entre 2 pessoas cobrindo a mesma marca (ex. SQL de Inpot ÷ 2)
+gera número quebrado; o anel "Hoje" do popup mostrava isso cru com 1 casa
+decimal ("0 / 1,9"). Novo `nfCeil()` (`Math.ceil`, sem decimal) substitui
+`nf()` em todo card/popup com meta (SQL, RR, SAL, COF, Fechamentos) e no anel
+de hoje — nunca mostra vírgula, e arredondar pra CIMA (não pro mais próximo)
+evita subestimar o alvo. Junto, aplicada a meta de SAL do SDR de
+setembro/2026 (`DB_Metas_Performance.meta_volume_sal`, achada mas ainda vazia
+na entrada anterior): valor tirado da aba "SDRs" de `Metas 2026.xlsx`
+("General - Líderes de Expansão" no OneDrive) — a segunda tabela da aba
+(linhas 16-23) bate exatamente com o `meta_sql`/`meta_reuniao_realizada` já
+cadastrados (total 245,3 / 145,2, idêntico à soma no banco), então o SAL dela
+(total 86,9) é a fonte certa. Rateado entre os responsáveis de cada marca do
+mesmo jeito que `meta_sql` já é (marca com 2 responsáveis parte a meta ao
+meio, marca com 1 só leva o valor cheio), arredondado pra cima: Sarah/Oral
+Unic=11, Sarah/Viva=7, Sarah/Eletrovias=10, Thiago/Inpot=14,
+Thiago/Eletrovias=10, Thiago/B2Case=10, Thiago/Lisô Laser=3, Xayane/Inpot=14,
+Xayane/Lisô Laser=3, Xayane/B2Case=10 — total 92 (soma dos arredondamentos
+individuais, por isso maior que 86,9). SAL do **Closer** continua sem meta,
+por decisão do Junior (entrada anterior).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (205 testes) via
+`~/ws-dashboard-build`, e o UPDATE conferido por SELECT contra o banco real.
+
 ### 2026-09-04 — Performance: metas diárias clicáveis + meta de SAL (SDR)
 
 Junior pediu 4 ajustes nos cards de meta (SQL/RR/SAL/COF/Fechamentos/Receita)

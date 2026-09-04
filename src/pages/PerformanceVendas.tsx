@@ -355,8 +355,6 @@ export function PerformanceVendas() {
     cof: countStageEvents(eventos, 'Oportunidade COF', win, viewModes, evOpts),
     fechamentos: countSales(scoped, win, viewModes),
     receita: sumRevenue(scoped, win, viewModes),
-    contatoEfetivo: countStageEvents(eventos, 'Contato Efetivo', win, viewModes, evOpts),
-    tentando: countStageEvents(eventos, 'Tentando Contato', win, viewModes, evOpts),
   }), [scoped, eventos, win, viewModes, evOpts])
 
   // Meta só quando o período resolve para exatamente 1 mês.
@@ -508,9 +506,9 @@ export function PerformanceVendas() {
   ], [scoped, win, viewModes, primeiroMql])
 
   const convTopo = useMemo(() => [
-    { label: 'MQL → Tentando contato', val: strip.mqlEvento > 0 ? (strip.tentando / strip.mqlEvento) * 100 : 0 },
-    { label: 'Tentando contato → Contato efetivo', val: strip.tentando > 0 ? (strip.contatoEfetivo / strip.tentando) * 100 : 0 },
-    { label: 'Contato efetivo → SQL · Reunião agendada', val: strip.contatoEfetivo > 0 ? (strip.sql / strip.contatoEfetivo) * 100 : 0 },
+    { label: 'MQL → Agendamento', val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
+    { label: 'Agendamento → Reunião Realizada', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
+    { label: 'Reunião Realizada → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
   ], [strip])
   const convFundo = useMemo(() => [
     { label: 'SQL · Reunião agendada → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },

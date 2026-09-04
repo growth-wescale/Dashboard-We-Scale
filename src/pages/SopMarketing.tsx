@@ -14,6 +14,7 @@ import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { resolveStage, STAGE_LABEL, type StageKey } from '@/lib/metrics'
 
 /** Subconjunto de 8 etapas da Visão Macro — usado no card CRM do Odonto Legacy. */
@@ -730,12 +731,33 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const investMeta    = Number(metas.find(m => m.metrica === 'investimento')?.valor_meta ?? 0)
   const investMetaPct = investMeta > 0 ? Math.round((mtdInvest / investMeta) * 100) : null
 
+  // ── Receita realizada — só Odonto Legacy ────────────────────────────────────
+  // Realizado da janela atual (7d p/ ODL) vs janela anterior (mesmo pattern
+  // dos outros cards do slide). MTD do mês inteiro (do dia 1 até hoje) é
+  // usado no extra pra comparar com a meta mensal, que vive num plano diferente
+  // da janela de 7d — meta é mensal por natureza.
+  const somaGanhos = useCallback((rows: VwMarketingFunil[], di: string, df: string) =>
+    rows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
+        .reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
+  , [])
+  const receitaCur   = useMemo(() => somaGanhos(crmCur,   mtdCurStart,     mtdCurEnd),     [somaGanhos, crmCur,   mtdCurStart,     mtdCurEnd])
+  const receitaPrev  = useMemo(() => somaGanhos(crmPrev,  prevRangeStart,  prevRangeEnd),  [somaGanhos, crmPrev,  prevRangeStart,  prevRangeEnd])
+  const receitaWeek  = useMemo(() => somaGanhos(crmWeek,  weekCurStart,    weekCurEnd),    [somaGanhos, crmWeek,  weekCurStart,    weekCurEnd])
+  const receitaPrior = useMemo(() => somaGanhos(crmPrior, weekPriorStart,  weekPriorEnd),  [somaGanhos, crmPrior, weekPriorStart,  weekPriorEnd])
+  const receitaMtd   = useMemo(() => somaGanhos(rawCrmAll, dates.monthStart, mtdCurEnd),   [somaGanhos, rawCrmAll, dates.monthStart, mtdCurEnd])
+
+  const monthKeyCur    = dates.monthStart.slice(0, 7)
+  const metaReceita    = getMetaReceitaLegacy(monthKeyCur).meta_receita
+  const pctReceita     = metaReceita > 0 ? Math.round((receitaMtd / metaReceita) * 100) : null
+  const [mesLblY, mesLblM] = monthKeyCur.split('-').map(Number)
+  const mesLabelUpper  = shortMonth(mesLblY, mesLblM - 1).toUpperCase()
+
   interface KpiCard {
     label: string; value: string
     semAnt: { txt: string; col: string }
     mtdAnt: { txt: string; col: string }
     /** Métrica secundária opcional (ex.: Custo/membro no card CP-MQL do Odonto Legacy). */
-    extra?: { label: string; value: string }
+    extra?: { label: string; value: string; subtext?: string }
   }
 
   const kpiCardsAll: KpiCard[] = [
@@ -782,19 +804,36 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       mtdAnt: deltaLabel(funnelMtd.sal, funnelMtdP.sal),
     },
   ]
-  // Odonto Legacy: 3 cards — Invest · MQL · (CP-MQL + Custo/membro comunidade).
+  // Odonto Legacy: 4 cards — Invest · MQL · (CP-MQL + Custo/membro) · Receita.
   // Custo/membro = Invest MTD ÷ total de membros hardcoded em COMUNIDADE_LEGACY_ATUAL.
+  // Card RECEITA usa valor 7d (consistente com outros cards do slide) + extra
+  // mostrando MTD do mês inteiro vs meta mensal (metasReceitaLegacy).
   const kpiCards: KpiCard[] = isOdontoLegacy
-    ? kpiCardsAll
-        .filter(c => ['INVEST.', 'MQL', 'CP-MQL'].includes(c.label))
-        .map(c => c.label === 'CP-MQL'
-          ? { ...c, extra: {
-              label: 'CUSTO/MEMBRO',
-              value: COMUNIDADE_LEGACY_ATUAL.total > 0
-                ? fmtBRL(mtdInvest / COMUNIDADE_LEGACY_ATUAL.total)
-                : '—',
-            } }
-          : c)
+    ? [
+        ...kpiCardsAll
+          .filter(c => ['INVEST.', 'MQL', 'CP-MQL'].includes(c.label))
+          .map(c => c.label === 'CP-MQL'
+            ? { ...c, extra: {
+                label: 'CUSTO/MEMBRO',
+                value: COMUNIDADE_LEGACY_ATUAL.total > 0
+                  ? fmtBRL(mtdInvest / COMUNIDADE_LEGACY_ATUAL.total)
+                  : '—',
+              } }
+            : c),
+        {
+          label: 'RECEITA',
+          value: fmtBRL(receitaWeek),
+          semAnt: deltaLabel(receitaWeek, receitaPrior),
+          mtdAnt: deltaLabel(receitaCur, receitaPrev),
+          extra: {
+            label: `META ${mesLabelUpper}/${String(mesLblY).slice(-2)}`,
+            value: metaReceita > 0 ? fmtBRL(metaReceita) : '—',
+            subtext: metaReceita > 0
+              ? `${fmtBRL(receitaMtd)} MTD · ${pctReceita}% atingido`
+              : undefined,
+          },
+        },
+      ]
     : kpiCardsAll
 
   // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
@@ -993,6 +1032,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                   <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>
                     {card.extra.value}
                   </div>
+                  {card.extra.subtext && (
+                    <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 4, lineHeight: 1.3 }}>
+                      {card.extra.subtext}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

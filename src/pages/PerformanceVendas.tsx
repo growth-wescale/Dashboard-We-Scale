@@ -4,7 +4,6 @@ import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
-import { FunilCompletoSection } from '@/components/ui/FunilCompletoSection'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
 import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
@@ -48,15 +47,23 @@ type MetaDrawerKey = 'sql' | 'rr' | 'sal' | 'cof' | 'fechamentos' | 'receita'
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
-const SDR_ACCENT      = '#EFA94A' // laranja
-const SDR_ACCENT_DARK = '#8A5A1E' // laranja escuro — sombreado do funil (TrapFunnel)
-const CLOSER_ACCENT   = '#2ABCB5' // teal
-const GARGALO         = '#E4585B' // vermelho suave
+const SDR_ACCENT         = '#EFA94A' // laranja
+const SDR_ACCENT_DARK    = '#8A5A1E' // laranja escuro — sombreado do funil (TrapFunnel)
+const CLOSER_ACCENT      = '#2ABCB5' // teal
+const CLOSER_ACCENT_DARK = '#166F69' // teal escuro — sombreado do funil (TrapFunnel)
+const GARGALO            = '#E4585B' // vermelho suave
 
 /** Funil da aba SDR: só as etapas que o SDR trabalha, de MQL até SAL —
  *  Oportunidade·COF em diante é território do Closer. */
 const SDR_STAGES: StageKey[] = [
   'MQL', 'Tentando Contato', 'Contato Efetivo', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL',
+]
+
+/** Funil da aba Closer: só as etapas que o Closer trabalha, de Diagnóstico
+ *  (fronteira de posse — mesma regra de `stageOwnerRole` em metrics.ts) até
+ *  Fechamento. */
+const CLOSER_STAGES: StageKey[] = [
+  'Diagnóstico', 'SAL', 'Oportunidade COF', 'Comitê', 'Pré-Contrato', 'Fechamento',
 ]
 
 // ─── Abas SDR / Closer ─────────────────────────────────────────────────────
@@ -152,11 +159,11 @@ function SectionHeader({ title, sub }: { title: string; sub: string }) {
 
 interface LeadtimeItem { label: string; info: string; value: string }
 
-function LeadtimeCard({ label, info, value }: LeadtimeItem) {
+function LeadtimeCard({ label, info, value, accent }: LeadtimeItem & { accent: string }) {
   return (
     <SCard style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>
-        <Timer size={13} style={{ flexShrink: 0, color: SDR_ACCENT }} />
+        <Timer size={13} style={{ flexShrink: 0, color: accent }} />
         <span>{label}</span>
         <span title={info} style={{ display: 'inline-flex', cursor: 'help' }}>
           <Info size={12} style={{ flexShrink: 0, color: 'var(--ws-text-secondary)', opacity: .7 }} />
@@ -170,14 +177,14 @@ function LeadtimeCard({ label, info, value }: LeadtimeItem) {
   )
 }
 
-function LeadtimeSection({ titulo, itens }: { titulo: string; itens: LeadtimeItem[] }) {
+function LeadtimeSection({ titulo, itens, accent }: { titulo: string; itens: LeadtimeItem[]; accent: string }) {
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', marginBottom: 10 }}>
         {titulo}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-        {itens.map(it => <LeadtimeCard key={it.label} {...it} />)}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(itens.length, 3)}, 1fr)`, gap: 14 }}>
+        {itens.map(it => <LeadtimeCard key={it.label} {...it} accent={accent} />)}
       </div>
     </div>
   )
@@ -531,16 +538,65 @@ export function PerformanceVendas() {
     [clickedSdrStage, scoped, eventos, win, viewModes],
   )
 
+  // ── Leadtime Closer (Diagnóstico → Fechamento) ──────────────────────────────
+  const leadtimeCloserEntreEtapas: LeadtimeItem[] = useMemo(() => [
+    {
+      label: 'Diagnóstico → SAL', info: 'Diagnóstico → SAL',
+      value: mediaLeadtime(rowsInStage(scoped, 'SAL', win, viewModes), r => r.data_reuniao_realizada, r => r.data_sal),
+    },
+    {
+      label: 'SAL → Oportunidade', info: 'SAL → Oportunidade (COF)',
+      value: mediaLeadtime(rowsInStage(scoped, 'Oportunidade COF', win, viewModes), r => r.data_sal, r => r.data_oportunidade),
+    },
+    {
+      label: 'Oportunidade → Comitê', info: 'Oportunidade (COF) → Comitê',
+      value: mediaLeadtime(rowsInStage(scoped, 'Comitê', win, viewModes), r => r.data_oportunidade, r => r.data_comite),
+    },
+    {
+      label: 'Comitê → Pré-Contrato', info: 'Comitê → Pré-Contrato',
+      value: mediaLeadtime(rowsInStage(scoped, 'Pré-Contrato', win, viewModes), r => r.data_comite, r => r.data_pre_contrato),
+    },
+    {
+      label: 'Pré-Contrato → Fechamento', info: 'Pré-Contrato → Fechamento',
+      value: mediaLeadtime(rowsInStage(scoped, 'Fechamento', win, viewModes), r => r.data_pre_contrato, r => r.data_venda),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [scoped, win, viewModes])
+
+  const leadtimeCloserGeral: LeadtimeItem[] = useMemo(() => [
+    {
+      label: 'Leadtime Geral', info: 'Diagnóstico → Fechamento',
+      value: mediaLeadtime(rowsInStage(scoped, 'Fechamento', win, viewModes), r => r.data_reuniao_realizada, r => r.data_venda),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [scoped, win, viewModes])
+
+  // ── Funil Closer (Diagnóstico → Fechamento), clicável ───────────────────────
+  const [clickedCloserStage, setClickedCloserStage] = useState<StageKey | null>(null)
+  const funilCloser: FunnelStage[] = useMemo(
+    () => CLOSER_STAGES.map(s => ({
+      key: s,
+      label: STAGE_LABEL[s],
+      // Fechamento é a trava de venda, nunca uma etapa no histórico de eventos.
+      value: s === 'Fechamento' ? countSales(scoped, win, viewModes) : countStageEvents(eventos, s, win, viewModes, evOpts),
+    })),
+    [scoped, eventos, win, viewModes, evOpts],
+  )
+  const dealsDoCliqueCloser = useMemo(
+    () => (clickedCloserStage ? dealsInStage(scoped, eventos, clickedCloserStage, win, viewModes, 'performance') : []),
+    [clickedCloserStage, scoped, eventos, win, viewModes],
+  )
+
   const convTopo = useMemo(() => [
     { label: 'MQL → Agendamento', val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
     { label: 'Agendamento → Reunião Realizada', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
     { label: 'Reunião Realizada → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
   ], [strip])
   const convFundo = useMemo(() => [
-    { label: 'SQL · Reunião agendada → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
     { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
     { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0 },
     { label: 'Oportunidade · COF → Fechamento', val: strip.cof > 0 ? (strip.fechamentos / strip.cof) * 100 : 0 },
+    { label: 'SAL → Fechamento', val: strip.sal > 0 ? (strip.fechamentos / strip.sal) * 100 : 0 },
   ], [strip])
 
   const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
@@ -620,8 +676,8 @@ export function PerformanceVendas() {
                 Considera apenas horas úteis (seg–sex, 08h–18h BRT).
               </div>
             </div>
-            <LeadtimeSection titulo="Entre etapas" itens={leadtimeEntreEtapas} />
-            <LeadtimeSection titulo="Geral" itens={leadtimeGeral} />
+            <LeadtimeSection titulo="Entre etapas" itens={leadtimeEntreEtapas} accent={SDR_ACCENT} />
+            <LeadtimeSection titulo="Geral" itens={leadtimeGeral} accent={SDR_ACCENT} />
           </div>
 
           <div style={{ marginTop: 32 }}>
@@ -675,7 +731,31 @@ export function PerformanceVendas() {
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
           </div>
 
-          <FunilCompletoSection />
+          <div style={{ marginTop: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)' }}>
+                Leadtime
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)' }}>
+                Considera apenas horas úteis (seg–sex, 08h–18h BRT).
+              </div>
+            </div>
+            <LeadtimeSection titulo="Entre etapas" itens={leadtimeCloserEntreEtapas} accent={CLOSER_ACCENT} />
+            <LeadtimeSection titulo="Geral" itens={leadtimeCloserGeral} accent={CLOSER_ACCENT} />
+          </div>
+
+          <div style={{ marginTop: 32 }}>
+            <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)', marginBottom: 4 }}>
+              Funil · Diagnóstico → Fechamento
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
+              Só as etapas do Closer — clique numa etapa pra ver os deals.
+            </div>
+            <SCard style={{ padding: '18px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+              <TrapFunnel stages={funilCloser} invest={0} accent={CLOSER_ACCENT} dark={CLOSER_ACCENT_DARK}
+                onStageClick={key => setClickedCloserStage(key as StageKey)} />
+            </SCard>
+          </div>
         </>
       )}
 
@@ -691,6 +771,16 @@ export function PerformanceVendas() {
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         deals={dealsDoCliqueSdr}
         accent={SDR_ACCENT}
+      />
+
+      <StageDealsDrawer
+        open={clickedCloserStage !== null}
+        onClose={() => setClickedCloserStage(null)}
+        stage={clickedCloserStage}
+        stageLabel={clickedCloserStage ? STAGE_LABEL[clickedCloserStage] : ''}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        deals={dealsDoCliqueCloser}
+        accent={CLOSER_ACCENT}
       />
 
       <MetaBreakdownDrawer

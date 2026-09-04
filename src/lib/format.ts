@@ -6,6 +6,13 @@ export function nf(n: number): string {
   return Math.round(n).toLocaleString('pt-BR')
 }
 
+/** Número inteiro arredondado pra CIMA, formatado em pt-BR ("1.235").
+ *  Usado em metas fracionárias (rateio entre pessoas dá número quebrado) pra
+ *  nunca aparecer vírgula na tela — e pra não subestimar um alvo. */
+export function nfCeil(n: number): string {
+  return Math.ceil(n).toLocaleString('pt-BR')
+}
+
 /** Número compacto — 1.234 → "1,2k"; 1.234.567 → "1,2M". */
 export function nfK(n: number): string {
   if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'M'

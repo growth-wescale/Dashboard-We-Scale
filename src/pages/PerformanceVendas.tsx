@@ -24,7 +24,7 @@ import {
 import { BRAND_LIST } from '@/constants/brands'
 import type { BrandDef } from '@/constants/brands'
 import type { Marca } from '@/lib/types'
-import { nf, pct, moneyK } from '@/lib/format'
+import { nf, pct, moneyK, nfCeil } from '@/lib/format'
 import { shortMonth, todayLocal } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
 
@@ -420,15 +420,15 @@ export function PerformanceVendas() {
           mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
         <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
           metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
           onClick={mesUnico && metaTimeSel.metaSql > 0 ? () => setMetaDrawer('sql') : undefined} />
         <MetaRitmoCard label="RR (reuniões realizadas)" realizado={strip.rr}
           metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
           onClick={mesUnico && metaTimeSel.metaReuniao > 0 ? () => setMetaDrawer('rr') : undefined} />
         <MetaRitmoCard label="SAL qualificados" realizado={strip.sal}
           metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
           onClick={mesUnico && metaTimeSel.metaSal > 0 ? () => setMetaDrawer('sal') : undefined} />
       </div>
 
@@ -455,11 +455,11 @@ export function PerformanceVendas() {
           mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
         <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
           metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
           onClick={mesUnico && metaTimeSel.metaCof > 0 ? () => setMetaDrawer('cof') : undefined} />
         <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
           metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
           granularity="monthly"
           onClick={mesUnico && metaTimeSel.metaQtdVendas > 0 ? () => setMetaDrawer('fechamentos') : undefined} />
         <MetaRitmoCard label="Receita gerada" realizado={strip.receita}
@@ -488,27 +488,27 @@ export function PerformanceVendas() {
       <MetaBreakdownDrawer
         open={metaDrawer === 'sql'} onClose={() => setMetaDrawer(null)}
         title="Meta SQL × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={SDR_ACCENT} formatter={nf} variant="daily" rows={sqlBreakdown}
+        accent={SDR_ACCENT} formatter={nfCeil} variant="daily" rows={sqlBreakdown}
       />
       <MetaBreakdownDrawer
         open={metaDrawer === 'rr'} onClose={() => setMetaDrawer(null)}
         title="Meta RR × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={SDR_ACCENT} formatter={nf} variant="daily" rows={rrBreakdown}
+        accent={SDR_ACCENT} formatter={nfCeil} variant="daily" rows={rrBreakdown}
       />
       <MetaBreakdownDrawer
         open={metaDrawer === 'sal'} onClose={() => setMetaDrawer(null)}
         title="Meta SAL × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={SDR_ACCENT} formatter={nf} variant="daily" rows={salBreakdown}
+        accent={SDR_ACCENT} formatter={nfCeil} variant="daily" rows={salBreakdown}
       />
       <MetaBreakdownDrawer
         open={metaDrawer === 'cof'} onClose={() => setMetaDrawer(null)}
         title="Meta COF × Realizado — por dia — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={CLOSER_ACCENT} formatter={nf} variant="daily" rows={cofBreakdown}
+        accent={CLOSER_ACCENT} formatter={nfCeil} variant="daily" rows={cofBreakdown}
       />
       <MetaBreakdownDrawer
         open={metaDrawer === 'fechamentos'} onClose={() => setMetaDrawer(null)}
         title="Meta Fechamentos × Realizado — por mês — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={CLOSER_ACCENT} formatter={nf} variant="monthly" rows={fechamentosBreakdown}
+        accent={CLOSER_ACCENT} formatter={nfCeil} variant="monthly" rows={fechamentosBreakdown}
       />
       <MetaBreakdownDrawer
         open={metaDrawer === 'receita'} onClose={() => setMetaDrawer(null)}

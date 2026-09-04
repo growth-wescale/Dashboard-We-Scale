@@ -9,15 +9,11 @@
 
 import { X } from 'lucide-react'
 import { SCard } from '@/components/ui/v2'
-import { pct } from '@/lib/format'
+import { pct, nfCeil } from '@/lib/format'
 import type { PersonMetaRow, PersonSimplesRow } from '@/lib/metaBreakdown'
 
 const OK = '#2ABCB5'
 const RUIM = '#E4585B'
-
-function fmt1(n: number): string {
-  return n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
-}
 
 function RingHoje({ realizado, meta, accent }: { realizado: number; meta: number; accent: string }) {
   const size = 60, raio = 24, largura = 6
@@ -34,7 +30,7 @@ function RingHoje({ realizado, meta, accent }: { realizado: number; meta: number
       <div>
         <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>Hoje</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-          {fmt1(realizado)} / {fmt1(meta)}
+          {nfCeil(realizado)} / {nfCeil(meta)}
         </div>
         <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>{meta > 0 ? `${Math.round(fracao * 100)}%` : '—'}</div>
       </div>

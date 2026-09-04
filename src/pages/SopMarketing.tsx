@@ -332,15 +332,15 @@ function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
   return (
     <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%"
       preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
-      {/* Legend */}
-      <rect x={6} y={4} width={10} height={10} fill="#CBD5E1" rx={2} />
-      <text x={20} y={13} fontSize={10} fill="#64748b">Mês anterior</text>
-      <rect x={90} y={4} width={10} height={10} fill={accent} rx={2} />
-      <text x={104} y={13} fontSize={10} fill="#64748b">Mês atual</text>
+      {/* Legend (order: ref → prev → cur, matching bar order) */}
       {hasRef && (<>
-        <rect x={174} y={4} width={10} height={10} fill="#94A3B8" rx={2} opacity={0.5} />
-        <text x={188} y={13} fontSize={10} fill="#64748b">{refLabel}</text>
+        <rect x={6} y={4} width={10} height={10} fill="#94A3B8" rx={2} opacity={0.5} />
+        <text x={20} y={13} fontSize={10} fill="#64748b">{refLabel}</text>
       </>)}
+      <rect x={hasRef ? 88 : 6}   y={4} width={10} height={10} fill="#CBD5E1" rx={2} />
+      <text x={hasRef ? 102 : 20} y={13} fontSize={10} fill="#64748b">Mês anterior</text>
+      <rect x={hasRef ? 178 : 90}  y={4} width={10} height={10} fill={accent} rx={2} />
+      <text x={hasRef ? 192 : 104} y={13} fontSize={10} fill="#64748b">Mês atual</text>
 
       {items.map((it, gi) => {
         const cx = groupW * gi + groupW / 2
@@ -350,9 +350,10 @@ function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
         const nBars = it.ref !== undefined ? 3 : 2
         const totalW = bW * nBars + gap * (nBars - 1)
         const startX = cx - totalW / 2
-        const prevX = startX
-        const curX  = startX + bW + gap
-        const refX  = startX + (bW + gap) * 2
+        // Ordem: ref (mês fechado) → prev (MTD anterior) → cur (MTD atual)
+        const refX  = startX
+        const prevX = it.ref !== undefined ? startX + bW + gap : startX
+        const curX  = it.ref !== undefined ? startX + (bW + gap) * 2 : startX + bW + gap
         const delta = deltaLabel(it.cur, it.prev)
         return (
           <g key={gi}>

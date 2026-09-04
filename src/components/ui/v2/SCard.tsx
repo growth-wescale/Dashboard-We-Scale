@@ -4,18 +4,29 @@ interface SCardProps {
   children?: ReactNode
   style?: CSSProperties
   pad?: number
+  onClick?: () => void
 }
 
-export function SCard({ children, style, pad = 20 }: SCardProps) {
+export function SCard({ children, style, pad = 20, onClick }: SCardProps) {
   return (
-    <div style={{
-      background: 'var(--ws-surface)',
-      border: '1px solid var(--ws-border)',
-      borderRadius: 18,
-      boxShadow: 'var(--shadow-sm)',
-      padding: pad,
-      ...style,
-    }}>
+    <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
+      style={{
+        background: 'var(--ws-surface)',
+        border: '1px solid var(--ws-border)',
+        borderRadius: 18,
+        boxShadow: 'var(--shadow-sm)',
+        padding: pad,
+        cursor: onClick ? 'pointer' : undefined,
+        transition: onClick ? 'border-color .15s' : undefined,
+        ...style,
+      }}
+      onMouseEnter={onClick ? e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--brand-accent)' } : undefined}
+      onMouseLeave={onClick ? e => { (e.currentTarget as HTMLDivElement).style.borderColor = '' } : undefined}
+    >
       {children}
     </div>
   )

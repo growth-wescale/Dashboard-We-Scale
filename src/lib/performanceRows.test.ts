@@ -20,10 +20,10 @@ const rosterMulti: MembroRoster[] = [
 ]
 
 const metasSdr: MetaAgregada[] = [
-  { nome: 'Xayane', funcao: 'SDR', metaSql: 20, metaAgendamento: 0, metaReuniao: 10, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0 },
+  { nome: 'Xayane', funcao: 'SDR', metaSql: 20, metaAgendamento: 0, metaReuniao: 10, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0, metaSal: 0 },
 ]
 const metasCloser: MetaAgregada[] = [
-  { nome: 'Douglas', funcao: 'Closer', metaSql: 0, metaAgendamento: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 100_000, metaQtdVendas: 0 },
+  { nome: 'Douglas', funcao: 'Closer', metaSql: 0, metaAgendamento: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 100_000, metaQtdVendas: 0, metaSal: 0 },
 ]
 
 function r(p: Partial<FunnelRow>): FunnelRow {

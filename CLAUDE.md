@@ -181,6 +181,26 @@ intocada. Deal Ganho/Perdido, ciclo antigo, ou numa etapa da outra camada
 continua congelado no handoff. `sdr_fonte`/`closer_fonte` = `'posse_atual'`
 marca as linhas corrigidas por essa regra.
 
+**Closer eleito nunca pode ter cargo SDR puro.** As três fontes de `nome_closer`
+(`evento`, `posse`, `posse_atual`) leem `responsavel`/`dono` — um campo de
+"quem está com o deal no RD agora", não "quem é Closer de verdade". Para um
+negócio que entrou numa etapa do Closer mas foi perdido/no-show **antes** de o
+RD reatribuir o dono pra um Closer real, esse campo fica preso no nome de quem
+o entregou — quase sempre o próprio SDR. Achado em 04/09: 149 ciclos com
+`nome_closer` = nome de SDR puro (Xayane 104, Thiago 27, Sarah Padilha 16),
+87% já perdidos, mas 19 ainda "Em andamento" — apareciam no filtro de Closer
+da FilterBar junto com os Closers de verdade. Fix: `clo_evento` e `clo_posse`
+(e o ramo `posse_atual` dentro de `pre`) só aceitam o nome se
+`nome_cargo_foto.cargo` da pessoa **não for exatamente `'SDR'`** — cai pro
+próximo da cadeia (`campo_rd`, o `payload->>'Closer responsável'`, mantido por
+outra automação e mais confiável). Cargo `'SDR/Closer'` (ex.: Vanessa Daniel,
+que acumula os dois papéis) não é bloqueado de propósito — só o `'SDR'` puro.
+**Não existe trava simétrica do lado SDR ainda** — um Closer aparecendo como
+`nome_sdr` é medido e maior (568 ciclos), mas concentrado em funis legados
+(`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil) onde pode
+ser fato histórico real (o Closer atual trabalhou como SDR antes da reforma de
+funis), não bug — decisão de mexer aí fica pro Junior, ver pendência.
+
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
 Não usar `rn_deal_etapa_mes` do banco: a partição ignora funil.
@@ -247,6 +267,7 @@ src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 | Marca | multi-seleção estilo Excel. Todas marcadas == Consolidado. 2+ marcas: busca sem filtro no servidor e filtra no cliente |
 | Período | granularidade (dia/mês/trimestre/ano) + quais períodos (multi-seleção estilo Excel, exceto no modo Dia) |
 | Fonte / Sub-Fonte | `fonte_macro` / `utm_source` normalizado (Sub-Fonte cai no campo do RD quando `utm_source` é vazio). **Opções vêm dos dados, nunca de lista fixa** — e desde 31/08 **cruzadas** com os demais filtros ativos (Marca, Fonte, a outra) **+ a janela de período**: só aparece o valor que produz ≥1 deal no funil do recorte atual. O valor já selecionado sempre fica na lista (escape hatch) |
+| SDR / Closer | `nome_sdr` / `nome_closer`, multi-seleção. Desde 04/09 também cruzados nesse mesmo esquema — inclusive um com o outro (escolher um SDR restringe as opções de Closer aos dele, e vice-versa) |
 | Vendas | Negócios × Unidades |
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
@@ -328,6 +349,7 @@ sem conversão de fuso.
 
 ## 8. Pendências conhecidas
 
+- [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
 - [ ] **Análise de Perda** ainda lê `vw_marketing_funil` (via `vw_funil_compat`/`usePerformanceEquipe`) e tem filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext`. (Performance foi migrada em 2026-09-03.)
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
@@ -343,6 +365,91 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-04 (4) — Xayane (SDR) aparecia como Closer no filtro novo; trava por cargo em vw_deal_ciclo
+
+Junior testou o filtro de SDR/Closer do PR #72 e reportou: a lista de Closer
+trazia "Xayane" — ela é SDR, não Closer. "A lógica tá certa (mostra o que tem
+no banco), mas operacionalmente tem algo errado."
+
+**Investigação confirmou dado errado, não bug do filtro.** `nome_closer` (em
+`vw_deal_ciclo`) é eleito com prioridade `evento > posse/posse_atual >
+campo_rd`. Pra negócios que entraram numa etapa do Closer mas foram
+perdidos/no-show **antes** de o RD reatribuir o dono pra um Closer de
+verdade, o evento de `mudanca_etapa` captura `responsavel` = quem ainda era o
+dono no RD naquele instante — quase sempre o SDR que agendou a reunião.
+Provado com um deal real (`695712d7...`, Inpot): o dashboard mostrava
+Closer = Xayane, mas `payload->>'Closer responsável'` (campo dedicado do RD,
+mantido por outra automação, mais confiável) já dizia **Jéssica**.
+
+**Tamanho:** 149 ciclos com `nome_closer` = nome de SDR puro (Xayane 104,
+Thiago 27, Sarah Padilha 16), 87% perdidos mas **19 ainda "Em andamento"**
+(afetavam contagem ao vivo, não só ruído histórico). Achado um precedente do
+mesmo padrão já reconhecido em código: `useMetasClosers.ts` comentava
+"Vanessa Daniel aparece como Closer... mas é SDR na realidade" — mesma
+família de bug, canto diferente do dashboard.
+
+**Fix em `vw_deal_ciclo`** (`CREATE OR REPLACE VIEW`, matview
+`mv_deal_ciclo_enriquecido` refeita na hora): as três fontes de Closer
+(`clo_evento`, `clo_posse`, e o ramo `posse_atual` dentro de `pre`) passaram a
+exigir que o cargo da pessoa em `nome_cargo_foto` **não seja exatamente
+`'SDR'`** — falha essa checagem e cai pro próximo da cadeia (`campo_rd`).
+Cargo `'SDR/Closer'` (Vanessa Daniel) não é bloqueado, só o `'SDR'` puro —
+ela pode legitimamente fechar negócio às vezes. `papel_responsavel` (que já
+existia em `vw_deal_eventos_ciclo`, calculado do mesmo `nome_cargo_foto`, só
+nunca tinha chegado até `clo_evento`) resolveu o lado evento sem precisar de
+join novo; `clo_posse` e `posse_atual` ganharam `LEFT JOIN nome_cargo_foto`
+próprio, porque partem de `vw_deal_posse.dono` (nome cru, sem cargo).
+
+Verificado: checksum de `vw_deal_ciclo` e `vw_funil_vendas` idêntico
+antes/depois (9.351 ciclos, 50 ganhos, 4.605 perdidos, 4.696 em andamento;
+7.036 linhas / 6.712 ciclo atual / 45 ganhos / R$ 1.998.779,98 / 4.758
+perdidos / 2.233 em andamento). Pós-fix: Xayane/Thiago/Sarah Padilha somem de
+`nome_closer` (149 → 0); os 3 deals de exemplo resolvem pra `campo_rd`
+corretamente (`695712d7...` e `6a733c30...` → Jéssica, `6a51996...` → Aurélio
+Briano). Vanessa Daniel intocada (2 ciclos, como esperado).
+
+**Achado colateral, não corrigido:** o problema espelhado do lado SDR é
+**maior** — 568 ciclos com `nome_sdr` = nome de Closer ativo, mas
+concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser`
+como nome de funil) onde pode ser fato histórico real, não bug. Registrado
+como pendência na seção 8 — decisão de aplicar a mesma trava fica pro Junior,
+caso a caso.
+
+### 2026-09-04 (3) — Filtros de SDR e Closer em Visão Macro e Performance
+
+Junior pediu dois filtros novos na `FilterBar` compartilhada: **SDR** e
+**Closer**. `buildScopeFilter` (`metrics.ts`) já tinha os campos `sdrs`/
+`closers` prontos no `ScopeOptions` — declarados mas nunca usados fora do
+popup de etapa (`StageDealsDrawer`, que faz seu próprio filtro local). Só
+faltava expor isso como filtro global.
+
+Implementação seguiu o molde exato de Fonte/Sub-Fonte: `sdrs`/`closers`
+entraram como estado persistido no `SharedFiltersContext` (mesmo padrão de
+array vazio = sem restrição, incluídos no `resetFiltros`), dois `MultiSelect`
+novos na `FilterBar`, e `funilFilterOptions` ganhou `sdrs`/`closers` na
+entrada e na saída — cruzando cada lista com os demais filtros ativos + a
+janela de período, **inclusive um com o outro**: selecionar um SDR restringe
+as opções de Closer aos que já trabalharam deal dele, e vice-versa (mesma
+regra "estilo Excel" que já existia entre Marca/Fonte/Sub-fonte).
+
+Escopo ficou só em Visão Macro + Performance, as duas abas que já
+compartilham essa infra. Análise de Perda pediu coordenação: outra sessão do
+Claude Code já estava rodando em paralelo, migrando exatamente essa aba de
+`vw_marketing_funil` para `vw_funil_vendas` + `FilterBar` (a pendência da
+seção 8) — avisada via `send_message` pra incluir o mesmo filtro de
+SDR/Closer como parte dessa migração, evitando trabalho duplicado ou
+conflito de merge.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (209 testes, 7
+novos) num worktree separado (`git worktree add`, fora do OneDrive, sem
+interferir nas outras sessões rodando na mesma pasta) — e desta vez também
+**visto renderizado**: rota temporária sem autenticação (removida antes do
+commit, mesmo padrão da entrada de 19/08 sobre o `DateRangePicker`)
+confirmou os dois filtros populados com nomes reais, filtrando o funil
+corretamente, e o cruzamento SDR↔Closer funcionando (selecionar "Thiago"
+como SDR reduziu as opções de Closer a só "Jéssica"). PR #72, merge direto
+a pedido do Junior.
 
 ### 2026-09-04 (2) — Performance: % de conclusão em vez de delta; SAL do SDR arredondado e preenchido
 

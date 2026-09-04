@@ -72,6 +72,17 @@ export function daysInMonth(monthKey: string): number {
   return new Date(y, m, 0).getDate()
 }
 
+/** Dias de segunda a sábado no mês da chave 'YYYY-MM'. Exclui só domingo; sem feriados. */
+export function businessDaysInMonth(monthKey: string): number {
+  const [y, m] = monthKey.split('-').map(Number)
+  const total = new Date(y, m, 0).getDate() // dia 0 do mês seguinte = último dia de m
+  let count = 0
+  for (let d = 1; d <= total; d++) {
+    if (new Date(y, m - 1, d).getDay() !== 0) count++ // 0 = domingo
+  }
+  return count
+}
+
 /** Dia numérico do ISO ('2026-08-11' -> 11). */
 export function dayOfMonth(iso: string): number {
   return Number(iso.slice(-2))

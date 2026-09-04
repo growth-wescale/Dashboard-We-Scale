@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toLocalDate, toLocalYearMonth } from '@/lib/dateUtils'
+import { toLocalDate, toLocalYearMonth, businessDaysInMonth } from '@/lib/dateUtils'
 
 describe('toLocalDate', () => {
   it('converte timestamptz UTC pro dia em Brasília', () => {
@@ -35,5 +35,22 @@ describe('toLocalYearMonth', () => {
   it('timestamptz perto da virada de mês usa o mês certo em Brasília', () => {
     // 2026-09-01T02:00Z == 2026-08-31T23:00 em BRT — ainda agosto.
     expect(toLocalYearMonth('2026-09-01T02:00:00+00:00')).toBe('2026-08')
+  })
+})
+
+describe('businessDaysInMonth', () => {
+  it('conta segunda a sábado, exclui domingo (fev/2026: começa domingo, 28 dias, 4 domingos)', () => {
+    // 2026-02-01 é domingo; domingos em 1, 8, 15, 22 → 28 - 4 = 24
+    expect(businessDaysInMonth('2026-02')).toBe(24)
+  })
+
+  it('mês de 31 dias começando quinta (jan/2026: domingos em 4,11,18,25)', () => {
+    // 2026-01-01 é quinta; 4 domingos → 31 - 4 = 27
+    expect(businessDaysInMonth('2026-01')).toBe(27)
+  })
+
+  it('mês de 31 dias começando domingo (mar/2026: domingos em 1,8,15,22,29)', () => {
+    // 2026-03-01 é domingo; 5 domingos → 31 - 5 = 26
+    expect(businessDaysInMonth('2026-03')).toBe(26)
   })
 })

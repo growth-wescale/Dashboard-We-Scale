@@ -14,7 +14,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance Detalhada, Análise de Perda, Análise de Objeções, GP Setembro** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -68,8 +68,8 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
-`vw_marketing_funil` é a view **antiga**; ainda serve Performance Detalhada e
-Análise de Perda até elas serem migradas. Não usar em código novo.
+`vw_marketing_funil` é a view **antiga**; ainda serve Análise de Perda até ela
+ser migrada. Não usar em código novo.
 
 ### Campos que importam
 
@@ -162,6 +162,25 @@ comparando `vw_funil_vendas.id_etapa_atual` (= `deal_snapshot.id_etapa`) —
 `resolveStage(etapa_funil)` sozinho não distingue SDR de Closer, só olha o
 nome. Deal parado na "Reunião Agendada SQL" do SDR some do balde no Atual.
 
+**SDR/Closer de deal vivo = dono ATUAL, não o dono da última mudança de etapa.**
+A eleição de `nome_sdr`/`nome_closer` em `vw_deal_ciclo` amostra `vw_deal_posse`
+no instante `ts_fim_sdr`/`ts_fim_closer` — o **último evento `mudanca_etapa`**
+daquela camada. `troca_responsavel` não é `mudanca_etapa`, então não move esse
+âncora: um deal parado na mesma etapa desde antes de uma troca de responsável
+ficava congelado no dono antigo (Thiago de férias → reatribuído a Xay/Sarah no
+RD, mas o dash seguia mostrando Thiago). Desde 03/09 há a fonte `posse_atual`:
+para o **ciclo corrente, `deal_snapshot.status IN ('open','ongoing')`**, e
+conforme a **camada da etapa ATUAL** do deal (`datas.camada_atual` = camada do
+último `mudanca_etapa`) — etapa SDR → escreve `nome_sdr`, etapa Closer →
+escreve `nome_closer` — o nome vem do intervalo de posse aberto (`fim IS NULL`
+= dono atual do RD), com prioridade sobre `evento`/`posse`/`campo_rd`. Usa
+`camada_atual`, **não** `ts_fim_closer IS NULL`: um deal em No Show (camada SDR)
+que já passou pelo Closer segue o dono como SDR, e a coluna de Closer fica
+intocada. Deal Ganho/Perdido, ciclo antigo, ou numa etapa da outra camada
+**não** tem o lado dele tocado — o SDR histórico de quem trabalhou o deal
+continua congelado no handoff. `sdr_fonte`/`closer_fonte` = `'posse_atual'`
+marca as linhas corrigidas por essa regra.
+
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
 Não usar `rn_deal_etapa_mes` do banco: a partição ignora funil.
@@ -197,22 +216,27 @@ src/lib/periodo.ts            granularidade, range de período e multi-seleção
 src/lib/aging.ts              agregação do modo Aging (puro, testado)
 src/lib/fonteMapping.ts       normaliza utm_source em grupos
 src/lib/funnelTypes.ts        tipos de vw_funil_vendas
+src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
+src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
+src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
-src/components/ui/TrapFunnel.tsx          funil visual (trapézios, custo, repetidos) — compartilhado com Performance Detalhada
-src/components/ui/FunilCompletoSection.tsx bloco do funil completo (12 etapas) em Performance Detalhada
+src/components/ui/TrapFunnel.tsx          funil visual (trapézios, custo, repetidos) — compartilhado com Performance
+src/components/ui/FunilCompletoSection.tsx bloco do funil completo (12 etapas) em Performance
 src/components/ui/MultiSelect.tsx         multi-seleção estilo Excel — usada pela barra E pelos filtros dos popups
 src/components/ui/DateRangePicker.tsx     calendário + atalhos (Hoje/Ontem/...) pro filtro de Dia
 src/components/ui/StageDealsDrawer.tsx    popup de deals de uma etapa (clique no funil) — filtros MultiSelect por marca/funil/fonte/SDR/closer, opções vêm sempre do próprio recorte
 src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "todas as etapas" (modo Passagens)
 src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
+src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
+src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 ```
 
 ### Os controles da barra
@@ -238,7 +262,7 @@ duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
 aging. A Visão Macro mostra um subconjunto de 8 etapas (MQL → Contato
 Efetivo → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
 Oportunidade → Fechamento) em todos os 3 modos; o funil completo de 12
-etapas fica em Performance Detalhada.
+etapas fica em Performance.
 
 **Multi-seleção de período é união exata, não intervalo.** Selecionar Junho +
 Agosto mostra só esses dois meses — Julho não entra, mesmo estando entre os
@@ -304,7 +328,7 @@ sem conversão de fuso.
 
 ## 8. Pendências conhecidas
 
-- [ ] **Performance Detalhada e Análise de Perda** ainda leem `vw_marketing_funil` e têm filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext` — Performance Detalhada já ganhou um bloco novo (`FunilCompletoSection`) na base nova, mas o resto da página continua na antiga
+- [ ] **Análise de Perda** ainda lê `vw_marketing_funil` (via `vw_funil_compat`/`usePerformanceEquipe`) e tem filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext`. (Performance foi migrada em 2026-09-03.)
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **Motivos de perda hardcoded** em `src/constants/motivosPerda.ts` (listas de string, frágil a acento)
@@ -319,6 +343,113 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-03 (3) — Performance Detalhada vira "Performance" e migra pro stack da Visão Macro
+
+A aba saiu de `vw_funil_compat`/`usePerformanceEquipe` + filtros próprios e
+passou a consumir `useSharedFilters` + `useFunilVendas` + `useFunilEventos`,
+igual à Visão Macro e ao `FunilCompletoSection` que já vivia nela. Agora tem a
+`FilterBar` compartilhada inteira (marca multi, período multi, fonte,
+sub-fonte, toggles) + `OrigemToggle`, e os números batem com a Visão Macro
+(contagem por evento, com a trava "Reunião Agendada SQL só no funil do
+Closer").
+
+**Estrutura mantida:** duas seções, SDR e Closer. Cada strip de cards:
+- SDR: MQL · SQL · RR · SAL (MQL e SAL sem meta — não existe no banco).
+- Closer: Reuniões realizadas · SAL · COF · Fechamentos · Receita.
+Cards com meta (SQL, RR no SDR; COF, Fechamentos, Receita no Closer) usam o
+novo `MetaRitmoCard`: barra de ritmo acumulado (esperado até hoje, dias
+corridos) + "meta do dia" = meta mensal ÷ dias úteis (segunda a sábado, sem
+feriados, via `businessDaysInMonth`). **Metas só aparecem quando o período
+resolve para exatamente 1 mês** — em multi-mês / trimestre / ano / dia os
+cards caem pra volume simples, mesma lógica da Visão Macro que esconde "vs.
+período anterior" em multi-seleção.
+
+**Tabelas por pessoa retrabalhadas** (`buildSdrRows`/`buildCloserRows` agora
+em `src/lib/performanceRows.ts`, sobre `FunnelRow`): SDR mostra MQL · SQL · RR
+· SAL + Meta SQL + % + MQL→SQL; Closer mostra RR · SAL · COF · Ganhos ·
+Faturamento + Meta Fat. + % + Win rate. Contagem por pessoa é por data de
+etapa na linha do deal, atribuída ao `nome_sdr`/`nome_closer` — pode dar um
+pouco menos que o strip (deal sem responsável), explicado em nota de rodapé
+em cada seção.
+
+**Extraído p/ compartilhar:** `funilFilterOptions` (o cruzamento "estilo
+Excel" Marca × Fonte × Sub-fonte × janela) saiu de dentro de `FunilVendas.tsx`
+pra `src/lib/funilFilterOptions.ts`; as duas páginas usam a mesma função.
+`usePerformanceEquipe.ts` **não foi deletado** — Análise de Perda ainda o
+consome (`vw_funil_compat` intacta no banco).
+
+**Rota, arquivo e componente inalterados** (`/performance-vendas`,
+`PerformanceVendas.tsx`, `export function PerformanceVendas`). Só o `<h1>` e o
+label do menu viraram "Performance".
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (188 testes) via
+`~/ws-dashboard-build`. O strip usa as MESMAS funções de contagem de
+`metrics.ts` que a Visão Macro (`countStage`/`countStageEvents`/`countSales`/
+`sumRevenue`), mas o app exige login — não foi visto renderizado nem
+comparado por SQL contra a base.
+
+Spec: `docs/superpowers/specs/2026-09-03-performance-migracao-visao-macro-design.md`
+
+### 2026-09-03 (2) — SDR/Closer responsável ficava congelado no dono antigo
+Junior reportou: no modo **Funil Atual**, os 9 deals em "Novo MQL" da Eletrovias
+apareciam todos como do **Thiago** — mas Thiago está de férias e ele já tinha
+reatribuído no RD todas as negociações Em Andamento para Xay/Sarah. Suspeita
+dele: a contabilização de SDR/closer estava errada em toda a base, não só nesse
+caso.
+
+**Causa raiz.** `vw_deal_ciclo` elege `nome_sdr` amostrando `vw_deal_posse` no
+instante `ts_fim_sdr` = `max(data_evento) FILTER (WHERE camada='SDR')` sobre
+eventos **`mudanca_etapa`**. `troca_responsavel` não é `mudanca_etapa`, então
+não avança esse âncora. Um deal que entrou na etapa uma vez e nunca mais se
+moveu tem `ts_fim_sdr` congelado na data de entrada — qualquer reatribuição
+posterior (a troca em massa da cobertura de férias) fica invisível para a
+eleição, que segue devolvendo o dono da data de entrada. O snapshot
+(`deal_snapshot.responsavel`) e o evento `troca_responsavel` estavam **certos**
+(confirmado deal a deal contra a API do RD com o token do Junior: JACSON,
+Marcelo Ultramari, Fernando Marcos Luiz etc. = Xayane no RD); o sync não tem
+culpa. Nos casos em que um `mudanca_etapa` antigo de origem `webhook` carimbou
+o então-dono, `sdr_evento` (fonte `'evento'`, tida como confiável) travava o
+nome mesmo com posse mais nova — mesmo sintoma, sub-caso. Blast radius medido:
+**188 de 2.051 deals Em Andamento ainda na fase SDR (9,2%)** + 6 na fase Closer
+com `nome_closer` defasado.
+
+**Fix — `vw_deal_ciclo` (`CREATE OR REPLACE VIEW`, matview não tocada na DDL;
+`REFRESH` rodado depois).** Nova fonte `posse_atual`: para o **ciclo corrente**
+com `deal_snapshot.status IN ('open','ongoing')`, conforme a **camada da etapa
+atual** do deal (`datas.camada_atual` = camada do último `mudanca_etapa`) —
+etapa SDR escreve `nome_sdr`, etapa Closer escreve `nome_closer` — o nome vem do
+intervalo de posse aberto (`vw_deal_posse.fim IS NULL` = dono atual do RD), com
+prioridade sobre `evento`/`posse`/`campo_rd`. Deal **Ganho/Perdido, ciclo
+antigo, ou numa etapa da outra camada** não tem o lado dele tocado — o SDR
+histórico continua congelado no handoff (regra de negócio: quem trabalhou o
+deal). CTEs novas `ciclo_max` e `posse_atual`; `datas` ganhou `camada_atual`;
+`campos_rd` ganhou `snap_status`; `sdr_fonte`/`closer_fonte` ganharam o valor
+`'posse_atual'`. `vw_funil_vendas` não expõe essas colunas de fonte, então
+**zero mudança no front** (pass-through).
+
+A 1ª versão do gate usava `ts_fim_closer IS NULL` p/ escolher o lado — isso
+punha o nome de um SDR na coluna de **Closer** se um deal em No Show (camada
+SDR, mas que já passou pelo Closer) fosse reatribuído a um SDR. Trocado no
+mesmo dia para `camada_atual` (migration `..._gate_por_camada_atual`); com isso
+os 9 No Show deixam de aparecer com `nome_sdr` histórico e passam a seguir o
+dono atual como SDR.
+
+**Verificado.** Simulação da view inteira sobre a base real. Checksum de
+`vw_funil_vendas` idêntico antes/depois (7.013 linhas, 6.689 ciclo atual, 45
+ganhos, R$ 1.998.779,98, 4.745 perdidos, 2.223 em andamento). Pós-fix (gate
+`camada_atual`): divergência entre `nome_sdr` e o dono atual do RD, para deals
+Em Andamento **numa etapa de camada SDR**, caiu de **188 → 0** (2.051 deals);
+divergência `nome_closer` em deals numa etapa Closer, 6 → 0. Nenhum ciclo
+fechado/passado nem o lado da outra camada foi alterado. Odonto Scale intocado
+(2 sem SDR eleito, pré-existente). Rollback salvo no scratchpad da sessão.
+
+**Automático daqui pra frente.** Reatribuir o responsável no RD propaga sozinho:
+`wf_5` (5 min) ou `espelhar-rd` edge (15 min) grava `troca_responsavel` +
+atualiza `deal_snapshot` → `vw_deal_posse` recalcula o intervalo aberto →
+`posse_atual` → matview refaz a cada 2 min. Latência total ~2–7 min. Validado
+end-to-end com reatribuições reais de 03/09 (ex.: Thiago→Sarah às 19:35, já
+refletido em `vw_funil_vendas` ~30 min depois sem intervenção).
 
 ### 2026-09-03 — Funil Atual: "Reunião Agendada SQL" só no funil do Closer
 Junior reportou (de novo) que no modo **Funil Atual** da Visão Macro a etapa

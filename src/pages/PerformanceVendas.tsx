@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Users, Handshake } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
@@ -45,17 +45,47 @@ const SDR_ACCENT    = '#EFA94A' // laranja
 const CLOSER_ACCENT = '#2ABCB5' // teal
 const GARGALO       = '#E4585B' // vermelho suave
 
-// ─── UI blocks ─────────────────────────────────────────────────────────────
+// ─── Abas SDR / Closer ─────────────────────────────────────────────────────
+// Separadas em abas (2026-09-04, pedido do Junior) — antes as duas seções
+// ficavam empilhadas na mesma tela, o que ficava longo e desorganizado.
 
-function SectionBadge({ n, accent }: { n: number; accent: string }) {
+type PerfTab = 'sdr' | 'closer'
+
+const PERF_TABS: { key: PerfTab; label: string; icon: React.ComponentType<{ size?: number }>; accent: string }[] = [
+  { key: 'sdr',    label: 'SDR',    icon: Users,      accent: SDR_ACCENT },
+  { key: 'closer', label: 'Closer', icon: Handshake,  accent: CLOSER_ACCENT },
+]
+
+function TabsBar({ current, onChange }: { current: PerfTab; onChange: (t: PerfTab) => void }) {
   return (
-    <div style={{
-      width: 34, height: 34, borderRadius: 10, background: accent, color: '#fff',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 700, fontSize: 16, flexShrink: 0,
-    }}>{n}</div>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+      {PERF_TABS.map(({ key, label, icon: Icon, accent }) => {
+        const ativo = key === current
+        return (
+          <button
+            key={key}
+            onClick={() => onChange(key)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '9px 18px',
+              border: ativo ? `1px solid ${accent}` : '1px solid var(--ws-border)',
+              background: ativo ? accent : 'var(--ws-surface)',
+              color: ativo ? '#fff' : 'var(--ws-text-primary)',
+              borderRadius: 999, cursor: 'pointer',
+              fontSize: 13, fontWeight: 600,
+              transition: 'all .15s',
+            }}
+          >
+            <Icon size={15} />
+            {label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
+
+// ─── UI blocks ─────────────────────────────────────────────────────────────
 
 function Avatar({ nome, accent }: { nome: string; accent: string }) {
   const parts = nome.split(' ')
@@ -95,14 +125,11 @@ function ConversionBar({ label, pctVal, gargalo }: { label: string; pctVal: numb
   )
 }
 
-function SectionHeader({ n, accent, title, sub }: { n: number; accent: string; title: string; sub: string }) {
+function SectionHeader({ title, sub }: { title: string; sub: string }) {
   return (
-    <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-      <SectionBadge n={n} accent={accent} />
-      <div>
-        <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 22, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>{title}</div>
-        <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 3 }}>{sub}</div>
-      </div>
+    <div>
+      <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 22, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>{title}</div>
+      <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 3 }}>{sub}</div>
     </div>
   )
 }
@@ -327,6 +354,8 @@ export function PerformanceVendas() {
     [scoped, win, mesUnico, metasPessoa, roster],
   )
 
+  const [tab, setTab] = useState<PerfTab>('sdr')
+
   // ── Popup de desdobramento por pessoa (clique num card com meta) ───────────
   const [metaDrawer, setMetaDrawer] = useState<MetaDrawerKey | null>(null)
   const winHoje = useMemo(() => toWindow(null, null, [{ from: todayLocal(), to: todayLocal() }]), [])
@@ -411,73 +440,79 @@ export function PerformanceVendas() {
 
       <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
 
-      {/* ── Seção 1 · SDR ─────────────────────────────────────────────── */}
-      <SectionHeader n={1} accent={SDR_ACCENT} title="Executivos de Expansão (SDR)"
-        sub="Do MQL à reunião agendada — cadência, contato efetivo e agendamento" />
+      <TabsBar current={tab} onChange={setTab} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-        <MetaRitmoCard label="MQL no período" realizado={strip.mql} metaMensal={0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
-        <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
-          metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-          onClick={mesUnico && metaTimeSel.metaSql > 0 ? () => setMetaDrawer('sql') : undefined} />
-        <MetaRitmoCard label="RR (reuniões realizadas)" realizado={strip.rr}
-          metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-          onClick={mesUnico && metaTimeSel.metaReuniao > 0 ? () => setMetaDrawer('rr') : undefined} />
-        <MetaRitmoCard label="SAL qualificados" realizado={strip.sal}
-          metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-          onClick={mesUnico && metaTimeSel.metaSal > 0 ? () => setMetaDrawer('sal') : undefined} />
-      </div>
+      {tab === 'sdr' && (
+        <>
+          <SectionHeader title="Executivos de Expansão (SDR)"
+            sub="Do MQL à reunião agendada — cadência, contato efetivo e agendamento" />
 
-      <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-        Os cards usam a mesma contagem por evento da Visão Macro (a etapa “Reunião Agendada SQL” só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
-      </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+            <MetaRitmoCard label="MQL no período" realizado={strip.mql} metaMensal={0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+            <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
+              metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
+              onClick={mesUnico && metaTimeSel.metaSql > 0 ? () => setMetaDrawer('sql') : undefined} />
+            <MetaRitmoCard label="RR (reuniões realizadas)" realizado={strip.rr}
+              metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
+              onClick={mesUnico && metaTimeSel.metaReuniao > 0 ? () => setMetaDrawer('rr') : undefined} />
+            <MetaRitmoCard label="SAL qualificados" realizado={strip.sal}
+              metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
+              onClick={mesUnico && metaTimeSel.metaSal > 0 ? () => setMetaDrawer('sal') : undefined} />
+          </div>
 
-      <SdrTable rows={sdrRows} />
+          <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
+            Os cards usam a mesma contagem por evento da Visão Macro (a etapa “Reunião Agendada SQL” só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
+          </p>
 
-      <div style={{ marginTop: 14 }}>
-        <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
-      </div>
+          <SdrTable rows={sdrRows} />
 
-      {/* ── Seção 2 · Closer ──────────────────────────────────────────── */}
-      <div style={{ marginTop: 40 }}>
-        <SectionHeader n={2} accent={CLOSER_ACCENT} title="Closer"
-          sub="Da reunião realizada ao fechamento — diagnóstico, SAL, oportunidade e receita" />
-      </div>
+          <div style={{ marginTop: 14 }}>
+            <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
+          </div>
+        </>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-        <MetaRitmoCard label="Reuniões realizadas" realizado={strip.rr} metaMensal={0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
-        <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
-        <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
-          metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
-          onClick={mesUnico && metaTimeSel.metaCof > 0 ? () => setMetaDrawer('cof') : undefined} />
-        <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
-          metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
-          granularity="monthly"
-          onClick={mesUnico && metaTimeSel.metaQtdVendas > 0 ? () => setMetaDrawer('fechamentos') : undefined} />
-        <MetaRitmoCard label="Receita gerada" realizado={strip.receita}
-          metaMensal={mesUnico ? metaTimeSel.metaFinanceira : 0}
-          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT}
-          granularity="monthly"
-          onClick={mesUnico && metaTimeSel.metaFinanceira > 0 ? () => setMetaDrawer('receita') : undefined} />
-      </div>
+      {tab === 'closer' && (
+        <>
+          <SectionHeader title="Closer"
+            sub="Da reunião realizada ao fechamento — diagnóstico, SAL, oportunidade e receita" />
 
-      <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-        Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído.
-      </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+            <MetaRitmoCard label="Reuniões realizadas" realizado={strip.rr} metaMensal={0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+            <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+            <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
+              metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
+              onClick={mesUnico && metaTimeSel.metaCof > 0 ? () => setMetaDrawer('cof') : undefined} />
+            <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
+              metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
+              granularity="monthly"
+              onClick={mesUnico && metaTimeSel.metaQtdVendas > 0 ? () => setMetaDrawer('fechamentos') : undefined} />
+            <MetaRitmoCard label="Receita gerada" realizado={strip.receita}
+              metaMensal={mesUnico ? metaTimeSel.metaFinanceira : 0}
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT}
+              granularity="monthly"
+              onClick={mesUnico && metaTimeSel.metaFinanceira > 0 ? () => setMetaDrawer('receita') : undefined} />
+          </div>
 
-      <CloserTable rows={closerRows} />
+          <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
+            Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído.
+          </p>
 
-      <div style={{ marginTop: 14 }}>
-        <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
-      </div>
+          <CloserTable rows={closerRows} />
+
+          <div style={{ marginTop: 14 }}>
+            <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
+          </div>
+        </>
+      )}
 
       <FunilCompletoSection />
 

@@ -39,7 +39,7 @@ const BRANDS_SUB = [
 
 const VENDAS_SUB = [
   { key: 'funil-vendas',        label: 'Visão Macro' },
-  { key: 'performance-vendas',  label: 'Performance Detalhada' },
+  { key: 'performance-vendas',  label: 'Performance' },
   { key: 'analise-perda',       label: 'Análise de Perda' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },

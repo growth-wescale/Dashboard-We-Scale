@@ -1,11 +1,9 @@
 /**
- * Funil completo (12 etapas) na aba Performance Detalhada.
+ * Funil completo (12 etapas) na aba Performance.
  *
- * Bloco independente do resto da página: lê `vw_funil_vendas` +
- * `SharedFiltersContext` — a mesma base e os mesmos filtros (marca, período,
- * fonte) da Visão Macro, que só mostra um subconjunto simplificado de
- * etapas. Não usa os filtros locais (marca/mês) do resto de Performance
- * Detalhada, que ainda lê a view antiga `vw_marketing_funil`.
+ * Lê `vw_funil_vendas` + `SharedFiltersContext` — a mesma base e os mesmos
+ * filtros do resto da página (migrada em 2026-09-03) e da Visão Macro, que só
+ * mostra um subconjunto simplificado de etapas.
  */
 
 import { useMemo } from 'react'

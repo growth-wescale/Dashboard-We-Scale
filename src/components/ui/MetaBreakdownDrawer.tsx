@@ -9,6 +9,7 @@
 
 import { X } from 'lucide-react'
 import { SCard } from '@/components/ui/v2'
+import { pct } from '@/lib/format'
 import type { PersonMetaRow, PersonSimplesRow } from '@/lib/metaBreakdown'
 
 const OK = '#2ABCB5'
@@ -43,7 +44,6 @@ function RingHoje({ realizado, meta, accent }: { realizado: number; meta: number
 
 function LinhaDiaria({ row, accent, formatter }: { row: PersonMetaRow; accent: string; formatter: (n: number) => string }) {
   const { ritmo } = row
-  const deltaVsMeta = row.metaMensal > 0 ? ((row.realizado - row.metaMensal) / row.metaMensal) * 100 : 0
   return (
     <SCard style={{ padding: 18 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
@@ -67,10 +67,10 @@ function LinhaDiaria({ row, accent, formatter }: { row: PersonMetaRow; accent: s
 
       <div style={{ marginTop: 8, fontSize: 12, fontWeight: 500 }}>
         <div style={{ color: ritmo.noRitmo ? '#0A7A68' : '#9B2C2C' }}>
-          {ritmo.deltaPct >= 0 ? '+' : ''}{ritmo.deltaPct.toFixed(1)}% vs esperado até hoje
+          {pct(ritmo.pctDoEsperado)} do esperado até hoje
         </div>
         <div style={{ color: 'var(--ws-text-secondary)', fontWeight: 400, marginTop: 2 }}>
-          {deltaVsMeta >= 0 ? '+' : ''}{deltaVsMeta.toFixed(1)}% vs meta total
+          {pct(ritmo.pctRealizado)} da meta total
         </div>
       </div>
 

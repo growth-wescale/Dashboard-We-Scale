@@ -1,5 +1,6 @@
 import { SCard } from '@/components/ui/v2'
 import { computeRitmo } from '@/lib/metaRitmo'
+import { pct } from '@/lib/format'
 
 const OK = '#2ABCB5'
 const RUIM = '#E4585B'
@@ -81,7 +82,7 @@ export function MetaRitmoCard({
 
       {r.esperado > 0 && (
         <div style={{ marginTop: 6, fontSize: 12, fontWeight: 500, color: r.noRitmo ? '#0A7A68' : '#9B2C2C' }}>
-          {r.deltaPct >= 0 ? '+' : ''}{r.deltaPct.toFixed(1)}% vs. esperado até hoje
+          {pct(r.pctDoEsperado)} do esperado até hoje
         </div>
       )}
 

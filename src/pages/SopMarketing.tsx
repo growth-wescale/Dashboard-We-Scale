@@ -15,16 +15,6 @@ import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
-import { resolveStage, STAGE_LABEL, type StageKey } from '@/lib/metrics'
-
-/** Subconjunto de 8 etapas da Visão Macro — usado no card CRM do Odonto Legacy. */
-const MACRO_STAGES_SOP: StageKey[] = [
-  'MQL', 'Contato Efetivo', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF', 'Fechamento',
-]
-const MACRO_STAGE_LABEL_SOP: Partial<Record<StageKey, string>> = {
-  'Oportunidade COF': 'Oportunidade',
-}
-
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -997,27 +987,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
       ]
 
-  // ── Volume por etapa do CRM (snapshot atual) — só Odonto Legacy ─────────────
-  // Deals ativos hoje, agrupados pelas 8 etapas da Visão Macro (topo do funil
-  // = MQL, fim = Fechamento). Fonte: rawCrmAll (vw_marketing_funil) já filtrado
-  // por marca pelo hook. `resolveStage` normaliza os aliases do CRM ("Novo MQL",
-  // "Diagnóstico (1 dia)", "Negociação SAL", etc).
-  const stageVolumesOdonto = useMemo(() => {
-    if (!isOdontoLegacy) return null
-    const counts = new Map<StageKey, number>(MACRO_STAGES_SOP.map(s => [s, 0]))
-    for (const r of rawCrmAll) {
-      if (r.status_atual !== 'Em andamento') continue
-      const stage = resolveStage(r.etapa_funil)
-      if (!stage || !counts.has(stage)) continue
-      counts.set(stage, (counts.get(stage) ?? 0) + 1)
-    }
-    return MACRO_STAGES_SOP.map(s => ({
-      stage: s,
-      label: MACRO_STAGE_LABEL_SOP[s] ?? STAGE_LABEL[s],
-      count: counts.get(s) ?? 0,
-    }))
-  }, [isOdontoLegacy, rawCrmAll])
-
   // ── MQLs por faixa de capital de investimento ────────────────────────────────
   // Agrupa valores equivalentes (ex.: "50k_100k" e "De R$ 50 mil a R$ 100 mil"
   // caem no mesmo bucket canônico). Ignora "não possui" — quem preenche isso
@@ -1212,7 +1181,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               {isOdontoLegacy ? 'Comparativo 7d · cumulativo' : 'MQL Semanal'}
             </div>
           </div>
-          <div style={{ height: 180 }}>
+          <div style={isOdontoLegacy ? { flex: 1, minHeight: 0 } : { height: 180 }}>
             {isOdontoLegacy && legacyMtdSeries ? (() => {
               const cur  = legacyMtdSeries.cur
               const prev = legacyMtdSeries.prev
@@ -1255,30 +1224,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               </div>
               <div style={{ height: 110 }}>
                 <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
-              </div>
-            </div>
-          )}
-          {isOdontoLegacy && stageVolumesOdonto && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
-                Volume por etapa do CRM · deals ativos
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {stageVolumesOdonto.map(({ stage, label, count }) => (
-                  <div key={stage} style={{
-                    display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline',
-                    padding: '5px 8px', borderRadius: 6,
-                    background: count > 0 ? `${acc}0a` : 'transparent',
-                    borderLeft: count > 0 ? `2px solid ${acc}` : '2px solid transparent',
-                  }}>
-                    <span style={{ fontSize: 11.5, color: count > 0 ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)' }}>
-                      {label}
-                    </span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: count > 0 ? acc : 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                      {count}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
           )}

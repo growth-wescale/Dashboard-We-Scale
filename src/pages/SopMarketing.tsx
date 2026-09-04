@@ -384,6 +384,104 @@ function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
   )
 }
 
+// ── SopMtdChart: 2 séries cumulativas (7d atual vs 7d anterior) ──────────────
+// Compacto (~300x180) pra caber na Col 1 do slide. Seletor de métrica embutido
+// no header. Dropped in no lugar do WeeklyBarChart pra Odonto Legacy.
+interface SopMtdSeries { label: string; values: number[]; dashed?: boolean }
+interface SopMtdMetricDef { key: string; label: string; money?: boolean }
+
+function SopMtdChart({
+  series, days, metric, metrics, onMetricChange, accent, formatValue,
+}: {
+  series: SopMtdSeries[]
+  days: number
+  metric: string
+  metrics: SopMtdMetricDef[]
+  onMetricChange: (m: string) => void
+  accent: string
+  formatValue: (v: number) => string
+}) {
+  const VW = 300, VH = 175, PAD_L = 6, PAD_R = 6, PAD_T = 44, PAD_B = 18
+  const iw = VW - PAD_L - PAD_R, ih = VH - PAD_T - PAD_B
+  const xFn = (i: number) => PAD_L + (i / Math.max(1, days - 1)) * iw
+  const maxV = Math.max(...series.flatMap(s => s.values), 1) * 1.15
+  const yFn = (v: number) => PAD_T + ih - (v / maxV) * ih
+
+  const cur  = series.find(s => !s.dashed)?.values ?? []
+  const prev = series.find(s => s.dashed)?.values ?? []
+  const curTot  = cur[cur.length - 1] ?? 0
+  const prevTot = prev[prev.length - 1] ?? 0
+  const delta   = deltaLabel(curTot, prevTot)
+
+  const tickDays = days <= 7 ? Array.from({ length: days }, (_, i) => i + 1) : [1, Math.ceil(days / 2), days]
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: accent, fontVariantNumeric: 'tabular-nums' }}>
+            {formatValue(curTot)}
+          </span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: delta.col }}>{delta.txt}</span>
+        </div>
+        <select
+          value={metric}
+          onChange={e => onMetricChange(e.target.value)}
+          style={{
+            appearance: 'none', padding: '3px 8px', border: '1px solid #e2e8f0',
+            borderRadius: 8, fontSize: 10, background: '#fff',
+            color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none',
+            fontWeight: 600,
+          }}
+          title="Métrica"
+        >
+          {metrics.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+      </div>
+      <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%"
+        preserveAspectRatio="xMidYMid meet" style={{ display: 'block', flex: 1 }}>
+        {[0, 0.25, 0.5, 0.75, 1].map(g => (
+          <line key={g} x1={PAD_L} x2={VW - PAD_R} y1={PAD_T + ih * g} y2={PAD_T + ih * g} stroke="#e2e8f0" strokeWidth="0.5" />
+        ))}
+        {series.slice().reverse().map(s => {
+          const stroke = s.dashed ? '#94a3b8' : accent
+          const dAttr = s.values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xFn(i)} ${yFn(v)}`).join(' ')
+          return (
+            <g key={s.label}>
+              <path d={dAttr} fill="none" stroke={stroke}
+                strokeWidth={s.dashed ? 1.5 : 2}
+                strokeDasharray={s.dashed ? '3 3' : ''}
+                strokeLinejoin="round" strokeLinecap="round" />
+              {!s.dashed && (
+                <circle cx={xFn(s.values.length - 1)} cy={yFn(s.values[s.values.length - 1] ?? 0)} r={3} fill={stroke} />
+              )}
+            </g>
+          )
+        })}
+        {tickDays.map(d => (
+          <text key={d} x={xFn(d - 1)} y={VH - 4} textAnchor="middle" fontSize={8} fill="#94a3b8">
+            d{d}
+          </text>
+        ))}
+      </svg>
+      <div style={{ display: 'flex', gap: 10, marginTop: 2, fontSize: 9, color: '#64748b' }}>
+        {series.map(s => (
+          <span key={s.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{
+              width: 10, height: 2, borderRadius: 1,
+              background: s.dashed ? '#94a3b8' : accent,
+              borderTop: s.dashed ? '1px dashed #94a3b8' : 'none',
+              borderBottom: s.dashed ? '1px dashed #94a3b8' : 'none',
+              opacity: s.dashed ? 0.8 : 1,
+            }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface FunnelStage { label: string; count: number; perdido?: number }
 
 // ── SopWaterfallFunnel ─────────────────────────────────────────────────────────
@@ -666,6 +764,44 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
   const funnelWeek  = useMemo(() => buildFunnel(crmWeek,  weekCurStart,   weekCurEnd),   [crmWeek,  weekCurStart,   weekCurEnd])
   const funnelPrior = useMemo(() => buildFunnel(crmPrior, weekPriorStart, weekPriorEnd), [crmPrior, weekPriorStart, weekPriorEnd])
+
+  // ── Séries cumulativas dia-a-dia (7d) — só usado no chart Odonto Legacy ─────
+  // Para cada dia da janela: MQL acumulado, novos membros acumulados,
+  // e custo/membro = invest acumulado ÷ membros acumulados.
+  // Membros = leads com formulario='comunidade_multistep' (marca Odonto Scale).
+  const legacyMtdSeries = useMemo(() => {
+    if (!isOdontoLegacy) return null
+    const buildWindow = (start: string, end: string) => {
+      const startMs = new Date(start + 'T00:00:00').getTime()
+      const endMs   = new Date(end   + 'T00:00:00').getTime()
+      const days = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1)
+      const invByDay: number[] = Array.from({ length: days }, () => 0)
+      const mqlByDay: number[] = Array.from({ length: days }, () => 0)
+      const memByDay: number[] = Array.from({ length: days }, () => 0)
+      const dedupF = filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= start && l.dia <= end)))
+      for (const r of activeMedia) {
+        if (r.dia < start || r.dia > end) continue
+        const i = Math.round((new Date(r.dia + 'T00:00:00').getTime() - startMs) / 86400000)
+        if (i >= 0 && i < days) invByDay[i] += r.spend_brl
+      }
+      for (const l of dedupF) {
+        if (!l.dia) continue
+        const i = Math.round((new Date(l.dia + 'T00:00:00').getTime() - startMs) / 86400000)
+        if (i < 0 || i >= days) continue
+        if (isLeadMql(l)) mqlByDay[i]++
+        if (l.formulario === 'comunidade_multistep') memByDay[i]++
+      }
+      const cum = (arr: number[]) => { let s = 0; return arr.map(v => (s += v)) }
+      const invCum = cum(invByDay)
+      const mqlCum = cum(mqlByDay)
+      const memCum = cum(memByDay)
+      const custoCum = memCum.map((m, i) => (m > 0 ? invCum[i] / m : 0))
+      return { days, mqlCum, memCum, custoCum }
+    }
+    return { cur: buildWindow(weekCurStart, weekCurEnd), prev: buildWindow(weekPriorStart, weekPriorEnd) }
+  }, [isOdontoLegacy, allLeads, activeMedia, weekCurStart, weekCurEnd, weekPriorStart, weekPriorEnd, filterLeads])
+
+  const [legacyMtdMetric, setLegacyMtdMetric] = useState<'mql' | 'membros' | 'custo'>('mql')
 
   // ── MTD computations ─────────────────────────────────────────────────────────
   const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart))), [allLeads, mtdCurStart, filterLeads])
@@ -1067,18 +1203,50 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           gap: 14, flex: 1, minHeight: 0,
         }}>
 
-        {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado) */}
+        {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado)
+             Odonto Legacy: chart cumulativo 7d com seletor MQL/Membros/Custo/membro. */}
         {!dates.isClosed && (
         <div style={cardStyle}>
           <div style={{ marginBottom: 6 }}>
-            <div style={colTitle(acc)}>MQL Semanal</div>
+            <div style={colTitle(acc)}>
+              {isOdontoLegacy ? 'Comparativo 7d · cumulativo' : 'MQL Semanal'}
+            </div>
           </div>
           <div style={{ height: 180 }}>
-            <WeeklyBarChart
-              values={weeklyData.map(w => w.mql)}
-              labels={effectiveWeeks.map(w => w.label)}
-              accent={acc}
-            />
+            {isOdontoLegacy && legacyMtdSeries ? (() => {
+              const cur  = legacyMtdSeries.cur
+              const prev = legacyMtdSeries.prev
+              const days = Math.min(cur.days, prev.days)
+              const pickArr = (w: typeof cur) =>
+                legacyMtdMetric === 'mql' ? w.mqlCum
+                  : legacyMtdMetric === 'membros' ? w.memCum
+                  : w.custoCum
+              const isMoney = legacyMtdMetric === 'custo'
+              return (
+                <SopMtdChart
+                  series={[
+                    { label: 'Últimos 7d',   values: pickArr(cur).slice(0, days) },
+                    { label: '7d anteriores', values: pickArr(prev).slice(0, days), dashed: true },
+                  ]}
+                  days={days}
+                  metric={legacyMtdMetric}
+                  metrics={[
+                    { key: 'mql',     label: 'MQL' },
+                    { key: 'membros', label: 'Membros na comunidade' },
+                    { key: 'custo',   label: 'Custo por membro', money: true },
+                  ]}
+                  onMetricChange={m => setLegacyMtdMetric(m as 'mql' | 'membros' | 'custo')}
+                  accent={acc}
+                  formatValue={v => (isMoney ? fmtBRL(v) : String(Math.round(v)))}
+                />
+              )
+            })() : (
+              <WeeklyBarChart
+                values={weeklyData.map(w => w.mql)}
+                labels={effectiveWeeks.map(w => w.label)}
+                accent={acc}
+              />
+            )}
           </div>
           {!isOdontoLegacy && (
             <div style={{ marginTop: 14 }}>

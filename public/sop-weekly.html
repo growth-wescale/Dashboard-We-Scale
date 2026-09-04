@@ -606,7 +606,52 @@ const MQL_SEM = {
   'viva':   {jul: 13, ago: 7}
 };
 
+// Odonto Legacy: 3 linhas comparando 7d atual vs 7d anterior (MQL / Membros / Custo/membro).
+// Espelha o SopMtdChart do React — janela 7d escolhida pelo Junior 03/09 pra
+// evitar distorção do MTD com poucos dias no mês corrente. Atualizar
+// manualmente conforme o Junior traz os números da semana.
+const LEGACY_7D = {
+  atual:    { ini:'28/08', fim:'03/09', mql:27, membros:62, custo:44  },
+  anterior: { ini:'21/08', fim:'27/08', mql:28, membros:10, custo:166 },
+};
+
+function legacyMtdHTML(){
+  const a = LEGACY_7D.atual, p = LEGACY_7D.anterior;
+  const rows = [
+    { lab:'MQL',           cur:a.mql,     prev:p.mql,     fmt:(v)=>v,                 lowerBetter:false },
+    { lab:'Membros',       cur:a.membros, prev:p.membros, fmt:(v)=>v,                 lowerBetter:false },
+    { lab:'Custo/membro',  cur:a.custo,   prev:p.custo,   fmt:(v)=>'R$ '+v,           lowerBetter:true  },
+  ].map(r=>{
+    const max = Math.max(r.cur, r.prev, 1);
+    const wCur  = Math.max(6, (r.cur  / max) * 100);
+    const wPrev = Math.max(6, (r.prev / max) * 100);
+    const delta = r.prev > 0 ? ((r.cur - r.prev) / r.prev) * 100 : (r.cur > 0 ? 100 : 0);
+    const up = delta >= 0;
+    const positive = r.lowerBetter ? !up : up;
+    const cls = positive ? 'up' : 'down';
+    const arrow = up ? '▲' : '▼';
+    const deltaFmt = (up?'+':'')+delta.toFixed(0)+'%';
+    return `<div class="mqlcmp-row">
+        <span class="mqlcmp-lab">${p.ini}–${p.fim}</span>
+        <div class="mqlcmp-track"><div class="mqlcmp-bar jul" style="width:${wPrev}%">${r.fmt(r.prev)}</div></div>
+        <span class="mqlcmp-delta"></span>
+      </div>
+      <div class="mqlcmp-row">
+        <span class="mqlcmp-lab">${a.ini}–${a.fim}</span>
+        <div class="mqlcmp-track"><div class="mqlcmp-bar ago" style="width:${wCur}%">${r.fmt(r.cur)}</div></div>
+        <span class="mqlcmp-delta ${cls}">${arrow} ${deltaFmt}</span>
+      </div>
+      <div class="mqlcmp-metric-lab" style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tinta-suave);margin:10px 0 6px">${r.lab}</div>`;
+  }).join('');
+  return `<div class="mqlcmp">
+    <div class="mqlcmp-head">Comparativo 7d · cumulativo</div>
+    <div class="mqlcmp-rows">${rows}</div>
+    <div class="mqlcmp-note">Últimos 7d vs 7d anteriores · fonte: leads + mídia Marketing</div>
+  </div>`;
+}
+
 function mqlComparativoHTML(bkey){
+  if(bkey === 'odonto') return legacyMtdHTML();
   const d = MQL_SEM[bkey];
   if(!d) return '';
   const max = Math.max(d.jul, d.ago, 1);

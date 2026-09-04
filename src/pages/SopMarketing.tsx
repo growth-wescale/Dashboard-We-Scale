@@ -209,6 +209,9 @@ function deltaLabel(cur: number, prev: number, lowerIsBetter = false) {
     return { txt: `+${rounded}`, col: lowerIsBetter ? 'var(--status-risco)' : 'var(--status-positivo)' }
   }
   const p = ((cur - prev) / prev) * 100
+  // Delta subpercentual (|p| < 0.5%) arredondaria pra '▲ 0%' — visualmente
+  // confuso (seta pra cima com magnitude zero). Colapsa em '—' cinza.
+  if (Math.abs(p) < 0.5) return { txt: '—', col: 'var(--ws-text-secondary)' }
   const up = p >= 0
   const positive = lowerIsBetter ? !up : up
   return {

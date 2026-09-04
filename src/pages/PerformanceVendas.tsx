@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download, Users, Handshake } from 'lucide-react'
+import { Download, Users, Handshake, Timer, Info } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
@@ -20,7 +20,10 @@ import { buildPersonMetaRows, buildPersonSimplesRows } from '@/lib/metaBreakdown
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
+  rowsInStage, rowsInLoss,
 } from '@/lib/metrics'
+import type { FunnelRow } from '@/lib/funnelTypes'
+import { businessMinutesBetween, formatBusinessDuration } from '@/lib/businessDuration'
 import { BRAND_LIST } from '@/constants/brands'
 import type { BrandDef } from '@/constants/brands'
 import type { Marca } from '@/lib/types'
@@ -130,6 +133,41 @@ function SectionHeader({ title, sub }: { title: string; sub: string }) {
     <div>
       <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 22, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>{title}</div>
       <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 3 }}>{sub}</div>
+    </div>
+  )
+}
+
+// ─── Leadtime (horário comercial) ───────────────────────────────────────────
+
+interface LeadtimeItem { label: string; info: string; value: string }
+
+function LeadtimeCard({ label, info, value }: LeadtimeItem) {
+  return (
+    <SCard style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>
+        <Timer size={13} style={{ flexShrink: 0, color: SDR_ACCENT }} />
+        <span>{label}</span>
+        <span title={info} style={{ display: 'inline-flex', cursor: 'help' }}>
+          <Info size={12} style={{ flexShrink: 0, color: 'var(--ws-text-secondary)', opacity: .7 }} />
+        </span>
+      </div>
+      <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 22, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)' }}>{info}</div>
+    </SCard>
+  )
+}
+
+function LeadtimeSection({ titulo, itens }: { titulo: string; itens: LeadtimeItem[] }) {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', marginBottom: 10 }}>
+        {titulo}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        {itens.map(it => <LeadtimeCard key={it.label} {...it} />)}
+      </div>
     </div>
   )
 }
@@ -396,6 +434,79 @@ export function PerformanceVendas() {
     metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaFinanceira ?? 0,
   }), [closerRows, metasPessoa])
 
+  // ── Leadtime em horário comercial (aba SDR) ─────────────────────────────────
+  // Reciclagem às vezes não gera novo evento de MQL no ciclo atual — usa a
+  // data de MQL mais antiga que esse lead já teve, em outro ciclo. Mesma
+  // lógica (duplicada de propósito) da Visão Macro (FunilVendas.tsx).
+  const primeiroMql = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of scoped) {
+      if (!r.data_novo_mql) continue
+      const atual = map.get(r.id_lead)
+      if (!atual || r.data_novo_mql < atual) map.set(r.id_lead, r.data_novo_mql)
+    }
+    return map
+  }, [scoped])
+  const mqlEfetivo = (r: FunnelRow) => r.data_novo_mql ?? primeiroMql.get(r.id_lead) ?? null
+
+  const mediaLeadtime = (
+    rows: FunnelRow[],
+    inicioDe: (r: FunnelRow) => string | null,
+    fimDe: (r: FunnelRow) => string | null,
+  ): string => {
+    const duracoes: number[] = []
+    for (const r of rows) {
+      const min = businessMinutesBetween(inicioDe(r), fimDe(r))
+      if (min != null && min > 0) duracoes.push(min)
+    }
+    if (duracoes.length === 0) return '—'
+    return formatBusinessDuration(duracoes.reduce((s, x) => s + x, 0) / duracoes.length)
+  }
+
+  const leadtimeEntreEtapas: LeadtimeItem[] = useMemo(() => [
+    {
+      label: 'MQL → Tentando Contato', info: 'Novo MQL → Tentando Contato',
+      value: mediaLeadtime(rowsInStage(scoped, 'Tentando Contato', win, viewModes), mqlEfetivo, r => r.data_tentando_contato),
+    },
+    {
+      label: 'Tentando Contato → Contato Efetivo', info: 'Tentando Contato → Contato Efetivo',
+      value: mediaLeadtime(rowsInStage(scoped, 'Contato Efetivo', win, viewModes), r => r.data_tentando_contato, r => r.data_contato_efetivo),
+    },
+    {
+      label: 'Contato Efetivo → Interesse Reunião', info: 'Contato Efetivo → Interesse Reunião',
+      value: mediaLeadtime(rowsInStage(scoped, 'Interesse Reunião', win, viewModes), r => r.data_contato_efetivo, r => r.data_interesse_reuniao),
+    },
+    {
+      label: 'Interesse Reunião → Conexão', info: 'Interesse Reunião → Conexão',
+      value: mediaLeadtime(rowsInStage(scoped, 'Conexão', win, viewModes), r => r.data_interesse_reuniao, r => r.data_conexao),
+    },
+    {
+      label: 'Conexão → Reunião Agendada', info: 'Conexão → Reunião Agendada',
+      value: mediaLeadtime(rowsInStage(scoped, 'Reunião Agendada SQL', win, viewModes), r => r.data_conexao, r => r.data_agendamento_reuniao_sql),
+    },
+    {
+      label: 'Contato Efetivo → Reunião Agendada', info: 'Contato Efetivo → Reunião Agendada (consolidado)',
+      value: mediaLeadtime(rowsInStage(scoped, 'Reunião Agendada SQL', win, viewModes), r => r.data_contato_efetivo, r => r.data_agendamento_reuniao_sql),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [scoped, win, viewModes, primeiroMql])
+
+  const leadtimeGeral: LeadtimeItem[] = useMemo(() => [
+    {
+      label: 'Tempo para Agendar', info: 'MQL → Agendamento',
+      value: mediaLeadtime(rowsInStage(scoped, 'Reunião Agendada SQL', win, viewModes), mqlEfetivo, r => r.data_agendamento_reuniao_sql),
+    },
+    {
+      label: 'Tempo para Perder', info: 'MQL → Perdido',
+      value: mediaLeadtime(rowsInLoss(scoped, win, viewModes), mqlEfetivo, r => r.data_perdido),
+    },
+    {
+      label: 'Tempo para Realizar Reunião', info: 'MQL → Reunião Realizada',
+      value: mediaLeadtime(rowsInStage(scoped, 'Diagnóstico', win, viewModes), mqlEfetivo, r => r.data_reuniao_realizada),
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [scoped, win, viewModes, primeiroMql])
+
   const convTopo = useMemo(() => [
     { label: 'MQL → Tentando contato', val: strip.mqlEvento > 0 ? (strip.tentando / strip.mqlEvento) * 100 : 0 },
     { label: 'Tentando contato → Contato efetivo', val: strip.tentando > 0 ? (strip.contatoEfetivo / strip.tentando) * 100 : 0 },
@@ -474,6 +585,19 @@ export function PerformanceVendas() {
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
+          </div>
+
+          <div style={{ marginTop: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)' }}>
+                Leadtime
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)' }}>
+                Considera apenas horas úteis (seg–sex, 08h–18h BRT).
+              </div>
+            </div>
+            <LeadtimeSection titulo="Entre etapas" itens={leadtimeEntreEtapas} />
+            <LeadtimeSection titulo="Geral" itens={leadtimeGeral} />
           </div>
         </>
       )}

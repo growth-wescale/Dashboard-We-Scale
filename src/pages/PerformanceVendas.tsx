@@ -1,139 +1,36 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Download, Filter } from 'lucide-react'
-import { usePerformanceEquipe } from '@/hooks/usePerformanceEquipe'
-import type { FunilCompatRow } from '@/hooks/usePerformanceEquipe'
-import { useMetasPerformance, findMeta, metaTimeSdr, metaTimeCloserFat } from '@/hooks/useMetasPerformance'
-import { useRosterVendas } from '@/hooks/useRosterVendas'
-import { inPeriod } from '@/lib/vendasUtils'
-import { BRANDS_WITH_OVERVIEW } from '@/constants/brands'
-import { nf, pct, moneyBig } from '@/lib/format'
-import { currentMonthRange, monthLabelLong as monthLabel, fmtBR, daysInMonth, dayOfMonth } from '@/lib/dateUtils'
-import { SCard, KTile } from '@/components/ui/v2'
-import { downloadCsv } from '@/lib/csv'
-import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { useMemo } from 'react'
+import { Download } from 'lucide-react'
+import { PageTop } from '@/components/ui/PageTop'
+import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
-import { useSharedFilters } from '@/contexts/SharedFiltersContext'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FunilCompletoSection } from '@/components/ui/FunilCompletoSection'
-
-const BRANDS = BRANDS_WITH_OVERVIEW
+import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
+import { SCard } from '@/components/ui/v2'
+import { useSharedFilters } from '@/contexts/SharedFiltersContext'
+import { useFunilVendas } from '@/hooks/useFunilVendas'
+import { useFunilEventos } from '@/hooks/useFunilEventos'
+import { useMetasPerformance } from '@/hooks/useMetasPerformance'
+import { useMetasTimeResumo } from '@/hooks/useMetasTimeResumo'
+import { useRosterVendas } from '@/hooks/useRosterVendas'
+import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
+import type { SdrRow, CloserRow } from '@/lib/performanceRows'
+import { funilFilterOptions } from '@/lib/funilFilterOptions'
+import {
+  buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
+} from '@/lib/metrics'
+import { BRAND_LIST } from '@/constants/brands'
+import type { BrandDef } from '@/constants/brands'
+import type { Marca } from '@/lib/types'
+import { nf, pct, moneyK } from '@/lib/format'
+import { shortMonth } from '@/lib/dateUtils'
+import { downloadCsv } from '@/lib/csv'
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
 const SDR_ACCENT    = '#EFA94A' // laranja
 const CLOSER_ACCENT = '#2ABCB5' // teal
 const GARGALO       = '#E4585B' // vermelho suave
-
-// ─── Deal helpers ──────────────────────────────────────────────────────────
-
-function activeRows(rows: FunilCompatRow[]) {
-  return rows.filter(r => r.status_atual !== 'Excluído')
-}
-
-function computeKpis(rows: FunilCompatRow[], di: string, df: string) {
-  const R = activeRows(rows)
-  // MQL vem da Expansão (data_novo_mql), não mais do banco de Marketing: só a
-  // Expansão sabe o funil do negócio, e sem isso o toggle Inbound × Prospecção
-  // Ativa não teria efeito sobre este KPI.
-  const mql   = R.filter(r => inPeriod(r.data_novo_mql, di, df)).length
-  const tent  = R.filter(r => inPeriod(r.data_tentando_contato, di, df)).length
-  const ce    = R.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length
-  const sql   = R.filter(r => inPeriod(r.data_agendamento_reuniao_sql, di, df)).length
-  const noShow= R.filter(r => inPeriod(r.data_no_show, di, df)).length
-  const diag  = R.filter(r => inPeriod(r.data_reuniao_realizada, di, df)).length
-  const sal   = R.filter(r => inPeriod(r.data_sal, di, df)).length
-  const cof   = R.filter(r => inPeriod(r.data_oportunidade, di, df)).length
-  const ganho = R.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
-  const fech  = ganho.length
-  const rev   = ganho.reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
-  return { mql, tent, ce, sql, noShow, diag, sal, cof, fech, rev }
-}
-
-// ─── Agregação real por SDR/Closer (via nome_sdr / nome_closer) ────────────
-
-import type { MetaAgregada } from '@/hooks/useMetasPerformance'
-import type { MembroRoster } from '@/hooks/useRosterVendas'
-
-interface SdrRow   { nome: string; agend: number; reun: number; contEfet: number; meta: number; pctAting: number; ceToAgend: number }
-interface CloserRow{ nome: string; reun: number; sal: number; ganhos: number; faturamento: number; meta: number; pctAting: number; winRate: number }
-
-function normKey(s: string | null | undefined): string {
-  return (s ?? '').trim().toLowerCase()
-}
-
-function rosterSetForSdr(roster: MembroRoster[]): Set<string> {
-  return new Set(
-    roster
-      .filter(r => r.cargo === 'SDR' || r.cargo === 'SDR/Closer')
-      .map(r => normKey(r.nome)),
-  )
-}
-
-function rosterSetForCloser(roster: MembroRoster[]): Set<string> {
-  return new Set(
-    roster
-      .filter(r => r.cargo === 'Closer' || r.cargo === 'SDR/Closer')
-      .map(r => normKey(r.nome)),
-  )
-}
-
-function buildSdrRows(
-  rows: FunilCompatRow[], di: string, df: string,
-  metas: MetaAgregada[], roster: MembroRoster[],
-): SdrRow[] {
-  const valid = rosterSetForSdr(roster)
-  const bucket = new Map<string, { agend: number; reun: number; ce: number }>()
-
-  for (const r of rows) {
-    if (r.status_atual === 'Excluído') continue
-    const nome = r.nome_sdr?.trim()
-    if (!nome) continue
-    if (!valid.has(normKey(nome))) continue
-
-    const cur = bucket.get(nome) ?? { agend: 0, reun: 0, ce: 0 }
-    if (inPeriod(r.data_agendamento_reuniao_sql, di, df))             cur.agend++
-    if (inPeriod(r.data_reuniao_realizada, di, df))     cur.reun++
-    if (inPeriod(r.data_contato_efetivo, di, df)) cur.ce++
-    bucket.set(nome, cur)
-  }
-
-  return Array.from(bucket.entries()).map(([nome, v]) => {
-    const meta = findMeta(metas, nome, 'SDR')?.metaSql ?? 0
-    const pctAting = meta > 0 ? (v.agend / meta) * 100 : 0
-    const ceToAg   = v.ce > 0 ? (v.agend / v.ce) * 100 : 0
-    return { nome, agend: v.agend, reun: v.reun, contEfet: v.ce, meta, pctAting, ceToAgend: ceToAg }
-  }).sort((a, b) => b.pctAting - a.pctAting)
-}
-
-function buildCloserRows(
-  rows: FunilCompatRow[], di: string, df: string,
-  metas: MetaAgregada[], roster: MembroRoster[],
-): CloserRow[] {
-  const valid = rosterSetForCloser(roster)
-  const bucket = new Map<string, { reun: number; sal: number; ganhos: number; faturamento: number }>()
-
-  for (const r of rows) {
-    if (r.status_atual === 'Excluído') continue
-    const nome = r.nome_closer?.trim()
-    if (!nome) continue
-    if (!valid.has(normKey(nome))) continue
-
-    const cur = bucket.get(nome) ?? { reun: 0, sal: 0, ganhos: 0, faturamento: 0 }
-    if (inPeriod(r.data_reuniao_realizada, di, df)) cur.reun++
-    if (inPeriod(r.data_sal, di, df))         cur.sal++
-    if (r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)) {
-      cur.ganhos++
-      cur.faturamento += r.valor_contrato ?? 0
-    }
-    bucket.set(nome, cur)
-  }
-
-  return Array.from(bucket.entries()).map(([nome, v]) => {
-    const meta = findMeta(metas, nome, 'Closer')?.metaFinanceira ?? 0
-    const pctAting = meta > 0 ? (v.faturamento / meta) * 100 : 0
-    const winRate  = v.reun > 0 ? (v.ganhos / v.reun) * 100 : 0
-    return { nome, reun: v.reun, sal: v.sal, ganhos: v.ganhos, faturamento: v.faturamento, meta, pctAting, winRate }
-  }).sort((a, b) => b.pctAting - a.pctAting)
-}
 
 // ─── UI blocks ─────────────────────────────────────────────────────────────
 
@@ -185,98 +82,54 @@ function ConversionBar({ label, pctVal, gargalo }: { label: string; pctVal: numb
   )
 }
 
-function GoalTracker({ label, realized, expected, total, formatter, dayText }: {
-  label: string
-  realized: number
-  expected: number
-  total: number
-  formatter: (n: number) => string
-  dayText: string
-}) {
-  const pctRealized = total > 0 ? Math.min(100, (realized / total) * 100) : 0
-  const pctExpected = total > 0 ? Math.min(100, (expected / total) * 100) : 0
-  const deltaPct = expected > 0 ? ((realized - expected) / expected) * 100 : 0
-  const noRitmo  = deltaPct >= -2
-  const fill = noRitmo ? CLOSER_ACCENT : GARGALO
-
+function SectionHeader({ n, accent, title, sub }: { n: number; accent: string; title: string; sub: string }) {
   return (
-    <SCard style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <div>
-          <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>{label}</div>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>{dayText}</div>
-        </div>
-        <span style={{
-          alignSelf: 'flex-start',
-          padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 500,
-          background: noRitmo ? '#E4F6F5' : '#FCE4E4',
-          color: noRitmo ? '#0A7A68' : '#9B2C2C',
-        }}>{noRitmo ? 'no ritmo' : 'abaixo do ritmo'}</span>
+    <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+      <SectionBadge n={n} accent={accent} />
+      <div>
+        <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 22, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>{title}</div>
+        <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 3 }}>{sub}</div>
       </div>
-      <div style={{ position: 'relative', height: 22, marginTop: 18, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', inset: 0, width: `${pctRealized}%`, background: fill, borderRadius: 999 }} />
-        <div style={{ position: 'absolute', left: `calc(${pctExpected}% - 1px)`, top: -2, bottom: -2, width: 2, background: 'var(--ws-text-primary)' }} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', marginTop: 14, gap: 12 }}>
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>Realizado</div>
-          <div style={{ fontWeight: 600, fontSize: 18, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatter(realized)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>Esperado até hoje</div>
-          <div style={{ fontWeight: 600, fontSize: 18, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatter(expected)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>Meta total</div>
-          <div style={{ fontWeight: 600, fontSize: 18, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatter(total)}</div>
-        </div>
-      </div>
-      {expected > 0 && (
-        <div style={{
-          marginTop: 10, fontSize: 12.5, fontWeight: 500,
-          color: noRitmo ? '#0A7A68' : '#9B2C2C',
-        }}>
-          {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(1)}% vs. esperado até hoje
-        </div>
-      )}
-    </SCard>
+    </div>
   )
 }
 
 // ─── Tabelas ───────────────────────────────────────────────────────────────
 
 function SdrTable({ rows }: { rows: SdrRow[] }) {
+  const cols = '40px 1fr 70px 70px 70px 70px 90px 70px 90px'
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
       <div style={{ background: SDR_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         PRÉ-VENDAS · EXECUTIVOS DE EXPANSÃO
       </div>
       <div style={{ padding: '6px 8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 100px 110px 90px 90px 100px', padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
           <span>#</span><span>NOME</span>
+          <span style={{ textAlign: 'right' }}>MQL</span>
+          <span style={{ textAlign: 'right' }}>SQL</span>
+          <span style={{ textAlign: 'right' }}>RR</span>
+          <span style={{ textAlign: 'right' }}>SAL</span>
+          <span style={{ textAlign: 'right' }}>META SQL</span>
           <span style={{ textAlign: 'right' }}>%</span>
-          <span style={{ textAlign: 'right' }}>META SAL</span>
-          <span style={{ textAlign: 'right' }}>CONT. EFET.</span>
-          <span style={{ textAlign: 'right' }}>AGEND.</span>
-          <span style={{ textAlign: 'right' }}>REUN.</span>
-          <span style={{ textAlign: 'right' }}>CE→AGEND.</span>
+          <span style={{ textAlign: 'right' }}>MQL→SQL</span>
         </div>
+        {rows.length === 0 && (
+          <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--ws-text-secondary)' }}>Nenhum SDR com atividade no recorte.</div>
+        )}
         {rows.map((r, i) => (
-          <div key={r.nome} style={{
-            display: 'grid', gridTemplateColumns: '40px 1fr 80px 100px 110px 90px 90px 100px',
-            padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)',
-            fontVariantNumeric: 'tabular-nums',
-          }}>
+          <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
             <RankNum i={i} accent={SDR_ACCENT} />
             <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
               <Avatar nome={r.nome} accent={SDR_ACCENT} />{r.nome}
             </span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{pct(r.pctAting)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.meta > 0 ? nf(r.meta) : '—'}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.contEfet)}</span>
-            <span style={{ textAlign: 'right' }}>{nf(r.agend)}</span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.reun)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.ceToAgend)}</span>
+            <span style={{ textAlign: 'right' }}>{nf(r.mql)}</span>
+            <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sql)}</span>
+            <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.sal)}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaSql > 0 ? nf(r.metaSql) : '—'}</span>
+            <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaSql > 0 ? pct(r.pctAting) : '—'}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.mqlToSql)}</span>
           </div>
         ))}
       </div>
@@ -285,38 +138,40 @@ function SdrTable({ rows }: { rows: SdrRow[] }) {
 }
 
 function CloserTable({ rows }: { rows: CloserRow[] }) {
+  const cols = '40px 1fr 70px 70px 70px 80px 120px 110px 70px 80px'
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
       <div style={{ background: CLOSER_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         VENDAS · CLOSERS
       </div>
       <div style={{ padding: '6px 8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 80px 120px 130px 80px 70px 90px 90px', padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
           <span>#</span><span>NOME</span>
-          <span style={{ textAlign: 'right' }}>%</span>
-          <span style={{ textAlign: 'right' }}>META FAT.</span>
-          <span style={{ textAlign: 'right' }}>FATURAMENTO</span>
-          <span style={{ textAlign: 'right' }}>REUN.</span>
+          <span style={{ textAlign: 'right' }}>RR</span>
           <span style={{ textAlign: 'right' }}>SAL</span>
+          <span style={{ textAlign: 'right' }}>COF</span>
           <span style={{ textAlign: 'right' }}>GANHOS</span>
+          <span style={{ textAlign: 'right' }}>FATURAMENTO</span>
+          <span style={{ textAlign: 'right' }}>META FAT.</span>
+          <span style={{ textAlign: 'right' }}>%</span>
           <span style={{ textAlign: 'right' }}>WIN RATE</span>
         </div>
+        {rows.length === 0 && (
+          <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--ws-text-secondary)' }}>Nenhum Closer com atividade no recorte.</div>
+        )}
         {rows.map((r, i) => (
-          <div key={r.nome} style={{
-            display: 'grid', gridTemplateColumns: '40px 1fr 80px 120px 130px 80px 70px 90px 90px',
-            padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)',
-            fontVariantNumeric: 'tabular-nums',
-          }}>
+          <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
             <RankNum i={i} accent={CLOSER_ACCENT} />
             <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
               <Avatar nome={r.nome} accent={CLOSER_ACCENT} />{r.nome}
             </span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{pct(r.pctAting)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.meta > 0 ? moneyBig(r.meta) : '—'}</span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{moneyBig(r.faturamento)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.reun)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.sal)}</span>
+            <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
+            <span style={{ textAlign: 'right' }}>{nf(r.sal)}</span>
+            <span style={{ textAlign: 'right' }}>{nf(r.cof)}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.ganhos)}</span>
+            <span style={{ textAlign: 'right', fontWeight: 700 }}>{moneyK(r.faturamento)}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaFinanceira > 0 ? moneyK(r.metaFinanceira) : '—'}</span>
+            <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaFinanceira > 0 ? pct(r.pctAting) : '—'}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.winRate)}</span>
           </div>
         ))}
@@ -325,230 +180,242 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
   )
 }
 
+// ─── Conversões (SCard reutilizável) ──────────────────────────────────────
+
+function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: string; val: number }[] }) {
+  const worst = Math.min(...linhas.map(x => x.val))
+  return (
+    <SCard>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>{titulo}</div>
+        <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--ws-text-secondary)' }}>
+          <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: GARGALO, marginRight: 4 }} />Gargalo</span>
+          <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: CLOSER_ACCENT, marginRight: 4 }} />Melhor</span>
+        </div>
+      </div>
+      {linhas.map((c, i) => (
+        <ConversionBar key={i} label={c.label} pctVal={c.val} gargalo={c.val === worst && linhas.length > 1} />
+      ))}
+    </SCard>
+  )
+}
+
 // ─── Página ────────────────────────────────────────────────────────────────
 
 export function PerformanceVendas() {
-  const { origem } = useSharedFilters()
-  const [brandKey, setBrandKey] = useState<string>('overview')
-  const [{ start, end }, setRange] = useState(currentMonthRange())
-  const [brandOpen, setBrandOpen] = useState(false)
+  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, viewModes } = useSharedFilters()
 
-  const brand = BRANDS.find(b => b.key === brandKey) ?? BRANDS[0]
-  const mesKey = start.slice(0, 7)
-  const { data: rows, error: rowsError } = usePerformanceEquipe({ marca: brand.marca, dataInicio: start, dataFim: end, origem })
+  const marcasSelecionadas = useMemo(
+    () => brandKeys.map(k => BRAND_LIST.find(b => b.key === k)).filter((b): b is BrandDef => !!b),
+    [brandKeys],
+  )
+  const todasSelecionadas = marcasSelecionadas.length === BRAND_LIST.length
+  const scopeLabel = todasSelecionadas
+    ? 'Consolidado'
+    : marcasSelecionadas.length === 1
+      ? marcasSelecionadas[0].label
+      : marcasSelecionadas.length <= 3
+        ? marcasSelecionadas.map(b => b.label).join(', ')
+        : `${marcasSelecionadas.length} marcas selecionadas`
+  const marcaFetch = marcasSelecionadas.length === 1 ? marcasSelecionadas[0].marca : undefined
+  const marcasParaEscopo = useMemo(
+    () => marcasSelecionadas.map(b => b.marca).filter((m): m is Marca => !!m),
+    [marcasSelecionadas],
+  )
+
+  const { data: rows, error: rowsError } = useFunilVendas(origem, marcaFetch)
+  const { data: eventos } = useFunilEventos({
+    enabled: true,
+    origem,
+    inicio: range.start,
+    // No modo safra o evento pode ser posterior à janela do MQL.
+    fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
+  })
   const { data: roster } = useRosterVendas()
-  const { data: metas, error: metasError }  = useMetasPerformance({ mesKey, marca: brand.marca })
 
-  useEffect(() => {
-    const handler = () => setRange({ ...currentMonthRange() })
-    window.addEventListener('dashboard:refresh', handler)
-    return () => window.removeEventListener('dashboard:refresh', handler)
-  }, [])
+  const scope = useMemo(
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes }),
+    [origem, marcasParaEscopo, fontes, subFontes],
+  )
+  const scoped = useMemo(() => rows.filter(scope), [rows, scope])
+  // `ranges` é a união exata dos períodos selecionados — nunca `range`.
+  const win = useMemo(
+    () => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))),
+    [ranges],
+  )
+  const idsEscopo = useMemo(() => new Set(scoped.map(r => String(r.id_lead))), [scoped])
+  const safra = useMemo(
+    () => (viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null),
+    [scoped, win, viewModes.funnelView],
+  )
 
-  const kpis = useMemo(() => computeKpis(rows, start, end), [rows, start, end])
+  const opcoes = useMemo(
+    () => funilFilterOptions({
+      rows, win, marcasParaEscopo, fontes, subFontes,
+      cohort: viewModes.funnelView === 'cohort',
+    }),
+    [rows, win, marcasParaEscopo, fontes, subFontes, viewModes.funnelView],
+  )
+  const marcasDisponiveis = useMemo(
+    () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),
+    [opcoes.marcas],
+  )
 
-  // Conversões
+  // ── Contagens por evento (strips) ──────────────────────────────────────────
+  const evOpts = useMemo(
+    () => ({ cohortIds: safra, extra: (e: { id_deal: unknown }) => idsEscopo.has(String(e.id_deal)) }),
+    [safra, idsEscopo],
+  )
+
+  const strip = useMemo(() => ({
+    mql: countStage(scoped, 'MQL', win, viewModes),
+    sql: countStageEvents(eventos, 'Reunião Agendada SQL', win, viewModes, evOpts),
+    rr:  countStageEvents(eventos, 'Diagnóstico', win, viewModes, evOpts),
+    sal: countStageEvents(eventos, 'SAL', win, viewModes, evOpts),
+    cof: countStageEvents(eventos, 'Oportunidade COF', win, viewModes, evOpts),
+    fechamentos: countSales(scoped, win, viewModes),
+    receita: sumRevenue(scoped, win, viewModes),
+    contatoEfetivo: countStageEvents(eventos, 'Contato Efetivo', win, viewModes, evOpts),
+    tentando: countStageEvents(eventos, 'Tentando Contato', win, viewModes, evOpts),
+  }), [scoped, eventos, win, viewModes, evOpts])
+
+  // Meta só quando o período resolve para exatamente 1 mês.
+  const mesUnico = periodMode === 'mes' && periodValues.length === 1 ? periodValues[0] : null
+  const fimJanela = ranges[0]?.end ?? range.end
+
+  const { porMarca: metaTime } = useMetasTimeResumo({ mesesKeys: mesUnico ? [mesUnico] : [] })
+  const metaTimeSel = useMemo(() => {
+    const acc = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0 }
+    for (const b of marcasSelecionadas) {
+      const m = b.marca ? metaTime.get(b.marca) : undefined
+      if (!m) continue
+      acc.metaSql += m.metaSql; acc.metaReuniao += m.metaReuniao; acc.metaCof += m.metaCof
+      acc.metaFinanceira += m.metaFinanceira; acc.metaQtdVendas += m.metaQtdVendas
+    }
+    return acc
+  }, [marcasSelecionadas, metaTime])
+
+  // Metas por pessoa (para a coluna % das tabelas).
+  const { data: metasPessoa, error: metasError } = useMetasPerformance({
+    mesKey: mesUnico ?? range.start.slice(0, 7),
+    marca: marcaFetch,
+  })
+  const sdrRows: SdrRow[] = useMemo(
+    () => buildSdrRows(scoped, win, metasPessoa, roster),
+    [scoped, win, metasPessoa, roster],
+  )
+  const closerRows: CloserRow[] = useMemo(
+    () => buildCloserRows(scoped, win, metasPessoa, roster),
+    [scoped, win, metasPessoa, roster],
+  )
+
   const convTopo = useMemo(() => [
-    { label: 'MQL → Tentando contato',                   val: kpis.mql  > 0 ? (kpis.tent / kpis.mql)  * 100 : 0 },
-    { label: 'Tentando contato → Contato efetivo',       val: kpis.tent > 0 ? (kpis.ce   / kpis.tent) * 100 : 0 },
-    { label: 'Contato efetivo → SQL · Reunião agendada', val: kpis.ce   > 0 ? (kpis.sql  / kpis.ce)   * 100 : 0 },
-  ], [kpis])
-
+    { label: 'MQL → Tentando contato', val: strip.mql > 0 ? (strip.tentando / strip.mql) * 100 : 0 },
+    { label: 'Tentando contato → Contato efetivo', val: strip.tentando > 0 ? (strip.contatoEfetivo / strip.tentando) * 100 : 0 },
+    { label: 'Contato efetivo → SQL · Reunião agendada', val: strip.contatoEfetivo > 0 ? (strip.sql / strip.contatoEfetivo) * 100 : 0 },
+  ], [strip])
   const convFundo = useMemo(() => [
-    { label: 'SQL · Reunião agendada → Diagnóstico', val: kpis.sql  > 0 ? (kpis.diag  / kpis.sql)  * 100 : 0 },
-    { label: 'Diagnóstico → SAL',                    val: kpis.diag > 0 ? (kpis.sal   / kpis.diag) * 100 : 0 },
-    { label: 'SAL → Oportunidade · COF',             val: kpis.sal  > 0 ? (kpis.cof   / kpis.sal)  * 100 : 0 },
-    { label: 'Oportunidade · COF → Fechamento',      val: kpis.cof  > 0 ? (kpis.fech  / kpis.cof)  * 100 : 0 },
-  ], [kpis])
+    { label: 'SQL · Reunião agendada → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
+    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
+    { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0 },
+    { label: 'Oportunidade · COF → Fechamento', val: strip.cof > 0 ? (strip.fechamentos / strip.cof) * 100 : 0 },
+  ], [strip])
 
-  // Metas do time (somadas das metas individuais reais de DB_Metas_Performance)
-  const dim   = daysInMonth(mesKey + '-01')
-  const dayN  = Math.min(dim, dayOfMonth(end))
-  const metaSql   = useMemo(() => metaTimeSdr(metas),        [metas])
-  const metaFat   = useMemo(() => metaTimeCloserFat(metas),  [metas])
-  const pctPeriod = dayN / dim
-
-  const sdrRows    = useMemo(() => buildSdrRows(rows, start, end, metas, roster),    [rows, start, end, metas, roster])
-  const closerRows = useMemo(() => buildCloserRows(rows, start, end, metas, roster), [rows, start, end, metas, roster])
+  const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
+    ? `${periodValues.length} períodos selecionados`
+    : `${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`
 
   return (
-    <div style={{ padding: '28px 32px 60px', maxWidth: 1400, margin: '0 auto' }}>
-      {/* Header ── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <h1 style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 34, lineHeight: 1.1, color: 'var(--ws-text-primary)', margin: 0 }}>Performance Detalhada</h1>
-            <OrigemToggle />
-          </div>
-          <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ws-text-secondary)' }}>
-            {brand.label} · {monthLabel(start)}
-          </div>
-        </div>
+    <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
+      {...(marcasSelecionadas.length === 1 ? { 'data-brand': marcasSelecionadas[0].key } : {})}>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {/* Brand dropdown */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setBrandOpen(v => !v)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 16px', borderRadius: 999,
-                border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
-                color: 'var(--ws-text-primary)', fontSize: 13, cursor: 'pointer',
-                boxShadow: 'var(--shadow-sm)',
-              }}
-            >
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CLOSER_ACCENT }} />
-              {brand.label}
-              <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>▾</span>
-            </button>
-            {brandOpen && (
-              <div style={{
-                position: 'absolute', top: '110%', left: 0, zIndex: 20,
-                background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
-                borderRadius: 12, boxShadow: 'var(--shadow-md)', minWidth: 220, padding: 6,
-              }}>
-                {BRANDS.map(b => (
-                  <button key={b.key}
-                    onClick={() => { setBrandKey(b.key); setBrandOpen(false) }}
-                    style={{
-                      width: '100%', textAlign: 'left', padding: '8px 10px', border: 'none',
-                      background: b.key === brandKey ? 'var(--ws-bg-alt, #F4F4F5)' : 'transparent',
-                      cursor: 'pointer', borderRadius: 8, fontSize: 13, color: 'var(--ws-text-primary)',
-                    }}
-                  >{b.label}</button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Range */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 10,
-            padding: '10px 16px', borderRadius: 999,
-            border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
-            color: 'var(--ws-text-primary)', fontSize: 13, boxShadow: 'var(--shadow-sm)',
-          }}>
-            <Filter size={14} style={{ color: 'var(--ws-text-secondary)' }} />
-            <span style={{ color: 'var(--ws-text-secondary)' }}>Mês</span>
-            <input type="date" value={start} onChange={e => setRange(r => ({ ...r, start: e.target.value }))}
-              style={{ border: 'none', background: 'transparent', color: 'var(--ws-text-primary)', fontSize: 13 }} />
-            <span style={{ color: 'var(--ws-text-secondary)' }}>–</span>
-            <input type="date" value={end} onChange={e => setRange(r => ({ ...r, end: e.target.value }))}
-              style={{ border: 'none', background: 'transparent', color: 'var(--ws-text-primary)', fontSize: 13 }} />
-          </div>
-
+      <PageTop
+        title="Performance"
+        titleAside={<OrigemToggle />}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        actions={
           <button
-            onClick={() => downloadCsv(rows, `performance-vendas-${brand.marca ?? 'todas'}-${start}-${end}`)}
-            disabled={!rows.length}
-            title={!rows.length ? 'Sem dados no período' : 'Exportar performance da equipe em CSV'}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '10px 16px', borderRadius: 999,
-              border: '1px solid var(--ws-border)', background: 'var(--ws-surface)',
-              color: 'var(--ws-text-primary)', fontSize: 13, cursor: rows.length ? 'pointer' : 'not-allowed', boxShadow: 'var(--shadow-sm)',
-              opacity: rows.length ? 1 : 0.5,
-            }}>
+            onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `performance-${marcasSelecionadas.map(b => b.key).join('-') || 'todas'}-${range.start}-${range.end}`)}
+            disabled={!scoped.length}
+            title={!scoped.length ? 'Sem dados no período' : 'Exportar deals do recorte em CSV'}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', background: 'var(--ws-surface)', fontSize: 13, color: 'var(--ws-text-primary)', cursor: scoped.length ? 'pointer' : 'not-allowed', opacity: scoped.length ? 1 : 0.5 }}
+          >
             <Download size={14} /> Exportar
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance de Vendas" />
+      <FilterBar
+        marcasDisponiveis={marcasDisponiveis}
+        fontesDisponiveis={opcoes.fontes}
+        subFontesDisponiveis={opcoes.subFontes}
+      />
 
-      {/* ── Seção 1 · SDR ─────────────────────────────────────────────────── */}
+      <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance" />
+
+      {/* ── Seção 1 · SDR ─────────────────────────────────────────────── */}
       <SectionHeader n={1} accent={SDR_ACCENT} title="Executivos de Expansão (SDR)"
         sub="Do MQL à reunião agendada — cadência, contato efetivo e agendamento" />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '10px 0 22px' }}>
-        <KTile label="MQLs no período"              value={nf(kpis.mql)} />
-        <KTile label="Contatos efetivos"            value={nf(kpis.ce)} />
-        <KTile label="SQLs (reuniões agendadas)"    value={nf(kpis.sql)} />
-        <KTile label="No-show"                      value={nf(kpis.noShow)} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px' }}>
+        <MetaRitmoCard label="MQL no período" realizado={strip.mql} metaMensal={0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+        <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
+          metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+        <MetaRitmoCard label="RR (reuniões realizadas)" realizado={strip.rr}
+          metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+        <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
       </div>
+
+      <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
+        Os cards usam a mesma contagem por evento da Visão Macro (a etapa “Reunião Agendada SQL” só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
+      </p>
 
       <SdrTable rows={sdrRows} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-        <GoalTracker
-          label="Meta de SQL do período"
-          realized={kpis.sql}
-          expected={metaSql * pctPeriod}
-          total={metaSql}
-          formatter={nf}
-          dayText={`Ritmo até o dia ${dayN} de ${dim}`}
-        />
-        <SCard>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>Conversões — topo do funil</div>
-            <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--ws-text-secondary)' }}>
-              <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: GARGALO, marginRight: 4 }} />Gargalo</span>
-              <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: CLOSER_ACCENT, marginRight: 4 }} />Melhor</span>
-            </div>
-          </div>
-          {convTopo.map((c, i) => {
-            const worst = Math.min(...convTopo.map(x => x.val))
-            return <ConversionBar key={i} label={c.label} pctVal={c.val} gargalo={c.val === worst && convTopo.length > 1} />
-          })}
-        </SCard>
+      <div style={{ marginTop: 14 }}>
+        <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
       </div>
 
-      {/* ── Seção 2 · Closer ──────────────────────────────────────────────── */}
+      {/* ── Seção 2 · Closer ──────────────────────────────────────────── */}
       <div style={{ marginTop: 40 }}>
         <SectionHeader n={2} accent={CLOSER_ACCENT} title="Closer"
           sub="Da reunião realizada ao fechamento — diagnóstico, SAL, oportunidade e receita" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '10px 0 22px' }}>
-        <KTile label="Reuniões realizadas"  value={nf(kpis.diag)} />
-        <KTile label="SAL qualificados"     value={nf(kpis.sal)} />
-        <KTile label="Oportunidades (COF)"  value={nf(kpis.cof)} />
-        <KTile label="Fechamentos"          value={nf(kpis.fech)} />
-        <KTile label="Receita gerada"       value={moneyBig(kpis.rev)} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px' }}>
+        <MetaRitmoCard label="Reuniões realizadas" realizado={strip.rr} metaMensal={0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+        <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+        <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
+          metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+        <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
+          metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+        <MetaRitmoCard label="Receita gerada" realizado={strip.receita}
+          metaMensal={mesUnico ? metaTimeSel.metaFinanceira : 0}
+          mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT} />
       </div>
+
+      <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
+        Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído.
+      </p>
 
       <CloserTable rows={closerRows} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-        <GoalTracker
-          label="Meta de faturamento do período"
-          realized={kpis.rev}
-          expected={metaFat * pctPeriod}
-          total={metaFat}
-          formatter={moneyBig}
-          dayText={`Ritmo até o dia ${dayN} de ${dim}`}
-        />
-        <SCard>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>Conversões — fundo do funil</div>
-            <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--ws-text-secondary)' }}>
-              <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: GARGALO, marginRight: 4 }} />Gargalo</span>
-              <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: CLOSER_ACCENT, marginRight: 4 }} />Melhor</span>
-            </div>
-          </div>
-          {convFundo.map((c, i) => {
-            const worst = Math.min(...convFundo.map(x => x.val))
-            return <ConversionBar key={i} label={c.label} pctVal={c.val} gargalo={c.val === worst && convFundo.length > 1} />
-          })}
-        </SCard>
+      <div style={{ marginTop: 14 }}>
+        <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
       </div>
 
       <FunilCompletoSection />
 
       <div style={{ marginTop: 40, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center' }}>
-        Período: {fmtBR(start)} – {fmtBR(end)} · Fonte: <code>vw_funil_compat</code> + <code>DB_Metas_Performance</code>
-      </div>
-    </div>
-  )
-}
-
-function SectionHeader({ n, accent, title, sub }: { n: number; accent: string; title: string; sub: string }) {
-  return (
-    <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-      <SectionBadge n={n} accent={accent} />
-      <div>
-        <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 22, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>{title}</div>
-        <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 3 }}>{sub}</div>
+        {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>
       </div>
     </div>
   )

@@ -10,6 +10,7 @@ import { ExternalLink, X } from 'lucide-react'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money } from '@/lib/format'
+import { marcaLabel } from '@/constants/brands'
 import { cell, fmtData } from './dealDrawerShared'
 import { currentStage, stageOwnerRole, STAGE_LABEL } from '@/lib/metrics'
 
@@ -104,7 +105,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                         <ExternalLink size={11} />
                       </a>
                     </td>
-                    <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(r.marca)}</td>
+                    <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{motivoLimpo(r.motivo_perda)}</td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{stage ? STAGE_LABEL[stage] : '—'}</td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(responsavelDe(r))}</td>

@@ -8,23 +8,13 @@ import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
-import type { Lead, Marca } from '@/lib/types'
+import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
 import { InverseFunnel } from '@/components/ui/InverseFunnel'
 import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
-import { resolveStage, STAGE_LABEL, type StageKey } from '@/lib/metrics'
-
-/** Subconjunto de 8 etapas da Visão Macro — usado no card CRM do Odonto Legacy. */
-const MACRO_STAGES_SOP: StageKey[] = [
-  'MQL', 'Contato Efetivo', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF', 'Fechamento',
-]
-const MACRO_STAGE_LABEL_SOP: Partial<Record<StageKey, string>> = {
-  'Oportunidade COF': 'Oportunidade',
-}
-
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -219,6 +209,9 @@ function deltaLabel(cur: number, prev: number, lowerIsBetter = false) {
     return { txt: `+${rounded}`, col: lowerIsBetter ? 'var(--status-risco)' : 'var(--status-positivo)' }
   }
   const p = ((cur - prev) / prev) * 100
+  // Delta subpercentual (|p| < 0.5%) arredondaria pra '▲ 0%' — visualmente
+  // confuso (seta pra cima com magnitude zero). Colapsa em '—' cinza.
+  if (Math.abs(p) < 0.5) return { txt: '—', col: 'var(--ws-text-secondary)' }
   const up = p >= 0
   const positive = lowerIsBetter ? !up : up
   return {
@@ -381,6 +374,203 @@ function MtdBarChart({ items, accent }: { items: MtdItem[]; accent: string }) {
         )
       })}
     </svg>
+  )
+}
+
+// ── SopMtdChart: comparativo MTD estilo Visão Geral, adaptado pro slide ──────
+// Múltiplas linhas dashed pra meses anteriores, seletor Linha/Barras, seletor
+// de métrica, big number + delta, hover tooltip, legenda embaixo. Canvas ~380x230.
+interface SopMtdSeries { label: string; values: number[]; dashed?: boolean; color: string }
+interface SopMtdMetricDef { key: string; label: string; money?: boolean }
+
+// Cores dashed pros meses passados — mesma paleta da Visão Geral
+const SOP_MTD_DASHED_COLORS = ['#60A5C8', '#C6A855', '#A870A8']
+
+function SopMtdChart({
+  series, days, metric, metrics, onMetricChange, chart, onChartChange, accent, formatValue,
+}: {
+  series: SopMtdSeries[]
+  days: number
+  metric: string
+  metrics: SopMtdMetricDef[]
+  onMetricChange: (m: string) => void
+  chart: 'linha' | 'barras'
+  onChartChange: (v: 'linha' | 'barras') => void
+  accent: string
+  formatValue: (v: number) => string
+}) {
+  const [hoverDay, setHoverDay] = useState<number | null>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const visible = series.filter(s => (s.values[s.values.length - 1] ?? 0) > 0)
+  const curSeries  = visible.find(s => !s.dashed) ?? visible[0]
+  const prevSeries = visible.find(s => s.dashed)
+  const curTot  = curSeries?.values[curSeries.values.length - 1] ?? 0
+  const prevTot = prevSeries?.values[days - 1] ?? prevSeries?.values[prevSeries.values.length - 1] ?? 0
+  const delta   = deltaLabel(curTot, prevTot)
+
+  const daily = (arr: number[]) => arr.map((v, i) => (i === 0 ? v : v - arr[i - 1]))
+  const VW = 400, VH = 210, PAD_L = 6, PAD_R = 6, PAD_T = 12, PAD_B = 20
+  const iw = VW - PAD_L - PAD_R, ih = VH - PAD_T - PAD_B
+  const xFn = (i: number) => PAD_L + (i / Math.max(1, days - 1)) * iw
+  const maxLine = Math.max(...visible.flatMap(s => s.values), 1) * 1.1
+  const maxBar  = Math.max(...visible.flatMap(s => daily(s.values)), 1) * 1.15
+  const yL = (v: number) => PAD_T + ih - (v / maxLine) * ih
+  const yB = (v: number) => PAD_T + ih - (v / maxBar)  * ih
+  const M  = visible.length
+  const group = iw / Math.max(1, days)
+  const barW  = Math.max(2, (group * 0.72) / Math.max(1, M))
+  const tickDays = days <= 7 ? Array.from({ length: days }, (_, i) => i + 1) : [1, Math.ceil(days / 2), days]
+
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const svgX = ((e.clientX - rect.left) / rect.width) * VW
+    const frac = Math.max(0, Math.min(1, (svgX - PAD_L) / iw))
+    setHoverDay(Math.round(frac * (days - 1)))
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 6 }}>
+      {/* Row 1: segmented Linha/Barras + select métrica */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 999, overflow: 'hidden', background: '#fff' }}>
+          {(['linha', 'barras'] as const).map(v => (
+            <button key={v}
+              onClick={() => onChartChange(v)}
+              style={{
+                padding: '3px 12px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                background: chart === v ? accent : 'transparent',
+                color: chart === v ? '#fff' : 'var(--ws-text-secondary)',
+                border: 'none', textTransform: 'capitalize',
+              }}>{v}</button>
+          ))}
+        </div>
+        <select
+          value={metric}
+          onChange={e => onMetricChange(e.target.value)}
+          style={{
+            appearance: 'none', padding: '3px 10px', border: '1px solid #e2e8f0',
+            borderRadius: 999, fontSize: 10, background: '#fff',
+            color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none',
+            fontWeight: 600, minWidth: 0, maxWidth: '55%',
+          }}
+          title="Métrica"
+        >
+          {metrics.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+        </select>
+      </div>
+
+      {/* Row 2: big number + delta */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 24, fontWeight: 700, color: accent, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+          {formatValue(curTot)}
+        </span>
+        {prevTot > 0 && (
+          <span style={{ fontSize: 11, fontWeight: 700, color: delta.col }}>
+            {delta.txt}{' '}
+            <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 400 }}>vs. {prevSeries?.label ?? ''}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: chart */}
+      <div ref={wrapRef} style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+        <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%"
+          preserveAspectRatio="none"
+          style={{ display: 'block', overflow: 'visible', cursor: 'crosshair' }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoverDay(null)}>
+          {[0, 0.25, 0.5, 0.75, 1].map(g => (
+            <line key={g} x1={PAD_L} x2={VW - PAD_R} y1={PAD_T + ih * g} y2={PAD_T + ih * g} stroke="#e2e8f0" strokeWidth="0.5" />
+          ))}
+          {hoverDay !== null && (
+            <line x1={xFn(hoverDay)} x2={xFn(hoverDay)} y1={PAD_T} y2={PAD_T + ih}
+              stroke="#94a3b8" strokeWidth="0.5" strokeDasharray="2 2" opacity="0.7" />
+          )}
+          {chart === 'linha' ? (
+            <>
+              {visible.slice().reverse().map(s => {
+                const d = s.values.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xFn(i)} ${yL(v)}`).join(' ')
+                return (
+                  <path key={s.label} d={d} fill="none" stroke={s.color}
+                    strokeWidth={s.dashed ? 1.2 : 2}
+                    strokeDasharray={s.dashed ? '4 3' : ''}
+                    strokeLinejoin="round" strokeLinecap="round"
+                    opacity={s.dashed ? 0.85 : 1} />
+                )
+              })}
+              {visible.filter(s => !s.dashed).map(s => (
+                <circle key={s.label} cx={xFn(s.values.length - 1)} cy={yL(s.values[s.values.length - 1])} r={2.5} fill={s.color} />
+              ))}
+              {hoverDay !== null && visible.map(s => s.values[hoverDay] !== undefined && (
+                <circle key={s.label + '-h'} cx={xFn(hoverDay)} cy={yL(s.values[hoverDay])}
+                  r={3} fill={s.color} stroke="#fff" strokeWidth="1" />
+              ))}
+            </>
+          ) : (
+            Array.from({ length: days }).map((_, d) => (
+              <g key={d}>
+                {visible.map((s, mi) => {
+                  const v  = daily(s.values)[d] ?? 0
+                  const gx = PAD_L + d * group + (group - barW * M) / 2 + mi * barW
+                  return <rect key={s.label} x={gx} y={yB(v)} width={Math.max(1, barW - 0.5)} height={PAD_T + ih - yB(v)}
+                    fill={s.color} rx="0.5" opacity={hoverDay === d ? 1 : (s.dashed ? 0.55 : 0.9)} />
+                })}
+              </g>
+            ))
+          )}
+          {tickDays.map(d => (
+            <text key={d} x={xFn(d - 1)} y={VH - 4} textAnchor="middle" fontSize={7.5} fill="#94a3b8">
+              dia {d}
+            </text>
+          ))}
+        </svg>
+
+        {hoverDay !== null && wrapRef.current && (() => {
+          const ww  = wrapRef.current.offsetWidth
+          const svgX = PAD_L + (hoverDay / Math.max(1, days - 1)) * iw
+          const pxX  = (svgX / VW) * ww
+          const flip = pxX > ww * 0.6
+          return (
+            <div style={{
+              position: 'absolute',
+              left:  flip ? undefined : pxX + 10,
+              right: flip ? (ww - pxX + 10) : undefined,
+              top: 4, pointerEvents: 'none', zIndex: 10,
+              background: '#fff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              padding: '6px 8px', fontSize: 10, minWidth: 120,
+            }}>
+              <div style={{ fontWeight: 700, color: '#64748b', fontSize: 9, marginBottom: 4 }}>
+                Dia {hoverDay + 1} · {chart === 'barras' ? 'no dia' : 'acumulado'}
+              </div>
+              {visible.map(s => (
+                <div key={s.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 3 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 1, background: s.color, flex: '0 0 auto' }} />
+                    {s.label}
+                  </span>
+                  <span style={{ fontWeight: 700, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatValue(chart === 'barras' ? (daily(s.values)[hoverDay] ?? 0) : (s.values[hoverDay] ?? 0))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* Row 4: legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 9, color: '#64748b' }}>
+        {visible.map(s => (
+          <span key={s.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600, color: 'var(--ws-text-primary)' }}>
+            <span style={{ width: 12, height: 2, borderRadius: 1, background: s.color, opacity: s.dashed ? 0.75 : 1 }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -593,6 +783,29 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
   const crmAllRes  = useVendasFunil({ marca: slide.marca })
   const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
+
+  // MTD Jul (prev2) e Jun (prev3) — só pro chart Odonto Legacy (Comparativo MTD 4 meses)
+  const mtdN = useMemo(() => {
+    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
+    const todayDay = new Date().getDate()
+    const build = (offset: number) => {
+      let ny = y, nm = m - offset
+      while (nm <= 0) { nm += 12; ny-- }
+      const lastDay = new Date(ny, nm, 0).getDate()
+      const d = Math.min(todayDay, lastDay)
+      return {
+        start: `${ny}-${String(nm).padStart(2, '0')}-01`,
+        end:   `${ny}-${String(nm).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
+      }
+    }
+    return { prev2: build(2), prev3: build(3), days: todayDay }
+  }, [dates.monthStart])
+
+  // Sempre passa datas válidas — janelas são pequenas (~4 dias) e só usadas quando isOdontoLegacy.
+  const leadsPrev2Odl  = useLeads({ marca: 'Odonto Scale', dataInicio: mtdN.prev2.start, dataFim: mtdN.prev2.end })
+  const leadsPrev3Odl  = useLeads({ marca: 'Odonto Scale', dataInicio: mtdN.prev3.start, dataFim: mtdN.prev3.end })
+  const mediaPrev2Odl  = useMediaOdontoLegacy({ dataInicio: mtdN.prev2.start, dataFim: mtdN.prev2.end })
+  const mediaPrev3Odl  = useMediaOdontoLegacy({ dataInicio: mtdN.prev3.start, dataFim: mtdN.prev3.end })
   const { data: allLeads } = leadsAll
   const { data: prevLeads } = leadsPrev
   const { data: rawCrmCur } = crmCurRes
@@ -606,7 +819,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const allLoaded =
     !mediaAllStd.loading && !mediaPrevStd.loading &&
     !mediaAllOdl.loading && !mediaPrevOdl.loading &&
+    !mediaPrev2Odl.loading && !mediaPrev3Odl.loading &&
     !leadsAll.loading && !leadsPrev.loading &&
+    !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
     !crmAllRes.loading && !metasRes.loading
@@ -666,6 +881,65 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
   const funnelWeek  = useMemo(() => buildFunnel(crmWeek,  weekCurStart,   weekCurEnd),   [crmWeek,  weekCurStart,   weekCurEnd])
   const funnelPrior = useMemo(() => buildFunnel(crmPrior, weekPriorStart, weekPriorEnd), [crmPrior, weekPriorStart, weekPriorEnd])
+
+  // ── Séries MTD dia-a-dia (4 meses) — chart Comparativo MTD do Odonto Legacy ─
+  // Para cada mês (Set/Ago/Jul/Jun): MQL acumulado, membros acumulados, custo
+  // acumulado (= invest ÷ membros). Membros = leads com formulario='comunidade_multistep'
+  // (só Odonto Scale). Jul/Jun ficam com 0 membros (comunidade nasceu em 04/08).
+  const legacyMtdSeries = useMemo(() => {
+    if (!isOdontoLegacy) return null
+    const days = mtdN.days
+    const buildMonth = (leadsRows: Lead[], mediaRows: MediaDailyRaw[], monthStart: string) => {
+      const [y, mm] = monthStart.slice(0, 7).split('-').map(Number)
+      const invByDay = Array.from({ length: days }, () => 0)
+      const mqlByDay = Array.from({ length: days }, () => 0)
+      const memByDay = Array.from({ length: days }, () => 0)
+      const dedupF = filterLeads(deduplicateLeads(leadsRows.filter(l =>
+        l.dia && l.dia.slice(0, 7) === `${y}-${String(mm).padStart(2, '0')}`
+      )))
+      for (const r of mediaRows) {
+        if (r.dia.slice(0, 7) !== `${y}-${String(mm).padStart(2, '0')}`) continue
+        const d = parseInt(r.dia.slice(-2), 10) - 1
+        if (d >= 0 && d < days) invByDay[d] += r.spend_brl
+      }
+      for (const l of dedupF) {
+        const d = parseInt(l.dia.slice(-2), 10) - 1
+        if (d < 0 || d >= days) continue
+        if (isLeadMql(l)) mqlByDay[d]++
+        if (l.formulario === 'comunidade_multistep') memByDay[d]++
+      }
+      const cum = (arr: number[]) => { let s = 0; return arr.map(v => (s += v)) }
+      const invCum = cum(invByDay)
+      const mqlCum = cum(mqlByDay)
+      const memCum = cum(memByDay)
+      const custoCum = memCum.map((m, i) => (m > 0 ? invCum[i] / m : 0))
+      return { days, mqlCum, memCum, custoCum }
+    }
+    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
+    const shortM = (offset: number) => {
+      let ny = y, nm = m - offset
+      while (nm <= 0) { nm += 12; ny-- }
+      return { label: `${shortMonth(ny, nm - 1)} ${ny}`, start: `${ny}-${String(nm).padStart(2, '0')}-01` }
+    }
+    const cur   = shortM(0)
+    const prev  = shortM(1)
+    const prev2 = shortM(2)
+    const prev3 = shortM(3)
+    // Cur e Prev vêm de allLeads/activeMedia (5 semanas cobertas)
+    // Prev2 e Prev3 vêm dos fetches dedicados
+    return {
+      series: [
+        { label: cur.label,   dashed: false, data: buildMonth(allLeads,          activeMedia,           cur.start) },
+        { label: prev.label,  dashed: true,  data: buildMonth(allLeads,          activeMedia,           prev.start) },
+        { label: prev2.label, dashed: true,  data: buildMonth(leadsPrev2Odl.data, mediaPrev2Odl.data,   prev2.start) },
+        { label: prev3.label, dashed: true,  data: buildMonth(leadsPrev3Odl.data, mediaPrev3Odl.data,   prev3.start) },
+      ],
+      days,
+    }
+  }, [isOdontoLegacy, mtdN.days, allLeads, activeMedia, leadsPrev2Odl.data, leadsPrev3Odl.data, mediaPrev2Odl.data, mediaPrev3Odl.data, filterLeads, dates.monthStart])
+
+  const [legacyMtdMetric, setLegacyMtdMetric] = useState<'mql' | 'membros' | 'custo'>('mql')
+  const [legacyMtdChart,  setLegacyMtdChart]  = useState<'linha' | 'barras'>('linha')
 
   // ── MTD computations ─────────────────────────────────────────────────────────
   const mtdLeads     = useMemo(() => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart))), [allLeads, mtdCurStart, filterLeads])
@@ -861,27 +1135,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
       ]
 
-  // ── Volume por etapa do CRM (snapshot atual) — só Odonto Legacy ─────────────
-  // Deals ativos hoje, agrupados pelas 8 etapas da Visão Macro (topo do funil
-  // = MQL, fim = Fechamento). Fonte: rawCrmAll (vw_marketing_funil) já filtrado
-  // por marca pelo hook. `resolveStage` normaliza os aliases do CRM ("Novo MQL",
-  // "Diagnóstico (1 dia)", "Negociação SAL", etc).
-  const stageVolumesOdonto = useMemo(() => {
-    if (!isOdontoLegacy) return null
-    const counts = new Map<StageKey, number>(MACRO_STAGES_SOP.map(s => [s, 0]))
-    for (const r of rawCrmAll) {
-      if (r.status_atual !== 'Em andamento') continue
-      const stage = resolveStage(r.etapa_funil)
-      if (!stage || !counts.has(stage)) continue
-      counts.set(stage, (counts.get(stage) ?? 0) + 1)
-    }
-    return MACRO_STAGES_SOP.map(s => ({
-      stage: s,
-      label: MACRO_STAGE_LABEL_SOP[s] ?? STAGE_LABEL[s],
-      count: counts.get(s) ?? 0,
-    }))
-  }, [isOdontoLegacy, rawCrmAll])
-
   // ── MQLs por faixa de capital de investimento ────────────────────────────────
   // Agrupa valores equivalentes (ex.: "50k_100k" e "De R$ 50 mil a R$ 100 mil"
   // caem no mesmo bucket canônico). Ignora "não possui" — quem preenche isso
@@ -1067,18 +1320,51 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           gap: 14, flex: 1, minHeight: 0,
         }}>
 
-        {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado) */}
+        {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado)
+             Odonto Legacy: chart cumulativo 7d com seletor MQL/Membros/Custo/membro. */}
         {!dates.isClosed && (
         <div style={cardStyle}>
           <div style={{ marginBottom: 6 }}>
-            <div style={colTitle(acc)}>MQL Semanal</div>
+            <div style={colTitle(acc)}>
+              {isOdontoLegacy ? 'Comparativo 7d · cumulativo' : 'MQL Semanal'}
+            </div>
           </div>
-          <div style={{ height: 180 }}>
-            <WeeklyBarChart
-              values={weeklyData.map(w => w.mql)}
-              labels={effectiveWeeks.map(w => w.label)}
-              accent={acc}
-            />
+          <div style={isOdontoLegacy ? { flex: 1, minHeight: 0 } : { height: 180 }}>
+            {isOdontoLegacy && legacyMtdSeries ? (() => {
+              const days = legacyMtdSeries.days
+              const pick = (m: typeof legacyMtdMetric) => (w: (typeof legacyMtdSeries.series)[number]['data']) =>
+                m === 'mql' ? w.mqlCum : m === 'membros' ? w.memCum : w.custoCum
+              const isMoney = legacyMtdMetric === 'custo'
+              const chartSeries: SopMtdSeries[] = legacyMtdSeries.series.map((s, i) => ({
+                label:  s.label,
+                dashed: s.dashed,
+                color:  s.dashed ? SOP_MTD_DASHED_COLORS[(i - 1 + SOP_MTD_DASHED_COLORS.length) % SOP_MTD_DASHED_COLORS.length] : acc,
+                values: pick(legacyMtdMetric)(s.data).slice(0, days),
+              }))
+              return (
+                <SopMtdChart
+                  series={chartSeries}
+                  days={days}
+                  metric={legacyMtdMetric}
+                  metrics={[
+                    { key: 'mql',     label: 'MQL' },
+                    { key: 'membros', label: 'Membros na comunidade' },
+                    { key: 'custo',   label: 'Custo por membro', money: true },
+                  ]}
+                  onMetricChange={m => setLegacyMtdMetric(m as 'mql' | 'membros' | 'custo')}
+                  chart={legacyMtdChart}
+                  onChartChange={setLegacyMtdChart}
+                  accent={acc}
+                  formatValue={v => (isMoney ? fmtBRL(v) : String(Math.round(v)))}
+                />
+              )
+            })() : (
+              <WeeklyBarChart
+                values={weeklyData.map(w => w.mql)}
+                labels={effectiveWeeks.map(w => w.label)}
+                accent={acc}
+              />
+            )}
           </div>
           {!isOdontoLegacy && (
             <div style={{ marginTop: 14 }}>
@@ -1087,30 +1373,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               </div>
               <div style={{ height: 110 }}>
                 <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
-              </div>
-            </div>
-          )}
-          {isOdontoLegacy && stageVolumesOdonto && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
-                Volume por etapa do CRM · deals ativos
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {stageVolumesOdonto.map(({ stage, label, count }) => (
-                  <div key={stage} style={{
-                    display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline',
-                    padding: '5px 8px', borderRadius: 6,
-                    background: count > 0 ? `${acc}0a` : 'transparent',
-                    borderLeft: count > 0 ? `2px solid ${acc}` : '2px solid transparent',
-                  }}>
-                    <span style={{ fontSize: 11.5, color: count > 0 ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)' }}>
-                      {label}
-                    </span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: count > 0 ? acc : 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                      {count}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
           )}

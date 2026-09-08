@@ -16,7 +16,7 @@ import {
   computeCruzamentos, computeResponsaveis, computeMarcas, dealsReceitaPerdida,
 } from '@/lib/perdaRows'
 import type { EtapaMeta, CruzCel } from '@/lib/perdaRows'
-import { BRAND_LIST, BRAND_ACCENT } from '@/constants/brands'
+import { BRAND_LIST, BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import type { BrandDef } from '@/constants/brands'
 import type { Marca } from '@/lib/types'
 import type { FunnelRow } from '@/lib/funnelTypes'
@@ -401,12 +401,12 @@ export function AnalisePerda() {
           <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume absoluto e taxa sobre os MQLs da própria marca</div>
           {marcas.map(m => (
             <BarRow key={m.marca}
-              label={m.marca}
+              label={marcaLabel(m.marca)}
               value={m.qtd}
               max={marcas[0]?.qtd ?? 1}
               color={BRAND_ACCENT[m.marca] ?? '#7F0C72'}
               right={<span>{m.qtd} <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 400, marginLeft: 4 }}>{m.pctSobreMql > 0 ? pct(m.pctSobreMql) : '—'}</span></span>}
-              onClick={() => setDrawer({ title: m.marca, subtitle: drawerSubtitle, deals: m.deals })}
+              onClick={() => setDrawer({ title: marcaLabel(m.marca), subtitle: drawerSubtitle, deals: m.deals })}
             />
           ))}
         </SCard>

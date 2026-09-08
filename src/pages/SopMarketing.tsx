@@ -862,15 +862,26 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
   // ── Weekly computations ──────────────────────────────────────────────────────
   // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser últimos 7d e 7d anteriores.
+  // Pra We Scale, esconde semanas de agosto (a marca só passou a receber dados em set/26):
+  // preserva o comprimento de 5 posições (kpiCards leem [4]/[3]) zerando as anteriores.
   const effectiveWeeks = useMemo(() => {
-    if (!isOdontoLegacy) return dates.weeks
-    const label7d = (start: string, end: string) => weekLabel(start, end)
-    return [
-      dates.weeks[0], dates.weeks[1], dates.weeks[2],
-      { start: weekPriorStart, end: weekPriorEnd, label: label7d(weekPriorStart, weekPriorEnd) },
-      { start: weekCurStart,   end: weekCurEnd,   label: label7d(weekCurStart,   weekCurEnd) },
-    ]
-  }, [isOdontoLegacy, dates.weeks, weekCurStart, weekCurEnd, weekPriorStart, weekPriorEnd])
+    if (isOdontoLegacy) {
+      const label7d = (start: string, end: string) => weekLabel(start, end)
+      return [
+        dates.weeks[0], dates.weeks[1], dates.weeks[2],
+        { start: weekPriorStart, end: weekPriorEnd, label: label7d(weekPriorStart, weekPriorEnd) },
+        { start: weekCurStart,   end: weekCurEnd,   label: label7d(weekCurStart,   weekCurEnd) },
+      ]
+    }
+    if (isWeScale) {
+      // Só semanas cujo início está em setembro/2026 ou depois. Preenche o resto
+      // com stubs vazios (start > end pra o filter de datas não pegar nenhum lead/mídia).
+      const emptyWeek: WeekRange = { start: '9999-01-01', end: '9999-01-01', label: '—' }
+      const setembroOn = dates.weeks.map(w => w.start >= '2026-09-01' ? w : emptyWeek)
+      return setembroOn
+    }
+    return dates.weeks
+  }, [isOdontoLegacy, isWeScale, dates.weeks, weekCurStart, weekCurEnd, weekPriorStart, weekPriorEnd])
 
   const weeklyData = useMemo(() => effectiveWeeks.map(w => {
     const wMedia = activeMedia.filter(r => r.dia >= w.start && r.dia <= w.end)
@@ -1321,10 +1332,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
 
-        {/* Grid: 3 cols (MTD) | 2 cols equal (fechado) */}
+        {/* Grid: 3 cols (MTD) | 2 cols equal (fechado) | 2 cols (We Scale — sem MTD comparativo) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: dates.isClosed ? '1fr 1fr' : '1fr 1fr 1.4fr',
+          gridTemplateColumns: isWeScale
+            ? '1fr 1.4fr'
+            : dates.isClosed ? '1fr 1fr' : '1fr 1fr 1.4fr',
           gap: 14, flex: 1, minHeight: 0,
         }}>
 
@@ -1387,7 +1400,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </div>
         )}
 
-        {/* Col 2: MTD comparativo */}
+        {/* Col 2: MTD comparativo — oculto pra We Scale (marca só passou a receber dados em set/26,
+             comparativo com agosto seria contra 0 e enganoso) */}
+        {!isWeScale && (
         <div style={{ ...cardStyle, overflowY: 'auto' }}>
           <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={colTitle(acc)}>{compareRange.label} MTD vs {dates.mtdLabel} MTD</div>
@@ -1494,6 +1509,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             </div>
           )}
         </div>
+        )}
 
         {/* Col 3: Funil inverso — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
         {isOdontoLegacy ? (
@@ -1662,8 +1678,10 @@ function ToggleGroup({ value, onChange, options, accent }: ToggleGroupProps) {
 // Funil Inverso, que não faz sentido enquanto o funil de Eventos no CRM não tem deals.
 const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
   { label: 'Scale Partner Odonto', adsetIncludes: ['ODONTOLOGIA'] },
-  { label: 'Scale Partner (geral)', adsetIncludes: ['SCALEPARTNER_GENERAL', 'SCALEPARTNER_GERAL'] }, // ainda sem adset dedicado
-  { label: 'Lisô Laser',           adsetIncludes: ['LLK', 'LISO', 'LISÔ'] },
+  // LLK é o adset "genérico" do Scale Partner (não vinculado a nicho).
+  { label: 'Scale Partner (geral)', adsetIncludes: ['LLK'] },
+  // Lisô Laser tem evento próprio — adset ainda não criado; fica em 0 até existir.
+  { label: 'Lisô Laser',           adsetIncludes: ['LISO_LASER_EVT', 'LISOLASER_EVT'] },
 ]
 
 function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; accent: string; monthLabel: string }) {

@@ -365,6 +365,34 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-08 (3) — Performance/SDR: conversões SQL→SAL e SQL→No-show; card de conversões sem barra
+
+Junior pediu 2 conversões novas no card "Conversões — topo do funil" da aba
+SDR:
+- **SQL → SAL** = `strip.sal / strip.sql`.
+- **SQL → No-show** = deals que passaram pela etapa "No Show" ÷ SQL. Nova
+  contagem `strip.noShow` via `countStageEvents(eventos, 'No Show', …)` —
+  mesma base por evento das demais linhas. "No Show" já existia no catálogo
+  do `metrics.ts` (`data_no_show`, alias `No Show / Reagendamento`), fora de
+  `STAGE_ORDER` de propósito.
+
+Junto, o layout do `ConversoesCard` foi refeito a pedido dele: **sai a barra
+de 0–100% e a marcação "Gargalo/Melhor"** — a polaridade "maior = melhor"
+não vale pra conversão e é invertida pro No-show (alto = ruim). Entra uma
+grade de blocos (`repeat(auto-fit, minmax(150px, 1fr))`): rótulo em cinza +
+`XX%` grande em cor neutra (`--ws-text-primary`), no mesmo estilo dos cards
+de Leadtime logo abaixo. `ConversionBar` e a const `GARGALO` foram
+removidos. O componente é compartilhado, então o card "Conversões — fundo
+do funil" da aba Closer herdou o mesmo layout.
+
+Nota de leitura: o card do SDR mistura "Agendamento" (linhas antigas) e
+"SQL" (linhas novas) pro mesmo estágio — os rótulos antigos ficaram
+intocados de propósito (diff mínimo, e "Agendamento → Reunião Realizada"
+lê melhor que "SQL → RR").
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (220 testes) via
+`~/ws-dashboard-build`. App exige login — não visto renderizado. PR #87.
+
 ### 2026-09-08 (2) — Análise de Perda migra pro stack da Visão Macro; motivos de perda deixam de ser frágeis a acento
 
 Última das 3 abas de Vendas ainda na base antiga (pendência da seção 8).

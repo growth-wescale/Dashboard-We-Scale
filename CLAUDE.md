@@ -365,6 +365,55 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-09 — MultiSelect estilo Excel: limpar/selecionar tudo sempre visíveis, filtro obrigatório vazio vira erro, lista de Marca consistente
+
+Continuação da entrada de 08/09 (7). Junior pediu 3 ajustes:
+
+**1. Rodapé estilo Excel.** "Selecionar tudo" e "Limpar seleção" **sempre**
+renderizados (quando há opções), esmaecidos (`opacity .4`, `disabled`) quando
+não fazem nada. "Limpar" agora é sempre `→ []` — saíram `clearTo`/`clearLabel`/
+`resolveClear`/`rodapeAcoes` (da entrada anterior). Helper puro novo
+`acoesRodape(selected, optionValues)` → `{ selecionarTudoAtivo, limparAtivo }`.
+
+**2. Filtro obrigatório vazio = estado inválido, não trava.** `minSelected`
+virou `required`. Sai a trava que impedia desmarcar o último item — o usuário
+pode zerar Marca/Período. Quando zera:
+- o controle ganha borda + halo vermelho (`--status-critico`), `aria-invalid`,
+  e o resumo vira "Selecione…";
+- a página (Visão Macro, Performance, Análise de Perda) esconde o conteúdo e
+  mostra `FiltrosObrigatoriosAviso` (componente novo, estilo `QueryErrorBanner`)
+  — "Selecione uma marca e um período para ver os dados". `FilterBar` continua
+  no topo pra corrigir. Guard por página: `brandKeys.length === 0 || (periodMode
+  !== 'dia' && periodValues.length === 0)`, antes do `return` principal (depois
+  de todos os hooks). Modo Dia nunca fica inválido.
+- `SharedFiltersContext`: `brandKeys`/`periodValues` aceitam `[]`
+  (`isStringArray`, não mais `isNonEmptyStringArray`); `range` cai em `rangeDia`
+  quando `ranges` está vazio (evita crash em hook; a página não renderiza dados
+  mesmo). Recuperação: o "Limpar" global da `FilterBar` (`resetFiltros`) volta
+  aos padrões.
+
+**3. Lista de Marca consistente — sem "We Scale" fantasma.** "We Scale"
+(ex-"Scale Partners", 8ª marca adicionada por outra sessão em 08/09) tem **0
+linhas em `vw_funil_vendas`** — o funil dela ("Eventos") está fora do allowlist.
+Aparecia/sumia do dropdown conforme a seleção. Correções:
+- **`useFunilVendas` não filtra mais marca no servidor** — as 3 páginas
+  carregam o recorte inteiro da origem e filtram marca no cliente (via `scope`),
+  igual Fonte/SDR. Removido `marcaFetch` das 3 páginas (e o `marca?` do hook, do
+  `useMediaData` e do `useMetasPerformance` na Performance). Custo: a interação
+  "1 marca só" fica tão pesada quanto o Consolidado (que já é o padrão). Decisão
+  do Junior.
+- **`opcoesMarcaDisponiveis(marcasDisponiveis)`** — 1 regra só em qualquer
+  estado: as marcas de `BRAND_LIST` com ≥1 deal no recorte (origem + período).
+  Saiu o ramo "seleção estrita mostra todas" (08/09 (7)) **e** o escape hatch
+  `∪ brandKeys` — redundante agora que "Limpar"/"Selecionar tudo" estão sempre
+  disponíveis, e era o que vazava "We Scale" (presente em `TODAS_MARCAS`).
+  `Premium Club` (3 deals na view, não está em `BRAND_LIST`) segue fora do
+  filtro — não é marca de UI; fora de escopo.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (266 testes) via
+`~/ws-dashboard-build`. App exige login — UI não vista renderizada; lógica
+coberta por `MultiSelect.test.ts` e `brands.test.ts`.
+
 ### 2026-09-08 (7) — "Limpar seleção" do MultiSelect volta ao estado sem recorte; Marca não trava mais numa marca só
 
 Junior reportou dois bugs no filtro de Marca (valem pra qualquer `MultiSelect`

@@ -71,7 +71,6 @@ function usePersisted<T>(key: string, isValid: (v: unknown) => v is T, fallback:
 const isString = (v: unknown): v is string => typeof v === 'string'
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every(x => typeof x === 'string')
-const isNonEmptyStringArray = (v: unknown): v is string[] => isStringArray(v) && v.length > 0
 const oneOf = <T extends string>(allowed: readonly T[]) =>
   (v: unknown): v is T => typeof v === 'string' && (allowed as readonly string[]).includes(v)
 const isRange = (v: unknown): v is DateRange =>
@@ -144,13 +143,17 @@ const ORIGEM_PADRAO: OrigemComercial = 'Inbound'
 export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   const [origem, setOrigem] = usePersisted<OrigemComercial>('origem', oneOf(ORIGENS), ORIGEM_PADRAO)
 
-  const [brandKeys, setBrandKeys] = usePersisted('brandKeys', isNonEmptyStringArray, TODAS_MARCAS)
+  // Marca e Período são obrigatórios, mas PODEM ficar vazios (o usuário
+  // desmarca tudo) — aí viram estado inválido: a `FilterBar` pinta a borda de
+  // vermelho e a página esconde os dados. Por isso `isStringArray`, não
+  // `isNonEmptyStringArray`: um `[]` salvo é um estado legítimo a restaurar.
+  const [brandKeys, setBrandKeys] = usePersisted('brandKeys', isStringArray, TODAS_MARCAS)
 
   const [periodMode, setPeriodModeRaw] = usePersisted<PeriodMode>(
     'periodMode', oneOf(['dia', 'mes', 'trimestre', 'ano'] as const), MODE_PADRAO,
   )
   const [periodValues, setPeriodValuesRaw] = usePersisted(
-    'periodValues', isNonEmptyStringArray, [periodoAtual(MODE_PADRAO)],
+    'periodValues', isStringArray, [periodoAtual(MODE_PADRAO)],
   )
   // Só usado no modo 'dia'; nos demais o range vem de periodMode + periodValues.
   const [rangeDia, setRangeDia] = usePersisted<DateRange>(
@@ -180,14 +183,17 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   // Caixa delimitadora: só para textos e para consultas de servidor que
   // precisam de um único intervalo (ex.: mídia). Nunca usar para filtrar
   // linhas — isso é o papel de `ranges`, que preserva a união exata.
+  // Sem período selecionado (`ranges` vazio = estado inválido) cai no
+  // `rangeDia` só pra não quebrar hooks — a página não renderiza os dados.
   const range = useMemo<DateRange>(() => {
+    if (ranges.length === 0) return rangeDia
     let { start, end } = ranges[0]
     for (const r of ranges) {
       if (r.start < start) start = r.start
       if (r.end > end) end = r.end
     }
     return { start, end }
-  }, [ranges])
+  }, [ranges, rangeDia])
 
   /** Trocar de granularidade seleciona o período corrente dela. */
   const setPeriodMode = useCallback((m: PeriodMode) => {

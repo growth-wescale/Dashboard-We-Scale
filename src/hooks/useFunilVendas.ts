@@ -14,10 +14,10 @@ import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
  * São ~4,6 mil linhas; a view já exclui deals de teste, status Excluído e
  * funis fora do escopo comercial.
  *
- * `origem` (Inbound / Prospecção Ativa) É filtrada no servidor, ao contrário
- * do período: é sempre um valor só, então não há a ambiguidade que obriga a
- * marca a filtrar no cliente quando há 2+ selecionadas. Como efeito colateral
- * bom, a paginação encurta — Inbound são ~5 páginas em vez de 7.
+ * `origem` (Inbound / Prospecção Ativa) É filtrada no servidor — é sempre um
+ * valor só. Marca NÃO é filtrada aqui: as páginas filtram no cliente (igual
+ * Fonte/SDR). Filtrar 1 marca no servidor colapsava a lista de "marcas com
+ * dado" e fazia marcas sumirem/reaparecerem conforme a seleção.
  */
 
 const PAGE_SIZE = 1000
@@ -44,18 +44,16 @@ export interface UseFunilVendasResult {
   reload: () => void
 }
 
-async function fetchAll(origem: OrigemComercial, marca?: string): Promise<{ rows: FunnelRow[]; error: string | null }> {
+async function fetchAll(origem: OrigemComercial): Promise<{ rows: FunnelRow[]; error: string | null }> {
   const out: FunnelRow[] = []
 
   for (let page = 0; ; page++) {
-    let q = supabaseVendas
+    const q = supabaseVendas
       .from('vw_funil_vendas')
       .select(COLS)
       .order('data_criacao_negociacao', { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       .eq('origem_comercial', origem)
-
-    if (marca) q = q.eq('marca', marca)
 
     const { data, error } = await q
     if (error) return { rows: [], error: error.message }
@@ -68,18 +66,18 @@ async function fetchAll(origem: OrigemComercial, marca?: string): Promise<{ rows
   return { rows: out, error: null }
 }
 
-export function useFunilVendas(origem: OrigemComercial, marca?: string): UseFunilVendasResult {
+export function useFunilVendas(origem: OrigemComercial): UseFunilVendasResult {
   const [data, setData] = useState<FunnelRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (showLoading: boolean) => {
     if (showLoading) setLoading(true)
-    const { rows, error: err } = await fetchAll(origem, marca)
+    const { rows, error: err } = await fetchAll(origem)
     setError(err)
     if (!err) setData(rows)
     setLoading(false)
-  }, [origem, marca])
+  }, [origem])
 
   useEffect(() => {
     let cancelled = false

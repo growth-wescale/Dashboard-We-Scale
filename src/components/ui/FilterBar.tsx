@@ -76,9 +76,16 @@ interface FilterBarProps {
   sdrsDisponiveis?: string[]
   /** Nomes de Closer presentes nos dados. */
   closersDisponiveis?: string[]
+  /** Esconde o toggle Negócios×Unidades — página sem conceito de venda fechada (ex.: Análise de Perda). */
+  hideVendasToggle?: boolean
+  /** Esconde o toggle Deals únicos×Passagens — página cujo evento é terminal único por natureza (ex.: Análise de Perda). */
+  hideContagemToggle?: boolean
 }
 
-export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFontesDisponiveis, sdrsDisponiveis, closersDisponiveis }: FilterBarProps) {
+export function FilterBar({
+  extra, marcasDisponiveis, fontesDisponiveis, subFontesDisponiveis, sdrsDisponiveis, closersDisponiveis,
+  hideVendasToggle, hideContagemToggle,
+}: FilterBarProps) {
   const {
     brandKeys, setBrandKeys,
     periodMode, setPeriodMode,
@@ -207,13 +214,15 @@ export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFont
 
         <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--ws-border)', margin: '0 2px' }} />
 
-        <Field label="Vendas">
-          <Segmented
-            value={viewModes.salesMode}
-            onChange={setSalesMode}
-            options={[{ value: 'deals', label: 'Negócios' }, { value: 'units', label: 'Unidades' }]}
-          />
-        </Field>
+        {!hideVendasToggle && (
+          <Field label="Vendas">
+            <Segmented
+              value={viewModes.salesMode}
+              onChange={setSalesMode}
+              options={[{ value: 'deals', label: 'Negócios' }, { value: 'units', label: 'Unidades' }]}
+            />
+          </Field>
+        )}
 
         <Field label="Deals criados no período">
           <Segmented
@@ -223,13 +232,15 @@ export function FilterBar({ extra, marcasDisponiveis, fontesDisponiveis, subFont
           />
         </Field>
 
-        <Field label="Contagem">
-          <Segmented
-            value={viewModes.eventSource}
-            onChange={setEventSource}
-            options={[{ value: 'unique', label: 'Deals únicos' }, { value: 'passages', label: 'Passagens' }]}
-          />
-        </Field>
+        {!hideContagemToggle && (
+          <Field label="Contagem">
+            <Segmented
+              value={viewModes.eventSource}
+              onChange={setEventSource}
+              options={[{ value: 'unique', label: 'Deals únicos' }, { value: 'passages', label: 'Passagens' }]}
+            />
+          </Field>
+        )}
 
         {extra}
 

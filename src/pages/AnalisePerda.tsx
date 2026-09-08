@@ -8,8 +8,8 @@ import { PerdaDealsDrawer } from '@/components/ui/PerdaDealsDrawer'
 import { SCard, KTile } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
-import { buildScopeFilter, toWindow, STAGE_LABEL } from '@/lib/metrics'
-import type { StageKey } from '@/lib/metrics'
+import { buildScopeFilter, toWindow, mqlWord, stageLabel } from '@/lib/metrics'
+import type { OrigemComercial, StageKey } from '@/lib/metrics'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   perdidos, computeKpis, computeMotivos, computeEvitavel, computeEtapas,
@@ -91,9 +91,10 @@ function BarRow({ label, subLabel, value, max, color, right, onClick }: {
   )
 }
 
-function Heatmap({ motivos, etapas, celulas, onCellClick }: {
+function Heatmap({ motivos, etapas, celulas, onCellClick, origem }: {
   motivos: string[]; etapas: EtapaMeta[]; celulas: CruzCel[]
   onCellClick?: (motivo: string, etapa: StageKey) => void
+  origem: OrigemComercial
 }) {
   const maxQ = Math.max(1, ...celulas.map(c => c.qtd))
   const val = (m: string, e: StageKey) => celulas.find(c => c.motivo === m && c.etapa === e)?.qtd ?? 0
@@ -112,7 +113,7 @@ function Heatmap({ motivos, etapas, celulas, onCellClick }: {
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 6, minWidth: 480 }}>
         <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase' }}>MOTIVO</div>
         {etapas.map(e => (
-          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em' }}>{STAGE_LABEL[e.etapa]}</div>
+          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em' }}>{stageLabel(e.etapa, origem)}</div>
         ))}
         {motivos.map(m => (
           <>
@@ -257,7 +258,7 @@ export function AnalisePerda() {
         <DarkKpi
           label="Negociações Perdidas"
           value={nf(kpis.perdidasDeals)}
-          sub={`Taxa de perda de ${pct(kpis.taxaPerda)} sobre os MQLs do período`}
+          sub={`Taxa de perda de ${pct(kpis.taxaPerda)} sobre os ${mqlWord(origem, true)} do período`}
           onClick={() => setDrawer({ title: 'Negociações Perdidas', subtitle: drawerSubtitle, deals: perdas })}
         />
         <div style={{ width: 1, background: 'rgba(255,255,255,0.16)' }} />
@@ -282,7 +283,7 @@ export function AnalisePerda() {
         <KTile label="Taxa de perda"            value={pct(kpis.taxaPerda)} />
         <KTile label="Em aberto (pipeline)"     value={nf(kpis.emAberto)} />
         <KTile label="Leadtime médio até perda" value={`${kpis.leadtimeDias.toFixed(1)}d`} />
-        <KTile label="Etapa que mais perde"     value={kpis.etapaTop ? STAGE_LABEL[kpis.etapaTop] : '—'} />
+        <KTile label="Etapa que mais perde"     value={kpis.etapaTop ? stageLabel(kpis.etapaTop, origem) : '—'} />
       </div>
 
       {/* Por que se perde ── */}
@@ -330,10 +331,10 @@ export function AnalisePerda() {
           <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 4 }}>Onde e quando se perde</div>
           <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume por etapa e leadtime médio até a perda</div>
           {etapas.map(e => (
-            <BarRow key={e.etapa} label={STAGE_LABEL[e.etapa]} value={e.qtd}
+            <BarRow key={e.etapa} label={stageLabel(e.etapa, origem)} value={e.qtd}
               max={Math.max(...etapas.map(x => x.qtd), 1)} color={DARK_ACCENT}
               right={<span>{e.qtd} <span style={{ color: 'var(--ws-text-secondary)', fontWeight: 400, marginLeft: 4 }}>{e.leadtime > 0 ? `${e.leadtime.toFixed(1)}d` : '—'}</span></span>}
-              onClick={() => setDrawer({ title: STAGE_LABEL[e.etapa], subtitle: drawerSubtitle, deals: e.deals })}
+              onClick={() => setDrawer({ title: stageLabel(e.etapa, origem), subtitle: drawerSubtitle, deals: e.deals })}
             />
           ))}
           {etapas.length === 0 && (
@@ -353,11 +354,11 @@ export function AnalisePerda() {
         </div>
         {cruz.motivos.length > 0 && cruz.etapas.length > 0
           ? <Heatmap
-              motivos={cruz.motivos} etapas={cruz.etapas} celulas={cruz.celulas}
+              motivos={cruz.motivos} etapas={cruz.etapas} celulas={cruz.celulas} origem={origem}
               onCellClick={(motivo, etapa) => {
                 const celula = cruz.celulas.find(c => c.motivo === motivo && c.etapa === etapa)
                 if (celula && celula.qtd > 0) {
-                  setDrawer({ title: `${motivo} · ${STAGE_LABEL[etapa]}`, subtitle: drawerSubtitle, deals: celula.deals })
+                  setDrawer({ title: `${motivo} · ${stageLabel(etapa, origem)}`, subtitle: drawerSubtitle, deals: celula.deals })
                 }
               }}
             />
@@ -398,7 +399,7 @@ export function AnalisePerda() {
 
         <SCard>
           <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 4 }}>Perda por marca</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume absoluto e taxa sobre os MQLs da própria marca</div>
+          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume absoluto e taxa sobre os {mqlWord(origem, true)} da própria marca</div>
           {marcas.map(m => (
             <BarRow key={m.marca}
               label={marcaLabel(m.marca)}

@@ -365,6 +365,46 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-08 (4) — Padronização de nomenclatura nas abas de Vendas
+
+Junior pediu 4 trocas de rótulo **só de exibição** (nenhum dado, view,
+`StageKey` interno ou alias de `resolveStage` mudou) nas 3 abas React de
+Vendas — Visão Macro, Performance, Análise de Perda:
+
+1. **"Agendamento" / "Reunião Agendada SQL" → só "SQL".** `STAGE_LABEL['Reunião
+   Agendada SQL']` foi de `'SQL · Reunião agendada'` pra `'SQL'` — pega as
+   barras de funil das 3 abas de uma vez. Na Performance, "trocar tudo" a
+   pedido dele: leadtimes "Conexão/Contato Efetivo → Reunião Agendada" →
+   "→ SQL", "Tempo para Agendar" → "Tempo até o SQL", card "SQL (reuniões
+   agendadas)" → "SQL", conversão "MQL → Agendamento" → "{MQL/Lead} → SQL".
+2. **"Reunião Realizada" / "RR" → "Diagnóstico" / "DIAG".** `STAGE_LABEL`
+   já usava `Diagnóstico` como chave; o que mudou foi o texto solto:
+   colunas de tabela `RR` → `DIAG` (SDR e Closer), cards "RR (reuniões
+   realizadas)" / "Reuniões realizadas" → "Diagnóstico", leadtime "Tempo
+   para Realizar Reunião" → "Tempo até o Diagnóstico", conversões
+   "Reunião Realizada → SAL" → "Diagnóstico → SAL".
+3. **"SAL qualificados" → "SAL"** nos cards da Performance (SDR e Closer).
+4. **MQL vira "Lead" na visão Prospecção Ativa.** MQL só faz sentido pra
+   lead qualificado vindo do Marketing (Inbound); em Prospecção
+   Ativa/Outbound o topo do funil é só "Lead". Dois helpers novos em
+   `metrics.ts`: `mqlWord(origem, plural?)` → `'MQL'`/`'MQLs'` no Inbound,
+   `'Lead'`/`'Leads'` na Prospecção Ativa; `stageLabel(stage, origem)` =
+   `STAGE_LABEL[stage]` com a troca do topo aplicada. As 3 páginas já
+   liam `origem` do `useSharedFilters()` — passaram a usar `stageLabel(…,
+   origem)` em vez de `STAGE_LABEL[…]` em todo rótulo visível, e
+   `mqlWord(origem)` nos textos soltos ("Conversão {MQL/Lead}→Ganho",
+   "{MQL/Lead} no período", coluna "{MQL/Lead}", "sobre os {MQLs/Leads}
+   do período", "Funil · {MQL/Lead} → SAL" etc.). O `Heatmap` da Análise
+   de Perda ganhou prop `origem` pros cabeçalhos de coluna.
+
+**Fora de escopo** (decisão do Junior): `metasEngine.ts` (etapa "Reunião
+Realizada" é do motor de metas, outro subsistema), páginas de Marketing,
+`MqlDrawer`, e a página **GP Setembro** (HTML estático da campanha F1).
+
+Verificado: `npm run build` (tsc -b, exit 0) + `npx vitest run` (247
+testes, 4 casos novos em `metrics.test.ts` pra `mqlWord`/`stageLabel`)
+num worktree fora do OneDrive. App exige login — não visto renderizado.
+
 ### 2026-09-08 (3) — Performance/SDR: conversões SQL→SAL e SQL→No-show; card de conversões sem barra
 
 Junior pediu 2 conversões novas no card "Conversões — topo do funil" da aba

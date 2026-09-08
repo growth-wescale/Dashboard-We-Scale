@@ -134,7 +134,7 @@ export const STAGE_LABEL: Record<StageKey, string> = {
   'Contato Efetivo': 'Contato efetivo',
   'Interesse Reunião': 'Interesse reunião',
   'Conexão': 'Conexão',
-  'Reunião Agendada SQL': 'SQL · Reunião agendada',
+  'Reunião Agendada SQL': 'SQL',
   'Diagnóstico': 'Diagnóstico',
   'SAL': 'SAL',
   'Oportunidade COF': 'Oportunidade · COF',
@@ -142,6 +142,21 @@ export const STAGE_LABEL: Record<StageKey, string> = {
   'Pré-Contrato': 'Pré-Contrato',
   'Fechamento': 'Fechamento',
   'No Show': 'No-show',
+}
+
+/**
+ * "MQL" só faz sentido pra lead qualificado que chega do Marketing (Inbound).
+ * Na visão Prospecção Ativa / Outbound o topo do funil é só "Lead". Decisão do
+ * Junior em 08/09 — vale pra todo rótulo visível das abas de Vendas.
+ */
+export function mqlWord(origem: OrigemComercial, plural = false): string {
+  const base = origem === 'Prospecção Ativa' ? 'Lead' : 'MQL'
+  return plural ? `${base}s` : base
+}
+
+/** STAGE_LABEL com a troca MQL→Lead aplicada conforme a origem comercial. */
+export function stageLabel(stage: StageKey, origem: OrigemComercial): string {
+  return stage === 'MQL' ? mqlWord(origem) : STAGE_LABEL[stage]
 }
 
 const COHORT_ROOT_FIELD = STAGE_DATE_FIELD['MQL']

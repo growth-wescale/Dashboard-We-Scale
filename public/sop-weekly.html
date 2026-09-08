@@ -556,7 +556,7 @@ const BRANDS=[
     ["mkt","MQL por evento MTD: Scale Partner Odonto 9 (69%) · Scale Partner geral 4 (31%) · Lisô Laser 0"],
     ["mkt","Próximo evento presencial: Balneário Camboriú + SP · 7-8 de outubro"],
   ],
-  meta:{mes:0,sem:0,risco:true,nota:"Marca nova · sem meta ainda"},
+  meta:{mes:"—",sem:"—",risco:true,nota:"Marca nova · sem meta ainda"},
   mkt:[["Investimento","—","R$ 2.765"],["MQL","—","13"],["Leads","—","24"],["CP-MQL","—","R$ 213"]],
   vnd:{f:[[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""]],ns:0,fonte:"Funil de Eventos ainda sem dados · deals ainda vão entrar",pending:"Funil de Eventos recém-criado no CRM · aguardando deals"},
   extras:[
@@ -621,6 +621,21 @@ const LEGACY_7D = {
   anterior: { ini:'25/08', fim:'31/08', mql:22, membros:0,  custo:0 },
 };
 
+// We Scale · MQL semanal — só semana 01-07/09 (marca começou em set/26 · sem semana anterior).
+function weScaleMqlHTML(){
+  return `<div class="mqlcmp">
+    <div class="mqlcmp-head">MQL semanal</div>
+    <div class="mqlcmp-rows">
+      <div class="mqlcmp-row">
+        <span class="mqlcmp-lab">01–07 Set</span>
+        <div class="mqlcmp-track"><div class="mqlcmp-bar ago" style="width:100%">12</div></div>
+        <span class="mqlcmp-delta"></span>
+      </div>
+    </div>
+    <div class="mqlcmp-note">Marca começou em set/26 · sem semana anterior pra comparar. Set MTD total (01-08): 13 MQL.</div>
+  </div>`;
+}
+
 function legacyMtdHTML(){
   const a = LEGACY_7D.atual, p = LEGACY_7D.anterior;
   const rows = [
@@ -658,6 +673,7 @@ function legacyMtdHTML(){
 
 function mqlComparativoHTML(bkey){
   if(bkey === 'odonto') return legacyMtdHTML();
+  if(bkey === 'we-scale') return weScaleMqlHTML();
   const d = MQL_SEM[bkey];
   if(!d) return '';
   const max = Math.max(d.jul, d.ago, 1);

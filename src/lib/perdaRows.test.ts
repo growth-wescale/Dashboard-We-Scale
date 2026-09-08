@@ -140,6 +140,19 @@ describe('computeEtapas', () => {
     expect(etapas[0].leadtime).toBeCloseTo(1, 5)
     expect(etapas[0].deals.map(d => d.id_lead).sort()).toEqual(['a', 'b'])
   })
+
+  it('ordena "No Show" logo após "Reunião Agendada SQL", não antes de "MQL"', () => {
+    // STAGE_ORDER não inclui 'No Show' de propósito (é saída lateral, não
+    // etapa de progressão) — sem tratamento especial, indexOf devolve -1 e
+    // ordena antes de tudo. Regressão real vista em produção (08/09).
+    const perdas = [
+      r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'No Show' }),
+      r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'MQL' }),
+      r({ id_lead: 'c', status_atual: 'Perdido', etapa_funil: 'Diagnóstico' }),
+    ]
+    const etapas = computeEtapas(perdas)
+    expect(etapas.map(e => e.etapa)).toEqual(['MQL', 'No Show', 'Diagnóstico'])
+  })
 })
 
 describe('computeCruzamentos', () => {

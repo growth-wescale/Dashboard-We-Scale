@@ -22,7 +22,7 @@ import { buildPersonMetaRows, buildPersonSimplesRows } from '@/lib/metaBreakdown
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
-  rowsInStage, rowsInLoss, dealsInStage, STAGE_LABEL,
+  rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel,
 } from '@/lib/metrics'
 import type { StageKey } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
@@ -175,7 +175,7 @@ function LeadtimeSection({ titulo, itens, accent }: { titulo: string; itens: Lea
 
 // ─── Tabelas ───────────────────────────────────────────────────────────────
 
-function SdrTable({ rows }: { rows: SdrRow[] }) {
+function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
   const cols = '40px 1fr 70px 70px 70px 70px 90px 70px 90px'
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
@@ -185,13 +185,13 @@ function SdrTable({ rows }: { rows: SdrRow[] }) {
       <div style={{ padding: '6px 8px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
           <span>#</span><span>NOME</span>
-          <span style={{ textAlign: 'right' }}>MQL</span>
+          <span style={{ textAlign: 'right' }}>{mqlLbl}</span>
           <span style={{ textAlign: 'right' }}>SQL</span>
-          <span style={{ textAlign: 'right' }}>RR</span>
+          <span style={{ textAlign: 'right' }}>DIAG</span>
           <span style={{ textAlign: 'right' }}>SAL</span>
           <span style={{ textAlign: 'right' }}>META SQL</span>
           <span style={{ textAlign: 'right' }}>%</span>
-          <span style={{ textAlign: 'right' }}>MQL→SQL</span>
+          <span style={{ textAlign: 'right' }}>{mqlLbl}→SQL</span>
         </div>
         {rows.length === 0 && (
           <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--ws-text-secondary)' }}>Nenhum SDR com atividade no recorte.</div>
@@ -226,7 +226,7 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
       <div style={{ padding: '6px 8px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
           <span>#</span><span>NOME</span>
-          <span style={{ textAlign: 'right' }}>RR</span>
+          <span style={{ textAlign: 'right' }}>DIAG</span>
           <span style={{ textAlign: 'right' }}>SAL</span>
           <span style={{ textAlign: 'right' }}>COF</span>
           <span style={{ textAlign: 'right' }}>GANHOS</span>
@@ -283,6 +283,8 @@ function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: s
 
 export function PerformanceVendas() {
   const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
+  // "MQL" no Inbound, "Lead" na Prospecção Ativa — ver mqlWord em metrics.ts.
+  const mqlLbl = mqlWord(origem)
 
   const marcasSelecionadas = useMemo(
     () => brandKeys.map(k => BRAND_LIST.find(b => b.key === k)).filter((b): b is BrandDef => !!b),
@@ -466,7 +468,7 @@ export function PerformanceVendas() {
 
   const leadtimeEntreEtapas: LeadtimeItem[] = useMemo(() => [
     {
-      label: 'MQL → Tentando Contato', info: 'Novo MQL → Tentando Contato',
+      label: `${mqlLbl} → Tentando Contato`, info: `${mqlLbl} → Tentando Contato`,
       value: mediaLeadtime(rowsInStage(scoped, 'Tentando Contato', win, viewModes), mqlEfetivo, r => r.data_tentando_contato),
     },
     {
@@ -482,11 +484,11 @@ export function PerformanceVendas() {
       value: mediaLeadtime(rowsInStage(scoped, 'Conexão', win, viewModes), r => r.data_interesse_reuniao, r => r.data_conexao),
     },
     {
-      label: 'Conexão → Reunião Agendada', info: 'Conexão → Reunião Agendada',
+      label: 'Conexão → SQL', info: 'Conexão → SQL',
       value: mediaLeadtime(rowsInStage(scoped, 'Reunião Agendada SQL', win, viewModes), r => r.data_conexao, r => r.data_agendamento_reuniao_sql),
     },
     {
-      label: 'Contato Efetivo → Reunião Agendada', info: 'Contato Efetivo → Reunião Agendada (consolidado)',
+      label: 'Contato Efetivo → SQL', info: 'Contato Efetivo → SQL (consolidado)',
       value: mediaLeadtime(rowsInStage(scoped, 'Reunião Agendada SQL', win, viewModes), r => r.data_contato_efetivo, r => r.data_agendamento_reuniao_sql),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -494,15 +496,15 @@ export function PerformanceVendas() {
 
   const leadtimeGeral: LeadtimeItem[] = useMemo(() => [
     {
-      label: 'Tempo para Agendar', info: 'MQL → Agendamento',
+      label: 'Tempo até o SQL', info: `${mqlLbl} → SQL`,
       value: mediaLeadtime(rowsInStage(scoped, 'Reunião Agendada SQL', win, viewModes), mqlEfetivo, r => r.data_agendamento_reuniao_sql),
     },
     {
-      label: 'Tempo para Perder', info: 'MQL → Perdido',
+      label: 'Tempo para Perder', info: `${mqlLbl} → Perdido`,
       value: mediaLeadtime(rowsInLoss(scoped, win, viewModes), mqlEfetivo, r => r.data_perdido),
     },
     {
-      label: 'Tempo para Realizar Reunião', info: 'MQL → Reunião Realizada',
+      label: 'Tempo até o Diagnóstico', info: `${mqlLbl} → Diagnóstico`,
       value: mediaLeadtime(rowsInStage(scoped, 'Diagnóstico', win, viewModes), mqlEfetivo, r => r.data_reuniao_realizada),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -513,10 +515,10 @@ export function PerformanceVendas() {
   const funilSdr: FunnelStage[] = useMemo(
     () => SDR_STAGES.map(s => ({
       key: s,
-      label: STAGE_LABEL[s],
+      label: stageLabel(s, origem),
       value: countStageEvents(eventos, s, win, viewModes, evOpts),
     })),
-    [eventos, win, viewModes, evOpts],
+    [eventos, win, viewModes, evOpts, origem],
   )
   const dealsDoCliqueSdr = useMemo(
     () => (clickedSdrStage ? dealsInStage(scoped, eventos, clickedSdrStage, win, viewModes, 'performance') : []),
@@ -561,11 +563,11 @@ export function PerformanceVendas() {
   const funilCloser: FunnelStage[] = useMemo(
     () => CLOSER_STAGES.map(s => ({
       key: s,
-      label: STAGE_LABEL[s],
+      label: stageLabel(s, origem),
       // Fechamento é a trava de venda, nunca uma etapa no histórico de eventos.
       value: s === 'Fechamento' ? countSales(scoped, win, viewModes) : countStageEvents(eventos, s, win, viewModes, evOpts),
     })),
-    [scoped, eventos, win, viewModes, evOpts],
+    [scoped, eventos, win, viewModes, evOpts, origem],
   )
   const dealsDoCliqueCloser = useMemo(
     () => (clickedCloserStage ? dealsInStage(scoped, eventos, clickedCloserStage, win, viewModes, 'performance') : []),
@@ -573,12 +575,12 @@ export function PerformanceVendas() {
   )
 
   const convTopo = useMemo(() => [
-    { label: 'MQL → Agendamento', val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
-    { label: 'Agendamento → Reunião Realizada', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
-    { label: 'Reunião Realizada → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
+    { label: `${mqlLbl} → SQL`, val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
+    { label: 'SQL → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
+    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
     { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0 },
     { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0 },
-  ], [strip])
+  ], [strip, mqlLbl])
   const convFundo = useMemo(() => [
     { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
     { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0 },
@@ -625,30 +627,30 @@ export function PerformanceVendas() {
       {tab === 'sdr' && (
         <>
           <SectionHeader title="Executivos de Expansão (SDR)"
-            sub="Do MQL à reunião agendada — cadência, contato efetivo e agendamento" />
+            sub={`Do ${mqlLbl} ao SQL — cadência, contato efetivo e agendamento`} />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-            <MetaRitmoCard label="MQL no período" realizado={strip.mql} metaMensal={0}
+            <MetaRitmoCard label={`${mqlLbl} no período`} realizado={strip.mql} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
-            <MetaRitmoCard label="SQL (reuniões agendadas)" realizado={strip.sql}
+            <MetaRitmoCard label="SQL" realizado={strip.sql}
               metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
               onClick={mesUnico && metaTimeSel.metaSql > 0 ? () => setMetaDrawer('sql') : undefined} />
-            <MetaRitmoCard label="RR (reuniões realizadas)" realizado={strip.rr}
+            <MetaRitmoCard label="Diagnóstico" realizado={strip.rr}
               metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
               onClick={mesUnico && metaTimeSel.metaReuniao > 0 ? () => setMetaDrawer('rr') : undefined} />
-            <MetaRitmoCard label="SAL qualificados" realizado={strip.sal}
+            <MetaRitmoCard label="SAL" realizado={strip.sal}
               metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
               onClick={mesUnico && metaTimeSel.metaSal > 0 ? () => setMetaDrawer('sal') : undefined} />
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Os cards usam a mesma contagem por evento da Visão Macro (a etapa “Reunião Agendada SQL” só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
+            Os cards usam a mesma contagem por evento da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
           </p>
 
-          <SdrTable rows={sdrRows} />
+          <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
@@ -669,7 +671,7 @@ export function PerformanceVendas() {
 
           <div style={{ marginTop: 32 }}>
             <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)', marginBottom: 4 }}>
-              Funil · MQL → SAL
+              Funil · {mqlLbl} → SAL
             </div>
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
               Só as etapas do SDR — clique numa etapa pra ver os deals.
@@ -685,12 +687,12 @@ export function PerformanceVendas() {
       {tab === 'closer' && (
         <>
           <SectionHeader title="Closer"
-            sub="Da reunião realizada ao fechamento — diagnóstico, SAL, oportunidade e receita" />
+            sub="Do diagnóstico ao fechamento — SAL, oportunidade e receita" />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
-            <MetaRitmoCard label="Reuniões realizadas" realizado={strip.rr} metaMensal={0}
+            <MetaRitmoCard label="Diagnóstico" realizado={strip.rr} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
-            <MetaRitmoCard label="SAL qualificados" realizado={strip.sal} metaMensal={0}
+            <MetaRitmoCard label="SAL" realizado={strip.sal} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
             <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
               metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
@@ -754,7 +756,7 @@ export function PerformanceVendas() {
         open={clickedSdrStage !== null}
         onClose={() => setClickedSdrStage(null)}
         stage={clickedSdrStage}
-        stageLabel={clickedSdrStage ? STAGE_LABEL[clickedSdrStage] : ''}
+        stageLabel={clickedSdrStage ? stageLabel(clickedSdrStage, origem) : ''}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         deals={dealsDoCliqueSdr}
         accent={SDR_ACCENT}
@@ -764,7 +766,7 @@ export function PerformanceVendas() {
         open={clickedCloserStage !== null}
         onClose={() => setClickedCloserStage(null)}
         stage={clickedCloserStage}
-        stageLabel={clickedCloserStage ? STAGE_LABEL[clickedCloserStage] : ''}
+        stageLabel={clickedCloserStage ? stageLabel(clickedCloserStage, origem) : ''}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         deals={dealsDoCliqueCloser}
         accent={CLOSER_ACCENT}

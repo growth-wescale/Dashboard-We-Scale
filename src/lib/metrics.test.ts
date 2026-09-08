@@ -13,8 +13,11 @@ import {
   dealsInStage,
   groupRepeatedDeals,
   isInWindow,
+  mqlWord,
   repeatedDealsInStage,
   resolveStage,
+  STAGE_LABEL,
+  stageLabel,
   stageOwnerRole,
   sumRevenue,
   toWindow,
@@ -756,5 +759,33 @@ describe('stageOwnerRole', () => {
     expect(stageOwnerRole('Diagnóstico')).toBe('closer')
     expect(stageOwnerRole('SAL')).toBe('closer')
     expect(stageOwnerRole('Fechamento')).toBe('closer')
+  })
+})
+
+// ── Nomenclatura de exibição (padronização 08/09) ──────────────────────────
+
+describe('mqlWord', () => {
+  it('Inbound usa "MQL"', () => {
+    expect(mqlWord('Inbound')).toBe('MQL')
+    expect(mqlWord('Inbound', true)).toBe('MQLs')
+  })
+
+  it('Prospecção Ativa usa "Lead"', () => {
+    expect(mqlWord('Prospecção Ativa')).toBe('Lead')
+    expect(mqlWord('Prospecção Ativa', true)).toBe('Leads')
+  })
+})
+
+describe('stageLabel', () => {
+  it('troca só o topo do funil por origem; demais etapas seguem STAGE_LABEL', () => {
+    expect(stageLabel('MQL', 'Inbound')).toBe('MQL')
+    expect(stageLabel('MQL', 'Prospecção Ativa')).toBe('Lead')
+    expect(stageLabel('SAL', 'Prospecção Ativa')).toBe('SAL')
+    expect(stageLabel('Diagnóstico', 'Prospecção Ativa')).toBe('Diagnóstico')
+  })
+
+  it('"Reunião Agendada SQL" aparece só como "SQL"', () => {
+    expect(STAGE_LABEL['Reunião Agendada SQL']).toBe('SQL')
+    expect(stageLabel('Reunião Agendada SQL', 'Inbound')).toBe('SQL')
   })
 })

@@ -24,7 +24,8 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro } from '@/lib/fonteMapping'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  STAGE_DATE_FIELD, STAGE_ORDER, STAGE_LABEL, buildScopeFilter, cohortKeys, countSales, countStage,
+  STAGE_DATE_FIELD, STAGE_ORDER, buildScopeFilter, cohortKeys, countSales, countStage,
+  mqlWord, stageLabel,
   countStageEvents, currentStage, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
@@ -491,7 +492,7 @@ export function FunilVendas() {
 
     return MACRO_STAGES.map(s => ({
       key: s,
-      label: MACRO_STAGE_LABEL[s] ?? STAGE_LABEL[s],
+      label: MACRO_STAGE_LABEL[s] ?? stageLabel(s, origem),
       // Fechamento não é etapa no histórico — venda é um tipo de evento à parte.
       // Procurar por etapa "Fechamento" nos eventos devolvia sempre zero, e a
       // venda sumia da tela ao ligar Passagens. Sempre pela trava de venda.
@@ -502,7 +503,7 @@ export function FunilVendas() {
             extra: e => idsEscopo.has(String(e.id_deal)),
           }),
     }))
-  }, [modo, scoped, eventos, win, viewModes])
+  }, [modo, scoped, eventos, win, viewModes, origem])
 
   // Deal vivo (em andamento no ciclo atual e com MQL conhecido) indexado por
   // id_lead — base do cruzamento do Aging e do popup de deals por etapa.
@@ -529,7 +530,7 @@ export function FunilVendas() {
       .map(s => {
         const a = porStageKey.get(s)
         if (!a || a.deals === 0) return null
-        return { etapa: s, label: MACRO_STAGE_LABEL[s] ?? STAGE_LABEL[s], ...a }
+        return { etapa: s, label: MACRO_STAGE_LABEL[s] ?? stageLabel(s, origem), ...a }
       })
       .filter((x): x is EtapaLeadtimeRow => x !== null)
   }
@@ -544,7 +545,7 @@ export function FunilVendas() {
         .filter((x): x is [StageKey, typeof porEtapaRaw[number]] => x[0] !== null),
     )
     return ordenarPorMacroStages(porStageKey)
-  }, [modo, periodos, mqlPorDealVivo])
+  }, [modo, periodos, mqlPorDealVivo, origem])
 
   // Atual: mesma lista/leadtimes do Aging, mas a partir da etapa corrente de
   // cada deal vivo (ignora período de propósito) — sem depender da tabela de
@@ -582,7 +583,7 @@ export function FunilVendas() {
       [...porStageKey.entries()].map(([s, b]) => [s, { deals: b.deals, mediaEtapa: media(b.etapaDias), mediaAndamento: media(b.andamentoDias) }]),
     )
     return ordenarPorMacroStages(resumido)
-  }, [modo, scoped])
+  }, [modo, scoped, origem])
 
   // Deals por trás da etapa clicada no funil — mesma regra usada pra contar,
   // pra nunca mostrar uma lista diferente do número que a pessoa clicou.
@@ -877,7 +878,7 @@ export function FunilVendas() {
           description={deltasFull && <DeltaSecundario delta={deltasFull.fechamentos} label={`vs. ${prevFullLabel}`} />} />
         <MetricCard style={metricStyle} label="Ticket médio" value={moneyK(kpis.ticket)} delta={delta(kpis.deltas.ticket)} deltaLabel={prevLabel} accent={false}
           description={deltasFull && <DeltaSecundario delta={deltasFull.ticket} label={`vs. ${prevFullLabel}`} />} />
-        <MetricCard style={metricStyle} label="Conversão MQL→Ganho" value={kpis.convGlobal.toFixed(1)} unit="%" delta={delta(kpis.deltas.convGlobal)} deltaLabel={prevLabel} accent={false}
+        <MetricCard style={metricStyle} label={`Conversão ${mqlWord(origem)}→Ganho`} value={kpis.convGlobal.toFixed(1)} unit="%" delta={delta(kpis.deltas.convGlobal)} deltaLabel={prevLabel} accent={false}
           description={deltasFull && <DeltaSecundario delta={deltasFull.convGlobal} label={`vs. ${prevFullLabel}`} />} />
         <MetricCard style={metricStyle} label="CAC (custo/ganho)" value={kpis.cac > 0 ? money(kpis.cac) : '—'} delta={delta(kpis.deltas.cac)} deltaLabel={prevLabel} invertDelta accent={false} />
         <MetricCard style={metricStyle} label="ROAS de mídia" value={kpis.roas > 0 ? kpis.roas.toFixed(1) + 'x' : '—'} delta={delta(kpis.deltas.roas)} deltaLabel={prevLabel} accent={false} />
@@ -963,14 +964,14 @@ export function FunilVendas() {
         <LeadtimeCard label="Leadtime médio até a perda" value={leadtimes.perda.value}
           sub="Média das negociações perdidas no período" tone="risco" icon={<TrendingDown size={17} />} />
         <LeadtimeCard label="Leadtime médio de fechamento" value={leadtimes.fechamento.value}
-          sub="Da entrada do MQL até o ganho, no período" tone="positivo" icon={<Trophy size={17} />} />
+          sub={`Da entrada do ${mqlWord(origem)} até o ganho, no período`} tone="positivo" icon={<Trophy size={17} />} />
       </div>
 
       <StageDealsDrawer
         open={clickedStage !== null}
         onClose={() => setClickedStage(null)}
         stage={clickedStage}
-        stageLabel={clickedStage ? (MACRO_STAGE_LABEL[clickedStage] ?? STAGE_LABEL[clickedStage]) : ''}
+        stageLabel={clickedStage ? (MACRO_STAGE_LABEL[clickedStage] ?? stageLabel(clickedStage, origem)) : ''}
         subtitle={modo === 'performance' ? `${scopeLabel} · ${subtitlePeriodo}` : `${scopeLabel} · posição atual`}
         deals={dealsDoClique}
         accent={accent}
@@ -980,7 +981,7 @@ export function FunilVendas() {
       <RepeatedDealsDrawer
         open={clickedRepeatStage !== null}
         onClose={() => setClickedRepeatStage(null)}
-        title={clickedRepeatStage ? `Repetidos · ${STAGE_LABEL[clickedRepeatStage]}` : ''}
+        title={clickedRepeatStage ? `Repetidos · ${stageLabel(clickedRepeatStage, origem)}` : ''}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         groups={repeatedGroupsDoClique}
         accent={accent}

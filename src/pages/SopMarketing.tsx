@@ -735,6 +735,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
+  const isWeScale = slide.marca === 'We Scale'
 
   // Odonto Legacy usa janela dos últimos 7 dias corridos em vez de MTD do mês
   // (Junior 03/09: MTD Set com só 3 dias distorce leitura). Comparativo passa a
@@ -1110,7 +1111,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         },
       ]
-    : kpiCardsAll
+    // We Scale: sem SQL/SAL/CP-SQL — funil de Eventos ainda sem deals, foco em captação MTD.
+    : isWeScale
+      ? kpiCardsAll.filter(c => ['INVEST.', 'LEADS', 'MQL', 'CP-MQL'].includes(c.label))
+      : kpiCardsAll
 
   // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
   // (não só até dia N como o MTD-vs-MTD normal) usando allLeads que já cobre
@@ -1128,13 +1132,16 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
   // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
   // Odonto Legacy: foco em receita/qualidade, sem SQL/SAL (removidos do funil)
+  // We Scale: sem SQL/SAL (Funil de Eventos ainda sem deals)
   const mtdItems: MtdItem[] = isOdontoLegacy
     ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql, ref: chartPrevFullMonthMql, refLabel: `${compareRange.label} fechado` }]
-    : [
-        { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
-        { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
-        { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
-      ]
+    : isWeScale
+      ? [{ label: 'MQL', cur: chartCurMql, prev: chartPrevMql }]
+      : [
+          { label: 'MQL', cur: chartCurMql,        prev: chartPrevMql },
+          { label: 'SQL', cur: chartFunnelCur.sql, prev: chartFunnelPrev.sql },
+          { label: 'SAL', cur: chartFunnelCur.sal, prev: chartFunnelPrev.sal },
+        ]
 
   // ── MQLs por faixa de capital de investimento ────────────────────────────────
   // Agrupa valores equivalentes (ex.: "50k_100k" e "De R$ 50 mil a R$ 100 mil"
@@ -1488,9 +1495,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           )}
         </div>
 
-        {/* Col 3: Funil inverso — para Odonto Legacy, widget de qualidade da comunidade */}
+        {/* Col 3: Funil inverso — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
+        ) : isWeScale ? (
+          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} />
         ) : (() => {
           const mesKey = dates.monthStart.slice(0, 7)
           const metaMes = getMetaVendas(slide.marca, mesKey)
@@ -1575,8 +1584,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         })()}
       </div>
 
-        {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (foco em receita, não em SQL/SAL) ── */}
-        {!isOdontoLegacy && funnelStages.length > 0 && (
+        {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (receita) e We Scale (Eventos sem deals ainda) ── */}
+        {!isOdontoLegacy && !isWeScale && funnelStages.length > 0 && (
           <div style={{
             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', flexShrink: 0,
@@ -1644,6 +1653,55 @@ function ToggleGroup({ value, onChange, options, accent }: ToggleGroupProps) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+// ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
+// Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
+// Funil Inverso, que não faz sentido enquanto o funil de Eventos no CRM não tem deals.
+const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
+  { label: 'Scale Partner Odonto', adsetIncludes: ['ODONTOLOGIA'] },
+  { label: 'Scale Partner (geral)', adsetIncludes: ['SCALEPARTNER_GENERAL', 'SCALEPARTNER_GERAL'] }, // ainda sem adset dedicado
+  { label: 'Lisô Laser',           adsetIncludes: ['LLK', 'LISO', 'LISÔ'] },
+]
+
+function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; accent: string; monthLabel: string }) {
+  const contagem = WE_SCALE_EVENTOS.map(evento => {
+    const n = leads.filter(l => {
+      const adset = String(l.dados_extras?.adset ?? '').toUpperCase()
+      return evento.adsetIncludes.some(needle => adset.includes(needle))
+    }).length
+    return { ...evento, n }
+  })
+  const total = contagem.reduce((s, e) => s + e.n, 0)
+  const max = Math.max(...contagem.map(e => e.n), 1)
+  return (
+    <div style={{ ...cardStyle, overflowY: 'auto' }}>
+      <div style={{ marginBottom: 10, flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <div style={colTitle(accent)}>MQL por evento — {monthLabel} MTD</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} MQL total</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {contagem.map(e => {
+          const pct = total > 0 ? Math.round((e.n / total) * 100) : 0
+          const barPct = Math.max(2, (e.n / max) * 100)
+          return (
+            <div key={e.label} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 60px', gap: 10, alignItems: 'center' }}>
+              <div style={{ fontSize: 12, color: 'var(--ws-text-primary)', fontWeight: 600 }}>{e.label}</div>
+              <div style={{ height: 20, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ width: `${barPct}%`, height: '100%', background: accent, transition: 'width .5s cubic-bezier(.2,.7,.2,1)' }} />
+              </div>
+              <div style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: 12, fontWeight: 700, color: 'var(--ws-text-primary)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {e.n} <span style={{ color: '#94a3b8', fontWeight: 500 }}>· {pct}%</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
+        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Lisô Laser).
+      </div>
     </div>
   )
 }

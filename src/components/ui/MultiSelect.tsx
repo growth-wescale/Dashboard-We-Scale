@@ -47,11 +47,52 @@ export function ordenarOpcoes(valores: string[]): string[] {
 
 export interface MultiSelectOption { value: string; label: string }
 
+/** Dois arrays têm o mesmo conjunto de valores, ignorando ordem. */
+export function mesmoConjunto(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  const sb = new Set(b)
+  return a.every(x => sb.has(x))
+}
+
+/**
+ * O que o botão de limpar/reset deve produzir:
+ * - filtro que pode ficar vazio (`minSelected` 0): lista vazia = "Todas";
+ * - filtro com piso (Marca, Período) e `clearTo`: volta ao estado "sem
+ *   recorte" informado (Marca → todas as marcas = Consolidado; Período →
+ *   período atual). Um "Limpar" que só troca a marca isolada pela primeira
+ *   da lista confunde — e ainda some com as demais opções;
+ * - filtro com piso e sem `clearTo`: fallback legado, mantém só o 1º item.
+ */
+export function resolveClear(selected: string[], minSelected: number, clearTo?: string[]): string[] {
+  if (clearTo) return clearTo
+  return minSelected === 0 ? [] : selected.slice(0, 1)
+}
+
+/**
+ * Quais botões do rodapé mostrar. "Selecionar tudo" some quando o próprio
+ * "Limpar" já leva a todas as opções (Marca: `clearTo` == todas as marcas) —
+ * dois botões com o mesmo efeito confundem. "Limpar" só aparece quando muda
+ * algo de fato.
+ */
+export function rodapeAcoes(
+  selected: string[],
+  optionValues: string[],
+  minSelected: number,
+  clearTo?: string[],
+): { selecionarTudo: boolean; limpar: boolean } {
+  const alvoLimpar = resolveClear(selected, minSelected, clearTo)
+  const limparCobreTudo = mesmoConjunto(alvoLimpar, optionValues)
+  return {
+    selecionarTudo: selected.length < optionValues.length && !limparCobreTudo,
+    limpar: !mesmoConjunto(selected, alvoLimpar),
+  }
+}
+
 /**
  * Nenhum item marcado = sem filtro (mostra tudo) — a menos que `minSelected`
  * exija um piso (ex.: período e marca nunca podem ficar vazios).
  */
-export function MultiSelect({ label, options, selected, onChange, minSelected = 0, allLabel, universoTotal }: {
+export function MultiSelect({ label, options, selected, onChange, minSelected = 0, allLabel, universoTotal, clearTo, clearLabel }: {
   label: string
   options: readonly MultiSelectOption[]
   selected: string[]
@@ -68,6 +109,15 @@ export function MultiSelect({ label, options, selected, onChange, minSelected = 
    * Default: `options.length`, igual antes.
    */
   universoTotal?: number
+  /**
+   * Estado "sem recorte" para o botão de limpar quando o filtro tem piso
+   * (`minSelected` > 0) e não pode simplesmente esvaziar. Marca → todas as
+   * chaves de marca; Período → `[períodoAtual]`. Sem isso, "Limpar" cai no
+   * fallback legado (mantém só o 1º selecionado).
+   */
+  clearTo?: string[]
+  /** Rótulo do botão de limpar quando `clearTo` está definido (ex.: "Consolidado"). */
+  clearLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -127,28 +177,33 @@ export function MultiSelect({ label, options, selected, onChange, minSelected = 
               </label>
             )
           })}
-          {(selected.length > minSelected || selected.length < options.length) && (
-            <div style={{ display: 'flex', marginTop: 4, borderTop: '1px solid var(--ws-border)', paddingTop: 4 }}>
-              {selected.length < options.length && (
-                <button
-                  type="button"
-                  onClick={() => onChange(options.map(o => o.value))}
-                  style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
-                >
-                  Selecionar tudo
-                </button>
-              )}
-              {selected.length > minSelected && (
-                <button
-                  type="button"
-                  onClick={() => onChange(minSelected === 0 ? [] : [selected[0]])}
-                  style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
-                >
-                  Limpar seleção
-                </button>
-              )}
-            </div>
-          )}
+          {(() => {
+            const optionValues = options.map(o => o.value)
+            const { selecionarTudo, limpar } = rodapeAcoes(selected, optionValues, minSelected, clearTo)
+            if (!selecionarTudo && !limpar) return null
+            return (
+              <div style={{ display: 'flex', marginTop: 4, borderTop: '1px solid var(--ws-border)', paddingTop: 4 }}>
+                {selecionarTudo && (
+                  <button
+                    type="button"
+                    onClick={() => onChange(optionValues)}
+                    style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
+                  >
+                    Selecionar tudo
+                  </button>
+                )}
+                {limpar && (
+                  <button
+                    type="button"
+                    onClick={() => onChange(resolveClear(selected, minSelected, clearTo))}
+                    style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
+                  >
+                    {clearTo ? (clearLabel ?? 'Limpar seleção') : 'Limpar seleção'}
+                  </button>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>

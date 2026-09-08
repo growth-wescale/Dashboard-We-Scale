@@ -365,6 +365,44 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-08 (6) — "Limpar seleção" do MultiSelect volta ao estado sem recorte; Marca não trava mais numa marca só
+
+Junior reportou dois bugs no filtro de Marca (valem pra qualquer `MultiSelect`
+com piso): (1) "Limpar seleção" não limpava — deixava a **primeira** marca
+selecionada; (2) quando isso acontecia, as **outras opções sumiam** do dropdown
+e só voltavam pelo botão "Limpar" global da barra.
+
+**Bug 1 — clear que não limpa.** [`MultiSelect.tsx`](src/components/ui/MultiSelect.tsx):
+o botão fazia `onChange(minSelected === 0 ? [] : [selected[0]])`. Marca tem
+`minSelected={1}` (não pode ficar vazio — quebra o escopo do funil e o
+`isNonEmptyStringArray` do contexto), então "limpar" virava "mantém a 1ª".
+Fix: props novas `clearTo?: string[]` + `clearLabel?: string`. Quando definidas,
+o botão vai pro estado "sem recorte": **Marca → todas as 7 marcas (Consolidado)**,
+**Período (mês/trim/ano) → só o período atual** (antes também caía em
+`[selected[0]]`, igualmente arbitrário). Os 4 filtros abertos (Fonte/Sub-fonte/
+SDR/Closer) e os 5 do `StageDealsDrawer` não passam `clearTo` — continuam
+limpando pra `[]` = "Todas", comportamento intacto.
+
+**Bug 2 — opções somem ao isolar 1 marca.** `opcoesMarcaDisponiveis`
+(`brands.ts`) derivava a lista das linhas carregadas. Com **exatamente 1 marca**
+selecionada o fetch filtra no servidor, então as linhas só têm essa marca e o
+dropdown colapsava pra 1 opção — e o rodapé (`selected.length < options.length`
+= `1 < 1`) escondia até o "Selecionar tudo". Era a "ressalva pré-existente" de
+31/08. Fix: **seleção estrita (não-Consolidado) mostra a `BRAND_LIST` inteira** —
+uma vez que o usuário isolou marcas, as linhas não dizem mais "quais têm dado",
+então não dá pra estreitar. O ramo Consolidado mantém o estreitamento
+intencional (ex.: Prospecção Ativa não tem Eletrovias/Viva).
+
+**Rodapé refeito** (`rodapeAcoes`, pura e testada): "Selecionar tudo" some
+quando o "Limpar" já leva a todas as opções (caso da Marca, onde `clearTo` ==
+todas as marcas) — evita dois botões com o mesmo efeito; "Limpar" só aparece
+quando muda algo. Período mantém os dois (ações distintas: "Selecionar tudo" =
+todos os meses, "Limpar" = só o mês atual).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (269 testes, +17:
+`MultiSelect.test.ts` novo com 15, +2 em `brands.test.ts`) via
+`~/ws-dashboard-build`. App exige login — não visto renderizado.
+
 ### 2026-09-08 (5) — Colunas "Leadtime" e "Taxa de Franquia" em todos os pop-ups de deal de Vendas
 
 Junior pediu duas colunas novas em **todos** os pop-ups de deal das abas de

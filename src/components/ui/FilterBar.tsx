@@ -11,7 +11,7 @@ import type { ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { BRAND_LIST, opcoesMarcaDisponiveis } from '@/constants/brands'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
-import { opcoesPara } from '@/lib/periodo'
+import { opcoesPara, periodoAtual } from '@/lib/periodo'
 import type { OpcaoPeriodo, PeriodMode } from '@/lib/periodo'
 import { MultiSelect, controlStyle, labelStyle, ordenarOpcoes } from './MultiSelect'
 import { DateRangePicker } from './DateRangePicker'
@@ -161,7 +161,7 @@ export function FilterBar({
         }}
       >
         <Field label="Marca">
-          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} minSelected={1} allLabel="Consolidado" universoTotal={BRAND_LIST.length} />
+          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} minSelected={1} allLabel="Consolidado" universoTotal={BRAND_LIST.length} clearTo={BRAND_LIST.map(b => b.key)} clearLabel="Consolidado (todas)" />
         </Field>
 
         <Field label="Período">
@@ -187,6 +187,8 @@ export function FilterBar({
                   selected={periodValues}
                   onChange={setPeriodValues}
                   minSelected={1}
+                  clearTo={[periodoAtual(periodMode)]}
+                  clearLabel={`Só ${PERIOD_LABEL[periodMode].toLowerCase()} atual`}
                 />
                 <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                   {range.start.split('-').reverse().join('/')} — {range.end.split('-').reverse().join('/')}

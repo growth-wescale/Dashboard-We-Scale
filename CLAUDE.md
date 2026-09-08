@@ -275,15 +275,15 @@ src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 Modos do card do funil: **Performance** (volume no período, `TrapFunnel`),
 **Aging** (há quanto tempo parados) e **Atual** (onde estão agora, ignora
 período) — os dois últimos renderizam `EtapaLeadtimeList`, não o funil visual:
-uma etapa por linha, na mesma sequência de 8 do Performance, com 2 médias —
+uma etapa por linha, na mesma sequência de 9 do Performance, com 2 médias —
 tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde o MQL).
 Aging lê de `vw_deal_etapa_periodos` (tempo por etapa) cruzado com
 `data_novo_mql` de `vw_funil_vendas` (tempo em andamento); Atual computa as
 duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
-aging. A Visão Macro mostra um subconjunto de 8 etapas (MQL → Contato
+aging. A Visão Macro mostra um subconjunto de 9 etapas (MQL → Contato
 Efetivo → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
-Oportunidade → Fechamento) em todos os 3 modos; o funil completo de 12
-etapas fica em Performance.
+Oportunidade → Pré-Contrato → Fechamento) em todos os 3 modos; o funil
+completo de 12 etapas fica em Performance.
 
 **Multi-seleção de período é união exata, não intervalo.** Selecionar Junho +
 Agosto mostra só esses dois meses — Julho não entra, mesmo estando entre os
@@ -365,6 +365,23 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-08 — Pré-Contrato entra no funil da Visão Macro
+
+Junior pediu a etapa **Pré-Contrato** entre Oportunidade · COF e Fechamento
+na Visão Macro. Mesmo caso da Conexão (21/08): a etapa já existia no catálogo
+(`STAGE_DATE_FIELD` → `data_pre_contrato`, `STAGE_ORDER`, `STAGE_LABEL`) e no
+funil completo de 12 etapas da Performance — só estava fora do subconjunto da
+Visão Macro. Mudança de uma linha: `MACRO_STAGES` (`FunilVendas.tsx`) foi de
+8 pra 9 etapas. Funil (Performance), Aging e Atual passaram a mostrá-la sem
+nenhuma outra alteração — os três iteram sobre `MACRO_STAGES`.
+
+Nota de leitura: como o funil não é monotônico e Pré-Contrato é usado por
+poucos funis, o degrau vem pequeno e a conversão Oportunidade→Pré-Contrato
+pode passar de 100% (seta pra cima) — comportamento esperado, igual Conexão.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (220 testes) via
+`~/ws-dashboard-build`. App exige login — não visto renderizado.
 
 ### 2026-09-04 (4) — Xayane (SDR) aparecia como Closer no filtro novo; trava por cargo em vw_deal_ciclo
 

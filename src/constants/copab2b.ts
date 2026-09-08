@@ -29,6 +29,7 @@ const SQL_BASELINE_MAIO: Record<Marca, number> = {
   'Odonto Scale':  0.0,
   'Oral Unic':     7.9,
   'Viva':         10.3,
+  'We Scale':      0.0, // marca nova · sem baseline histórico
 }
 
 // Leads por mês Jan–Jun/26 (proxy de tendência)
@@ -50,6 +51,7 @@ const CUSTO_BASELINE_MAIO: Record<Marca, { baseline: number; meta: number }> = {
   'Odonto Scale': { baseline: 364.62, meta: 309.93 },
   'Oral Unic':    { baseline: 738.29, meta: 627.55 },
   'Viva':         { baseline: 223.81, meta: 190.24 },
+  'We Scale':     { baseline: 0,      meta: 0      }, // marca nova · sem baseline histórico
 }
 
 // Budget mensal por marca (Google + Meta Ads)
@@ -62,6 +64,7 @@ const BUDGET_MENSAL: Record<Marca, { google: number; meta: number }> = {
   'Odonto Scale': { google: 0,     meta: 0     },
   'Oral Unic':    { google: 15000, meta: 30000 },
   'Viva':         { google: 6000,  meta: 4000  },
+  'We Scale':     { google: 0,     meta: 0     }, // marca nova · sem budget definido
 }
 
 // Meta volume MQL (Meta Copa doc — pisos com leve crescimento sobre maio/26)

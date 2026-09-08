@@ -235,6 +235,7 @@ const SLIDES: SlideConfig[] = [
   { id: 'viva',          label: 'Viva',         marca: 'Viva',         accent: '#FF0069' },
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
   { id: 'odonto-scale',  label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#7f0c72' },
+  { id: 'we-scale',      label: 'We Scale',     subLabel: 'Eventos',   marca: 'We Scale',     accent: '#7E0E70' },
 ]
 
 // ── SVG Charts ─────────────────────────────────────────────────────────────────

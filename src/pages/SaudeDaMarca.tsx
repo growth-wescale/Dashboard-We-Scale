@@ -52,6 +52,7 @@ const BRAND_DEFS = [
   { key: 'liso-laser', label: 'Lisô Laser',        accent: '#FF6643', tipo: 'marca' as const },
   { key: 'b2case',     label: 'B2Case',            accent: '#0169F2', tipo: 'marca' as const },
   { key: 'viva',       label: 'Viva',              accent: '#FF0069', tipo: 'marca' as const },
+  { key: 'we-scale',   label: 'We Scale',          accent: '#7E0E70', tipo: 'marca' as const },
   { key: 'fred',       label: 'Frederico Nicolau', accent: '#2A6E3F', tipo: 'ceo' as const },
   { key: 'leo',        label: 'Leonardo Pereira',  accent: '#3B5998', tipo: 'ceo' as const },
 ]

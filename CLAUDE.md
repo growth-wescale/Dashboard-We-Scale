@@ -365,6 +365,62 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-08 (5) — Colunas "Leadtime" e "Taxa de Franquia" em todos os pop-ups de deal de Vendas
+
+Junior pediu duas colunas novas em **todos** os pop-ups de deal das abas de
+Vendas: **Leadtime** e **Taxa de Franquia** (ao lado de Unidades).
+
+**Banco — `vw_funil_vendas` (`CREATE OR REPLACE VIEW`, matview não tocada,
+mesmo padrão do `sub_fonte_crm` em 31/08).** Coluna nova `valor_produto
+numeric` = valor do **Produto** anexado ao deal no RD (`payload->>'_valor_
+contrato'`), que é o que representa quanto foi/seria faturado de taxa de
+franquia. Mesma extração numérica que `valor_contrato` já faz na matview
+(inclusive tratando `"0"` como ausente via `NULLIF(...,0)` — sem isso, ~7.100
+deals apareceriam com "R$ 0,00" porque o payload traz `_valor_contrato: "0"`
+explícito na maioria), **mas SEM o gate de `status = 'Ganho'`**: fica
+disponível em qualquer etapa/status. `COALESCE(<extração>, d.valor_contrato)`
+cobre o caminho legado (`atributos_legado`) pros deals Ganhos. É **total** do
+deal, não por-unidade (deal de 2 unidades mostra o total faturado). Checksum
+da view idêntico antes/depois (7.108 linhas, 45 ganhos, 4.826 perdidos, 2.237
+em andamento, `sum(valor_contrato)` = R$ 1.998.779,98, `sum(quantidade_
+unidades)` = 389); `valor_produto` = `valor_contrato` em 100% dos Ganhos
+(superset estrito) e passou a preencher **286 deals não-Ganhos** (perdidos/em
+andamento com produto anexado) que antes não tinham valor visível.
+
+**Front.** `FunnelRow.valor_produto` + `'valor_produto'` no `COLS` de
+`useFunilVendas` → chega nos 4 pop-ups de uma vez (todos leem `vw_funil_vendas`
+via `useFunilVendas`). Helper puro novo `leadtimeDias(inicio, ref, agora)` em
+`dealDrawerShared.tsx` (testado): dias corridos do MQL (`data_novo_mql`,
+fallback `data_criacao_original`) até a **data de referência daquela linha no
+pop-up** — entrada na etapa (Performance), venda (Receita/Fechamentos), perda
+(Análise de Perda), última repetição (Repetidos), ou hoje se o deal ainda está
+vivo. `null` (mostra "—") quando falta o início, data inválida, ou a `ref` é
+anterior ao início.
+
+Por pop-up:
+- **`StageDealsDrawer`** (Visão Macro + Performance): "Taxa de Franquia" depois
+  de Unidades; "Leadtime" nova coluna. Nos modos Aging/Atual a antiga coluna
+  **"Em andamento" virou "Leadtime"** (é a mesma métrica: tempo em andamento no
+  funil inteiro desde o MQL), ao lado de "Parado na etapa". No modo Performance
+  "Leadtime" = MQL → entrada na etapa.
+- **`SimpleDealsDrawer`** (KPIs Receita/Fechamentos/Vendas por fonte): "Taxa de
+  Franquia" depois de Unidades; "Leadtime" (MQL → `data_venda`) antes de Data.
+  Mantida a coluna "Valor" (`valor_contrato`) — pra deal Ganho as duas batem.
+- **`PerdaDealsDrawer`** (Análise de Perda): a coluna **"Valor" (quebrada — era
+  `valor_contrato`, sempre `NULL` pra Perdido) foi substituída por "Taxa de
+  Franquia"**. Adicionadas "Unidades" (não existia aqui) e "Leadtime"
+  (MQL → `data_perdido`).
+- **`RepeatedDealsDrawer`** (Repetidos, Visão Macro): "Unidades", "Taxa de
+  Franquia" e "Leadtime" (MQL → última repetição) antes de "Última repetição".
+
+`MqlDrawer` (Lista de MQLs) ficou de fora — vive nas abas de Marketing (Saúde
+da Marca / Visão Geral), outra fonte de dados (leads do Marketing, sem produto/
+unidades).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (249 testes, 6 novos em
+`dealDrawerShared.test.ts`) num git worktree fora do OneDrive. Checksum da view
+conferido por SQL contra a base real. App exige login — não visto renderizado.
+
 ### 2026-09-08 (4) — Padronização de nomenclatura nas abas de Vendas
 
 Junior pediu 4 trocas de rótulo **só de exibição** (nenhum dado, view,

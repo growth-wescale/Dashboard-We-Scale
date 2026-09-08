@@ -47,6 +47,7 @@ function row(over: Partial<FunnelRow> = {}): FunnelRow {
     utm_source: null,
     valor_contrato: null,
     quantidade_unidades: null,
+    valor_produto: null,
     motivo_perda: null,
     data_novo_mql: null,
     data_tentando_contato: null,

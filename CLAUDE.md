@@ -365,6 +365,85 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-09 (2) — Campanha de Metas: "Corrida de Performance" nos cards + Grid dos SDRs com dado real
+
+Junior pediu 4 ajustes na aba **Campanha de Metas** (`CampanhaMetas.tsx`,
+rota `/campanha-metas`; não confundir com a página `/gp-setembro`).
+
+**1. Os 4 cards de prêmio viram 2 cards de trilha.** Pole Position / Volta
+Mais Rápida / Pit Stop Perfeito / Troféu Senna saíram; entraram **Trilha
+SDR** e **Trilha Closer**, seguindo `corrida-de-performance-logica.md`
+(doc que o Junior mandou). Modelo **híbrido** (decisão dele): cada card
+mostra a **regra** (pontos de volume × degraus de velocidade) + a
+**pontuação do mês por pessoa** — sem ranking cross-trilha, sem os
+guardrails de no-show/desconto do doc.
+
+Motor puro e testado: `src/lib/corridaPerformance.ts`. Regra:
+`PONTOS = Σ (volume da unidade × multiplicador de velocidade daquela
+unidade)` — aplicado **por-RR / por-venda**, nunca sobre a média do período
+(o exemplo 3/50/48/51/49 dias do doc vira teste). Volume: 1 pt inbound /
+2 pt outbound (lê `origem_comercial`; `Prospecção Ativa` = outbound), ×1,5
+se a pessoa fez +1 unidade no mesmo dia calendário (Brasília, via
+`toLocalDate`). Velocidade SDR = `data_agendamento_reuniao_sql −
+data_novo_mql` (degraus 0,5 / 1 / 3 / 7 dias → 1,5× … 0,5×); Closer =
+`data_venda − data_reuniao_realizada` (14 / 17 / 28 / 40 dias). Degraus
+fixos do doc (mediana do time SDR ≈ 1,0 d, Closer ≈ 16,8 d — n pequeno,
+recalibrar).
+
+**2. Faturamento dos closers: confirmado correto, sem mudança.** Já vinha
+de `vw_funil_vendas` (`status_atual='Ganho'`, `data_venda` no mês,
+`valor_contrato` por `nome_closer`) — mesma fonte e trava da aba
+Performance (`buildCloserRows`). Em deal Ganho, `valor_contrato` é
+**idêntico** a `valor_produto` (o "campo de Produto" / taxa de franquia do
+PR #91) — conferido ago/2026, 0 linhas divergentes. Set/2026 tem 0 vendas
+fechadas, por isso os cards mostram R$ 0 — não é bug. Mantido em
+`valor_contrato` pra não divergir da Performance.
+
+**3. "Histórico de resultados": vem de `useHistoricoAtingimento`** — 1 query
+em `DB_Metas_Performance` (`funcao='Closer'`, `meta_financeira`, meses
+mar–ago/2026) + 1 em `vw_funil_vendas` (Ganhos no range), agregado no
+cliente por (closer, mês). Célula = `soma(valor_contrato) ÷ meta_financeira
+× 100`; "—" quando não há meta no mês; MÉDIA = média das % só dos meses com
+meta. Filtrado por `CLOSERS_ATIVOS`. **Não foi tocado** — Junior só
+perguntou a origem.
+
+**4. Grid dos SDRs.**
+- **Metas viram inteiro** (`nfCeil`) — some o "73,7" e o
+  "58,84999999999999" (as metas de `meta_sql` / `meta_reuniao_realizada`
+  no banco são fracionárias por causa do rateio por marca).
+- **Realizado ligado**, mesma fonte da Performance: SQL =
+  `data_agendamento_reuniao_sql` no mês, RR = `data_reuniao_realizada` no
+  mês, contados por `nome_sdr` (lista canônica `SDRS_ATIVOS`). Antes vinha
+  `0` hardcoded (`useMetasSDRs` tinha `realizadoSql: 0` placeholder).
+- **Linha "Agendamento" removida** — `meta_agendamento == meta_sql` em
+  toda linha do banco, e "Agendamento"/"SQL" são a mesma etapa depois da
+  padronização de nomenclatura (PR #89). Entra **"Tempo até agendar"**
+  (mediana MQL→agendamento + tag do degrau) — a dimensão de velocidade do
+  doc.
+- Some a pill "AGUARDANDO" e a nota "Realizado em definição com o time".
+- Vanessa Daniel não tem meta de SDR em setembro → card dela zera
+  legitimamente (0 / 0). Foto F1 dela ainda pendente (Junior vai mandar).
+
+**Hook novo `useCorridaPerformance(mesRef)`** — 3 recortes do mês em
+`vw_funil_vendas` (RR realizada, SQL agendado, venda ganha), **sem filtro
+de origem** (o peso K.O. da pontuação precisa de Inbound + Prospecção Ativa
+juntos). Mesmo padrão de query focada de `useMetasClosers` /
+`useHistoricoAtingimento`. Devolve `sdrTrilha` / `closerTrilha`
+(`LinhaTrilha[]`) + `sdrRealizado` (Map por SDR) pro Grid.
+`useMetasSDRs` enxugou: saiu `meta_agendamento` e os campos `realizado*`
+placeholder.
+
+**Fora de escopo** (dito ao Junior): hero banner, `PolePositionCard`, chip
+"Pool de prêmios · R$ 12k", `SennaCard` da sidebar, `GpStrip`, página
+`/gp-setembro`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (280 testes, 14
+novos em `corridaPerformance.test.ts`) num git worktree fora do OneDrive.
+App exige login — não visto renderizado; inputs conferidos por SQL contra
+a base real (set/2026: Xayane 13 RR / mediana 0,76 d, Sarah 6 / 0,47 d,
+Thiago 4 / 1,98 d, Vanessa 0; 0 vendas no mês → trilha Closer mostra "sem
+vendas"). PR #102.
+
 ### 2026-09-09 — MultiSelect estilo Excel: limpar/selecionar tudo sempre visíveis, filtro obrigatório vazio vira erro, lista de Marca consistente
 
 Continuação da entrada de 08/09 (7). Junior pediu 3 ajustes:

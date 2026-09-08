@@ -365,6 +365,25 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-08 (6) — Leadtime dos pop-ups em dia/hora/minuto
+
+Junior reclamou que "4.3 dias" nas colunas de tempo dos pop-ups fica ruim de
+ler. Novo formatador `fmtDuracao(dias)` em `dealDrawerShared.tsx`: `"4d 7h
+12min"`, `"6h 0min"`, `"29min"` — acima de 1 dia mostra os três componentes;
+abaixo, some o dia (e a hora, se zero). null/NaN → `"—"`, ≤0 → `"0min"`.
+
+Aplicado nas 6 células de tempo por-deal dos pop-ups: Leadtime
+(`StageDealsDrawer` nos dois modos, `SimpleDealsDrawer`, `PerdaDealsDrawer`,
+`RepeatedDealsDrawer`) **e** "Parado na etapa" (`StageDealsDrawer` Aging/Atual —
+troquei junto pra não ficar `"4d 7h 12min"` do lado de `"2.3d"` na mesma
+tabela). `fmtDias` (compacto, `"4.3d"`) **continua** só na
+`EtapaLeadtimeList` da Visão Macro, onde os valores são MÉDIAS de vários deals
+e dia/hora/minuto seria falsa precisão.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (259 testes, 6 novos
+pra `fmtDuracao`) num worktree fora do OneDrive. App exige login — não visto
+renderizado.
+
 ### 2026-09-08 (5) — Colunas "Leadtime" e "Taxa de Franquia" em todos os pop-ups de deal de Vendas
 
 Junior pediu duas colunas novas em **todos** os pop-ups de deal das abas de

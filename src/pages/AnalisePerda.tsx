@@ -4,7 +4,7 @@ import { usePerdas, type PerdaEvento } from '@/hooks/usePerdas'
 import { usePerformanceEquipe, type FunilCompatRow } from '@/hooks/usePerformanceEquipe'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo, type CategoriaMotivo } from '@/constants/motivosPerda'
-import { BRANDS_WITH_OVERVIEW, BRAND_ACCENT } from '@/constants/brands'
+import { BRANDS_WITH_OVERVIEW, BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, pct } from '@/lib/format'
 import { currentMonthRange, fmtBR, monthLabelLong as monthLabel } from '@/lib/dateUtils'
 import { SCard, KTile } from '@/components/ui/v2'
@@ -526,7 +526,7 @@ export function AnalisePerda() {
           <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume absoluto e taxa sobre os MQLs da própria marca</div>
           {marcas.map(m => (
             <BarRow key={m.marca}
-              label={m.marca}
+              label={marcaLabel(m.marca)}
               value={m.qtd}
               max={marcas[0]?.qtd ?? 1}
               color={BRAND_COLOR[m.marca] ?? '#7F0C72'}

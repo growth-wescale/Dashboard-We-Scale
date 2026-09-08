@@ -8,6 +8,7 @@ export const SLUG_TO_MARCA: Record<string, Marca> = {
   'liso-laser':   'Lisô Laser',
   'b2case':       'B2Case',
   'viva':         'Viva',
+  'we-scale':     'We Scale',
 }
 
 /** Data ISO (YYYY-MM-DD) do Date — em fuso LOCAL, não UTC.

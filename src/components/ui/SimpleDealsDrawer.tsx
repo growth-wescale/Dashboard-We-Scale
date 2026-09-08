@@ -9,6 +9,7 @@ import { ExternalLink, X } from 'lucide-react'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
+import { marcaLabel } from '@/constants/brands'
 import { cell, fmtData } from './dealDrawerShared'
 
 interface SimpleDealsDrawerProps {
@@ -92,7 +93,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                       <ExternalLink size={11} />
                     </a>
                   </td>
-                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(r.marca)}</td>
+                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                   <td style={{
                     padding: '10px 16px', whiteSpace: 'nowrap',
                     fontWeight: destacarFonte ? 600 : 400,

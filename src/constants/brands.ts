@@ -25,7 +25,8 @@ export const BRAND_OVERVIEW: BrandDef = {
 /** Marcas reais (sem consolidado). Ordem = ordem de exibição. */
 export const BRAND_LIST: BrandDef[] = [
   { key: 'oral-unic',    label: 'Oral Unic',    marca: 'Oral Unic',    accent: '#7F0C72', dark: '#540247' },
-  { key: 'odonto-scale', label: 'Odonto Scale', marca: 'Odonto Scale', accent: '#0EA5E9', dark: '#075985' },
+  // Rótulo de UI é "Odonto Legacy"; a marca no banco continua 'Odonto Scale'.
+  { key: 'odonto-scale', label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#0EA5E9', dark: '#075985' },
   { key: 'inpot',        label: 'Inpot',        marca: 'Inpot',        accent: '#C6D32D', dark: '#0B3120' },
   { key: 'eletrovias',   label: 'Eletrovias',   marca: 'Eletrovias',   accent: '#ED6D3A', dark: '#4E2800' },
   { key: 'liso-laser',   label: 'Lisô Laser',   marca: 'Lisô Laser',   accent: '#FF6643', dark: '#6E1D61' },
@@ -52,9 +53,21 @@ export function findBrandByMarca(marca: string | null | undefined): BrandDef | u
   return BRAND_LIST.find(b => b.marca === marca)
 }
 
-/** Mapa slug→cor (accent). Substitui MARCA_COR em types.ts que estava desatualizado. */
+/**
+ * Rótulo de UI para um valor cru da coluna `marca` do banco. Use sempre que for
+ * EXIBIR a marca (célula de tabela, legenda, opção de filtro) — nunca para o
+ * valor usado em query/filtro. Hoje só troca 'Odonto Scale' → 'Odonto Legacy';
+ * qualquer outra marca volta igual.
+ */
+export function marcaLabel(marca: string | null | undefined): string {
+  if (!marca) return ''
+  return findBrandByMarca(marca)?.label ?? marca
+}
+
+/** Mapa cor (accent) por marca. Aceita tanto o valor cru do banco quanto o
+ *  rótulo de UI (ex.: 'Odonto Scale' e 'Odonto Legacy' resolvem para a mesma cor). */
 export const BRAND_ACCENT: Record<string, string> = Object.fromEntries(
-  BRAND_LIST.map(b => [b.marca!, b.accent]),
+  BRAND_LIST.flatMap(b => [[b.marca!, b.accent], [b.label, b.accent]]),
 )
 
 /**

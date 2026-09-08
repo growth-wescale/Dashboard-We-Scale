@@ -3,6 +3,7 @@ import { ExternalLink, X } from 'lucide-react'
 import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
 import { nf } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
+import { marcaLabel } from '@/constants/brands'
 import { BarList, StatusBadge, cell, fmtData, topBreakdown } from './dealDrawerShared'
 
 interface RepeatedDealsDrawerProps {
@@ -113,7 +114,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
                   <td style={{ padding: '10px 16px', fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--status-atencao)' }}>
                     {nf(g.vezes)}
                   </td>
-                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(g.row.marca)}</td>
+                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(g.row.marca))}</td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><StatusBadge status={g.row.status_atual} /></td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(g.row.nome_sdr)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(g.row.nome_closer)}</td>

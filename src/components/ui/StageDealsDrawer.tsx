@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ExternalLink, X } from 'lucide-react'
 import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
-import { BRAND_ACCENT } from '@/constants/brands'
+import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf } from '@/lib/format'
 import { BarList, StatusBadge, cell, fmtData, fmtDias, diasDesde, topBreakdown } from './dealDrawerShared'
 import { MultiSelect, ordenarOpcoes } from './MultiSelect'
@@ -78,7 +78,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
     : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Data na etapa']
 
   const porMarca = useMemo(
-    () => topBreakdown(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
+    () => topBreakdown(deals, d => marcaLabel(d.row.marca), m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
     [deals],
   )
   // Diagnóstico em diante é do Closer; antes disso, do SDR — nome_closer já vem
@@ -142,7 +142,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
           display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
         }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>Filtrar por</span>
-          <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: v }))}
+          <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: marcaLabel(v) }))}
             selected={filters.marca} onChange={v => setFilters(f => ({ ...f, marca: v }))} />
           <MultiSelect label="Funil" options={options.funil.map(v => ({ value: v, label: v }))}
             selected={filters.funil} onChange={v => setFilters(f => ({ ...f, funil: v }))} />
@@ -201,7 +201,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
                     </a>
                   </td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_funil)}</td>
-                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(r.marca)}</td>
+                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status_atual} /></td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_sdr)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_closer)}</td>

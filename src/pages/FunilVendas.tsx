@@ -46,7 +46,7 @@ import { downloadCsv } from '@/lib/csv'
  *  executivo. Rótulo local: "Oportunidade" em vez do técnico "Oportunidade · COF". */
 const MACRO_STAGES: StageKey[] = [
   'MQL', 'Contato Efetivo', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF',
-  'Fechamento',
+  'Pré-Contrato', 'Fechamento',
 ]
 const MACRO_STAGE_LABEL: Partial<Record<StageKey, string>> = {
   'Oportunidade COF': 'Oportunidade',

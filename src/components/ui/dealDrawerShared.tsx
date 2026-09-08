@@ -6,11 +6,26 @@ export function fmtData(value: string | null): string {
   return iso ? fmtBR(iso) : '—'
 }
 
-/** Dias corridos (com "h" abaixo de 1 dia) — usado nas colunas de tempo do
- *  popup nos modos Aging/Atual e na lista de etapas da Visão Macro. */
+/** Dias corridos (com "h" abaixo de 1 dia) — usado na lista de etapas da Visão
+ *  Macro, onde os valores são MÉDIAS (fração de dia lê melhor que "4d 7h 12min"). */
 export function fmtDias(d: number | null): string {
   if (d === null) return '—'
   return d < 1 ? `${Math.round(d * 24)}h` : `${d.toFixed(d < 10 ? 1 : 0)}d`
+}
+
+/** Duração por-deal em dia/hora/minuto — "4d 7h 12min", "6h 0min", "29min".
+ *  Usada nas colunas de tempo dos pop-ups (Leadtime, Parado na etapa), onde
+ *  cada linha é um deal só e "4.3d" fica ruim de ler. */
+export function fmtDuracao(dias: number | null): string {
+  if (dias === null || Number.isNaN(dias)) return '—'
+  const totalMin = Math.round(dias * 1440)
+  if (totalMin <= 0) return '0min'
+  const d = Math.floor(totalMin / 1440)
+  const h = Math.floor((totalMin % 1440) / 60)
+  const m = totalMin % 60
+  if (d > 0) return `${d}d ${h}h ${m}min`
+  if (h > 0) return `${h}h ${m}min`
+  return `${m}min`
 }
 
 /** Dias entre `iso` e `agora`; null quando a data falta, é inválida ou está

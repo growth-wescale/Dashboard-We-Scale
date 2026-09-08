@@ -4,7 +4,7 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, money } from '@/lib/format'
-import { BarList, StatusBadge, cell, fmtData, fmtDias, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { BarList, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
 import { MultiSelect, ordenarOpcoes } from './MultiSelect'
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
@@ -216,12 +216,12 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
                   </td>
                   {leadtimeCols ? (
                     <>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(diasDesde(dataEtapa, agora))}</td>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDias(diasDesde(r.data_novo_mql, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(diasDesde(dataEtapa, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDuracao(diasDesde(r.data_novo_mql, agora))}</td>
                     </>
                   ) : (
                     <>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, dataEtapa, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, dataEtapa, agora))}</td>
                       <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
                     </>
                   )}

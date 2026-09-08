@@ -10,7 +10,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { cell, fmtData, fmtDias, leadtimeDias } from './dealDrawerShared'
+import { cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -109,7 +109,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                     {r.valor_contrato ? money(r.valor_contrato) : '—'}
                   </td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    {fmtDias(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, r.data_venda, Date.now()))}
+                    {fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, r.data_venda, Date.now()))}
                   </td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                     {fmtData(r.data_venda)}

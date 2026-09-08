@@ -4,7 +4,7 @@ import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
 import { nf, money } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
 import { marcaLabel } from '@/constants/brands'
-import { BarList, StatusBadge, cell, fmtData, fmtDias, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { BarList, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, topBreakdown } from './dealDrawerShared'
 
 interface RepeatedDealsDrawerProps {
   open: boolean
@@ -121,7 +121,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(g.row.fonte_macro)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{nf(g.row.quantidade_unidades ?? 0)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{g.row.valor_produto != null ? money(g.row.valor_produto) : '—'}</td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(leadtimeDias(g.row.data_novo_mql ?? g.row.data_criacao_original, g.ultimaData, Date.now()))}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(leadtimeDias(g.row.data_novo_mql ?? g.row.data_criacao_original, g.ultimaData, Date.now()))}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(g.ultimaData)}</td>
                 </tr>
               ))}

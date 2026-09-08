@@ -32,6 +32,8 @@ export const BRAND_LIST: BrandDef[] = [
   { key: 'liso-laser',   label: 'Lisô Laser',   marca: 'Lisô Laser',   accent: '#FF6643', dark: '#6E1D61' },
   { key: 'b2case',       label: 'B2Case',       marca: 'B2Case',       accent: '#0169F2', dark: '#040492' },
   { key: 'viva',         label: 'Viva',         marca: 'Viva',         accent: '#FF0069', dark: '#141414' },
+  // Antes 'Scale Partners' (renomeado 08/09/2026). Foco: eventos presenciais · funil "Eventos" no CRM.
+  { key: 'we-scale',     label: 'We Scale',     marca: 'We Scale',     accent: '#7E0E70', dark: '#540247' },
 ]
 
 /** Lista completa com consolidado no topo (usada nos dropdowns das páginas de Vendas). */

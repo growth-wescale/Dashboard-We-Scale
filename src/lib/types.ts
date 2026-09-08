@@ -6,6 +6,7 @@ export type Marca =
   | 'Lisô Laser'
   | 'B2Case'
   | 'Viva'
+  | 'We Scale'
 
 export type Canal = 'meta' | 'google'
 

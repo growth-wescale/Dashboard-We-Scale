@@ -547,7 +547,18 @@ const BRANDS=[
   meta:{mes:1,sem:2,risco:true,nota:"Meta em set/nov — arrastada p/ ago"},
   mkt:[["Investimento","R$ 2.797","R$ 2.195"],["MQL","16","9"],["Leads","26","13"],["CP-MQL","R$ 175","R$ 244"]],
   vnd:{f:[[9,""],[0,""],[6,"66,7%"],[0,""],[0,""],[0,""],[1,""],[0,""],[0,""],[0,""],[0,""],[0,""]],ns:1,fonte:"MTD Set (01-08/09) · sem venda no período",
-   perdas:{total:3,top:[["Atingiu o fim da cadência",1,"33%"],["Sem perfil (fora do ICP)",1,"33%"],["BOT - Avaliar",1,"33%"]]}}}
+   perdas:{total:3,top:[["Atingiu o fim da cadência",1,"33%"],["Sem perfil (fora do ICP)",1,"33%"],["BOT - Avaliar",1,"33%"]]}}},
+
+ {key:"we-scale",name:"We Scale",tag:"Eventos · captação de investidores",status:"attn",badge:"",dark:false,
+  bullets:[
+    ["mkt","Nova marca no hub · captação de leads via Meta Ads (conta 655039566905092)"],
+    ["mkt","Funil de Eventos criado no CRM · sem venda ainda (funil recém aberto)"],
+    ["mkt","Próximo evento agendado para 7 e 8 de outubro"],
+    ["mkt","Cuidado: campanha IDA (Instituto do Autismo) roda na mesma conta Meta · isolar nos relatórios"],
+  ],
+  meta:{mes:0,sem:0,risco:true,nota:"Marca nova · sem meta ainda"},
+  mkt:[["Investimento","—","—"],["MQL","—","—"],["Leads","—","—"],["CP-MQL","—","—"]],
+  vnd:{f:[[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""],[0,""]],ns:0,fonte:"Funil de Eventos ainda sem dados · marca começou agora",pending:"Funil de Eventos recém-criado no CRM · sem deals ainda"}}
 ];
 
 document.getElementById('frentes').innerHTML = FRENTES.map(f=>`<div class="fr"><span class="tg">${f[0]}</span><p>${f[1]}</p></div>`).join('');

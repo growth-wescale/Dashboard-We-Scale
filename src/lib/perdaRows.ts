@@ -106,6 +106,21 @@ export function computeEvitavel(perdas: FunnelRow[]): EvitavelStats {
   return { pctEvitavel, qtdProcesso, qtdMercado }
 }
 
+/**
+ * Posição de ordenação de uma etapa nas listas/heatmap de perda. `STAGE_ORDER`
+ * não inclui "No Show" DE PROPÓSITO (metrics.ts: "fora da sequência do
+ * funil... o deal volta dela para o fluxo normal", mesma regra da Visão
+ * Macro, que a exibe como saída lateral após "Reunião Agendada SQL", não como
+ * degrau do funil). `STAGE_ORDER.indexOf('No Show')` sem esse tratamento
+ * devolve -1 e ordena "No-show" ANTES de "MQL" — errado. Aqui ela entra logo
+ * depois de "Reunião Agendada SQL" (índice fracionário, sem empurrar as
+ * etapas seguintes), o mesmo lugar em que o deal sai do fluxo normal.
+ */
+function ordemEtapa(stage: StageKey): number {
+  if (stage === 'No Show') return STAGE_ORDER.indexOf('Reunião Agendada SQL') + 0.5
+  return STAGE_ORDER.indexOf(stage)
+}
+
 export interface EtapaRow { etapa: StageKey; ordem: number; qtd: number; leadtime: number; deals: FunnelRow[] }
 
 export function computeEtapas(perdas: FunnelRow[]): EtapaRow[] {
@@ -124,7 +139,7 @@ export function computeEtapas(perdas: FunnelRow[]): EtapaRow[] {
         .map(d => businessDaysBetween(d.data_novo_mql!, d.data_perdido!))
         .filter(d => d > 0)
       const leadtime = leadtimes.length > 0 ? leadtimes.reduce((s, v) => s + v, 0) / leadtimes.length : 0
-      return { etapa, ordem: STAGE_ORDER.indexOf(etapa), qtd: deals.length, leadtime, deals }
+      return { etapa, ordem: ordemEtapa(etapa), qtd: deals.length, leadtime, deals }
     })
     .sort((a, b) => a.ordem - b.ordem)
 }
@@ -141,7 +156,7 @@ export function computeCruzamentos(
   const etapasMap = new Map<StageKey, number>()
   for (const p of perdas) {
     const stage = currentStage(p)
-    if (stage) etapasMap.set(stage, STAGE_ORDER.indexOf(stage))
+    if (stage) etapasMap.set(stage, ordemEtapa(stage))
   }
   const etapas = [...etapasMap.entries()]
     .map(([etapa, ordem]) => ({ etapa, ordem }))

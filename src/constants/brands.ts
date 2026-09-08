@@ -71,22 +71,24 @@ export const BRAND_ACCENT: Record<string, string> = Object.fromEntries(
 )
 
 /**
- * Opções do filtro de Marca — mesma regra de Fonte/Sub-Fonte, adaptada ao fato
- * de Marca ser "todas marcadas por padrão" (Consolidado), não "nenhuma".
+ * Opções do filtro de Marca.
  *
  * Com tudo marcado (Consolidado), a seleção não é uma preferência real a
  * proteger: a lista mostra só o que tem dado no recorte atual (ex.: dentro do
- * toggle de origem comercial). Isolar 1+ marca de propósito é diferente — aí
- * ela entra na lista mesmo que suma do recorte, senão o usuário fica com um
- * filtro marcado e sem como desmarcar.
+ * toggle de origem comercial).
+ *
+ * Assim que o usuário isola 1+ marca, mostra a lista INTEIRA. As linhas
+ * carregadas já vêm filtradas por marca no servidor quando só 1 está
+ * selecionada, então `marcasDisponiveis` colapsa para essa única marca — e a
+ * regra antiga (`marcasDisponiveis ∪ brandKeys`) deixava o dropdown preso numa
+ * marca só, sem como voltar para as outras a não ser pelo "Limpar" global.
  */
 export function opcoesMarcaDisponiveis(
   marcasDisponiveis: string[] | undefined,
   brandKeys: string[],
 ): BrandDef[] {
   const consolidado = brandKeys.length === BRAND_LIST.length
-  const chaves = new Set(
-    consolidado ? (marcasDisponiveis ?? BRAND_LIST.map(b => b.key)) : [...(marcasDisponiveis ?? []), ...brandKeys],
-  )
+  if (!consolidado) return [...BRAND_LIST]
+  const chaves = new Set(marcasDisponiveis ?? BRAND_LIST.map(b => b.key))
   return BRAND_LIST.filter(b => chaves.has(b.key))
 }

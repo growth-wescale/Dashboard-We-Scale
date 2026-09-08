@@ -45,12 +45,17 @@ describe('opcoesMarcaDisponiveis', () => {
     expect(opcoes).not.toContain('viva')
   })
 
-  it('seleção estrita (não é Consolidado) entra na lista mesmo fora do recorte', () => {
-    // Usuário isolou Eletrovias de propósito; toggle muda e Eletrovias some
-    // dos dados — a opção não pode sumir da lista sem o usuário poder desmarcar.
+  it('seleção estrita (não é Consolidado) mostra TODAS as marcas', () => {
+    // Usuário isolou Eletrovias de propósito; a lista completa continua
+    // disponível pra ele trocar de marca sem passar pelo "Limpar" global.
     const disponiveis = ['oral-unic', 'odonto-scale']
     const opcoes = opcoesMarcaDisponiveis(disponiveis, ['eletrovias']).map(b => b.key)
-    expect(opcoes).toEqual(expect.arrayContaining(['eletrovias', 'oral-unic', 'odonto-scale']))
+    expect(opcoes).toEqual(TODAS)
+  })
+
+  it('bug reportado: 1 marca isolada + linhas só dessa marca → lista completa, ninguém some', () => {
+    const opcoes = opcoesMarcaDisponiveis(['oral-unic'], ['oral-unic']).map(b => b.key)
+    expect(opcoes).toEqual(TODAS)
   })
 
   it('preserva a ordem de exibição de BRAND_LIST, não a ordem do recorte', () => {

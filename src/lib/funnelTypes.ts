@@ -55,6 +55,12 @@ export interface FunnelRow {
 
   valor_contrato: number | null
   quantidade_unidades: number | null
+  /**
+   * Valor do Produto anexado ao deal no RD (taxa de franquia faturada/prevista).
+   * Diferente de `valor_contrato`, vem preenchido em qualquer etapa/status — não
+   * só em Ganho. `null` quando o deal ainda não tem produto cadastrado.
+   */
+  valor_produto: number | null
   motivo_perda: string | null
 
   data_criacao_negociacao?: string | null

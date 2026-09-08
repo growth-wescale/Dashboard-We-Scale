@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { ExternalLink, X } from 'lucide-react'
 import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
-import { nf } from '@/lib/format'
+import { nf, money } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
 import { marcaLabel } from '@/constants/brands'
-import { BarList, StatusBadge, cell, fmtData, topBreakdown } from './dealDrawerShared'
+import { BarList, StatusBadge, cell, fmtData, fmtDias, leadtimeDias, topBreakdown } from './dealDrawerShared'
 
 interface RepeatedDealsDrawerProps {
   open: boolean
@@ -78,10 +78,10 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
                 {[
-                  'Negociação', ...(multiStage ? ['Etapa'] : []), 'Vezes', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Última repetição',
+                  'Negociação', ...(multiStage ? ['Etapa'] : []), 'Vezes', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Leadtime', 'Última repetição',
                 ].map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: 'left', fontWeight: 600, fontSize: 11,
+                    padding: '10px 16px', textAlign: ['Unidades', 'Taxa de Franquia', 'Leadtime'].includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
                   }}>{h}</th>
@@ -91,7 +91,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
             <tbody>
               {ordenados.length === 0 ? (
                 <tr>
-                  <td colSpan={multiStage ? 9 : 8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={multiStage ? 12 : 11} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal repetido no recorte selecionado.
                   </td>
                 </tr>
@@ -119,6 +119,9 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(g.row.nome_sdr)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(g.row.nome_closer)}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(g.row.fonte_macro)}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{nf(g.row.quantidade_unidades ?? 0)}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{g.row.valor_produto != null ? money(g.row.valor_produto) : '—'}</td>
+                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(leadtimeDias(g.row.data_novo_mql ?? g.row.data_criacao_original, g.ultimaData, Date.now()))}</td>
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(g.ultimaData)}</td>
                 </tr>
               ))}

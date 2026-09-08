@@ -23,6 +23,28 @@ export function diasDesde(iso: string | null | undefined, agora: number): number
   return dias >= 0 ? dias : null
 }
 
+/**
+ * Leadtime em dias corridos: do `inicio` (MQL do deal, com fallback na criação)
+ * até a `ref` — a data que marca aquele deal no pop-up em questão: entrada na
+ * etapa (Performance), venda (Receita/Fechamentos), perda (Análise de Perda),
+ * última repetição (Repetidos). Sem `ref`, mede até `agora` (deal ainda vivo).
+ * null quando falta o início, uma das datas é inválida, ou a `ref` é anterior
+ * ao início (evento fora de ordem / relógio torto) — não inventa tempo negativo.
+ */
+export function leadtimeDias(
+  inicio: string | null | undefined,
+  ref: string | null | undefined,
+  agora: number,
+): number | null {
+  if (!inicio) return null
+  const t0 = new Date(inicio).getTime()
+  if (Number.isNaN(t0)) return null
+  const t1 = ref ? new Date(ref).getTime() : agora
+  if (Number.isNaN(t1)) return null
+  const dias = (t1 - t0) / 86_400_000
+  return dias >= 0 ? dias : null
+}
+
 export function cell(value: string | null | undefined): string {
   return value?.trim() ? value : '—'
 }

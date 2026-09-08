@@ -9,9 +9,9 @@
 import { ExternalLink, X } from 'lucide-react'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
-import { money } from '@/lib/format'
+import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { cell, fmtData } from './dealDrawerShared'
+import { cell, fmtData, fmtDias, leadtimeDias } from './dealDrawerShared'
 import { currentStage, stageOwnerRole, STAGE_LABEL } from '@/lib/metrics'
 
 interface PerdaDealsDrawerProps {
@@ -74,9 +74,9 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Marca', 'Motivo', 'Etapa perdida', 'Responsável', 'Valor', 'Data'].map(h => (
+                {['Negociação', 'Marca', 'Motivo', 'Etapa perdida', 'Responsável', 'Unidades', 'Taxa de Franquia', 'Leadtime', 'Data'].map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: h === 'Valor' ? 'right' : 'left', fontWeight: 600, fontSize: 11,
+                    padding: '10px 16px', textAlign: ['Unidades', 'Taxa de Franquia', 'Leadtime'].includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
                   }}>{h}</th>
@@ -86,7 +86,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
             <tbody>
               {deals.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={9} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal no recorte selecionado.
                   </td>
                 </tr>
@@ -110,7 +110,13 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{stage ? STAGE_LABEL[stage] : '—'}</td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(responsavelDe(r))}</td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                      {r.valor_contrato ? money(r.valor_contrato) : '—'}
+                      {nf(r.quantidade_unidades ?? 0)}
+                    </td>
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      {r.valor_produto != null ? money(r.valor_produto) : '—'}
+                    </td>
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {fmtDias(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, r.data_perdido, Date.now()))}
                     </td>
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtData(r.data_perdido)}

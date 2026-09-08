@@ -3,8 +3,8 @@ import { ExternalLink, X } from 'lucide-react'
 import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
-import { nf } from '@/lib/format'
-import { BarList, StatusBadge, cell, fmtData, fmtDias, diasDesde, topBreakdown } from './dealDrawerShared'
+import { nf, money } from '@/lib/format'
+import { BarList, StatusBadge, cell, fmtData, fmtDias, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
 import { MultiSelect, ordenarOpcoes } from './MultiSelect'
 
 // ─── Filtros ────────────────────────────────────────────────────────────────
@@ -69,13 +69,15 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
     return [...filtered].sort((a, b) => (diasDesde(b.dataEtapa, agora) ?? -1) - (diasDesde(a.dataEtapa, agora) ?? -1))
   }, [filtered, leadtimeCols, agora])
 
-  // Unidades vem do produto do deal (vw_deal_ciclo_enriquecido), disponível em
-  // qualquer etapa — não só em Fechamento, já que o produto pode ser definido
-  // antes da venda se concretizar. Nos modos Aging/Atual a última coluna vira
-  // duas: quanto tempo parado na etapa e há quanto tempo o deal está no funil.
+  // Unidades e Taxa de Franquia (valor do produto no RD) vêm do deal e existem
+  // em qualquer etapa — não só em Fechamento. "Leadtime" mede do MQL até a data
+  // que marca o deal nesta lista: no modo Performance é a entrada na etapa; nos
+  // modos Aging/Atual é o tempo em andamento no funil inteiro (antiga coluna
+  // "Em andamento"), ao lado do tempo parado só nesta etapa.
   const headers = leadtimeCols
-    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Parado na etapa', 'Em andamento']
-    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Data na etapa']
+    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Parado na etapa', 'Leadtime']
+    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Leadtime', 'Data na etapa']
+  const alignRight = new Set(['Unidades', 'Taxa de Franquia', 'Leadtime', 'Parado na etapa'])
 
   const porMarca = useMemo(
     () => topBreakdown(deals, d => marcaLabel(d.row.marca), m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
@@ -173,7 +175,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
                 {headers.map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: h === 'Unidades' ? 'right' : 'left', fontWeight: 600, fontSize: 11,
+                    padding: '10px 16px', textAlign: alignRight.has(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
                   }}>{h}</th>
@@ -209,13 +211,19 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {nf(r.quantidade_unidades ?? 0)}
                   </td>
+                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {r.valor_produto != null ? money(r.valor_produto) : '—'}
+                  </td>
                   {leadtimeCols ? (
                     <>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(diasDesde(dataEtapa, agora))}</td>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtDias(diasDesde(r.data_novo_mql, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(diasDesde(dataEtapa, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDias(diasDesde(r.data_novo_mql, agora))}</td>
                     </>
                   ) : (
-                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
+                    <>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDias(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, dataEtapa, agora))}</td>
+                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
+                    </>
                   )}
                 </tr>
               ))}

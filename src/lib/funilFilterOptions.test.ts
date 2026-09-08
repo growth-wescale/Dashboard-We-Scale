@@ -10,7 +10,7 @@ function row(p: Partial<FunnelRow>): FunnelRow {
     etapa_funil: 'Novo MQL', id_etapa_atual: null, status_atual: 'Em andamento',
     nome_negociacao: null, nome_sdr: 'Xayane', nome_closer: 'Douglas',
     fonte_macro: 'Inbound', sub_fonte: null, utm_source: 'meta', sub_fonte_crm: null,
-    valor_contrato: null, quantidade_unidades: null, motivo_perda: null,
+    valor_contrato: null, quantidade_unidades: null, valor_produto: null, motivo_perda: null,
     data_novo_mql: '2026-08-10', data_tentando_contato: null, data_contato_efetivo: null,
     data_interesse_reuniao: null, data_conexao: null, data_agendamento_reuniao_sql: null,
     data_reuniao_realizada: null, data_no_show: null, data_sal: null, data_oportunidade: null,

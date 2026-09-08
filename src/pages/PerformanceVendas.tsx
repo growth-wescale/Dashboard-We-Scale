@@ -51,7 +51,6 @@ const SDR_ACCENT         = '#EFA94A' // laranja
 const SDR_ACCENT_DARK    = '#8A5A1E' // laranja escuro — sombreado do funil (TrapFunnel)
 const CLOSER_ACCENT      = '#2ABCB5' // teal
 const CLOSER_ACCENT_DARK = '#166F69' // teal escuro — sombreado do funil (TrapFunnel)
-const GARGALO            = '#E4585B' // vermelho suave
 
 /** Funil da aba SDR: só as etapas que o SDR trabalha, de MQL até SAL —
  *  Oportunidade·COF em diante é território do Closer. */
@@ -127,22 +126,6 @@ function RankNum({ i, accent }: { i: number; accent: string }) {
     <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 15, color: accent, fontVariantNumeric: 'tabular-nums' }}>
       {i + 1}º
     </span>
-  )
-}
-
-function ConversionBar({ label, pctVal, gargalo }: { label: string; pctVal: number; gargalo?: boolean }) {
-  const color = gargalo ? GARGALO : CLOSER_ACCENT
-  const w = Math.min(100, Math.max(0, pctVal))
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 60px', gap: 16, alignItems: 'center', padding: '10px 0' }}>
-      <span style={{ fontSize: 13, color: 'var(--ws-text-primary)' }}>{label}</span>
-      <div style={{ height: 6, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
-        <div style={{ width: `${w}%`, height: '100%', background: color, borderRadius: 999 }} />
-      </div>
-      <span style={{ fontSize: 14, fontWeight: 600, color, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-        {pct(pctVal)}
-      </span>
-    </div>
   )
 }
 
@@ -279,19 +262,19 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
 // ─── Conversões (SCard reutilizável) ──────────────────────────────────────
 
 function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: string; val: number }[] }) {
-  const worst = Math.min(...linhas.map(x => x.val))
   return (
     <SCard>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>{titulo}</div>
-        <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--ws-text-secondary)' }}>
-          <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: GARGALO, marginRight: 4 }} />Gargalo</span>
-          <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: CLOSER_ACCENT, marginRight: 4 }} />Melhor</span>
-        </div>
+      <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 14 }}>{titulo}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, background: 'var(--ws-border)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+        {linhas.map((c, i) => (
+          <div key={i} style={{ background: 'var(--ws-surface)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', lineHeight: 1.3 }}>{c.label}</span>
+            <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 22, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+              {pct(c.val)}
+            </span>
+          </div>
+        ))}
       </div>
-      {linhas.map((c, i) => (
-        <ConversionBar key={i} label={c.label} pctVal={c.val} gargalo={c.val === worst && linhas.length > 1} />
-      ))}
     </SCard>
   )
 }
@@ -371,6 +354,8 @@ export function PerformanceVendas() {
     rr:  countStageEvents(eventos, 'Diagnóstico', win, viewModes, evOpts),
     sal: countStageEvents(eventos, 'SAL', win, viewModes, evOpts),
     cof: countStageEvents(eventos, 'Oportunidade COF', win, viewModes, evOpts),
+    // Deals que passaram pela etapa "No Show" (fora da sequência do funil).
+    noShow: countStageEvents(eventos, 'No Show', win, viewModes, evOpts),
     fechamentos: countSales(scoped, win, viewModes),
     receita: sumRevenue(scoped, win, viewModes),
   }), [scoped, eventos, win, viewModes, evOpts])
@@ -591,6 +576,8 @@ export function PerformanceVendas() {
     { label: 'MQL → Agendamento', val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
     { label: 'Agendamento → Reunião Realizada', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
     { label: 'Reunião Realizada → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
+    { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0 },
+    { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0 },
   ], [strip])
   const convFundo = useMemo(() => [
     { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },

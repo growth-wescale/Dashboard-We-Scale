@@ -1686,14 +1686,18 @@ const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
 
 function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; accent: string; monthLabel: string }) {
   const contagem = WE_SCALE_EVENTOS.map(evento => {
-    const n = leads.filter(l => {
+    const rows = leads.filter(l => {
       const adset = String(l.dados_extras?.adset ?? '').toUpperCase()
       return evento.adsetIncludes.some(needle => adset.includes(needle))
-    }).length
-    return { ...evento, n }
+    })
+    return { ...evento, n: rows.length, rows }
   })
   const total = contagem.reduce((s, e) => s + e.n, 0)
   const max = Math.max(...contagem.map(e => e.n), 1)
+  const fmtDia = (dia: string) => {
+    const [, m, d] = dia.split('-')
+    return `${d}/${m}`
+  }
   return (
     <div style={{ ...cardStyle, overflowY: 'auto' }}>
       <div style={{ marginBottom: 10, flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
@@ -1717,8 +1721,40 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; acc
           )
         })}
       </div>
+      {/* Lista detalhada de leads por evento */}
+      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {contagem.filter(e => e.rows.length > 0).map(e => (
+          <details key={e.label} open style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff' }}>
+            <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, fontWeight: 700, color: accent, listStyle: 'none' }}>
+              {e.label} — {e.n} lead{e.n !== 1 ? 's' : ''}
+            </summary>
+            <div style={{ padding: '0 12px 10px' }}>
+              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ color: 'var(--ws-text-secondary)', fontWeight: 600, textTransform: 'uppercase', fontSize: 9, letterSpacing: '0.04em' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 6px 4px 0' }}>Data</th>
+                    <th style={{ textAlign: 'left', padding: '4px 6px' }}>Nome</th>
+                    <th style={{ textAlign: 'left', padding: '4px 6px' }}>Empresa</th>
+                    <th style={{ textAlign: 'left', padding: '4px 0 4px 6px' }}>Local</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...e.rows].sort((a, b) => a.dia.localeCompare(b.dia)).map(l => (
+                    <tr key={l.id} style={{ borderTop: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '5px 6px 5px 0', color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtDia(l.dia)}</td>
+                      <td style={{ padding: '5px 6px', color: 'var(--ws-text-primary)', fontWeight: 500 }}>{l.nome ?? '—'}</td>
+                      <td style={{ padding: '5px 6px', color: 'var(--ws-text-secondary)' }}>{String(l.dados_extras?.empresa ?? '—')}</td>
+                      <td style={{ padding: '5px 0 5px 6px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{[l.cidade, l.uf].filter(Boolean).join('/') || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        ))}
+      </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Lisô Laser).
+        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Lisô Laser aguarda adset dedicado.
       </div>
     </div>
   )

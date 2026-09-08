@@ -11,7 +11,7 @@
 
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
-import { rowsInLoss, countStage, currentStage } from '@/lib/metrics'
+import { rowsInLoss, countStage, currentStage, STAGE_ORDER } from '@/lib/metrics'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import type { CategoriaMotivo } from '@/constants/motivosPerda'
@@ -104,4 +104,68 @@ export function computeEvitavel(perdas: FunnelRow[]): EvitavelStats {
   const total = qtdProcesso + qtdMercado
   const pctEvitavel = total > 0 ? (qtdProcesso / total) * 100 : 0
   return { pctEvitavel, qtdProcesso, qtdMercado }
+}
+
+export interface EtapaRow { etapa: StageKey; ordem: number; qtd: number; leadtime: number; deals: FunnelRow[] }
+
+export function computeEtapas(perdas: FunnelRow[]): EtapaRow[] {
+  const bucket = new Map<StageKey, FunnelRow[]>()
+  for (const p of perdas) {
+    const stage = currentStage(p)
+    if (!stage) continue
+    const cur = bucket.get(stage) ?? []
+    cur.push(p)
+    bucket.set(stage, cur)
+  }
+  return [...bucket.entries()]
+    .map(([etapa, deals]) => {
+      const leadtimes = deals
+        .filter(d => d.data_novo_mql && d.data_perdido)
+        .map(d => businessDaysBetween(d.data_novo_mql!, d.data_perdido!))
+        .filter(d => d > 0)
+      const leadtime = leadtimes.length > 0 ? leadtimes.reduce((s, v) => s + v, 0) / leadtimes.length : 0
+      return { etapa, ordem: STAGE_ORDER.indexOf(etapa), qtd: deals.length, leadtime, deals }
+    })
+    .sort((a, b) => a.ordem - b.ordem)
+}
+
+export interface EtapaMeta { etapa: StageKey; ordem: number }
+export interface CruzCel { motivo: string; etapa: StageKey; qtd: number; deals: FunnelRow[] }
+
+export function computeCruzamentos(
+  perdas: FunnelRow[],
+): { motivos: string[]; etapas: EtapaMeta[]; celulas: CruzCel[] } {
+  const motivos = computeMotivos(perdas).slice(0, 10).map(m => m.motivo)
+  const motivosSet = new Set(motivos)
+
+  const etapasMap = new Map<StageKey, number>()
+  for (const p of perdas) {
+    const stage = currentStage(p)
+    if (stage) etapasMap.set(stage, STAGE_ORDER.indexOf(stage))
+  }
+  const etapas = [...etapasMap.entries()]
+    .map(([etapa, ordem]) => ({ etapa, ordem }))
+    .sort((a, b) => a.ordem - b.ordem)
+
+  const cel = new Map<string, FunnelRow[]>()
+  for (const p of perdas) {
+    if (!p.motivo_perda) continue
+    const m = limparMotivo(p.motivo_perda)
+    if (!motivosSet.has(m)) continue
+    const stage = currentStage(p)
+    if (!stage) continue
+    const key = `${m}|||${stage}`
+    const cur = cel.get(key) ?? []
+    cur.push(p)
+    cel.set(key, cur)
+  }
+
+  const celulas: CruzCel[] = []
+  for (const m of motivos) {
+    for (const e of etapas) {
+      const deals = cel.get(`${m}|||${e.etapa}`) ?? []
+      celulas.push({ motivo: m, etapa: e.etapa, qtd: deals.length, deals })
+    }
+  }
+  return { motivos, etapas, celulas }
 }

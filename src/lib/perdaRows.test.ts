@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { perdidos, dealsReceitaPerdida, computeKpis, computeMotivos, computeEvitavel } from '@/lib/perdaRows'
+import {
+  perdidos, dealsReceitaPerdida, computeKpis, computeMotivos, computeEvitavel,
+  computeEtapas, computeCruzamentos,
+} from '@/lib/perdaRows'
 import { toWindow, DEFAULT_VIEW_MODES } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 
@@ -113,5 +116,46 @@ describe('computeEvitavel', () => {
     expect(ev.qtdProcesso).toBe(1)
     expect(ev.qtdMercado).toBe(1)
     expect(ev.pctEvitavel).toBeCloseTo(50, 5) // 1 / (1+1), sem contar os 2 de fora
+  })
+})
+
+describe('computeEtapas', () => {
+  it('agrupa por etapa corrente (respeitando a trava do Closer), com leadtime médio em dias úteis', () => {
+    const perdas = [
+      r({
+        id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Diagnóstico',
+        data_novo_mql: '2026-08-03T09:00:00-03:00', data_perdido: '2026-08-03T18:00:00-03:00', // 1 dia útil
+      }),
+      r({
+        id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'Diagnóstico',
+        data_novo_mql: '2026-08-04T09:00:00-03:00', data_perdido: '2026-08-05T09:00:00-03:00', // 1 dia útil
+      }),
+      // "Reunião Agendada SQL" do SDR (id errado) — currentStage() descarta.
+      r({ id_lead: 'c', status_atual: 'Perdido', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: 'id-sdr' }),
+    ]
+    const etapas = computeEtapas(perdas)
+    expect(etapas).toHaveLength(1)
+    expect(etapas[0].etapa).toBe('Diagnóstico')
+    expect(etapas[0].qtd).toBe(2)
+    expect(etapas[0].leadtime).toBeCloseTo(1, 5)
+    expect(etapas[0].deals.map(d => d.id_lead).sort()).toEqual(['a', 'b'])
+  })
+})
+
+describe('computeCruzamentos', () => {
+  it('cruza motivo (top 10) com etapa corrente e carrega os deals de cada célula', () => {
+    const perdas = [
+      r({ id_lead: 'a', status_atual: 'Perdido', motivo_perda: 'Sem perfil (fora do ICP)', etapa_funil: 'Diagnóstico' }),
+      r({ id_lead: 'b', status_atual: 'Perdido', motivo_perda: 'Sem perfil (fora do ICP)', etapa_funil: 'SAL' }),
+      r({ id_lead: 'c', status_atual: 'Perdido', motivo_perda: 'Parou de responder', etapa_funil: 'Diagnóstico' }),
+    ]
+    const cruz = computeCruzamentos(perdas)
+    expect(cruz.motivos).toEqual(['Sem perfil (fora do ICP)', 'Parou de responder'])
+    expect(cruz.etapas.map(e => e.etapa)).toEqual(['Diagnóstico', 'SAL'])
+    const celula = cruz.celulas.find(c => c.motivo === 'Sem perfil (fora do ICP)' && c.etapa === 'Diagnóstico')
+    expect(celula?.qtd).toBe(1)
+    expect(celula?.deals.map(d => d.id_lead)).toEqual(['a'])
+    const vazia = cruz.celulas.find(c => c.motivo === 'Parou de responder' && c.etapa === 'SAL')
+    expect(vazia?.qtd).toBe(0)
   })
 })

@@ -13,6 +13,8 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
 import { rowsInLoss, countStage, currentStage } from '@/lib/metrics'
 import { businessDaysBetween } from '@/lib/businessHours'
+import { classificarMotivo } from '@/constants/motivosPerda'
+import type { CategoriaMotivo } from '@/constants/motivosPerda'
 
 /** Deals perdidos na janela — ponto único de entrada da aba sobre rowsInLoss (metrics.ts). */
 export function perdidos(rows: FunnelRow[], win: PeriodWindow, modes: ViewModes): FunnelRow[] {
@@ -63,4 +65,43 @@ export function computeKpis(scoped: FunnelRow[], win: PeriodWindow, modes: ViewM
   const receitaPerdida = dealsReceitaPerdida(perdas).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
 
   return { perdidasDeals, mqlsPeriodo, taxaPerda, emAberto, leadtimeDias, etapaTop, receitaPerdida }
+}
+
+/** Limpa o prefixo "[NOVO]" que o RD antepõe a alguns motivos, pra exibição/agrupamento. */
+function limparMotivo(motivo: string): string {
+  return motivo.replace(/^\[NOVO\]\s*/i, '').trim()
+}
+
+export interface MotivoRow { motivo: string; qtd: number; pct: number; categoria: CategoriaMotivo | null; deals: FunnelRow[] }
+
+export function computeMotivos(perdas: FunnelRow[]): MotivoRow[] {
+  const comMotivo = perdas.filter(p => p.motivo_perda)
+  const total = comMotivo.length || 1
+  const bucket = new Map<string, FunnelRow[]>()
+  for (const p of comMotivo) {
+    const m = limparMotivo(p.motivo_perda!)
+    const cur = bucket.get(m) ?? []
+    cur.push(p)
+    bucket.set(m, cur)
+  }
+  return [...bucket.entries()]
+    .map(([motivo, deals]) => ({
+      motivo, qtd: deals.length, pct: (deals.length / total) * 100,
+      categoria: classificarMotivo(motivo), deals,
+    }))
+    .sort((a, b) => b.qtd - a.qtd)
+}
+
+export interface EvitavelStats { pctEvitavel: number; qtdProcesso: number; qtdMercado: number }
+
+export function computeEvitavel(perdas: FunnelRow[]): EvitavelStats {
+  let qtdProcesso = 0, qtdMercado = 0
+  for (const p of perdas) {
+    const c = classificarMotivo(p.motivo_perda)
+    if (c === 'processo') qtdProcesso += 1
+    else if (c === 'mercado') qtdMercado += 1
+  }
+  const total = qtdProcesso + qtdMercado
+  const pctEvitavel = total > 0 ? (qtdProcesso / total) * 100 : 0
+  return { pctEvitavel, qtdProcesso, qtdMercado }
 }

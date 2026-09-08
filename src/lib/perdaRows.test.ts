@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { perdidos, dealsReceitaPerdida, computeKpis } from '@/lib/perdaRows'
+import { perdidos, dealsReceitaPerdida, computeKpis, computeMotivos, computeEvitavel } from '@/lib/perdaRows'
 import { toWindow, DEFAULT_VIEW_MODES } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 
@@ -82,5 +82,36 @@ describe('computeKpis', () => {
       r({ id_lead: 'b', status_atual: 'Perdido', data_perdido: '2026-08-06', data_oportunidade: null, valor_contrato: 9999 }),
     ]
     expect(computeKpis(scoped, win, modes).receitaPerdida).toBe(5000)
+  })
+})
+
+describe('computeMotivos', () => {
+  it('agrupa por motivo (limpando o prefixo [NOVO]), calcula % e classifica', () => {
+    const perdas = [
+      r({ id_lead: 'a', motivo_perda: '[NOVO] Sem perfil (fora do ICP)' }),
+      r({ id_lead: 'b', motivo_perda: 'Sem perfil (fora do ICP)' }),
+      r({ id_lead: 'c', motivo_perda: 'Parou de responder' }),
+      r({ id_lead: 'd', motivo_perda: null }), // sem motivo, fora do total
+    ]
+    const motivos = computeMotivos(perdas)
+    expect(motivos[0]).toMatchObject({ motivo: 'Sem perfil (fora do ICP)', qtd: 2, categoria: 'mercado' })
+    expect(motivos[0].deals.map(d => d.id_lead).sort()).toEqual(['a', 'b'])
+    expect(motivos[0].pct).toBeCloseTo((2 / 3) * 100, 5) // total = 3 (só quem tem motivo)
+    expect(motivos[1]).toMatchObject({ motivo: 'Parou de responder', qtd: 1, categoria: 'processo' })
+  })
+})
+
+describe('computeEvitavel', () => {
+  it('soma processo/mercado e calcula % evitável, ignorando categoria ignorar/não-classificado', () => {
+    const perdas = [
+      r({ id_lead: 'a', motivo_perda: 'Parou de responder' }),      // processo
+      r({ id_lead: 'b', motivo_perda: 'Sem perfil (fora do ICP)' }), // mercado
+      r({ id_lead: 'c', motivo_perda: '[NOVO] Teste' }),             // ignorar
+      r({ id_lead: 'd', motivo_perda: 'Registro de teste - apagar' }), // não classificado
+    ]
+    const ev = computeEvitavel(perdas)
+    expect(ev.qtdProcesso).toBe(1)
+    expect(ev.qtdMercado).toBe(1)
+    expect(ev.pctEvitavel).toBeCloseTo(50, 5) // 1 / (1+1), sem contar os 2 de fora
   })
 })

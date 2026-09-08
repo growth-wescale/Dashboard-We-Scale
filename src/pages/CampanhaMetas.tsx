@@ -2,15 +2,17 @@ import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useMetasClosers, CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
 import type { CloserMeta } from '@/hooks/useMetasClosers'
-import { useMetasSDRs, type SdrMeta } from '@/hooks/useMetasSDRs'
+import { useMetasSDRs, type SdrMeta, SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
 import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHistoricoAtingimento'
 import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
+import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
+import type { LinhaTrilha } from '@/lib/corridaPerformance'
 
 // Ordem canônica das marcas na seção "Metas por Marca" (mesmo recorte que a
 // seção sempre teve — sem Odonto Scale, que não é franquia).
 const MARCAS_FRANQUIA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 'Eletrovias'] as const
-import { money, pct } from '@/lib/format'
+import { money, pct, nf, nfCeil } from '@/lib/format'
 
 const MES_ATIVO = '2026-09-01'
 const MES_LABEL = 'Setembro 2026'
@@ -64,6 +66,7 @@ export function CampanhaMetas() {
 
   const { closers, loading: loadingClosers, metasCadastradas } = useMetasClosers(MES_ATIVO)
   const { historico, loading: loadingHist } = useHistoricoAtingimento()
+  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(MES_ATIVO)
 
   // Ranking ordenado por % atingimento desc, empate por realizado desc
   const ranking = useMemo(
@@ -135,7 +138,7 @@ export function CampanhaMetas() {
             pctEsperado={pctEsperado}
           />
 
-          <PremiosGrid />
+          <TrilhasGrid sdr={sdrTrilha} closer={closerTrilha} loading={loadingCorrida} />
 
           <PilotosGrid closers={closers} historico={historico} loading={loadingClosers || loadingHist} />
         </div>
@@ -143,7 +146,7 @@ export function CampanhaMetas() {
 
       <HistoricoTable historico={historico} loading={loadingHist} />
 
-      <SdrsSection />
+      <SdrsSection realizado={sdrRealizado} trilha={sdrTrilha} loadingCorrida={loadingCorrida} />
 
       <MetasMarcaSection />
     </div>
@@ -401,58 +404,126 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
   )
 }
 
-/* ── Prêmios (4 cards, incluindo Troféu Senna) ─────────────────────────── */
+/* ── Corrida de Performance: trilhas SDR e Closer (2 cards) ────────────── */
+// Segue "corrida-de-performance-logica.md": pontos de volume × multiplicador
+// de velocidade, aplicado POR UNIDADE (cada RR / cada venda). Cada card mostra
+// a regra + a pontuação do mês por pessoa. Modelo híbrido (decisão do Junior,
+// 08/09): sem ranking cross-trilha, sem os guardrails de no-show/desconto.
 
-const PREMIOS: Array<{ titulo: string; desc: string; premio: string; status: string; cor?: string }> = [
-  {
-    titulo: 'Pole Position',
-    desc: 'Primeiro a cruzar a meta da semana',
-    premio: 'R$ 500 + pole no ranking',
-    status: 'Volta 1 · em disputa',
-  },
-  {
-    titulo: 'Volta Mais Rápida',
-    desc: 'Maior contrato único do mês',
-    premio: 'Jantar premium para 2',
-    status: 'Em disputa',
-  },
-  {
-    titulo: 'Pit Stop Perfeito',
-    desc: '100% dos leads respondidos em menos de 5 min na semana',
-    premio: 'Day off na sexta',
-    status: 'Em disputa',
-  },
-  {
-    titulo: "Troféu Senna · Mônaco '88",
-    desc: 'Volta perfeita: bater a meta nas 4 voltas do mês — como Senna, imbatível em Mônaco',
-    premio: 'Troféu Senna + R$ 1.000',
-    status: 'Em aberto · 4 pilotos na disputa',
-    cor: '#FFD400',
-  },
-]
+interface TrilhaRegra {
+  titulo: string
+  volumeLabel: string
+  velocidadeLabel: string
+  degraus: string
+  unidade: 'RR' | 'vendas'
+}
 
-function PremiosGrid() {
+const TRILHA_SDR: TrilhaRegra = {
+  titulo: 'Trilha SDR',
+  volumeLabel: 'RR realizada',
+  velocidadeLabel: 'tempo MQL → agendamento',
+  degraus: '≤0,5d 1,5× · ≤1d 1,2× · ≤3d 1,0× · ≤7d 0,8× · +7d 0,5×',
+  unidade: 'RR',
+}
+const TRILHA_CLOSER: TrilhaRegra = {
+  titulo: 'Trilha Closer',
+  volumeLabel: 'venda fechada',
+  velocidadeLabel: 'tempo reunião → venda',
+  degraus: '≤14d 1,5× · ≤17d 1,2× · ≤28d 1,0× · ≤40d 0,8× · +40d 0,5×',
+  unidade: 'vendas',
+}
+
+const SDR_VISUAL = new Map(SDRS_ATIVOS.map(s => [s.nome, { iniciais: s.iniciais, cor: s.cor }]))
+const CLOSER_VISUAL = new Map(CLOSERS_ATIVOS.map(c => [c.nome, { iniciais: c.iniciais, cor: c.cor }]))
+
+/** Dias com no máx. 1 casa ("0,4d", "17d"). */
+function diasFmt(n: number): string {
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+}
+/** Pontos com no máx. 1 casa, sem ".0" pendurado ("13,5", "30"). */
+function pontosFmt(n: number): string {
+  return (Math.round(n * 10) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+}
+
+function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-      {PREMIOS.map(p => (
-        <div key={p.titulo} style={{
-          background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12,
-          padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 8, height: 8, background: p.cor ?? '#E10600' }} />
-            <span style={{ fontSize: 14, fontWeight: 500 }}>{p.titulo}</span>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>{p.desc}</div>
-          <div style={{ fontSize: 13 }}>🏆 {p.premio}</div>
-          <div style={{
-            marginTop: 4, padding: '6px 10px', borderRadius: 6,
-            background: '#F9FAFB', fontSize: 11, color: 'var(--ws-text-secondary)',
-          }}>
-            {p.status}
-          </div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+      <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={SDR_VISUAL} loading={loading} />
+      <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={CLOSER_VISUAL} loading={loading} />
+    </div>
+  )
+}
+
+function TrilhaCard({
+  regra, linhas, visual, loading,
+}: {
+  regra: TrilhaRegra
+  linhas: LinhaTrilha[]
+  visual: Map<string, { iniciais: string; cor: string }>
+  loading: boolean
+}) {
+  const ordenadas = [...linhas].sort((a, b) => b.pontos - a.pontos || b.volume - a.volume)
+  const totalVol = linhas.reduce((s, l) => s + l.volume, 0)
+
+  return (
+    <div style={{
+      background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12,
+      padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, background: '#E10600' }} />
+        <span style={{ fontSize: 14, fontWeight: 600 }}>{regra.titulo}</span>
+      </div>
+
+      <div style={{
+        padding: '8px 10px', borderRadius: 8, background: '#F9FAFB',
+        fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.65,
+      }}>
+        <div><b>Volume</b> · {regra.volumeLabel}: 1 pt inbound · 2 pt outbound · ×1,5 se +1 no mesmo dia</div>
+        <div><b>Velocidade</b> · {regra.velocidadeLabel}: {regra.degraus}</div>
+        <div style={{ marginTop: 2, fontStyle: 'italic' }}>Pontos = Σ (volume × multiplicador), por unidade</div>
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Carregando…</div>
+      ) : totalVol === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+          Sem {regra.unidade === 'RR' ? 'RR' : 'vendas'} no mês ainda.
         </div>
-      ))}
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {ordenadas.map((l, i) => {
+            const v = visual.get(l.nome)
+            return (
+              <div key={l.nome} style={{
+                display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 10, alignItems: 'center',
+                padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)',
+              }}>
+                <span style={{
+                  width: 26, height: 26, borderRadius: 999, background: v?.cor ?? '#CBD5E1',
+                  color: '#fff', fontSize: 9, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{v?.iniciais ?? l.nome.slice(0, 3).toUpperCase()}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{l.nome}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
+                    {l.volume} {regra.unidade === 'RR' ? 'RR' : 'vendas'}
+                    {l.volumeOutbound > 0 && ` · ${l.volumeOutbound} outbound`}
+                    {' · '}
+                    {l.tempoMedianoDias === null ? 'sem tempo' : `${diasFmt(l.tempoMedianoDias)}d · ${l.tagVelocidade}`}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500 }}>
+                    {pontosFmt(l.pontos)}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}> pts</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -742,9 +813,19 @@ function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
 }
 
 /* ── Grid dos SDRs ──────────────────────────────────────────────────────── */
+// Métricas alinhadas com "corrida-de-performance-logica.md": volume = RR
+// realizada, e a dimensão de velocidade = tempo MQL → agendamento. Realizado
+// (SQL e RR) vem de `useCorridaPerformance` — mesma fonte da aba Performance.
 
-function SdrsSection() {
-  const { sdrs, loading, metasCadastradas } = useMetasSDRs(MES_ATIVO)
+function SdrsSection({
+  realizado, trilha, loadingCorrida,
+}: {
+  realizado: Map<string, SdrRealizado>
+  trilha: LinhaTrilha[]
+  loadingCorrida: boolean
+}) {
+  const { sdrs, loading: loadingMetas, metasCadastradas } = useMetasSDRs(MES_ATIVO)
+  const trilhaPorNome = useMemo(() => new Map(trilha.map(t => [t.nome, t])), [trilha])
 
   return (
     <section style={{ marginTop: 32 }}>
@@ -757,12 +838,12 @@ function SdrsSection() {
             Quem gera o ritmo da corrida
           </h2>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            Meta de SQL, agendamento e reunião realizada por SDR — Setembro/2026
+            SQL e reunião realizada vs. meta + velocidade de resposta por SDR — Setembro/2026
           </div>
         </div>
       </div>
 
-      {!metasCadastradas && !loading && (
+      {!metasCadastradas && !loadingMetas && (
         <div style={{
           padding: '8px 12px', marginBottom: 12, borderRadius: 8,
           background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 12,
@@ -773,60 +854,57 @@ function SdrsSection() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
         {sdrs.map(sdr => (
-          <SdrCard key={sdr.nome} sdr={sdr} loading={loading} />
+          <SdrCard
+            key={sdr.nome}
+            sdr={sdr}
+            realizado={realizado.get(sdr.nome)}
+            velocidade={trilhaPorNome.get(sdr.nome) ?? null}
+            loadingMetas={loadingMetas}
+            loadingCorrida={loadingCorrida}
+          />
         ))}
       </div>
     </section>
   )
 }
 
-function SdrCard({ sdr, loading }: { sdr: SdrMeta; loading: boolean }) {
+function SdrCard({
+  sdr, realizado, velocidade, loadingMetas, loadingCorrida,
+}: {
+  sdr: SdrMeta
+  realizado: SdrRealizado | undefined
+  velocidade: LinhaTrilha | null
+  loadingMetas: boolean
+  loadingCorrida: boolean
+}) {
   return (
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
       <VendedorFoto foto={sdr.foto} iniciais={sdr.iniciais} cor={sdr.cor} nome={sdr.nome} escuderia={sdr.escuderia} />
 
       <div style={{ padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{sdr.nome}</div>
-            <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2, letterSpacing: '.06em', textTransform: 'uppercase' }}>
-              SDR
-            </div>
-          </div>
-          <span style={{
-            padding: '2px 8px', borderRadius: 999,
-            background: '#F3F4F6', color: '#6B7280',
-            fontSize: 10, fontWeight: 500, letterSpacing: '.06em',
-          }}>
-            AGUARDANDO
-          </span>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>{sdr.nome}</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+          SDR
         </div>
 
-        {/* Métricas SDR */}
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <MetricaLinha
             label="SQL"
-            realizado={sdr.realizadoSql}
+            realizado={realizado?.sql ?? 0}
             meta={sdr.metaSql}
-            loading={loading}
+            loading={loadingMetas || loadingCorrida}
           />
           <MetricaLinha
             label="Reunião realizada"
-            realizado={sdr.realizadoReuniao}
+            realizado={realizado?.rr ?? 0}
             meta={sdr.metaReuniao}
-            loading={loading}
+            loading={loadingMetas || loadingCorrida}
           />
-          <MetricaLinha
-            label="Agendamento"
-            realizado={0}
-            meta={sdr.metaAgendamento}
-            loading={loading}
-            semRealizado
+          <VelocidadeLinha
+            dias={velocidade?.tempoMedianoDias ?? null}
+            tag={velocidade?.tagVelocidade ?? '—'}
+            loading={loadingCorrida}
           />
-        </div>
-
-        <div style={{ marginTop: 10, fontSize: 10, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>
-          Realizado em definição com o time — cards ficam prontos assim que fonte for confirmada.
         </div>
       </div>
     </div>
@@ -834,13 +912,12 @@ function SdrCard({ sdr, loading }: { sdr: SdrMeta; loading: boolean }) {
 }
 
 function MetricaLinha({
-  label, realizado, meta, loading, semRealizado = false,
+  label, realizado, meta, loading,
 }: {
   label: string
   realizado: number
   meta: number
   loading: boolean
-  semRealizado?: boolean
 }) {
   const pctVal = meta > 0 ? (realizado / meta) * 100 : 0
   const barWidth = Math.min(100, Math.max(0, pctVal))
@@ -849,25 +926,36 @@ function MetricaLinha({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, marginBottom: 4 }}>
         <span style={{ color: 'var(--ws-text-secondary)' }}>{label}</span>
         <span>
-          {semRealizado ? (
-            <span style={{ color: 'var(--ws-text-secondary)' }}>meta {loading ? '—' : meta}</span>
-          ) : (
-            <>
-              <span style={{ fontWeight: 500 }}>{loading ? '—' : realizado}</span>
-              <span style={{ color: 'var(--ws-text-secondary)' }}> / {meta}</span>
-            </>
-          )}
+          <span style={{ fontWeight: 500 }}>{loading ? '—' : nf(realizado)}</span>
+          <span style={{ color: 'var(--ws-text-secondary)' }}> / {nfCeil(meta)}</span>
         </span>
       </div>
-      {!semRealizado && (
-        <div style={{ height: 4, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
-          <div style={{
-            width: `${barWidth}%`, height: '100%',
-            background: pctVal >= 100 ? '#14B8A6' : pctVal >= 50 ? '#F59E0B' : '#CBD5E1',
-            transition: 'width 300ms ease',
-          }} />
-        </div>
-      )}
+      <div style={{ height: 4, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{
+          width: `${barWidth}%`, height: '100%',
+          background: pctVal >= 100 ? '#14B8A6' : pctVal >= 50 ? '#F59E0B' : '#CBD5E1',
+          transition: 'width 300ms ease',
+        }} />
+      </div>
+    </div>
+  )
+}
+
+/** Linha de velocidade do SDR (tempo mediano MQL → agendamento + tag do degrau). */
+function VelocidadeLinha({ dias, tag, loading }: { dias: number | null; tag: string; loading: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12 }}>
+      <span style={{ color: 'var(--ws-text-secondary)' }}>Tempo até agendar</span>
+      <span>
+        {loading || dias === null ? (
+          <span style={{ color: 'var(--ws-text-secondary)' }}>—</span>
+        ) : (
+          <>
+            <span style={{ fontWeight: 500 }}>{diasFmt(dias)}d</span>
+            <span style={{ color: 'var(--ws-text-secondary)' }}> · {tag}</span>
+          </>
+        )}
+      </span>
     </div>
   )
 }

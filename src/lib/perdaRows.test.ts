@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   perdidos, dealsReceitaPerdida, computeKpis, computeMotivos, computeEvitavel,
-  computeEtapas, computeCruzamentos,
+  computeEtapas, computeCruzamentos, computeResponsaveis, computeMarcas,
 } from '@/lib/perdaRows'
 import { toWindow, DEFAULT_VIEW_MODES } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
@@ -157,5 +157,45 @@ describe('computeCruzamentos', () => {
     expect(celula?.deals.map(d => d.id_lead)).toEqual(['a'])
     const vazia = cruz.celulas.find(c => c.motivo === 'Parou de responder' && c.etapa === 'SAL')
     expect(vazia?.qtd).toBe(0)
+  })
+})
+
+describe('computeResponsaveis', () => {
+  it('atribui pela camada da etapa onde foi perdido, mesmo com os 2 nomes preenchidos', () => {
+    // Verificado no banco real (04/09): 578 de 4.757 deals perdidos têm
+    // nome_sdr E nome_closer preenchidos ao mesmo tempo — não dá pra supor
+    // que só um dos dois vem populado.
+    const perdas = [
+      r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_sdr: 'Xayane', nome_closer: 'Douglas' }),
+      r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'Contato Efetivo', nome_sdr: 'Xayane', nome_closer: 'Douglas' }),
+    ]
+    const resps = computeResponsaveis(perdas)
+    const porNome = new Map(resps.map(x => [x.nome, x]))
+    expect(porNome.get('Douglas')).toMatchObject({ camada: 'Closer', qtd: 1 })
+    expect(porNome.get('Xayane')).toMatchObject({ camada: 'SDR', qtd: 1 })
+  })
+
+  it('ignora deal sem etapa corrente resolvível', () => {
+    const perdas = [r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Etapa Desconhecida', nome_sdr: 'Xayane' })]
+    expect(computeResponsaveis(perdas)).toEqual([])
+  })
+})
+
+describe('computeMarcas', () => {
+  it('calcula % sobre o MQL da própria marca, não o MQL global', () => {
+    const scoped = [
+      r({ id_lead: 'a', marca: 'Oral Unic', status_atual: 'Perdido', data_perdido: '2026-08-05', data_novo_mql: '2026-08-01' }),
+      r({ id_lead: 'b', marca: 'Oral Unic', status_atual: 'Em andamento', data_novo_mql: '2026-08-02' }),
+      r({ id_lead: 'c', marca: 'Oral Unic', status_atual: 'Em andamento', data_novo_mql: '2026-08-03' }),
+      r({ id_lead: 'd', marca: 'Inpot', status_atual: 'Perdido', data_perdido: '2026-08-06', data_novo_mql: '2026-08-01' }),
+      r({ id_lead: 'e', marca: 'Inpot', status_atual: 'Em andamento', data_novo_mql: '2026-08-02' }),
+    ]
+    const perdas = perdidos(scoped, win, modes)
+    const marcas = computeMarcas(perdas, scoped, win, modes)
+    const oralUnic = marcas.find(m => m.marca === 'Oral Unic')!
+    const inpot = marcas.find(m => m.marca === 'Inpot')!
+    expect(oralUnic.qtd).toBe(1)
+    expect(oralUnic.pctSobreMql).toBeCloseTo(100 / 3, 5) // 1 perdido / 3 MQL da Oral Unic
+    expect(inpot.pctSobreMql).toBeCloseTo(50, 5) // 1 perdido / 2 MQL da Inpot
   })
 })

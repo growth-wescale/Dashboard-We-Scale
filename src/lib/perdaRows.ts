@@ -11,7 +11,7 @@
 
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
-import { rowsInLoss, countStage, currentStage, STAGE_ORDER } from '@/lib/metrics'
+import { rowsInLoss, countStage, currentStage, STAGE_ORDER, stageOwnerRole } from '@/lib/metrics'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import type { CategoriaMotivo } from '@/constants/motivosPerda'
@@ -168,4 +168,46 @@ export function computeCruzamentos(
     }
   }
   return { motivos, etapas, celulas }
+}
+
+export interface RespRow { nome: string; camada: 'SDR' | 'Closer' | '—'; qtd: number; deals: FunnelRow[] }
+
+export function computeResponsaveis(perdas: FunnelRow[]): RespRow[] {
+  const bucket = new Map<string, { camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
+  for (const p of perdas) {
+    const stage = currentStage(p)
+    const camada: 'SDR' | 'Closer' | '—' = stage ? (stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer') : '—'
+    const nome = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
+    if (!nome) continue
+    const cur = bucket.get(nome) ?? { camada, deals: [] }
+    cur.deals.push(p)
+    bucket.set(nome, cur)
+  }
+  return [...bucket.entries()]
+    .map(([nome, v]) => ({ nome, camada: v.camada, qtd: v.deals.length, deals: v.deals }))
+    .sort((a, b) => b.qtd - a.qtd)
+}
+
+export interface MarcaRow { marca: string; qtd: number; pctSobreMql: number; deals: FunnelRow[] }
+
+export function computeMarcas(
+  perdas: FunnelRow[], scoped: FunnelRow[], win: PeriodWindow, modes: ViewModes,
+): MarcaRow[] {
+  const porMarca = new Map<string, FunnelRow[]>()
+  for (const p of perdas) {
+    if (!p.marca) continue
+    const cur = porMarca.get(p.marca) ?? []
+    cur.push(p)
+    porMarca.set(p.marca, cur)
+  }
+  return [...porMarca.entries()]
+    .map(([marca, deals]) => {
+      const mqlMarca = countStage(scoped, 'MQL', win, modes, r => r.marca === marca)
+      return {
+        marca, qtd: deals.length,
+        pctSobreMql: mqlMarca > 0 ? (deals.length / mqlMarca) * 100 : 0,
+        deals,
+      }
+    })
+    .sort((a, b) => b.qtd - a.qtd)
 }

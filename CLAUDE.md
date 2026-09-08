@@ -68,8 +68,9 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
-`vw_marketing_funil` é a view **antiga**; ainda serve Análise de Perda até ela
-ser migrada. Não usar em código novo.
+`vw_marketing_funil` é a view **antiga**, sem nenhuma aba de Vendas
+consumindo ela mais (Análise de Perda migrou em 04/09). Não usar em código
+novo.
 
 ### Campos que importam
 
@@ -350,10 +351,8 @@ sem conversão de fuso.
 ## 8. Pendências conhecidas
 
 - [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
-- [ ] **Análise de Perda** ainda lê `vw_marketing_funil` (via `vw_funil_compat`/`usePerformanceEquipe`) e tem filtros próprios. Migrar para `vw_funil_vendas` + `SharedFiltersContext`. (Performance foi migrada em 2026-09-03.)
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
-- [ ] **Motivos de perda hardcoded** em `src/constants/motivosPerda.ts` (listas de string, frágil a acento)
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
 - [ ] **Anon key do Supabase de Marketing exposta** no histórico do git (repo é público) — rotacionar
 - [ ] **~50 deals sem marca** no CRM, invisíveis no dashboard
@@ -365,6 +364,93 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-08 (2) — Análise de Perda migra pro stack da Visão Macro; motivos de perda deixam de ser frágeis a acento
+
+Última das 3 abas de Vendas ainda na base antiga (pendência da seção 8).
+Pedido do Junior: validar se os números batem com Visão Macro/Performance,
+trazer os mesmos filtros, e melhorar a aba com as ideias das outras duas
+(popup de deals).
+
+**Validação antes de mexer no código.** Cruzando `vw_perdas` (evento) com
+`vw_funil_vendas` (`status_atual='Perdido'`) em agosto/2026 direto no banco:
+947 deals distintos vs. 918 — a diferença é quase toda **deal de teste** que
+`usePerdas.ts` não filtrava direito (só excluía `nome_negociacao ilike
+%teste%`, não motivo de teste tipo `"[NOVO] Teste"`/`"Registro de teste -
+apagar"`, nem funis legados fora de `SDR`/`Closer`/`Prospecção
+Ativa`/`Odonto Scale`). `computeMotivos`/`computeKpis` da página antiga
+também não excluíam a categoria `ignorar` (teste/duplicado) — contava cheio
+em "Negociações Perdidas" e aparecia como barra cinza no ranking de motivos.
+
+**Fonte de dados: `vw_funil_vendas`, não `vw_perdas`.** `metrics.ts` já
+tinha `isLoss`/`rowsInLoss` (a mesma trava do Fechamento, por
+`status_atual === 'Perdido'`) — usada até agora só pelo card "Tempo de
+ciclo" da Visão Macro. Virou a base inteira da Análise de Perda. **Zero
+mudança de banco**: `vw_funil_vendas` já tinha `motivo_perda`,
+`data_perdido`, `valor_contrato`, `fonte_macro`, `sub_fonte`, `nome_sdr`/
+`nome_closer`, `origem_comercial` — os mesmos campos que Visão Macro/
+Performance já liam. `vw_perdas`/`usePerdas.ts` e `vw_funil_compat`/
+`usePerformanceEquipe.ts` ficam órfãos (não deletados — mesmo padrão que
+`usePerformanceEquipe` já tinha ficado após a migração da Performance em
+03/09, pro caso de algo voltar a precisar deles).
+
+**Lógica extraída pra `src/lib/perdaRows.ts`, testada.** As agregações
+(`computeKpis`/`computeMotivos`/`computeEvitavel`/`computeEtapas`/
+`computeCruzamentos`/`computeResponsaveis`/`computeMarcas`) viviam inline no
+`.tsx`, sem nenhum teste. "Etapa que mais perde" e a etapa de cada linha do
+card "Onde e quando se perde" usam `currentStage(row)` — de graça, herdam a
+trava "Reunião Agendada SQL só conta no funil do Closer", que a lógica
+antiga (baseada em `vw_perdas.etapa_canonica`) não aplicava. "Perda por
+responsável" usa `stageOwnerRole` da etapa onde o deal foi perdido — não
+presume que só `nome_sdr` OU `nome_closer` vem preenchido: verificado no
+banco, 578 de 4.757 deals perdidos têm os dois campos preenchidos ao mesmo
+tempo (passaram pelas duas camadas antes de perder).
+
+**KPI novo: Receita Perdida.** Soma `valor_contrato` só dos perdidos com
+`data_oportunidade` preenchida — por pedido do Junior, não faz sentido
+contar como receita perdida um deal que nunca teve proposta de valor real
+(ex.: perdido ainda em Diagnóstico, sem produto/valor definido).
+
+**Filtros: `FilterBar` inteira.** Marca multi-seleção, Período multi +
+granularidade, Fonte/Sub-fonte cruzados, SDR/Closer, "Deals criados no
+período". Preservados os 2 controles que só existem nesta aba — Processo×
+Mercado (motivo) e SDR×Closer por camada (responsável) — sem equivalente na
+barra compartilhada. **Fora**: toggle Contagem (Passagens não se aplica a
+evento terminal único — perda é trava de snapshot, igual Fechamento) e
+toggle Vendas Negócios×Unidades (não migra como toggle; virou o KPI de
+Receita Perdida). `FilterBar` ganhou `hideVendasToggle`/`hideContagemToggle`
+(opcionais, default mostra — Visão Macro e Performance não mudam) pra
+esconder os dois nesta página.
+
+**Filtro de SDR/Closer herdado, sem trabalho extra de biblioteca.** Outra
+sessão implementou e mergeou `sdrs`/`closers` em `SharedFiltersContext` +
+`FilterBar` + `funilFilterOptions` (PR #72, mesmo dia) enquanto esta
+migração estava em design, de propósito deixando Análise de Perda de fora
+pra esta sessão absorver — só consumiu o que já existia em `main`.
+
+**Popups em quase tudo.** Componente novo `PerdaDealsDrawer.tsx` (mesmo
+padrão de `SimpleDealsDrawer`, colunas de perda: Negociação/Marca/Motivo/
+Etapa perdida/Responsável/Valor/Data) — clicável nas 3 KPIs escuras, cada
+linha de Motivo/Etapa/Responsável/Marca, e cada célula do heatmap Motivo×
+Etapa.
+
+**`motivosPerda.ts` deixa de ser frágil a acento** (pendência da seção 8
+removida). `classificarMotivo` normaliza NFD (remove diacríticos), colapsa
+espaço ao redor de "/" e lowercase antes do lookup — as 3 variantes de "Sem
+interesse / não quis conversa" e os 2 espaçamentos de "Sem budget/momento"
+(hoje 2 entradas separadas por causa disso) viram 1 entrada só.
+Comportamento de `classificarMotivo` (assinatura, retorno) não muda.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (226 testes,
+17 novos: 13 em `perdaRows.test.ts`, 4 em `motivosPerda.test.ts`) num
+worktree fora do OneDrive, sem interferir nas outras sessões rodando na
+mesma pasta. App exige login — não visto renderizado nesta sessão;
+`perdidasDeals` conferido por SQL contra `vw_funil_vendas` real (161
+perdidos no recorte padrão — Inbound, Consolidado, mês corrente — mesma
+trava `isLoss` da Visão Macro).
+
+Spec: `docs/superpowers/specs/2026-09-04-analise-perda-migracao-visao-macro-design.md`
+Plano: `docs/superpowers/plans/2026-09-04-analise-perda-migracao-visao-macro.md`
 
 ### 2026-09-08 — Pré-Contrato entra no funil da Visão Macro
 

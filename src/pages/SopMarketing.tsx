@@ -874,10 +874,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       ]
     }
     if (isWeScale) {
-      // Só semanas cujo início está em setembro/2026 ou depois. Preenche o resto
-      // com stubs vazios (start > end pra o filter de datas não pegar nenhum lead/mídia).
+      // Semanas que tocam setembro/2026 (w.end >= '2026-09-01' — inclui a que
+      // abraça a virada de mês, ex.: 31/08–06/09). Restante vira stub vazio.
       const emptyWeek: WeekRange = { start: '9999-01-01', end: '9999-01-01', label: '—' }
-      const setembroOn = dates.weeks.map(w => w.start >= '2026-09-01' ? w : emptyWeek)
+      const setembroOn = dates.weeks.map(w => w.end >= '2026-09-01' ? w : emptyWeek)
       return setembroOn
     }
     return dates.weeks

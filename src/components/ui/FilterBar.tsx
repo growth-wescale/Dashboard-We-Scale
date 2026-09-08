@@ -11,7 +11,7 @@ import type { ReactNode } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { BRAND_LIST, opcoesMarcaDisponiveis } from '@/constants/brands'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
-import { opcoesPara, periodoAtual } from '@/lib/periodo'
+import { opcoesPara } from '@/lib/periodo'
 import type { OpcaoPeriodo, PeriodMode } from '@/lib/periodo'
 import { MultiSelect, controlStyle, labelStyle, ordenarOpcoes } from './MultiSelect'
 import { DateRangePicker } from './DateRangePicker'
@@ -114,8 +114,8 @@ export function FilterBar({
   }, [])
 
   const opcoesMarca = useMemo(
-    () => opcoesMarcaDisponiveis(marcasDisponiveis, brandKeys).map(b => ({ value: b.key, label: b.label })),
-    [marcasDisponiveis, brandKeys],
+    () => opcoesMarcaDisponiveis(marcasDisponiveis).map(b => ({ value: b.key, label: b.label })),
+    [marcasDisponiveis],
   )
 
   // Opções vindas dos dados — já cruzadas com os demais filtros ativos e o
@@ -161,7 +161,8 @@ export function FilterBar({
         }}
       >
         <Field label="Marca">
-          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} minSelected={1} allLabel="Consolidado" universoTotal={BRAND_LIST.length} clearTo={BRAND_LIST.map(b => b.key)} clearLabel="Consolidado (todas)" />
+          {/* obrigatório: vazio → borda vermelha + página esconde os dados */}
+          <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} required allLabel="Consolidado" universoTotal={BRAND_LIST.length} />
         </Field>
 
         <Field label="Período">
@@ -180,15 +181,14 @@ export function FilterBar({
               <DateRangePicker value={range} onChange={setRange} />
             ) : (
               <>
-                {/* Mês / trimestre / ano: multi-seleção estilo Excel — pelo menos 1 marcado sempre. */}
+                {/* Mês / trimestre / ano: multi-seleção estilo Excel. Obrigatório —
+                    vazio → borda vermelha + página esconde os dados. */}
                 <MultiSelect
                   label={PERIOD_LABEL[periodMode]}
                   options={opcoesPeriodo}
                   selected={periodValues}
                   onChange={setPeriodValues}
-                  minSelected={1}
-                  clearTo={[periodoAtual(periodMode)]}
-                  clearLabel={`Só ${PERIOD_LABEL[periodMode].toLowerCase()} atual`}
+                  required
                 />
                 <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                   {range.start.split('-').reverse().join('/')} — {range.end.split('-').reverse().join('/')}

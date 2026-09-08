@@ -32,35 +32,24 @@ describe('marcaLabel', () => {
 })
 
 describe('opcoesMarcaDisponiveis', () => {
-  it('sem recorte de dados, mostra todas as marcas (comportamento anterior)', () => {
-    expect(opcoesMarcaDisponiveis(undefined, TODAS).map(b => b.key)).toEqual(TODAS)
+  it('sem recorte conhecido (undefined), mostra todas as marcas', () => {
+    expect(opcoesMarcaDisponiveis(undefined).map(b => b.key)).toEqual(TODAS)
   })
 
-  it('Consolidado (tudo marcado) restringe às marcas do recorte atual', () => {
-    // Caso do bug reportado: toggle Prospecção Ativa não tem Eletrovias/Viva.
-    const disponiveis = ['oral-unic', 'odonto-scale', 'inpot', 'liso-laser', 'b2case']
-    const opcoes = opcoesMarcaDisponiveis(disponiveis, TODAS).map(b => b.key)
-    expect(opcoes).toEqual(disponiveis)
-    expect(opcoes).not.toContain('eletrovias')
+  it('restringe às marcas com dado no recorte — marca sem deal (ex.: We Scale) nunca aparece', () => {
+    const comDado = ['oral-unic', 'odonto-scale', 'inpot', 'liso-laser', 'b2case']
+    const opcoes = opcoesMarcaDisponiveis(comDado).map(b => b.key)
+    expect(opcoes).toEqual(comDado)
+    expect(opcoes).not.toContain('we-scale')
     expect(opcoes).not.toContain('viva')
   })
 
-  it('seleção estrita (não é Consolidado) mostra TODAS as marcas', () => {
-    // Usuário isolou Eletrovias de propósito; a lista completa continua
-    // disponível pra ele trocar de marca sem passar pelo "Limpar" global.
-    const disponiveis = ['oral-unic', 'odonto-scale']
-    const opcoes = opcoesMarcaDisponiveis(disponiveis, ['eletrovias']).map(b => b.key)
-    expect(opcoes).toEqual(TODAS)
-  })
-
-  it('bug reportado: 1 marca isolada + linhas só dessa marca → lista completa, ninguém some', () => {
-    const opcoes = opcoesMarcaDisponiveis(['oral-unic'], ['oral-unic']).map(b => b.key)
-    expect(opcoes).toEqual(TODAS)
+  it('recorte vazio → lista vazia (sem cair pra "todas")', () => {
+    expect(opcoesMarcaDisponiveis([]).map(b => b.key)).toEqual([])
   })
 
   it('preserva a ordem de exibição de BRAND_LIST, não a ordem do recorte', () => {
-    const disponiveisForaDeOrdem = ['viva', 'oral-unic']
-    const opcoes = opcoesMarcaDisponiveis(disponiveisForaDeOrdem, TODAS).map(b => b.key)
+    const opcoes = opcoesMarcaDisponiveis(['viva', 'oral-unic']).map(b => b.key)
     expect(opcoes).toEqual(['oral-unic', 'viva'])
   })
 })

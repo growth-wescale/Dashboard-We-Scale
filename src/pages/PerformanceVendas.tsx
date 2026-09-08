@@ -4,6 +4,7 @@ import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
 import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
@@ -298,13 +299,14 @@ export function PerformanceVendas() {
       : marcasSelecionadas.length <= 3
         ? marcasSelecionadas.map(b => b.label).join(', ')
         : `${marcasSelecionadas.length} marcas selecionadas`
-  const marcaFetch = marcasSelecionadas.length === 1 ? marcasSelecionadas[0].marca : undefined
   const marcasParaEscopo = useMemo(
     () => marcasSelecionadas.map(b => b.marca).filter((m): m is Marca => !!m),
     [marcasSelecionadas],
   )
 
-  const { data: rows, error: rowsError, loading } = useFunilVendas(origem, marcaFetch)
+  // Sempre carrega o recorte inteiro da origem — marca filtrada no cliente
+  // (via `scope`), igual Fonte/SDR. Ver comentário em FunilVendas.
+  const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
   const { data: eventos } = useFunilEventos({
     enabled: true,
     origem,
@@ -381,7 +383,6 @@ export function PerformanceVendas() {
   // Metas por pessoa (para a coluna % das tabelas).
   const { data: metasPessoa, error: metasError } = useMetasPerformance({
     mesKey: mesUnico ?? range.start.slice(0, 7),
-    marca: marcaFetch,
   })
   // Fora de um único mês (Trimestre/Ano/multi-mês) a meta mensal não faz sentido
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
@@ -591,6 +592,29 @@ export function PerformanceVendas() {
   const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
     ? `${periodValues.length} períodos selecionados`
     : `${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`
+
+  // Filtro obrigatório sem nada marcado → esconde os dados e pede a seleção.
+  const faltandoObrigatorio = [
+    brandKeys.length === 0 ? 'uma marca' : null,
+    periodMode !== 'dia' && periodValues.length === 0 ? 'um período' : null,
+  ].filter((x): x is string => x !== null)
+
+  if (faltandoObrigatorio.length > 0) {
+    return (
+      <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
+        <PageTop title="Performance" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
+        <FilterBar
+          marcasDisponiveis={marcasDisponiveis}
+          fontesDisponiveis={opcoes.fontes}
+          subFontesDisponiveis={opcoes.subFontes}
+          sdrsDisponiveis={opcoes.sdrs}
+          closersDisponiveis={opcoes.closers}
+        />
+        <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
+        <FiltrosObrigatoriosAviso faltando={faltandoObrigatorio} />
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}

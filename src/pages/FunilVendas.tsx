@@ -7,6 +7,7 @@ import { PageTop } from '@/components/ui/PageTop'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { SimpleDealsDrawer } from '@/components/ui/SimpleDealsDrawer'
 import { RepeatedDealsDrawer } from '@/components/ui/RepeatedDealsDrawer'
@@ -343,10 +344,6 @@ export function FunilVendas() {
       : marcasSelecionadas.length <= 3
         ? marcasSelecionadas.map(b => b.label).join(', ')
         : `${marcasSelecionadas.length} marcas selecionadas`
-  // Busca no servidor filtrada por marca só quando é exatamente 1 selecionada
-  // — mais rápido. Com 2+ marcas, busca tudo e filtra no cliente via `scope`,
-  // junto com fonte/sub-fonte (mesmo padrão dos outros filtros).
-  const marcaFetch = marcasSelecionadas.length === 1 ? marcasSelecionadas[0].marca : undefined
 
   // 2+ períodos selecionados: comparação "vs. período anterior" não faz
   // sentido pra um conjunto não-contíguo, então some da tela inteira.
@@ -381,9 +378,12 @@ export function FunilVendas() {
   const { porMarca: metaPorMarca } = useMetaResumo({ mesesKeys: mesesMeta })
 
   // ── Dados ───────────────────────────────────────────────────────────────────
-  const { data: rows, loading, error } = useFunilVendas(origem, marcaFetch)
-  const { data: curMedia } = useMediaData({ marca: marcaFetch, dataInicio: range.start, dataFim: range.end })
-  const { data: prevMedia } = useMediaData({ marca: marcaFetch, dataInicio: prev.start, dataFim: prev.end })
+  // Sempre carrega o recorte inteiro da origem — a marca é filtrada no cliente
+  // (via `scope`), igual Fonte/SDR. Filtrar 1 marca no servidor colapsava a
+  // lista de "marcas com dado" e escondia/reexibia marcas conforme a seleção.
+  const { data: rows, loading, error } = useFunilVendas(origem)
+  const { data: curMedia } = useMediaData({ dataInicio: range.start, dataFim: range.end })
+  const { data: prevMedia } = useMediaData({ dataInicio: prev.start, dataFim: prev.end })
 
   // Os DOIS modos de contagem leem o histórico de eventos. Antes, "Deals
   // únicos" vinha da tabela plana e "Passagens" dos eventos — bases diferentes,
@@ -401,9 +401,8 @@ export function FunilVendas() {
   const { periodos } = useFunilAging(modo === 'aging')
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
-  // Marca entra no escopo mesmo quando `marcaFetch` já filtrou no servidor —
-  // nesse caso é um no-op (as linhas já são só daquela marca); é essencial
-  // quando 2+ marcas estão selecionadas e a busca trouxe tudo.
+  // Marca é sempre filtrada aqui no cliente (a busca traz o recorte inteiro
+  // da origem).
   const marcasParaEscopo: string[] = useMemo(
     () => marcasSelecionadas.map(b => b.marca).filter((m): m is Marca => !!m),
     [marcasSelecionadas],
@@ -413,8 +412,7 @@ export function FunilVendas() {
     [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
   )
   // Mesmo escopo, mas sem restrição de marca — base pra quebrar KPIs por marca
-  // no dropdown do card de Meta (funciona com o quanto de dado já veio: se
-  // `marcaFetch` filtrou 1 marca no servidor, só tem aquela marca mesmo).
+  // no dropdown do card de Meta.
   const scopeSemMarca = useMemo(
     () => buildScopeFilter({ origem, fontes, subFontes, sdrs, closers }),
     [origem, fontes, subFontes, sdrs, closers],
@@ -814,6 +812,29 @@ export function FunilVendas() {
   const subtitlePeriodo = multiPeriodo
     ? `${periodValues.length} ${PERIOD_LABEL_PLURAL[periodMode as Exclude<PeriodMode, 'dia'>]} selecionados`
     : `${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`
+
+  // Filtro obrigatório sem nada marcado → esconde os dados e pede a seleção.
+  const faltandoObrigatorio = [
+    brandKeys.length === 0 ? 'uma marca' : null,
+    periodMode !== 'dia' && periodValues.length === 0 ? 'um período' : null,
+  ].filter((x): x is string => x !== null)
+
+  if (faltandoObrigatorio.length > 0) {
+    return (
+      <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
+        <PageTop title="Visão Macro" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
+        <FilterBar
+          marcasDisponiveis={marcasDisponiveis}
+          fontesDisponiveis={fontesDisponiveis}
+          subFontesDisponiveis={subFontesDisponiveis}
+          sdrsDisponiveis={sdrsDisponiveis}
+          closersDisponiveis={closersDisponiveis}
+        />
+        <QueryErrorBanner errors={[error]} scope="Visão Macro" />
+        <FiltrosObrigatoriosAviso faltando={faltandoObrigatorio} />
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}

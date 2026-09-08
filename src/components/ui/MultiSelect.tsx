@@ -1,8 +1,14 @@
 /**
  * Multi-seleção estilo filtro de Excel: checkboxes, "Selecionar tudo" e
- * "Limpar seleção". Compartilhado pela barra de filtros (FilterBar) e pelos
- * filtros internos de popups (StageDealsDrawer) — mesmo componente, mesmo
- * visual e lógica em todo lugar que filtra por uma lista de valores.
+ * "Limpar seleção" (sempre visíveis, esmaecidos quando não há o que fazer).
+ * Compartilhado pela barra de filtros (FilterBar) e pelos filtros internos de
+ * popups (StageDealsDrawer) — mesmo componente, mesmo visual e lógica em todo
+ * lugar que filtra por uma lista de valores.
+ *
+ * `required`: o filtro NÃO pode ficar vazio. Quando fica, o controle mostra
+ * borda vermelha (`--status-critico`) e a página responsável esconde os dados
+ * e pede uma seleção — o componente não trava o checkbox (o usuário pode
+ * desmarcar tudo), só sinaliza que falta escolher.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -28,6 +34,8 @@ export const controlStyle: CSSProperties = {
   padding: '6px 10px',
   outline: 'none',
 }
+
+const COR_INVALIDO = 'var(--status-critico, #dc2626)'
 
 /**
  * Cestos genéricos vão para o fim da lista; o resto em ordem alfabética
@@ -55,69 +63,41 @@ export function mesmoConjunto(a: string[], b: string[]): boolean {
 }
 
 /**
- * O que o botão de limpar/reset deve produzir:
- * - filtro que pode ficar vazio (`minSelected` 0): lista vazia = "Todas";
- * - filtro com piso (Marca, Período) e `clearTo`: volta ao estado "sem
- *   recorte" informado (Marca → todas as marcas = Consolidado; Período →
- *   período atual). Um "Limpar" que só troca a marca isolada pela primeira
- *   da lista confunde — e ainda some com as demais opções;
- * - filtro com piso e sem `clearTo`: fallback legado, mantém só o 1º item.
+ * Estado dos dois botões do rodapé (sempre renderizados, estilo Excel):
+ * "Selecionar tudo" fica ativo enquanto falta marcar algo; "Limpar seleção"
+ * enquanto há algo marcado.
  */
-export function resolveClear(selected: string[], minSelected: number, clearTo?: string[]): string[] {
-  if (clearTo) return clearTo
-  return minSelected === 0 ? [] : selected.slice(0, 1)
-}
-
-/**
- * Quais botões do rodapé mostrar. "Selecionar tudo" some quando o próprio
- * "Limpar" já leva a todas as opções (Marca: `clearTo` == todas as marcas) —
- * dois botões com o mesmo efeito confundem. "Limpar" só aparece quando muda
- * algo de fato.
- */
-export function rodapeAcoes(
+export function acoesRodape(
   selected: string[],
   optionValues: string[],
-  minSelected: number,
-  clearTo?: string[],
-): { selecionarTudo: boolean; limpar: boolean } {
-  const alvoLimpar = resolveClear(selected, minSelected, clearTo)
-  const limparCobreTudo = mesmoConjunto(alvoLimpar, optionValues)
+): { selecionarTudoAtivo: boolean; limparAtivo: boolean } {
   return {
-    selecionarTudo: selected.length < optionValues.length && !limparCobreTudo,
-    limpar: !mesmoConjunto(selected, alvoLimpar),
+    selecionarTudoAtivo: selected.length < optionValues.length,
+    limparAtivo: selected.length > 0,
   }
 }
 
 /**
- * Nenhum item marcado = sem filtro (mostra tudo) — a menos que `minSelected`
- * exija um piso (ex.: período e marca nunca podem ficar vazios).
+ * Nenhum item marcado = sem filtro (mostra tudo) — a menos que `required`,
+ * quando ficar vazio é estado inválido (ver cabeçalho do arquivo).
  */
-export function MultiSelect({ label, options, selected, onChange, minSelected = 0, allLabel, universoTotal, clearTo, clearLabel }: {
+export function MultiSelect({ label, options, selected, onChange, required = false, allLabel, universoTotal }: {
   label: string
   options: readonly MultiSelectOption[]
   selected: string[]
   onChange: (v: string[]) => void
-  /** Nº mínimo de itens que devem continuar marcados (ex.: período = 1). */
-  minSelected?: number
+  /** Filtro obrigatório: vazio vira estado inválido (borda vermelha). */
+  required?: boolean
   /** Rótulo quando TODAS as opções estão marcadas (ex.: "Consolidado" pra Marca). */
   allLabel?: string
   /**
    * Tamanho do domínio completo, quando `options` pode vir menor que ele (ex.:
    * Marca só lista quem tem dado na origem atual, mas "todas selecionadas"
-   * continua significando as 7 marcas de verdade, não as 5 exibidas — sem
-   * isso o rótulo mostraria "5 selecionados" no lugar de "Consolidado").
+   * continua significando as marcas de verdade, não as exibidas — sem isso o
+   * rótulo mostraria "5 selecionados" no lugar de "Consolidado").
    * Default: `options.length`, igual antes.
    */
   universoTotal?: number
-  /**
-   * Estado "sem recorte" para o botão de limpar quando o filtro tem piso
-   * (`minSelected` > 0) e não pode simplesmente esvaziar. Marca → todas as
-   * chaves de marca; Período → `[períodoAtual]`. Sem isso, "Limpar" cai no
-   * fallback legado (mantém só o 1º selecionado).
-   */
-  clearTo?: string[]
-  /** Rótulo do botão de limpar quando `clearTo` está definido (ex.: "Consolidado"). */
-  clearLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -131,20 +111,42 @@ export function MultiSelect({ label, options, selected, onChange, minSelected = 
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const resumo = selected.length === 0
-    ? 'Todas'
-    : allLabel && selected.length === (universoTotal ?? options.length)
-      ? allLabel
-      : selected.length === 1
-        ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
-        : `${selected.length} selecionados`
+  const invalido = required && selected.length === 0
+
+  const resumo = invalido
+    ? 'Selecione…'
+    : selected.length === 0
+      ? 'Todas'
+      : allLabel && selected.length === (universoTotal ?? options.length)
+        ? allLabel
+        : selected.length === 1
+          ? (options.find(o => o.value === selected[0])?.label ?? selected[0])
+          : `${selected.length} selecionados`
+
+  const optionValues = options.map(o => o.value)
+  const { selecionarTudoAtivo, limparAtivo } = acoesRodape(selected, optionValues)
+
+  const rodapeBtn = (ativo: boolean): CSSProperties => ({
+    flex: 1, padding: '5px 8px', border: 'none', background: 'transparent',
+    color: 'var(--ws-text-secondary)', fontSize: 11.5, textAlign: 'left',
+    fontFamily: 'var(--font-body)',
+    cursor: ativo ? 'pointer' : 'default', opacity: ativo ? 1 : 0.4,
+  })
 
   return (
     <div ref={box} style={{ position: 'relative' }}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        style={{ ...controlStyle, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 130, justifyContent: 'space-between' }}
+        aria-invalid={invalido || undefined}
+        style={{
+          ...controlStyle,
+          display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+          minWidth: 130, justifyContent: 'space-between',
+          border: invalido ? `1px solid ${COR_INVALIDO}` : controlStyle.border,
+          boxShadow: invalido ? `0 0 0 3px color-mix(in srgb, ${COR_INVALIDO} 18%, transparent)` : undefined,
+          color: invalido ? COR_INVALIDO : controlStyle.color,
+        }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resumo}</span>
         <ChevronDown size={13} style={{ flexShrink: 0, opacity: .6 }} />
@@ -163,47 +165,38 @@ export function MultiSelect({ label, options, selected, onChange, minSelected = 
           )}
           {options.map(opt => {
             const on = selected.includes(opt.value)
-            const travado = on && selected.length <= minSelected
             return (
-              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: travado ? 'default' : 'pointer', fontSize: 12.5, color: travado ? 'var(--ws-text-secondary)' : 'var(--ws-text-primary)' }}>
+              <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 12.5, color: 'var(--ws-text-primary)' }}>
                 <input
                   type="checkbox"
                   checked={on}
-                  disabled={travado}
                   onChange={() => onChange(on ? selected.filter(s => s !== opt.value) : [...selected, opt.value])}
-                  style={{ accentColor: 'var(--ws-accent, #2ABCB5)', cursor: travado ? 'default' : 'pointer' }}
+                  style={{ accentColor: 'var(--ws-accent, #2ABCB5)', cursor: 'pointer' }}
                 />
                 {opt.label}
               </label>
             )
           })}
-          {(() => {
-            const optionValues = options.map(o => o.value)
-            const { selecionarTudo, limpar } = rodapeAcoes(selected, optionValues, minSelected, clearTo)
-            if (!selecionarTudo && !limpar) return null
-            return (
-              <div style={{ display: 'flex', marginTop: 4, borderTop: '1px solid var(--ws-border)', paddingTop: 4 }}>
-                {selecionarTudo && (
-                  <button
-                    type="button"
-                    onClick={() => onChange(optionValues)}
-                    style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
-                  >
-                    Selecionar tudo
-                  </button>
-                )}
-                {limpar && (
-                  <button
-                    type="button"
-                    onClick={() => onChange(resolveClear(selected, minSelected, clearTo))}
-                    style={{ flex: 1, padding: '5px 8px', border: 'none', background: 'transparent', color: 'var(--ws-text-secondary)', fontSize: 11.5, cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-body)' }}
-                  >
-                    {clearTo ? (clearLabel ?? 'Limpar seleção') : 'Limpar seleção'}
-                  </button>
-                )}
-              </div>
-            )
-          })()}
+          {options.length > 0 && (
+            <div style={{ display: 'flex', marginTop: 4, borderTop: '1px solid var(--ws-border)', paddingTop: 4 }}>
+              <button
+                type="button"
+                disabled={!selecionarTudoAtivo}
+                onClick={() => onChange(optionValues)}
+                style={rodapeBtn(selecionarTudoAtivo)}
+              >
+                Selecionar tudo
+              </button>
+              <button
+                type="button"
+                disabled={!limparAtivo}
+                onClick={() => onChange([])}
+                style={rodapeBtn(limparAtivo)}
+              >
+                Limpar seleção
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -4,6 +4,7 @@ import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { PerdaDealsDrawer } from '@/components/ui/PerdaDealsDrawer'
 import { SCard, KTile } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
@@ -162,13 +163,14 @@ export function AnalisePerda() {
       : marcasSelecionadas.length <= 3
         ? marcasSelecionadas.map(b => b.label).join(', ')
         : `${marcasSelecionadas.length} marcas selecionadas`
-  const marcaFetch = marcasSelecionadas.length === 1 ? marcasSelecionadas[0].marca : undefined
   const marcasParaEscopo = useMemo(
     () => marcasSelecionadas.map(b => b.marca).filter((m): m is Marca => !!m),
     [marcasSelecionadas],
   )
 
-  const { data: rows, error: rowsError } = useFunilVendas(origem, marcaFetch)
+  // Sempre carrega o recorte inteiro da origem — marca filtrada no cliente
+  // (via `scope`), igual Fonte/SDR. Ver comentário em FunilVendas.
+  const { data: rows, error: rowsError } = useFunilVendas(origem)
 
   const scope = useMemo(
     () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
@@ -214,6 +216,31 @@ export function AnalisePerda() {
 
   const motivosFiltrados = motivoTab === 'todos' ? motivos : motivos.filter(m => m.categoria === motivoTab)
   const respFiltrados = respTab === 'todos' ? resps : resps.filter(r => r.camada === respTab)
+
+  // Filtro obrigatório sem nada marcado → esconde os dados e pede a seleção.
+  const faltandoObrigatorio = [
+    brandKeys.length === 0 ? 'uma marca' : null,
+    periodMode !== 'dia' && periodValues.length === 0 ? 'um período' : null,
+  ].filter((x): x is string => x !== null)
+
+  if (faltandoObrigatorio.length > 0) {
+    return (
+      <div style={{ padding: '28px 32px 60px', maxWidth: 1400, margin: '0 auto' }}>
+        <PageTop title="Análise de Perda" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
+        <FilterBar
+          marcasDisponiveis={marcasDisponiveis}
+          fontesDisponiveis={opcoes.fontes}
+          subFontesDisponiveis={opcoes.subFontes}
+          sdrsDisponiveis={opcoes.sdrs}
+          closersDisponiveis={opcoes.closers}
+          hideVendasToggle
+          hideContagemToggle
+        />
+        <QueryErrorBanner errors={[rowsError]} scope="Análise de Perda" />
+        <FiltrosObrigatoriosAviso faltando={faltandoObrigatorio} />
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '28px 32px 60px', maxWidth: 1400, margin: '0 auto' }}>

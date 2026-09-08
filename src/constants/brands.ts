@@ -73,24 +73,24 @@ export const BRAND_ACCENT: Record<string, string> = Object.fromEntries(
 )
 
 /**
- * Opções do filtro de Marca.
+ * Opções do filtro de Marca — **mesma regra em qualquer estado de seleção**:
+ * as marcas de `BRAND_LIST` que têm ≥1 deal no recorte atual (origem +
+ * período), calculadas em `marcasDisponiveis`.
  *
- * Com tudo marcado (Consolidado), a seleção não é uma preferência real a
- * proteger: a lista mostra só o que tem dado no recorte atual (ex.: dentro do
- * toggle de origem comercial).
+ * Antes a lista mudava conforme a seleção (Consolidado estreitava; seleção
+ * parcial mostrava tudo + "escape hatch" das marcas selecionadas), o que fazia
+ * uma marca sem dado — ex.: "We Scale", 0 deals na view — sumir e reaparecer só
+ * por marcar/desmarcar outra. Sem o escape hatch: se o usuário isolar uma marca
+ * que sai do recorte, ela some da lista mas os botões "Limpar seleção" /
+ * "Selecionar tudo" (sempre presentes) tiram ele de qualquer beco sem saída.
  *
- * Assim que o usuário isola 1+ marca, mostra a lista INTEIRA. As linhas
- * carregadas já vêm filtradas por marca no servidor quando só 1 está
- * selecionada, então `marcasDisponiveis` colapsa para essa única marca — e a
- * regra antiga (`marcasDisponiveis ∪ brandKeys`) deixava o dropdown preso numa
- * marca só, sem como voltar para as outras a não ser pelo "Limpar" global.
+ * Para `marcasDisponiveis` refletir o recorte de verdade, as páginas carregam
+ * `vw_funil_vendas` sem filtrar marca no servidor (marca é filtrada no cliente,
+ * igual Fonte/SDR). `marcasDisponiveis` undefined = recorte desconhecido →
+ * todas as marcas.
  */
-export function opcoesMarcaDisponiveis(
-  marcasDisponiveis: string[] | undefined,
-  brandKeys: string[],
-): BrandDef[] {
-  const consolidado = brandKeys.length === BRAND_LIST.length
-  if (!consolidado) return [...BRAND_LIST]
-  const chaves = new Set(marcasDisponiveis ?? BRAND_LIST.map(b => b.key))
+export function opcoesMarcaDisponiveis(marcasDisponiveis: string[] | undefined): BrandDef[] {
+  if (!marcasDisponiveis) return [...BRAND_LIST]
+  const chaves = new Set(marcasDisponiveis)
   return BRAND_LIST.filter(b => chaves.has(b.key))
 }

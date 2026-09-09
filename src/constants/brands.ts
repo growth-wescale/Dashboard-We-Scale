@@ -39,9 +39,6 @@ export const BRAND_LIST: BrandDef[] = [
 /** Lista completa com consolidado no topo (usada nos dropdowns das páginas de Vendas). */
 export const BRANDS_WITH_OVERVIEW: BrandDef[] = [BRAND_OVERVIEW, ...BRAND_LIST]
 
-/** Só marcas reais, sem Odonto Scale — usada em Marketing (Odonto Legacy fica dentro de Oral Unic). */
-export const BRAND_LIST_MARKETING: BrandDef[] = BRAND_LIST.filter(b => b.key !== 'odonto-scale')
-
 /** Retorna a BrandDef pelo key (ou undefined). */
 export function findBrand(key: string | undefined): BrandDef | undefined {
   if (!key) return undefined

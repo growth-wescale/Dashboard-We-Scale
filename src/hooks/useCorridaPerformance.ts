@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import { SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
 import { CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
+import { emJanelas, janelasKey, type Janela } from '@/constants/metasCampanhaF1'
 import {
   pontosSdr,
   pontosCloser,
@@ -22,6 +23,10 @@ import {
  *   - RR realizada  (`data_reuniao_realizada`)         → trilha SDR + realizado RR
  *   - SQL agendado  (`data_agendamento_reuniao_sql`)   → realizado SQL do SDR
  *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer
+ *
+ * `janelas` (opcional) recorta os 3 conjuntos para a união desses intervalos
+ * de data — usado pelo seletor de voltas. A query sempre traz o mês inteiro;
+ * o recorte é client-side, então trocar de volta não refetcha.
  *
  * A pontuação em si (volume × multiplicador de velocidade, por-unidade) mora
  * em `src/lib/corridaPerformance.ts`, puro e testado.
@@ -54,6 +59,7 @@ interface RawRr {
 }
 interface RawSql {
   nome_sdr: string | null
+  data_agendamento_reuniao_sql: string | null
 }
 interface RawVenda {
   nome_closer: string | null
@@ -75,7 +81,7 @@ async function fetchRrs(inicio: string, fimTs: string): Promise<RawRr[]> {
 async function fetchSqls(inicio: string, fimTs: string): Promise<RawSql[]> {
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('nome_sdr')
+    .select('nome_sdr, data_agendamento_reuniao_sql')
     .gte('data_agendamento_reuniao_sql', inicio)
     .lte('data_agendamento_reuniao_sql', fimTs)
   if (error) throw new Error(error.message)
@@ -107,20 +113,26 @@ export interface UseCorridaPerformanceResult {
   error: string | null
 }
 
-function agregarRealizadoSdr(rrs: RawRr[], sqls: RawSql[]): Map<string, SdrRealizado> {
+function agregarRealizadoSdr(
+  rrs: RawRr[],
+  sqls: RawSql[],
+  janelas?: readonly Janela[],
+): Map<string, SdrRealizado> {
   const map = new Map<string, SdrRealizado>(SDR_NOMES.map(n => [n, { sql: 0, rr: 0 }]))
   for (const r of sqls) {
+    if (!emJanelas(r.data_agendamento_reuniao_sql, janelas)) continue
     const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
     if (nome) map.get(nome)!.sql++
   }
   for (const r of rrs) {
+    if (!emJanelas(r.data_reuniao_realizada, janelas)) continue
     const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
     if (nome) map.get(nome)!.rr++
   }
   return map
 }
 
-export function useCorridaPerformance(mesRef: string): UseCorridaPerformanceResult {
+export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[]): UseCorridaPerformanceResult {
   const [rrs, setRrs] = useState<RawRr[]>([])
   const [sqls, setSqls] = useState<RawSql[]>([])
   const [vendas, setVendas] = useState<RawVenda[]>([])
@@ -160,11 +172,14 @@ export function useCorridaPerformance(mesRef: string): UseCorridaPerformanceResu
     }
   }, [fetchAll])
 
+  const jKey = janelasKey(janelas)
+
   const sdrTrilha = useMemo(() => {
     const unidades: RrUnidade[] = rrs
       .map(r => {
         const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
         if (!nome || !r.data_reuniao_realizada) return null
+        if (!emJanelas(r.data_reuniao_realizada, janelas)) return null
         return {
           nome,
           origem: r.origem_comercial,
@@ -175,13 +190,15 @@ export function useCorridaPerformance(mesRef: string): UseCorridaPerformanceResu
       })
       .filter((u): u is RrUnidade => u !== null)
     return pontosSdr(unidades, SDR_NOMES)
-  }, [rrs])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rrs, jKey])
 
   const closerTrilha = useMemo(() => {
     const unidades: VendaUnidade[] = vendas
       .map(v => {
         const nome = CLOSER_LOOKUP.get(normalizeNome(v.nome_closer ?? ''))
         if (!nome || !v.data_venda) return null
+        if (!emJanelas(v.data_venda, janelas)) return null
         return {
           nome,
           origem: v.origem_comercial,
@@ -191,9 +208,14 @@ export function useCorridaPerformance(mesRef: string): UseCorridaPerformanceResu
       })
       .filter((u): u is VendaUnidade => u !== null)
     return pontosCloser(unidades, CLOSER_NOMES)
-  }, [vendas])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendas, jKey])
 
-  const sdrRealizado = useMemo(() => agregarRealizadoSdr(rrs, sqls), [rrs, sqls])
+  const sdrRealizado = useMemo(
+    () => agregarRealizadoSdr(rrs, sqls, janelas),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rrs, sqls, jKey],
+  )
 
   return { sdrTrilha, closerTrilha, sdrRealizado, loading, error }
 }

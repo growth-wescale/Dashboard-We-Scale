@@ -8,6 +8,14 @@ import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
 import type { LinhaTrilha } from '@/lib/corridaPerformance'
+import {
+  VOLTAS_F1,
+  janelasDasVoltas,
+  janelaLabel,
+  pctDecorridoJanela,
+  fatorMetaCloser,
+  fatorMetaSdr,
+} from '@/constants/metasCampanhaF1'
 
 // Ordem canônica das marcas na seção "Metas por Marca" (mesmo recorte que a
 // seção sempre teve — sem Odonto Scale, que não é franquia).
@@ -21,13 +29,7 @@ const MES_INICIO = new Date(2026, 8, 1)   // 1º set 2026
 const MES_FIM = new Date(2026, 8, 30)     // 30 set 2026
 const DIAS_MES = 30
 const POOL_PREMIOS = 12000
-
-const VOLTAS = [
-  { num: 1, inicio: 1,  fim: 7,  label: 'Volta 1 · 1–7 set' },
-  { num: 2, inicio: 8,  fim: 14, label: 'Volta 2 · 8–14 set' },
-  { num: 3, inicio: 15, fim: 21, label: 'Volta 3 · 15–21 set' },
-  { num: 4, inicio: 22, fim: 30, label: 'Volta 4 · 22–30 set' },
-]
+type Ciclo = 'semanal' | 'mensal'
 
 const MARCA_COR: Record<string, string> = {
   'Oral Unic':  '#7F0C72',
@@ -60,13 +62,47 @@ function voltaAtual(dia: number): number {
 }
 
 export function CampanhaMetas() {
-  const [ciclo, setCiclo] = useState<'semanal' | 'mensal'>('semanal')
   const dia = diaDoMes()
-  const [voltaSelecionada, setVoltaSelecionada] = useState<number>(voltaAtual(dia))
+  const [ciclo, setCiclo] = useState<Ciclo>('semanal')
+  const [voltasSel, setVoltasSel] = useState<number[]>([voltaAtual(dia)])
 
-  const { closers, loading: loadingClosers, metasCadastradas } = useMetasClosers(MES_ATIVO)
+  const toggleVolta = (n: number) =>
+    setVoltasSel(prev => {
+      if (prev.includes(n)) {
+        const next = prev.filter(x => x !== n)
+        return next.length ? next : prev // nunca fica vazio
+      }
+      return [...prev, n].sort((a, b) => a - b)
+    })
+
+  // Janela ativa (undefined no Ciclo mensal = mês inteiro).
+  const janelas = useMemo(
+    () => (ciclo === 'mensal' ? undefined : janelasDasVoltas(voltasSel)),
+    [ciclo, voltasSel],
+  )
+  const rotuloJanela = janelaLabel(ciclo, voltasSel)
+  const notaJanela = ciclo === 'semanal' ? 'meta da(s) volta(s) pela forma da planilha' : undefined
+
+  const { closers: closersRaw, loading: loadingClosers, metasCadastradas } = useMetasClosers(MES_ATIVO, janelas)
   const { historico, loading: loadingHist } = useHistoricoAtingimento()
-  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(MES_ATIVO)
+  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(MES_ATIVO, janelas)
+
+  // Escala a meta mensal de cada closer pro conjunto de voltas e recomputa o %.
+  const closers = useMemo(
+    () =>
+      closersRaw.map(c => {
+        const fator = ciclo === 'mensal' ? 1 : fatorMetaCloser(c.nome, voltasSel)
+        const metaFinanceira = c.metaFinanceira * fator
+        const metaQtdVendas = c.metaQtdVendas * fator
+        return {
+          ...c,
+          metaFinanceira,
+          metaQtdVendas,
+          pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
+        }
+      }),
+    [closersRaw, ciclo, voltasSel],
+  )
 
   // Ranking ordenado por % atingimento desc, empate por realizado desc
   const ranking = useMemo(
@@ -89,7 +125,8 @@ export function CampanhaMetas() {
   }, [closers])
 
   const pctTotal = totais.metaFin > 0 ? (totais.realFin / totais.metaFin) * 100 : 0
-  const pctEsperado = (dia / DIAS_MES) * 100
+  const pctEsperado = pctDecorridoJanela(ciclo, voltasSel, dia)
+  const metaFatorSdr = ciclo === 'mensal' ? 1 : fatorMetaSdr(voltasSel)
   const diasRestantes = Math.max(0, DIAS_MES - dia)
   const volta = voltaAtual(dia)
 
@@ -99,7 +136,7 @@ export function CampanhaMetas() {
         title="Campanha de Metas"
         subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${DIAS_MES}`}
         titleAside={
-          <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--ws-brand)', color: '#fff', fontSize: 13, fontWeight: 500 }}>
+          <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--brand-accent)', color: '#fff', fontSize: 13, fontWeight: 500 }}>
             {MES_SHORT}
           </span>
         }
@@ -120,12 +157,12 @@ export function CampanhaMetas() {
       <CicloVoltas
         ciclo={ciclo}
         setCiclo={setCiclo}
-        voltaSelecionada={voltaSelecionada}
-        setVoltaSelecionada={setVoltaSelecionada}
+        voltasSel={voltasSel}
+        toggleVolta={toggleVolta}
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 20, marginTop: 20 }}>
-        <ClassificacaoCard ranking={ranking} voltaLabel={VOLTAS[voltaSelecionada - 1].label} />
+        <ClassificacaoCard ranking={ranking} voltaLabel={rotuloJanela} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <MetaTimeCard
@@ -136,6 +173,8 @@ export function CampanhaMetas() {
             metaQtd={totais.metaQtd}
             pctAtingido={pctTotal}
             pctEsperado={pctEsperado}
+            rotuloJanela={rotuloJanela}
+            notaJanela={notaJanela}
           />
 
           <TrilhasGrid sdr={sdrTrilha} closer={closerTrilha} loading={loadingCorrida} />
@@ -146,7 +185,13 @@ export function CampanhaMetas() {
 
       <HistoricoTable historico={historico} loading={loadingHist} />
 
-      <SdrsSection realizado={sdrRealizado} trilha={sdrTrilha} loadingCorrida={loadingCorrida} />
+      <SdrsSection
+        realizado={sdrRealizado}
+        trilha={sdrTrilha}
+        loadingCorrida={loadingCorrida}
+        metaFator={metaFatorSdr}
+        rotuloJanela={rotuloJanela}
+      />
 
       <MetasMarcaSection />
     </div>
@@ -246,13 +291,14 @@ function PolePositionCard({ pole }: { pole: CloserMeta | null }) {
 /* ── Toggle Ciclo + Voltas ──────────────────────────────────────────────── */
 
 function CicloVoltas({
-  ciclo, setCiclo, voltaSelecionada, setVoltaSelecionada,
+  ciclo, setCiclo, voltasSel, toggleVolta,
 }: {
-  ciclo: 'semanal' | 'mensal'
-  setCiclo: (c: 'semanal' | 'mensal') => void
-  voltaSelecionada: number
-  setVoltaSelecionada: (v: number) => void
+  ciclo: Ciclo
+  setCiclo: (c: Ciclo) => void
+  voltasSel: number[]
+  toggleVolta: (v: number) => void
 }) {
+  const semanal = ciclo === 'semanal'
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
       <div style={{
@@ -264,7 +310,7 @@ function CicloVoltas({
           return (
             <button key={c} onClick={() => setCiclo(c)} style={{
               padding: '6px 16px', borderRadius: 999, border: 'none', cursor: 'pointer',
-              background: ativo ? 'var(--ws-brand)' : 'transparent',
+              background: ativo ? 'var(--brand-accent)' : 'transparent',
               color: ativo ? '#fff' : 'var(--ws-text-primary)',
               fontSize: 13, fontWeight: ativo ? 500 : 400,
             }}>
@@ -274,16 +320,23 @@ function CicloVoltas({
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {VOLTAS.map(v => {
-          const ativo = v.num === voltaSelecionada
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {semanal && (
+          <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
+            voltas · marque várias para o acumulado
+          </span>
+        )}
+        {VOLTAS_F1.map(v => {
+          const ativo = semanal && voltasSel.includes(v.num)
           return (
-            <button key={v.num} onClick={() => setVoltaSelecionada(v.num)} style={{
+            <button key={v.num} onClick={() => toggleVolta(v.num)} disabled={!semanal} style={{
               padding: '8px 14px', borderRadius: 999,
-              border: '1px solid ' + (ativo ? 'var(--ws-brand)' : 'var(--ws-border)'),
-              background: ativo ? 'var(--ws-brand)' : '#fff',
+              border: '1px solid ' + (ativo ? 'var(--brand-accent)' : 'var(--ws-border)'),
+              background: ativo ? 'var(--brand-accent)' : '#fff',
               color: ativo ? '#fff' : 'var(--ws-text-primary)',
-              fontSize: 12, fontWeight: ativo ? 500 : 400, cursor: 'pointer',
+              opacity: semanal ? 1 : 0.4,
+              fontSize: 12, fontWeight: ativo ? 500 : 400,
+              cursor: semanal ? 'pointer' : 'not-allowed',
             }}>
               {v.label}
             </button>
@@ -351,9 +404,11 @@ interface MetaTimeCardProps {
   metaQtd: number
   pctAtingido: number
   pctEsperado: number
+  rotuloJanela: string
+  notaJanela?: string
 }
 
-function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido, pctEsperado }: MetaTimeCardProps) {
+function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido, pctEsperado, rotuloJanela, notaJanela }: MetaTimeCardProps) {
   const status: 'abaixo' | 'no' | 'acima' =
     pctAtingido < pctEsperado - 5 ? 'abaixo' : pctAtingido > pctEsperado + 5 ? 'acima' : 'no'
   const statusMap = {
@@ -368,10 +423,10 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
-            Meta do time · {MES_LABEL}
+            Meta do time · {rotuloJanela}
           </h2>
           <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            Soma das metas individuais dos closers
+            Soma das metas individuais dos closers{notaJanela ? ` · ${notaJanela}` : ''}
           </div>
         </div>
         <span style={{
@@ -384,20 +439,20 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
       </div>
 
       <div style={{ marginTop: 20, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 500, color: 'var(--ws-brand)', lineHeight: 1 }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 500, color: 'var(--brand-accent)', lineHeight: 1 }}>
           {loading ? '—' : money(realFin)}
         </span>
         <span style={{ fontSize: 15, color: 'var(--ws-text-secondary)' }}>
-          de {moneyCompact(metaFin)} · {realQtd}/{metaQtd} un · {pct(pctAtingido, 0)}
+          de {moneyCompact(metaFin)} · {realQtd}/{nfCeil(metaQtd)} un · {pct(pctAtingido, 0)}
         </span>
       </div>
 
       <div style={{ marginTop: 16, height: 8, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
-        <div style={{ width: `${pctBar}%`, height: '100%', background: 'var(--ws-brand)', transition: 'width 400ms ease' }} />
+        <div style={{ width: `${pctBar}%`, height: '100%', background: 'var(--brand-accent)', transition: 'width 400ms ease' }} />
       </div>
 
       <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-        <span>ritmo esperado · {pct(pctEsperado, 0)} do mês</span>
+        <span>ritmo esperado · {pct(pctEsperado, 0)} do período</span>
         <span>bandeirada · 30 · set</span>
       </div>
     </div>
@@ -488,7 +543,7 @@ function TrilhaCard({
         <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Carregando…</div>
       ) : totalVol === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-          Sem {regra.unidade === 'RR' ? 'RR' : 'vendas'} no mês ainda.
+          Sem {regra.unidade === 'RR' ? 'RR' : 'vendas'} no período.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -587,7 +642,7 @@ function PilotoCard({
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{closer.nome}</div>
             <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-              P{posicao} no ciclo semanal
+              P{posicao} na classificação
             </div>
           </div>
           <span style={{
@@ -603,7 +658,7 @@ function PilotoCard({
           <span>
             <span style={{ fontWeight: 500 }}>{loading ? '—' : money(closer.realizado)}</span>
             <span style={{ color: 'var(--ws-text-secondary)' }}> de {moneyCompact(closer.metaFinanceira)} · </span>
-            <span style={{ fontWeight: 500 }}>{closer.realizadoQtd}/{closer.metaQtdVendas}</span>
+            <span style={{ fontWeight: 500 }}>{closer.realizadoQtd}/{nfCeil(closer.metaQtdVendas)}</span>
             <span style={{ color: 'var(--ws-text-secondary)' }}> un</span>
           </span>
           <span style={{ fontSize: 11, color: statusMap.color, fontWeight: 500 }}>{statusMap.label}</span>
@@ -818,11 +873,14 @@ function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
 // (SQL e RR) vem de `useCorridaPerformance` — mesma fonte da aba Performance.
 
 function SdrsSection({
-  realizado, trilha, loadingCorrida,
+  realizado, trilha, loadingCorrida, metaFator, rotuloJanela,
 }: {
   realizado: Map<string, SdrRealizado>
   trilha: LinhaTrilha[]
   loadingCorrida: boolean
+  /** Fator da meta mensal do SDR (rateio por dias) para a janela ativa. */
+  metaFator: number
+  rotuloJanela: string
 }) {
   const { sdrs, loading: loadingMetas, metasCadastradas } = useMetasSDRs(MES_ATIVO)
   const trilhaPorNome = useMemo(() => new Map(trilha.map(t => [t.nome, t])), [trilha])
@@ -838,7 +896,8 @@ function SdrsSection({
             Quem gera o ritmo da corrida
           </h2>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            SQL e reunião realizada vs. meta + velocidade de resposta por SDR — Setembro/2026
+            SQL e reunião realizada vs. meta + velocidade de resposta por SDR — {rotuloJanela}
+            {metaFator !== 1 ? ' · meta rateada pelos dias da(s) volta(s)' : ''}
           </div>
         </div>
       </div>
@@ -857,6 +916,7 @@ function SdrsSection({
           <SdrCard
             key={sdr.nome}
             sdr={sdr}
+            metaFator={metaFator}
             realizado={realizado.get(sdr.nome)}
             velocidade={trilhaPorNome.get(sdr.nome) ?? null}
             loadingMetas={loadingMetas}
@@ -869,13 +929,14 @@ function SdrsSection({
 }
 
 function SdrCard({
-  sdr, realizado, velocidade, loadingMetas, loadingCorrida,
+  sdr, realizado, velocidade, loadingMetas, loadingCorrida, metaFator,
 }: {
   sdr: SdrMeta
   realizado: SdrRealizado | undefined
   velocidade: LinhaTrilha | null
   loadingMetas: boolean
   loadingCorrida: boolean
+  metaFator: number
 }) {
   return (
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
@@ -891,13 +952,13 @@ function SdrCard({
           <MetricaLinha
             label="SQL"
             realizado={realizado?.sql ?? 0}
-            meta={sdr.metaSql}
+            meta={sdr.metaSql * metaFator}
             loading={loadingMetas || loadingCorrida}
           />
           <MetricaLinha
             label="Reunião realizada"
             realizado={realizado?.rr ?? 0}
-            meta={sdr.metaReuniao}
+            meta={sdr.metaReuniao * metaFator}
             loading={loadingMetas || loadingCorrida}
           />
           <VelocidadeLinha
@@ -1011,8 +1072,8 @@ function MetasMarcaSection() {
           {MESES.map(m => (
             <button key={m.key} onClick={() => setMesMarcaRef(m.key)} style={{
               padding: '6px 12px', borderRadius: 999,
-              border: '1px solid ' + (mesMarcaRef === m.key ? 'var(--ws-brand)' : 'var(--ws-border)'),
-              background: mesMarcaRef === m.key ? 'var(--ws-brand)' : '#fff',
+              border: '1px solid ' + (mesMarcaRef === m.key ? 'var(--brand-accent)' : 'var(--ws-border)'),
+              background: mesMarcaRef === m.key ? 'var(--brand-accent)' : '#fff',
               color: mesMarcaRef === m.key ? '#fff' : 'var(--ws-text-primary)',
               fontSize: 12, cursor: 'pointer',
             }}>{m.label}</button>
@@ -1046,7 +1107,7 @@ function MetasMarcaSection() {
               ))}
             </tbody>
             <tfoot>
-              <tr style={{ background: 'var(--ws-bg)', borderTop: '2px solid var(--ws-brand)' }}>
+              <tr style={{ background: 'var(--ws-bg)', borderTop: '2px solid var(--brand-accent)' }}>
                 <td style={{ ...tdMarca, fontWeight: 600 }}>WE SCALE (total)</td>
                 <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>{total.metaQtd}</td>
                 <td style={{ ...tdMarca, textAlign: 'right', fontWeight: 600 }}>{total.realQtd}</td>

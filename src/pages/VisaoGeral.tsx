@@ -17,7 +17,7 @@ import { useAllBrandsMqlPacing } from '@/hooks/useMqlPacing'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
 import { nf, money, moneyK } from '@/lib/format'
-import { BRAND_LIST_MARKETING } from '@/constants/brands'
+import { BRAND_LIST } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { getMetaVendas } from '@/constants/metasVendas'
 import { PacingCard, MiniCard } from '@/pages/Pacing'
@@ -26,7 +26,7 @@ import { CompareControl } from '@/components/ui/CompareControl'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
-const BRAND_DEFS = BRAND_LIST_MARKETING.map(b => ({ key: b.key, label: b.label, accent: b.accent }))
+const BRAND_DEFS = BRAND_LIST.map(b => ({ key: b.key, label: b.label, accent: b.accent }))
 
 const VALID_MARCAS = new Set<string>(Object.values(SLUG_TO_MARCA))
 

@@ -365,6 +365,72 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-09 (4) — Campanha de Metas: botões de volta consertados + dados seguem a(s) volta(s), multi-seleção
+
+Junior reportou 2 bugs na aba **Campanha de Metas** (`CampanhaMetas.tsx`,
+rota `/gp-setembro` — `GpSetembro` é só re-export de `CampanhaMetas`).
+
+**Bug 1 — botões/pills invisíveis.** A página usava `var(--ws-brand)` em 9
+lugares, **token que não existe** no design system (o certo é
+`--brand-accent`, `#E10600` no tema F1 — ver `src/index.css` /
+`src/styles/gp-mode.css`). `var()` sem fallback não resolve → o botão
+*ativo* (fundo `--ws-brand` + texto branco) ficava transparente sobre a
+página clara e sumia. Por isso a volta selecionada não aparecia e o toggle
+só mostrava "Ciclo mensal" (o "Ciclo semanal", ativo por padrão, também
+invisível). Trocado nos 9 pontos.
+
+**Bug 2 — a volta selecionada não filtrava nada** (só trocava um rótulo no
+card Classificação; o toggle Ciclo semanal/mensal também era inerte).
+Agora:
+- **Seletor de voltas = multi-seleção** (marque várias p/ o acumulado). A
+  janela ativa é a **UNIÃO** das voltas — V1 + V3 não-contíguas mantêm o
+  buraco da V2 de fora. `Ciclo mensal` = mês inteiro, botões apagados
+  (`disabled`). Default: `Ciclo semanal` na volta atual.
+- **Realizado** (closers → Classificação/ranking/Meta do time/cards de
+  piloto; trilhas SDR/Closer; Grid dos SDRs) passa a contar só a janela.
+- **Meta do Closer na janela** = meta mensal viva de
+  `DB_Metas_Performance` (R$ 981.385 / 25 un no time em set/26) × a
+  **fração das voltas**. A FORMA da distribuição semanal (não-uniforme)
+  vem de `Metas 2026.xlsx` (`General - Líderes de Expansão`, aba **Closer**
+  · bloco "FECHAMENTO POR SEMANA"): Douglas/Jéssica `20/40/20/20%`, Bruna
+  `25/25/25/25%`, Aurélio `12,5/25/37,5/25%`. Somando as 4 voltas dá
+  exatamente a meta mensal. Vale pra R$ e unidades; % de atingimento
+  recomputado na página sobre a meta escalada.
+- **Meta do SDR na janela** (SQL/RR do Grid) — a planilha só tem semanal
+  de **ligações**, não de SQL/RR, então é **rateada pelos dias** de cada
+  volta (V1–3 = 7/30, V4 = 9/30). Subtítulo avisa "meta rateada pelos dias
+  da(s) volta(s)".
+- **Trilhas de pontos** (Corrida de Performance) só janelam volume/pontos
+  — não têm meta. Ver [[corrida-performance-pontuacao]].
+- Seguem **mensais** de propósito: "Histórico de resultados", barrinhas de
+  histórico dos pilotos, "Metas por Marca" (tem seletor próprio).
+- Hero banner ("Volta X de 4", dias pra bandeirada) continua mostrando a
+  volta **atual**, não a selecionada — é status, não filtro.
+
+**Implementação.**
+- `src/constants/metasCampanhaF1.ts` (novo, testado — 17 casos):
+  `VOLTAS_F1` (datas + `fracaoDias` + label), `FRACAO_VOLTA_CLOSER`,
+  `emJanelas`/`janelasKey` (recorte client-side por **dia Brasília** via
+  `toLocalDate`, união de janelas), `fatorMetaCloser`/`fatorMetaSdr`,
+  `janelaLabel`, `pctDecorridoJanela` (ritmo esperado da janela).
+- `useMetasClosers` e `useCorridaPerformance` ganham param **opcional**
+  `janelas`: a query **segue trazendo o mês inteiro**, o recorte é na
+  agregação (`useMemo` com `janelasKey` como dep estável) — trocar de
+  volta **não refetcha**. Sem `janelas` (ex.: `GpStrip`) o comportamento é
+  o mês todo, inalterado. `useMetasClosers` passou a guardar as linhas
+  cruas em estado e derivar `closers` por `useMemo` (antes agregava dentro
+  do `fetchAll`). `useCorridaPerformance.fetchSqls` agora seleciona
+  `data_agendamento_reuniao_sql` (antes só `nome_sdr`).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (297 testes, 17
+novos em `metasCampanhaF1.test.ts`) + `oxlint` limpo, num git worktree
+fora do OneDrive. App exige login — recorte por volta conferido por SQL
+contra a base real (set/2026 · V1: Sarah 8 SQL/6 RR, Xayane 11/12, Thiago
+0/4 · V2: Sarah 12/3, Xayane 3/2 · 0 vendas fechadas no mês → trilha
+Closer "sem vendas no período"). PR #113. O 1º deploy falhou num passo de
+infra do pipeline (`ssh-keyscan` pro VPS); `gh run rerun --failed`
+resolveu.
+
 ### 2026-09-09 (3) — Visão Geral: Odonto Legacy no Grid + segregação Oral Unic em 3 buckets
 
 Auditoria de MQL/investimento na Visão Geral revelou 3 problemas encadeados,

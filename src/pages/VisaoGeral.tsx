@@ -19,7 +19,7 @@ import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUt
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
-import { isMediaOdontoLegacy } from '@/lib/oralUnicMapping'
+import { isMediaOdontoLegacy, isMediaLegacy } from '@/lib/oralUnicMapping'
 import { getMetaVendas } from '@/constants/metasVendas'
 import { PacingCard, MiniCard } from '@/pages/Pacing'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
@@ -62,13 +62,15 @@ function funnelFor(scope: Pick<Scope, 'leads' | 'mql' | 'sql' | 'sal' | 'fech'>)
   return [leads, mql, sql, sal, fech].map((x) => Math.round(x))
 }
 
-// Mídia Odonto Legacy vive em duas fontes (ver useMediaOdontoLegacy):
-// - Histórico: marca='Odonto Scale' cru
-// - Novo (ago/26+): marca='Oral Unic' com marker [ODL]/[OS] na campanha (Consultoria).
-// Oral Unic Franquia = marca='Oral Unic' SEM marker. Comunidade Legacy ([LEGACY]/[CMD])
-// fica FORA do card Odonto Legacy da Visão Geral por decisão de negócio (Junior, 09/09):
-// esta página trata só Consultoria, que é a frente com MQL. Comunidade segue visível
-// em Saúde da Marca / S&OP como topo de funil separado.
+// Ecossistema Oral Unic segregado em 3 buckets (decisão Junior, 09/09/2026):
+// - Franquia (Nossa + V4): marca='Oral Unic' sem [ODL]/[OS]/[LEGACY]/[CMD]
+// - Consultoria (Odonto Legacy = Scale): marca='Odonto Scale' cru + Oral Unic com [ODL]/[OS]
+// - Comunidade Legacy ([LEGACY]/[CMD]): fora dos cards da Visão Geral. Segue visível
+//   em Saúde da Marca / S&OP como topo de funil (sem MQL, sem meta de venda).
+function isComunidadeRow(r: MediaDailyRaw): boolean {
+  return r.marca === 'Oral Unic' && isMediaLegacy(r.campanha)
+}
+
 function filterMediaByMarca(rows: MediaDailyRaw[], marca: string): MediaDailyRaw[] {
   if (marca === 'Odonto Scale') {
     return rows.filter(r =>
@@ -77,7 +79,11 @@ function filterMediaByMarca(rows: MediaDailyRaw[], marca: string): MediaDailyRaw
     )
   }
   if (marca === 'Oral Unic') {
-    return rows.filter(r => r.marca === 'Oral Unic' && !isMediaOdontoLegacy(r.campanha))
+    return rows.filter(r =>
+      r.marca === 'Oral Unic' &&
+      !isMediaOdontoLegacy(r.campanha) &&
+      !isMediaLegacy(r.campanha)
+    )
   }
   return rows.filter(r => r.marca === marca)
 }
@@ -85,7 +91,7 @@ function filterMediaByMarca(rows: MediaDailyRaw[], marca: string): MediaDailyRaw
 // ─── Data computation ─────────────────────────────────────────────────────────
 function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], brandSlug: string, di: string, df: string): Scope {
   const marca = brandSlug !== 'overview' ? SLUG_TO_MARCA[brandSlug] : undefined
-  const mRows = (marca ? filterMediaByMarca(media, marca) : media).filter(r => VALID_MARCAS.has(r.marca))
+  const mRows = (marca ? filterMediaByMarca(media, marca) : media.filter(r => !isComunidadeRow(r))).filter(r => VALID_MARCAS.has(r.marca))
   const lRows = (marca ? leadRows.filter(r => r.marca === marca) : leadRows).filter(r => VALID_MARCAS.has(r.marca))
   const cRows = (marca ? crm.filter(r => r.marca === marca) : crm).filter(r => r.marca && VALID_MARCAS.has(r.marca))
   const active = cRows.filter(r => r.status_atual !== 'Excluído')
@@ -168,7 +174,7 @@ function buildSeries(
   totalDays: number,
 ): Record<string, number[]> {
   const marca = brandSlug !== 'overview' ? SLUG_TO_MARCA[brandSlug] : undefined
-  const mRows = (marca ? filterMediaByMarca(media, marca) : media).filter(r => VALID_MARCAS.has(r.marca))
+  const mRows = (marca ? filterMediaByMarca(media, marca) : media.filter(r => !isComunidadeRow(r))).filter(r => VALID_MARCAS.has(r.marca))
   const lRows = (marca ? leadRows.filter(r => r.marca === marca) : leadRows).filter(r => VALID_MARCAS.has(r.marca))
   const cRows = (marca ? crm.filter(r => r.marca === marca) : crm).filter(r => r.marca && VALID_MARCAS.has(r.marca))
   const uniqueLRows = deduplicateLeads(lRows)

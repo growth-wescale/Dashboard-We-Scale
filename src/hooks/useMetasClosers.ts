@@ -27,7 +27,7 @@ export const CLOSERS_ATIVOS: ReadonlyArray<{
   { nome: 'Jéssica',         iniciais: 'JES', cor: '#00D2BE', foto: '/assets/vendedores/jessica.png', escuderia: 'Mercedes AMG Petronas' },
   { nome: 'Douglas',         iniciais: 'DOU', cor: '#006F62', foto: '/assets/vendedores/douglas.png', escuderia: 'Aston Martin' },
   { nome: 'Aurélio Briano',  iniciais: 'AUR', cor: '#005AFF', foto: '/assets/vendedores/aurelio.png', escuderia: 'Williams Racing' },
-  { nome: 'Bruna',           iniciais: 'BRU', cor: '#FF8000', escuderia: 'McLaren' },
+  { nome: 'Bruna',           iniciais: 'BRU', cor: '#FF8000', foto: '/assets/vendedores/bruna.png', escuderia: 'McLaren' },
 ]
 
 export interface CloserMeta {

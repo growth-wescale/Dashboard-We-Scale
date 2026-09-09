@@ -365,6 +365,80 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-09 (3) — Visão Geral: Odonto Legacy no Grid + segregação Oral Unic em 3 buckets
+
+Auditoria de MQL/investimento na Visão Geral revelou 3 problemas encadeados,
+todos consertados em 3 PRs sequenciais (#109 → #110 → #111).
+
+**Achado 1 — Consolidado não fechava com a soma do Grid.** Em Set/2026, o
+KPI grande mostrava 345 MQL mas a soma dos 7 cards do Grid dava 241 —
+**104 MQL invisíveis (30% do total)**, todos Odonto Legacy.
+
+Causa: `BRAND_LIST_MARKETING` (`brands.ts:43`) filtrava `odonto-scale` fora
+do Grid com o comentário *"Odonto Legacy fica dentro de Oral Unic"*. Na
+prática, **100% dos 214 leads Legacy com marker `[ODL]/[OS]` em Set/2026
+estão gravados com `marca='Odonto Scale'`**, não em Oral Unic — o filtro
+escondia dado real. `VALID_MARCAS` do Consolidado incluía `Odonto Scale`,
+descolando os 2 lados.
+
+Fix (#109): deletar `BRAND_LIST_MARKETING` — só era consumido na Visão
+Geral. `BRAND_DEFS` passou a mapear `BRAND_LIST` inteiro (8 cards). Saúde
+da Marca não afetada (Odonto Legacy segue como sub-tab dentro de Oral Unic,
+regra separada).
+
+**Achado 2 (só depois do #109 chegar em produção) — Odonto Legacy tinha 104
+MQL mas R$ 0 de investimento**, CP-MQL zerado. Padrão **inverso** dos leads:
+100% do invest Odonto Legacy em Set/2026 está gravado como `marca='Oral
+Unic'` com marker `[ODL]/[OS]`, **não** em `marca='Odonto Scale'`.
+
+Fix (#110): helper local `filterMediaByMarca` reproduz a regra do
+`useMediaOdontoLegacy` (usado em Saúde da Marca) e aplica em
+`computeScope`, `computeBrands` e `buildSeries`. Split por marker
+(`isMediaOdontoLegacy` de `oralUnicMapping.ts`):
+- Card **Odonto Legacy**: `marca='Odonto Scale'` cru + `marca='Oral Unic'`
+  com `[ODL]/[OS]`
+- Card **Oral Unic**: `marca='Oral Unic'` sem marker Odonto
+
+Consolidado inalterado no #110 — só realoca entre cards. Em Set/2026:
+card Odonto Legacy foi de R$ 0 → **R$ 8.290**, Oral Unic de R$ 18.030 →
+R$ 9.740.
+
+**Achado 3 — Comunidade Legacy (`[CMD]`) ainda inflava o card Oral Unic em
+R$ 3.960**, sem MQL correspondente. Decisão de negócio do Junior: o
+ecossistema Oral Unic vive em **3 buckets segregados**:
+- **Franquia** (Nossa + V4): `[OUF]` + `[V4]` + sem marker
+- **Consultoria** (Odonto Legacy = Scale, mesma coisa): `[ODL]`, `[OS]`, e
+  as 2 Google Search Intenção mapeadas manualmente em
+  `oralUnicMapping.ts:isMediaOdontoLegacy`
+- **Comunidade** (`[CMD]`, `[LEGACY]`): **FORA da Visão Geral**. Segue
+  visível em Saúde da Marca / S&OP como topo de funil — não tem MQL nem
+  meta de venda, então inflaria CP-MQL do card sem contrapartida
+
+Fix (#111): helper `isComunidadeRow` aplicado no `filterMediaByMarca`
+(bucket Oral Unic) + no Consolidado de `computeScope`/`buildSeries`.
+Consolidado cai R$ 3.960 em Set/2026 (Comunidade some da tela principal).
+
+Nota: `[SEARCH] LEGACY Franchise marca` (R$ 42 em Set) tem "LEGACY" no
+nome mas foi confirmado como **Franquia** pelo Junior — não bate com
+nenhum helper de Legacy/ODL, cai correto em Franquia.
+
+**Achado colateral (não é bug de dashboard, dado real do banco):** Franquia
+Nossa Oral Unic despencou de **R$ 27.880 (jul)** → **R$ 14.354 (ago)** →
+**R$ 148 em set (9 dias)**. Migração completa Nossa → V4 iniciada em
+ago/2026 quando a conta compartilhada V4 foi ligada (24/08). Ritmo V4 em
+set: R$ 626/dia. Junior notificado — decisão de negócio, fora de escopo do
+dashboard.
+
+Verificado: `npm run build` limpo nos 3 PRs (~220ms cada), 280/280 testes
+passando. Auditoria por SQL contra a base real (queries mostradas ao Junior
+antes de cada fix). App exige login — não visto renderizado nesta sessão.
+Deploys #109 às 13:40, #110 às 13:51, #111 às 14:06.
+
+Bônus da sessão (não relacionado ao Visão Geral): fotos F1 da **Bruna**
+(PR #107, card Closer, McLaren) e **Vanessa Daniel** (PR #108, Grid SDR,
+Ferrari) completam o grid de fotos da Campanha de Metas — todas as 8
+pessoas (4 Closers + 4 SDRs) agora com foto real.
+
 ### 2026-09-08 (8) — Comitê entra no funil da Visão Macro
 
 Sequência da entrada "Pré-Contrato" de 08/09. Junior pediu **Comitê** entre

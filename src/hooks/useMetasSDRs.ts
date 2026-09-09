@@ -28,7 +28,7 @@ export const SDRS_ATIVOS: ReadonlyArray<{
   { nome: 'Sarah Padilha',   iniciais: 'SAR', cor: '#00D2BE', foto: '/assets/vendedores/sarah.png',  escuderia: 'Mercedes AMG Petronas' },
   { nome: 'Thiago',          iniciais: 'THI', cor: '#3671C6', foto: '/assets/vendedores/thiago.png', escuderia: 'Red Bull Racing' },
   { nome: 'Xayane',          iniciais: 'XAY', cor: '#B6BABD', foto: '/assets/vendedores/xayane.png', escuderia: 'Mercedes SDR' },
-  { nome: 'Vanessa Daniel',  iniciais: 'VAN', cor: '#F91536', escuderia: 'Ferrari' }, // sem foto ainda
+  { nome: 'Vanessa Daniel',  iniciais: 'VAN', cor: '#F91536', foto: '/assets/vendedores/vanessa.png', escuderia: 'Ferrari' },
 ]
 
 export interface SdrMeta {

@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { emJanelas, janelasKey, type Janela } from '@/constants/metasCampanhaF1'
 
 /**
  * Metas mensais dos closers da campanha F1 GP We Scale. Filtra
  * `DB_Metas_Performance` pela lista canônica de 4 closers ativos, agrega
  * meta_financeira e meta_qtd_vendas somando todas as marcas de cada closer no
  * mês. Também busca realizado (vendas) por closer via `vw_funil_vendas`.
+ *
+ * `janelas` (opcional) recorta o REALIZADO para a união desses intervalos de
+ * data (usado pelo seletor de voltas da Campanha de Metas). A meta continua
+ * sendo a do mês inteiro — quem escala pra volta é a página. Sem `janelas`
+ * (ex.: `GpStrip`), o realizado é o mês todo.
  *
  * Não confundir com `useMetasPerformance` (que é a base geral, sem filtrar
  * closers específicos e sem agregar por pessoa) ou `useMetaPorMarca` (que é
@@ -54,6 +60,7 @@ interface RawVendaRow {
   nome_closer: string | null
   valor_contrato: number | null
   quantidade_unidades: number | null
+  data_venda: string | null
 }
 
 function normalizeNome(s: string): string {
@@ -86,7 +93,7 @@ async function fetchRealizadoCloser(mesRef: string): Promise<{ rows: RawVendaRow
   const fim = ultimoDiaMes(mesRef)
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('nome_closer, valor_contrato, quantidade_unidades')
+    .select('nome_closer, valor_contrato, quantidade_unidades, data_venda')
     .eq('status_atual', 'Ganho')
     .gte('data_venda', inicio)
     .lte('data_venda', fim + 'T23:59:59')
@@ -97,6 +104,7 @@ async function fetchRealizadoCloser(mesRef: string): Promise<{ rows: RawVendaRow
 function aggregate(
   metasRows: RawMetaRow[],
   vendasRows: RawVendaRow[],
+  janelas?: readonly Janela[],
 ): CloserMeta[] {
   // Agrega metas por nome_colaborador (soma todas as marcas)
   const metasMap = new Map<string, { fin: number; qtd: number }>()
@@ -114,6 +122,7 @@ function aggregate(
   const realizadoMap = new Map<string, { fin: number; qtd: number }>()
   for (const r of vendasRows) {
     if (!r.nome_closer) continue
+    if (!emJanelas(r.data_venda, janelas)) continue
     const key = normalizeNome(r.nome_closer)
     if (!CLOSER_NOMES_SET.has(key)) continue
     const cur = realizadoMap.get(key) ?? { fin: 0, qtd: 0 }
@@ -151,8 +160,9 @@ export interface UseMetasClosersResult {
   metasCadastradas: boolean  // true se algum closer tem meta > 0 no mês
 }
 
-export function useMetasClosers(mesRef: string): UseMetasClosersResult {
-  const [closers, setClosers] = useState<CloserMeta[]>([])
+export function useMetasClosers(mesRef: string, janelas?: readonly Janela[]): UseMetasClosersResult {
+  const [rawMetas, setRawMetas] = useState<RawMetaRow[]>([])
+  const [rawVendas, setRawVendas] = useState<RawVendaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -162,7 +172,8 @@ export function useMetasClosers(mesRef: string): UseMetasClosersResult {
     const [metas, vendas] = await Promise.all([fetchMetasCloser(mesRef), fetchRealizadoCloser(mesRef)])
     if (metas.error) { setError(metas.error); setLoading(false); return }
     if (vendas.error) { setError(vendas.error); setLoading(false); return }
-    setClosers(aggregate(metas.rows, vendas.rows))
+    setRawMetas(metas.rows)
+    setRawVendas(vendas.rows)
     setLoading(false)
   }, [mesRef])
 
@@ -179,10 +190,16 @@ export function useMetasClosers(mesRef: string): UseMetasClosersResult {
     }
   }, [fetchAll])
 
-  const stable = useMemo(() => closers, [closers])
+  // Trocar de volta só re-agrega (não refetcha) — a query já traz o mês todo.
+  const jKey = janelasKey(janelas)
+  const closers = useMemo(
+    () => aggregate(rawMetas, rawVendas, janelas),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawMetas, rawVendas, jKey],
+  )
   const metasCadastradas = useMemo(
     () => closers.some(c => c.metaFinanceira > 0 || c.metaQtdVendas > 0),
     [closers],
   )
-  return { closers: stable, loading, error, reload: () => fetchAll(true), metasCadastradas }
+  return { closers, loading, error, reload: () => fetchAll(true), metasCadastradas }
 }

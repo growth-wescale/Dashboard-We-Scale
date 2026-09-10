@@ -98,7 +98,7 @@ export function useSearchTerms(filters: Filters = {}): Result {
 
     const handleRefresh = () => { if (!cancelled) fetchBoth(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) fetchBoth(false) }, 60_000)
+    const timer = setInterval(() => { if (!cancelled) fetchBoth(false) }, 300_000)
 
     return () => {
       cancelled = true

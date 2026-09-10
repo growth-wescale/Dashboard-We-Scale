@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import type { FunnelEventRow } from '@/lib/metrics'
 import type { OrigemComercial } from '@/lib/funnelTypes'
@@ -81,16 +81,23 @@ export function useFunilEventos(p: Params): UseFunilEventosResult {
   const [data, setData] = useState<FunnelEventRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const inFlight = useRef(false)
 
   const { enabled, origem, inicio, fim } = p
 
   const load = useCallback(async () => {
     if (!enabled) { setData([]); setError(null); setLoading(false); return }
+    if (inFlight.current) return
+    inFlight.current = true
     setLoading(true)
-    const { rows, error: err } = await fetchAll({ enabled, origem, inicio, fim })
-    setError(err)
-    if (!err) setData(rows)
-    setLoading(false)
+    try {
+      const { rows, error: err } = await fetchAll({ enabled, origem, inicio, fim })
+      setError(err)
+      if (!err) setData(rows)
+    } finally {
+      setLoading(false)
+      inFlight.current = false
+    }
   }, [enabled, origem, inicio, fim])
 
   useEffect(() => { void load() }, [load])

@@ -14,7 +14,7 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useLeads } from '@/hooks/useLeads'
 import { useMetas } from '@/hooks/useMetas'
 import { useAllBrandsMqlPacing } from '@/hooks/useMqlPacing'
-import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
+import type { MediaDailyRaw, Lead, Meta, Marca } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
@@ -24,6 +24,7 @@ import { getMetaVendas } from '@/constants/metasVendas'
 import { PacingCard, MiniCard } from '@/pages/Pacing'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
+import { MultiSelect } from '@/components/ui/MultiSelect'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
@@ -71,29 +72,45 @@ function isComunidadeRow(r: MediaDailyRaw): boolean {
   return r.marca === 'Oral Unic' && isMediaLegacy(r.campanha)
 }
 
+/**
+ * Bucket "de negócio" ao qual uma linha de mídia pertence. Faz o mapa 1:1
+ * linha → marca canônica seguindo a segregação Oral Unic acima. Retorna null
+ * quando a linha é de Comunidade Legacy — que fica fora dos cards da Visão Geral.
+ */
+function rowBucket(r: MediaDailyRaw): string | null {
+  if (r.marca === 'Oral Unic') {
+    if (isMediaOdontoLegacy(r.campanha)) return 'Odonto Scale'
+    if (isMediaLegacy(r.campanha)) return null
+    return 'Oral Unic'
+  }
+  return r.marca
+}
+
+/** Filtra linhas de mídia por uma LISTA de marcas (bucket). Multi-seleção. */
+function filterMediaByMarcas(rows: MediaDailyRaw[], marcas: string[]): MediaDailyRaw[] {
+  const set = new Set(marcas)
+  return rows.filter(r => {
+    const b = rowBucket(r)
+    return b !== null && set.has(b)
+  })
+}
+
+/** Wrapper 1-marca — usado por `computeBrands`, que agrega por marca uma a uma. */
 function filterMediaByMarca(rows: MediaDailyRaw[], marca: string): MediaDailyRaw[] {
-  if (marca === 'Odonto Scale') {
-    return rows.filter(r =>
-      r.marca === 'Odonto Scale' ||
-      (r.marca === 'Oral Unic' && isMediaOdontoLegacy(r.campanha))
-    )
-  }
-  if (marca === 'Oral Unic') {
-    return rows.filter(r =>
-      r.marca === 'Oral Unic' &&
-      !isMediaOdontoLegacy(r.campanha) &&
-      !isMediaLegacy(r.campanha)
-    )
-  }
-  return rows.filter(r => r.marca === marca)
+  return filterMediaByMarcas(rows, [marca])
 }
 
 // ─── Data computation ─────────────────────────────────────────────────────────
-function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], brandSlug: string, di: string, df: string): Scope {
-  const marca = brandSlug !== 'overview' ? SLUG_TO_MARCA[brandSlug] : undefined
-  const mRows = (marca ? filterMediaByMarca(media, marca) : media.filter(r => !isComunidadeRow(r))).filter(r => VALID_MARCAS.has(r.marca))
-  const lRows = (marca ? leadRows.filter(r => r.marca === marca) : leadRows).filter(r => VALID_MARCAS.has(r.marca))
-  const cRows = (marca ? crm.filter(r => r.marca === marca) : crm).filter(r => r.marca && VALID_MARCAS.has(r.marca))
+// `marcas`: lista de marcas canônicas em foco. Vazia = todas (Consolidado).
+// Multi-marca soma naturalmente — a mesma pipeline agrega leads/mídia/CRM
+// de todas as marcas selecionadas. Comunidade Legacy segue fora sempre (via rowBucket).
+function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], marcas: string[], di: string, df: string): Scope {
+  const setMarcas = new Set(marcas)
+  const filtroMarca = (m: string | null) => marcas.length === 0 || (!!m && setMarcas.has(m))
+  const mRows = (marcas.length === 0 ? media.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(media, marcas))
+    .filter(r => VALID_MARCAS.has(r.marca))
+  const lRows = leadRows.filter(r => filtroMarca(r.marca)).filter(r => VALID_MARCAS.has(r.marca))
+  const cRows = crm.filter(r => filtroMarca(r.marca)).filter(r => r.marca && VALID_MARCAS.has(r.marca))
   const active = cRows.filter(r => r.status_atual !== 'Excluído')
   const uniqueLeads = deduplicateLeads(lRows)
   const invest = mRows.reduce((s, r) => s + r.spend_brl, 0)
@@ -169,14 +186,16 @@ function buildSeries(
   media: MediaDailyRaw[],
   leadRows: Lead[],
   crm: VwMarketingFunil[],
-  brandSlug: string,
+  marcas: string[],
   startDate: string,
   totalDays: number,
 ): Record<string, number[]> {
-  const marca = brandSlug !== 'overview' ? SLUG_TO_MARCA[brandSlug] : undefined
-  const mRows = (marca ? filterMediaByMarca(media, marca) : media.filter(r => !isComunidadeRow(r))).filter(r => VALID_MARCAS.has(r.marca))
-  const lRows = (marca ? leadRows.filter(r => r.marca === marca) : leadRows).filter(r => VALID_MARCAS.has(r.marca))
-  const cRows = (marca ? crm.filter(r => r.marca === marca) : crm).filter(r => r.marca && VALID_MARCAS.has(r.marca))
+  const setMarcas = new Set(marcas)
+  const filtroMarca = (m: string | null) => marcas.length === 0 || (!!m && setMarcas.has(m))
+  const mRows = (marcas.length === 0 ? media.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(media, marcas))
+    .filter(r => VALID_MARCAS.has(r.marca))
+  const lRows = leadRows.filter(r => filtroMarca(r.marca)).filter(r => VALID_MARCAS.has(r.marca))
+  const cRows = crm.filter(r => filtroMarca(r.marca)).filter(r => r.marca && VALID_MARCAS.has(r.marca))
   const uniqueLRows = deduplicateLeads(lRows)
   const ym = startDate.slice(0, 7) // 'YYYY-MM'
 
@@ -299,12 +318,15 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, onMqlClic
 }
 
 // ─── Status das marcas ────────────────────────────────────────────────────────
-function StatusTable({ brands, selected, onSelect, periodLabel }: {
+function StatusTable({ brands, selectedKeys, onToggle, periodLabel }: {
   brands: BrandRow[]
-  selected: string
-  onSelect: (k: string) => void
+  /** Chaves das marcas em foco. [] = Consolidado (nenhuma linha destacada). */
+  selectedKeys: string[]
+  /** Toggle: adiciona/remove a marca clicada da seleção. */
+  onToggle: (k: string) => void
   periodLabel: string
 }) {
+  const selSet = new Set(selectedKeys)
   const cols = [
     { k: 'invest', h: 'Investimento', fmt: (b: BrandRow) => money(b.invest) },
     { k: 'mql',    h: 'MQLs',        fmt: (b: BrandRow) => nf(b.mql) },
@@ -317,7 +339,7 @@ function StatusTable({ brands, selected, onSelect, periodLabel }: {
       <div style={{ padding: '18px 20px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 21 }}>Status das marcas</h2>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>Clique numa marca para filtrar a página inteira</div>
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>Clique numa marca para adicionar/remover do filtro</div>
         </div>
         <Badge tone="neutral">{periodLabel}</Badge>
       </div>
@@ -332,9 +354,9 @@ function StatusTable({ brands, selected, onSelect, periodLabel }: {
           </thead>
           <tbody>
             {brands.map((b) => {
-              const on = selected === b.key
+              const on = selSet.has(b.key)
               return (
-                <tr key={b.key} onClick={() => onSelect(on ? 'overview' : b.key)}
+                <tr key={b.key} onClick={() => onToggle(b.key)}
                   style={{ borderTop: '1px solid var(--ws-border)', cursor: 'pointer',
                     background: on ? 'color-mix(in srgb, var(--brand-accent) 8%, transparent)' : 'transparent',
                     boxShadow: on ? 'inset 3px 0 0 var(--brand-accent)' : 'none',
@@ -670,17 +692,35 @@ function WaterfallFunnel({ scope, scopeLabel }: {
 }
 
 // ─── Filtros do topo ──────────────────────────────────────────────────────────
-function BrandSelect({ brands, value, onChange }: { brands: BrandRow[]; value: string; onChange: (k: string) => void }) {
-  const cur    = brands.find((b) => b.key === value)
-  const accent = cur ? cur.accent : 'var(--brand-accent)'
+/**
+ * Filtro multi-marca no pill do topo da Visão Geral.
+ *
+ * `selected = []` significa Consolidado (soma de todas). O usuário pode marcar
+ * 2+ marcas pra ver o total delas somado — pedido de 10/09/2026. O visual pill
+ * do fio dourado (BrandSelect antigo) foi mantido embrulhando o MultiSelect
+ * compartilhado, pra combinar com os outros controles do topo.
+ */
+function BrandSelect({ brands, selected, onChange }: {
+  brands: BrandRow[]
+  selected: string[]
+  onChange: (keys: string[]) => void
+}) {
+  // Cor do pontinho: com 1 marca, o accent dela; sem seleção (Consolidado) ou
+  // multi, o accent neutro. É só decorativo, não afeta a lógica de filtro.
+  const dotAccent = selected.length === 1
+    ? (brands.find(b => b.key === selected[0])?.accent ?? 'var(--brand-accent)')
+    : 'var(--brand-accent)'
+  const options = brands.map(b => ({ value: b.key, label: b.label }))
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--ws-surface)', border: '1px solid var(--ws-border-strong)', borderRadius: 999, padding: '0 12px 0 14px', height: 40 }}>
-      <span style={{ width: 9, height: 9, borderRadius: '50%', background: accent, flex: '0 0 auto' }} />
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        style={{ border: 'none', background: 'transparent', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer', paddingRight: 4, height: '100%' }}>
-        <option value="overview">Consolidado · 6 marcas</option>
-        {brands.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
-      </select>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--ws-surface)', border: '1px solid var(--ws-border-strong)', borderRadius: 999, padding: '0 6px 0 14px', height: 40 }}>
+      <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotAccent, flex: '0 0 auto' }} />
+      <MultiSelect
+        label="Marca"
+        options={options}
+        selected={selected}
+        onChange={onChange}
+        allLabel="Consolidado"
+      />
     </div>
   )
 }
@@ -757,10 +797,21 @@ const MEDIA_COLS = [
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function VisaoGeral() {
   const initDates = getMtdDates()
-  const [brand,  setBrand]  = useState('overview')
+  // brandKeys: multi-seleção estilo Excel. [] == Consolidado (todas as marcas
+  // somadas). Selecionar 2 marcas soma os dados delas.
+  const [brandKeys, setBrandKeys] = useState<string[]>([])
   const [range,  setRange]  = useState({ start: initDates.start, end: initDates.end })
   const [filterFonte, setFilterFonte] = useState('__all__')
   const today = new Date()
+
+  // Marcas canônicas selecionadas. [] === todas (Consolidado, sem restrição).
+  const marcasSelecionadas = useMemo(() => {
+    return brandKeys.map(k => SLUG_TO_MARCA[k]).filter((m): m is Marca => !!m)
+  }, [brandKeys])
+  const isConsolidado = brandKeys.length === 0 || brandKeys.length === BRAND_LIST.length
+  // Lista efetiva pra passar às pipelines: em Consolidado, `[]` sinaliza "sem
+  // restrição" (mais simples que enumerar as 8 marcas — evita drift se BRAND_LIST muda).
+  const marcasEfetivas = isConsolidado ? [] : marcasSelecionadas
 
   const endDate = new Date(range.end + 'T00:00')
   // Cap at today so future-dated ranges don't make previous months look fuller than current
@@ -821,8 +872,10 @@ export function VisaoGeral() {
   }, [exportMenuOpen])
 
   function handleExportLeads() {
-    const marca = brand !== 'overview' ? SLUG_TO_MARCA[brand] : undefined
-    const rows = (marca ? leadsCur.filter(r => r.marca === marca) : leadsCur)
+    const set = new Set<string>(marcasSelecionadas)
+    const filtroMarca = (m: string | null) => isConsolidado || (!!m && set.has(m))
+    const rows = leadsCur
+      .filter(r => filtroMarca(r.marca))
       .filter(r => VALID_MARCAS.has(r.marca))
       .map(r => ({
         dia: r.dia, marca: r.marca, nome: r.nome, email: r.email,
@@ -837,40 +890,48 @@ export function VisaoGeral() {
   }
 
   function handleExportMedia() {
-    const marca = brand !== 'overview' ? SLUG_TO_MARCA[brand] : undefined
-    const rows = (marca ? mediaCur.filter(r => r.marca === marca) : mediaCur)
+    const rows = (isConsolidado ? mediaCur.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(mediaCur, marcasSelecionadas))
       .filter(r => VALID_MARCAS.has(r.marca)) as unknown as Record<string, unknown>[]
     downloadCsv(`midia_${scopeLabel}_${range.start}_${range.end}.csv`, rows, MEDIA_COLS)
     setExportMenuOpen(false)
   }
 
   const brands       = useMemo(() => computeBrands(mediaCur, leadsCur, crmCur, metas, range.start, range.end),     [mediaCur, leadsCur, crmCur, metas, range.start, range.end])
-  const scope        = useMemo(() => computeScope(mediaCur, leadsCur, crmCur, brand, range.start, range.end),      [mediaCur, leadsCur, crmCur, brand, range.start, range.end])
-  const compareScope = useMemo(() => computeScope(mediaCompareRaw, leadsCompare, crmCompare, brand, effectiveCompareRange.start, effectiveCompareRange.end), [mediaCompareRaw, leadsCompare, crmCompare, brand, effectiveCompareRange.start, effectiveCompareRange.end])
+  const scope        = useMemo(() => computeScope(mediaCur, leadsCur, crmCur, marcasEfetivas, range.start, range.end),      [mediaCur, leadsCur, crmCur, marcasEfetivas, range.start, range.end])
+  const compareScope = useMemo(() => computeScope(mediaCompareRaw, leadsCompare, crmCompare, marcasEfetivas, effectiveCompareRange.start, effectiveCompareRange.end), [mediaCompareRaw, leadsCompare, crmCompare, marcasEfetivas, effectiveCompareRange.start, effectiveCompareRange.end])
   const compareLabel = compareState.enabled
     ? `vs. ${formatCompareLabel(effectiveCompareRange)}`
     : `vs. ${formatCompareLabel(effectiveCompareRange)} (mês ant.)`
 
   const mqlLeads = useMemo(() => {
-    const marca = brand !== 'overview' ? SLUG_TO_MARCA[brand] : undefined
-    const lRows = (marca ? leadsCur.filter(r => r.marca === marca) : leadsCur).filter(r => VALID_MARCAS.has(r.marca))
+    const set = new Set<string>(marcasSelecionadas)
+    const lRows = leadsCur
+      .filter(r => isConsolidado || (!!r.marca && set.has(r.marca)))
+      .filter(r => VALID_MARCAS.has(r.marca))
     return deduplicateLeads(lRows).filter(isLeadMql)
-  }, [leadsCur, brand])
+  }, [leadsCur, marcasSelecionadas, isConsolidado])
 
   const curLabel   = monthLabel(range.start)
   const prevLabel  = monthLabel(prevDates.start)
   const prev2Label = monthLabel(prev2Dates.start)
   const prev3Label = monthLabel(prev3Dates.start)
 
-  const isConsolidated = !brand || brand === 'overview'
-  const brandObj       = brands.find((b) => b.key === brand)
-  const scopeLabel     = isConsolidated ? 'Consolidado' : (brandObj?.label ?? brand)
-  const rootProps      = isConsolidated ? {} : { 'data-brand': brand }
+  const brandObj      = brandKeys.length === 1 ? brands.find((b) => b.key === brandKeys[0]) : undefined
+  const scopeLabel    = isConsolidado
+    ? 'Consolidado'
+    : brandKeys.length === 1
+      ? (brandObj?.label ?? brandKeys[0])
+      : brandKeys.length <= 3
+        ? brandKeys.map(k => BRAND_LIST.find(b => b.key === k)?.label ?? k).join(', ')
+        : `${brandKeys.length} marcas selecionadas`
+  // data-brand só faz sentido pra tema visual quando é EXATAMENTE 1 marca —
+  // multi-seleção e Consolidado usam paleta neutra.
+  const rootProps     = brandKeys.length === 1 ? { 'data-brand': brandKeys[0] } : {}
 
-  const curSeries   = useMemo(() => buildSeries(mediaCur,   leadsCur,   crmCur,   brand, range.start,      days), [mediaCur,   leadsCur,   crmCur,   brand, range.start,      days])
-  const prevSeries  = useMemo(() => buildSeries(mediaPrev,  leadsPrev,  crmPrev,  brand, prevDates.start,  days), [mediaPrev,  leadsPrev,  crmPrev,  brand, prevDates.start,  days])
-  const prev2Series = useMemo(() => buildSeries(mediaPrev2, leadsPrev2, crmPrev2, brand, prev2Dates.start, days), [mediaPrev2, leadsPrev2, crmPrev2, brand, prev2Dates.start, days])
-  const prev3Series = useMemo(() => buildSeries(mediaPrev3, leadsPrev3, crmPrev3, brand, prev3Dates.start, days), [mediaPrev3, leadsPrev3, crmPrev3, brand, prev3Dates.start, days])
+  const curSeries   = useMemo(() => buildSeries(mediaCur,   leadsCur,   crmCur,   marcasEfetivas, range.start,      days), [mediaCur,   leadsCur,   crmCur,   marcasEfetivas, range.start,      days])
+  const prevSeries  = useMemo(() => buildSeries(mediaPrev,  leadsPrev,  crmPrev,  marcasEfetivas, prevDates.start,  days), [mediaPrev,  leadsPrev,  crmPrev,  marcasEfetivas, prevDates.start,  days])
+  const prev2Series = useMemo(() => buildSeries(mediaPrev2, leadsPrev2, crmPrev2, marcasEfetivas, prev2Dates.start, days), [mediaPrev2, leadsPrev2, crmPrev2, marcasEfetivas, prev2Dates.start, days])
+  const prev3Series = useMemo(() => buildSeries(mediaPrev3, leadsPrev3, crmPrev3, marcasEfetivas, prev3Dates.start, days), [mediaPrev3, leadsPrev3, crmPrev3, marcasEfetivas, prev3Dates.start, days])
 
   const mtdGroups: MtdGroup[] = [
     { label: curLabel,   color: 'var(--brand-accent)', dashed: false, series: curSeries },
@@ -887,7 +948,7 @@ export function VisaoGeral() {
         subtitle={`${scopeLabel} · ${curLabel}`}
         actions={
           <>
-            <BrandSelect brands={brands} value={brand} onChange={setBrand} />
+            <BrandSelect brands={brands} selected={brandKeys} onChange={setBrandKeys} />
             <select
               value={filterFonte}
               onChange={e => setFilterFonte(e.target.value)}
@@ -939,7 +1000,12 @@ export function VisaoGeral() {
       <KpiStrip scope={scope} compareScope={compareScope} compareLabel={compareLabel} compareEnabled={compareState.enabled} onMqlClick={() => setMqlDrawerOpen(true)} />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
-        <StatusTable brands={brands} selected={brand} onSelect={setBrand} periodLabel={curLabel} />
+        <StatusTable
+          brands={brands}
+          selectedKeys={brandKeys}
+          onToggle={(k) => setBrandKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
+          periodLabel={curLabel}
+        />
         <MtdChart groups={mtdGroups} scopeLabel={scopeLabel} days={days} />
       </div>
 
@@ -955,12 +1021,20 @@ export function VisaoGeral() {
         </div>
 
         <div style={{ opacity: pacingLoading ? 0.5 : 1, pointerEvents: pacingLoading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
-        {isConsolidated ? (
+        {/*
+          Pacing:
+          - Consolidado ou multi (0 ou 2+): todas as marcas em mini cards.
+            Pacing é por marca (meta individual, ritmo individual) — somar 2
+            pacings não faz sentido, então multi mostra o mesmo grid que
+            Consolidado, o usuário compara lado a lado.
+          - Exatamente 1 marca: card completo dela + "Outras marcas" abaixo.
+        */}
+        {brandKeys.length !== 1 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
             {pacingData.map(d => <MiniCard key={d.marca} d={d} />)}
           </div>
         ) : (() => {
-          const selectedMarca = SLUG_TO_MARCA[brand]
+          const selectedMarca = SLUG_TO_MARCA[brandKeys[0]]
           const selectedPacing = pacingData.find(d => d.marca === selectedMarca)
           const otherPacing = pacingData.filter(d => d.marca !== selectedMarca)
           return (

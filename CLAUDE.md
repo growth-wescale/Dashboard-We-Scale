@@ -365,6 +365,25 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-10 (2) — Assistente flutuante sai das abas de Vendas
+
+Junior pediu para tirar o "campo de chat" do canto inferior direito das
+abas de Vendas. É o `AiChat` (`src/components/AiChat.tsx`) — botão
+flutuante que abre o "Assistente We Scale" (Edge Function `ai-assistant`,
+dados dos últimos 30 dias). Fica vermelho no Modo GP porque usa
+`var(--ws-vinho-b)`, que `gp-mode.css` sobrescreve pra `#E10600`.
+
+Era renderizado global no `AppLayout` (1 linha, `<AiChat />` no fim do
+layout), aparecendo em todas as abas. Passou a `{!isVendas && <AiChat />}`
+— `isVendas` (= `getActiveKey(pathname) === 'vendas'`) já existia no
+componente e cobre as 6 rotas de Vendas (`/funil-vendas`,
+`/performance-vendas`, `/analise-perda`, `/analise-objecoes`,
+`/gp-setembro`, `/metas`). Abas de Marketing inalteradas.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (302 testes) em
+worktree fora do OneDrive. App exige login — não visto renderizado.
+PR #119, deploy automático OK.
+
 ### 2026-09-10 — Corrida de Performance: peso de volume passa a ler Fonte Macro
 
 Ponto 1 de 2 do pedido do Junior (o 2 é peso de venda por ticket da

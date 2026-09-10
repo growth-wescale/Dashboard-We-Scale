@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   classificarVelocidade,
   difDias,
-  pesoOrigem,
+  normalizarFonte,
+  pesoFonte,
   pontosCloser,
   pontosSdr,
   SDR_SPEED_TIERS,
@@ -11,11 +12,43 @@ import {
   type VendaUnidade,
 } from './corridaPerformance'
 
-describe('pesoOrigem', () => {
-  it('outbound (Prospecção Ativa) pesa 2, resto pesa 1', () => {
-    expect(pesoOrigem('Prospecção Ativa')).toBe(2)
-    expect(pesoOrigem('Inbound')).toBe(1)
-    expect(pesoOrigem(null)).toBe(1)
+describe('pesoFonte', () => {
+  it('1 pt: Inbound, Indicação, Parceiro, inbound - Repasse e sem classificação', () => {
+    expect(pesoFonte('Inbound')).toBe(1)
+    expect(pesoFonte('Indicação')).toBe(1)
+    expect(pesoFonte('Parceiro')).toBe(1)
+    expect(pesoFonte('inbound - Repasse')).toBe(1)
+    expect(pesoFonte('Sem Classificação')).toBe(1)
+    expect(pesoFonte(null)).toBe(1)
+    expect(pesoFonte('')).toBe(1)
+    expect(pesoFonte('   ')).toBe(1)
+  })
+
+  it('2 pts: todo o restante', () => {
+    expect(pesoFonte('Prospecção Ativa')).toBe(2)
+    expect(pesoFonte('Resgate')).toBe(2)
+    expect(pesoFonte('Evento')).toBe(2)
+    expect(pesoFonte('Outro CRM')).toBe(2)
+    expect(pesoFonte('Outro Crm')).toBe(2)
+    expect(pesoFonte('Franqueado')).toBe(2)
+    expect(pesoFonte('valor novo qualquer')).toBe(2)
+  })
+
+  it('tolera acento, caixa e espaçamento em volta do "-"', () => {
+    expect(pesoFonte('INBOUND')).toBe(1)
+    expect(pesoFonte('indicacao')).toBe(1)
+    expect(pesoFonte('inbound-repasse')).toBe(1)
+    expect(pesoFonte('  Inbound  -  Repasse ')).toBe(1)
+    expect(pesoFonte('PROSPECÇÃO ATIVA')).toBe(2)
+  })
+})
+
+describe('normalizarFonte', () => {
+  it('minúsculo, sem acento, espaço colapsado e "-" padronizado', () => {
+    expect(normalizarFonte('Inbound - Repasse')).toBe('inbound - repasse')
+    expect(normalizarFonte('inbound-repasse')).toBe('inbound - repasse')
+    expect(normalizarFonte('  Prospecção   Ativa ')).toBe('prospeccao ativa')
+    expect(normalizarFonte(null)).toBe('')
   })
 })
 
@@ -67,38 +100,57 @@ describe('classificarVelocidade — trilha Closer', () => {
   })
 })
 
-/** RR outbound com gap MQL→agendamento de `gapDias` e RR num dia único (sem bônus). */
-function rr(nome: string, diaRr: number, gapDias: number, origem: RrUnidade['origem'] = 'Prospecção Ativa'): RrUnidade {
+/** RR de fonte 2 pts com gap MQL→agendamento de `gapDias` e RR num dia único (sem bônus). */
+function rr(nome: string, diaRr: number, gapDias: number, fonte: RrUnidade['fonte'] = 'Prospecção Ativa'): RrUnidade {
   const dd = String(diaRr).padStart(2, '0')
   const mql = '2026-08-20T00:00:00Z'
   const agendamento = new Date(Date.parse(mql) + gapDias * 86_400_000).toISOString()
-  return { nome, origem, dataMql: mql, dataAgendamento: agendamento, dataRr: `2026-09-${dd}T13:00:00Z` }
+  return { nome, fonte, dataMql: mql, dataAgendamento: agendamento, dataRr: `2026-09-${dd}T13:00:00Z` }
 }
 
 describe('pontosSdr — exemplos do doc', () => {
-  it('SDR X: 10 RR outbound respondidas em 0,4 dia → 1,5× → 30 pts', () => {
+  it('SDR X: 10 RR de 2 pts respondidas em 0,4 dia → 1,5× → 30 pts', () => {
     const rrs = Array.from({ length: 10 }, (_, i) => rr('X', i + 1, 0.4))
     const [linha] = pontosSdr(rrs, ['X'])
     expect(linha.volume).toBe(10)
-    expect(linha.volumeOutbound).toBe(10)
+    expect(linha.volume2pts).toBe(10)
     expect(linha.pontos).toBe(30) // 10 × (2 × 1.5)
     expect(linha.tagVelocidade).toBe('Resposta Relâmpago')
   })
 
-  it('SDR Y: 15 RR outbound em 4 dias → 0,8× → 24 pts', () => {
+  it('SDR Y: 15 RR de 2 pts em 4 dias → 0,8× → 24 pts', () => {
     const rrs = Array.from({ length: 15 }, (_, i) => rr('Y', i + 1, 4))
     const [linha] = pontosSdr(rrs, ['Y'])
     expect(linha.volume).toBe(15)
     expect(linha.pontos).toBe(24) // 15 × (2 × 0.8)
     expect(linha.tagVelocidade).toBe('Atenção')
   })
+
+  it('SDR de fonte 1 pt (Inbound) pontua metade do de 2 pts, mesmo ritmo', () => {
+    const rrs = Array.from({ length: 10 }, (_, i) => rr('Z', i + 1, 0.4, 'Inbound'))
+    const [linha] = pontosSdr(rrs, ['Z'])
+    expect(linha.volume).toBe(10)
+    expect(linha.volume2pts).toBe(0)
+    expect(linha.pontos).toBe(15) // 10 × (1 × 1.5)
+  })
+
+  it('Indicação e Repasse valem 1 pt', () => {
+    const rrs = [
+      rr('W', 1, 0.4, 'Indicação'),
+      rr('W', 2, 0.4, 'inbound - Repasse'),
+    ]
+    const [linha] = pontosSdr(rrs, ['W'])
+    expect(linha.volume2pts).toBe(0)
+    // 2 RR no mesmo mês, dias distintos, sem bônus: 2 × (1 × 1.5) = 3
+    expect(linha.pontos).toBe(3)
+  })
 })
 
 describe('pontosSdr — bônus de mais de uma RR no mesmo dia', () => {
-  it('2 RR inbound no mesmo dia (Brasília), ritmo padrão → 1,5× cada', () => {
+  it('2 RR de 1 pt no mesmo dia (Brasília), ritmo padrão → 1,5× cada', () => {
     const base: Omit<RrUnidade, 'dataRr'> = {
       nome: 'A',
-      origem: 'Inbound',
+      fonte: 'Inbound',
       dataMql: '2026-09-01T00:00:00Z',
       dataAgendamento: '2026-09-03T00:00:00Z', // 2 dias → Padrão (1,0×)
     }
@@ -113,7 +165,7 @@ describe('pontosSdr — bônus de mais de uma RR no mesmo dia', () => {
   it('as mesmas 2 RR em dias diferentes → sem bônus', () => {
     const base: Omit<RrUnidade, 'dataRr'> = {
       nome: 'A',
-      origem: 'Inbound',
+      fonte: 'Inbound',
       dataMql: '2026-09-01T00:00:00Z',
       dataAgendamento: '2026-09-03T00:00:00Z',
     }
@@ -140,7 +192,7 @@ describe('pontosSdr — recorte por nome', () => {
 describe('pontosSdr — leadtime ausente', () => {
   it('sem data de MQL → conta volume com multiplicador neutro', () => {
     const rrs: RrUnidade[] = [
-      { nome: 'A', origem: 'Inbound', dataMql: null, dataAgendamento: '2026-09-03T00:00:00Z', dataRr: '2026-09-05T13:00:00Z' },
+      { nome: 'A', fonte: 'Inbound', dataMql: null, dataAgendamento: '2026-09-03T00:00:00Z', dataRr: '2026-09-05T13:00:00Z' },
     ]
     const [linha] = pontosSdr(rrs, ['A'])
     expect(linha.volume).toBe(1)
@@ -156,7 +208,7 @@ describe('pontosCloser — multiplicador por-venda, nunca sobre a média', () =>
     const rrRef = Date.parse('2026-08-01T12:00:00Z')
     const vendas: VendaUnidade[] = dias.map(d => ({
       nome: 'A',
-      origem: 'Inbound' as const,
+      fonte: 'Inbound' as const,
       dataRr: '2026-08-01T12:00:00Z',
       dataVenda: new Date(rrRef + d * 86_400_000).toISOString(),
     }))

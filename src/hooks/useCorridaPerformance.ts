@@ -7,7 +7,6 @@ import {
   pontosSdr,
   pontosCloser,
   type LinhaTrilha,
-  type Origem,
   type RrUnidade,
   type VendaUnidade,
 } from '@/lib/corridaPerformance'
@@ -18,8 +17,9 @@ import {
  *
  * Lê `vw_funil_vendas` direto (mesmo padrão de `useMetasClosers` /
  * `useHistoricoAtingimento`, que também consultam a view por conta própria) —
- * **sem** filtro de origem, porque o peso K.O. da pontuação precisa de Inbound
- * e Prospecção Ativa juntos. Três recortes do mês:
+ * **sem** filtro de origem: a pontuação pesa cada unidade pela `fonte_macro`
+ * dela (1 pt Inbound/Indicação/Parceiro/Repasse, 2 pt o restante), então
+ * precisa de todas as fontes juntas. Três recortes do mês:
  *   - RR realizada  (`data_reuniao_realizada`)         → trilha SDR + realizado RR
  *   - SQL agendado  (`data_agendamento_reuniao_sql`)   → realizado SQL do SDR
  *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer
@@ -52,7 +52,7 @@ function ultimoDiaMes(mesRef: string): string {
 
 interface RawRr {
   nome_sdr: string | null
-  origem_comercial: Origem
+  fonte_macro: string | null
   data_novo_mql: string | null
   data_agendamento_reuniao_sql: string | null
   data_reuniao_realizada: string | null
@@ -63,7 +63,7 @@ interface RawSql {
 }
 interface RawVenda {
   nome_closer: string | null
-  origem_comercial: Origem
+  fonte_macro: string | null
   data_reuniao_realizada: string | null
   data_venda: string | null
 }
@@ -71,7 +71,7 @@ interface RawVenda {
 async function fetchRrs(inicio: string, fimTs: string): Promise<RawRr[]> {
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('nome_sdr, origem_comercial, data_novo_mql, data_agendamento_reuniao_sql, data_reuniao_realizada')
+    .select('nome_sdr, fonte_macro, data_novo_mql, data_agendamento_reuniao_sql, data_reuniao_realizada')
     .gte('data_reuniao_realizada', inicio)
     .lte('data_reuniao_realizada', fimTs)
   if (error) throw new Error(error.message)
@@ -91,7 +91,7 @@ async function fetchSqls(inicio: string, fimTs: string): Promise<RawSql[]> {
 async function fetchVendas(inicio: string, fimTs: string): Promise<RawVenda[]> {
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('nome_closer, origem_comercial, data_reuniao_realizada, data_venda')
+    .select('nome_closer, fonte_macro, data_reuniao_realizada, data_venda')
     .eq('status_atual', 'Ganho')
     .gte('data_venda', inicio)
     .lte('data_venda', fimTs)
@@ -182,7 +182,7 @@ export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[
         if (!emJanelas(r.data_reuniao_realizada, janelas)) return null
         return {
           nome,
-          origem: r.origem_comercial,
+          fonte: r.fonte_macro,
           dataMql: r.data_novo_mql,
           dataAgendamento: r.data_agendamento_reuniao_sql,
           dataRr: r.data_reuniao_realizada,
@@ -201,7 +201,7 @@ export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[
         if (!emJanelas(v.data_venda, janelas)) return null
         return {
           nome,
-          origem: v.origem_comercial,
+          fonte: v.fonte_macro,
           dataRr: v.data_reuniao_realizada,
           dataVenda: v.data_venda,
         }

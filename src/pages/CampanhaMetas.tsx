@@ -534,7 +534,9 @@ function TrilhaCard({
         padding: '8px 10px', borderRadius: 8, background: '#F9FAFB',
         fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.65,
       }}>
-        <div><b>Volume</b> · {regra.volumeLabel}: 1 pt inbound · 2 pt outbound · ×1,5 se +1 no mesmo dia</div>
+        <div><b>Volume</b> · {regra.volumeLabel}: peso pela Fonte Macro · ×1,5 se +1 no mesmo dia</div>
+        <div style={{ paddingLeft: 8 }}><b>1 pt</b> · Inbound · Indicação · Parceiro · Repasse · sem classificação</div>
+        <div style={{ paddingLeft: 8 }}><b>2 pts</b> · Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado</div>
         <div><b>Velocidade</b> · {regra.velocidadeLabel}: {regra.degraus}</div>
         <div style={{ marginTop: 2, fontStyle: 'italic' }}>Pontos = Σ (volume × multiplicador), por unidade</div>
       </div>
@@ -563,7 +565,7 @@ function TrilhaCard({
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{l.nome}</div>
                   <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
                     {l.volume} {regra.unidade === 'RR' ? 'RR' : 'vendas'}
-                    {l.volumeOutbound > 0 && ` · ${l.volumeOutbound} outbound`}
+                    {l.volume2pts > 0 && ` · ${l.volume2pts} de 2 pts`}
                     {' · '}
                     {l.tempoMedianoDias === null ? 'sem tempo' : `${diasFmt(l.tempoMedianoDias)}d · ${l.tagVelocidade}`}
                   </div>

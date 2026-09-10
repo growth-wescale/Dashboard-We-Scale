@@ -94,7 +94,7 @@ export function usePerdas(filters: Filters = {}): UseResult {
 
     const handleRefresh = () => { if (!cancelled) fetchAll(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 60000)
+    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 300_000)
 
     return () => {
       cancelled = true

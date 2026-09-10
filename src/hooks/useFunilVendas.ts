@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
 
@@ -70,13 +70,23 @@ export function useFunilVendas(origem: OrigemComercial): UseFunilVendasResult {
   const [data, setData] = useState<FunnelRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Dedup de fetches em vôo: são ~7 páginas de 1000 linhas cada; se a anterior
+  // ainda está rodando (view Vendas já teve timeout no anon), não faz sentido
+  // disparar outra em cima — fica só empilhando memória. O tick pula silencioso.
+  const inFlight = useRef(false)
 
   const load = useCallback(async (showLoading: boolean) => {
+    if (inFlight.current) return
+    inFlight.current = true
     if (showLoading) setLoading(true)
-    const { rows, error: err } = await fetchAll(origem)
-    setError(err)
-    if (!err) setData(rows)
-    setLoading(false)
+    try {
+      const { rows, error: err } = await fetchAll(origem)
+      setError(err)
+      if (!err) setData(rows)
+    } finally {
+      setLoading(false)
+      inFlight.current = false
+    }
   }, [origem])
 
   useEffect(() => {
@@ -88,7 +98,7 @@ export function useFunilVendas(origem: OrigemComercial): UseFunilVendasResult {
     // Mesmo protocolo dos hooks existentes: botão de refresh global + polling.
     const onRefresh = () => run(false)
     window.addEventListener('dashboard:refresh', onRefresh)
-    const timer = setInterval(() => run(false), 60_000)
+    const timer = setInterval(() => run(false), 300_000)
 
     return () => {
       cancelled = true

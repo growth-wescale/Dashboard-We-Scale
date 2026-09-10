@@ -106,7 +106,7 @@ export function useMetaMes(mesReferencia: string) {
 
     const handleRefresh = () => { if (!cancelled) void run(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) void run(false) }, 60_000)
+    const timer = setInterval(() => { if (!cancelled) void run(false) }, 300_000)
 
     return () => {
       cancelled = true

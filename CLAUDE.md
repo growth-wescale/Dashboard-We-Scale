@@ -365,6 +365,47 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-10 — Corrida de Performance: peso de volume passa a ler Fonte Macro
+
+Ponto 1 de 2 do pedido do Junior (o 2 é peso de venda por ticket da
+marca, ainda pendente). O motor de pontuação da Campanha de Metas
+(`src/lib/corridaPerformance.ts`, ver [[corrida-performance-pontuacao]])
+deixou de pesar o volume por `origem_comercial` (só Inbound ×
+Prospecção Ativa) e passou a ler **`fonte_macro`** de `vw_funil_vendas`
+— o mesmo campo que o filtro de Fonte do dash usa.
+
+**Regra (definida pelo Junior):**
+- **1 pt:** Inbound · Indicação · Parceiro · `inbound - Repasse` ·
+  Sem Classificação (e fonte em branco/nula)
+- **2 pts:** todo o restante — Prospecção Ativa · Resgate · Evento ·
+  Outro CRM · Franqueado · qualquer valor futuro
+
+`inbound - Repasse` conta como Inbound (1 pt) por decisão dele. "Sem
+Classificação" → 1 pt como piso conservador (ele está corrigindo a
+classificação na origem; se sobrar deal sem classificar, pontua o
+mínimo). `pesoFonte()`/`normalizarFonte()` tratam acento, caixa e
+espaço em volta do `-`, então `INBOUND`, `Outro CRM`, `inbound -
+Repasse` caem certo. Multiplicador de velocidade e bônus ×1,5 do "+1
+no mesmo dia" **inalterados** — só o insumo do peso de volume mudou.
+
+**Front:** `RrUnidade`/`VendaUnidade` carregam `fonte` (era `origem`);
+`LinhaTrilha.volumeOutbound` → `volume2pts`; `useCorridaPerformance`
+faz `select` de `fonte_macro` no lugar de `origem_comercial`. A régua
+cinza dentro de cada `TrilhaCard` (SDR/Closer) na aba Campanha de
+Metas ganhou a tabela de fontes por peso (1 pt / 2 pts), pro time
+inteiro entender a regra sem sair da tela; subtítulo por pessoa
+passou de "· N outbound" pra "· N de 2 pts".
+
+Nota de leitura: em Set/2026, das ~30 RR realizadas, 20 estão como
+"Sem Classificação" (→ 1 pt) — a competição só fica significativa
+depois do ajuste de classificação na origem que o Junior está fazendo.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (302 testes,
+~19 novos/ajustados em `corridaPerformance.test.ts`) + `oxlint` limpo
+nos arquivos tocados, em worktree fora do OneDrive. App exige login —
+não visto renderizado; mapa de peso conferido por SQL contra a base
+real. PR #117.
+
 ### 2026-09-09 (4) — Campanha de Metas: botões de volta consertados + dados seguem a(s) volta(s), multi-seleção
 
 Junior reportou 2 bugs na aba **Campanha de Metas** (`CampanhaMetas.tsx`,

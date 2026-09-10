@@ -302,7 +302,8 @@ export function AppLayout({ children }: AppLayoutProps) {
           </main>
         </div>
 
-        <AiChat />
+        {/* Assistente flutuante só nas abas de Marketing — fora das abas de Vendas (Junior) */}
+        {!isVendas && <AiChat />}
         {gpAtivo && <GpIntro />}
       </div>
     </MarcaContext.Provider>

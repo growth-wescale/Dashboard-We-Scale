@@ -1,5 +1,4 @@
 import { toLocalDate } from '@/lib/dateUtils'
-import type { OrigemComercial } from '@/lib/funnelTypes'
 
 /**
  * Corrida de Performance — motor de pontuação da Campanha de Metas (tema F1).
@@ -12,8 +11,11 @@ import type { OrigemComercial } from '@/lib/funnelTypes'
  * O multiplicador é aplicado POR UNIDADE, nunca sobre a média do período —
  * senão uma venda rápida disfarça várias travadas atrás dela.
  *
- * Pontos de volume: outbound (Prospecção Ativa) pesa 2, inbound pesa 1;
- * se a pessoa fez mais de uma unidade no mesmo dia, todas as unidades desse
+ * Pontos de volume: por **Fonte Macro** (o campo `fonte_macro` de
+ * `vw_funil_vendas`, o mesmo que o filtro de Fonte do dashboard usa).
+ *   1 ponto:  Inbound · Indicação · Parceiro · inbound - Repasse · Sem Classificação (e vazio)
+ *   2 pontos: todo o restante (Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado · …)
+ * Se a pessoa fez mais de uma unidade no mesmo dia, todas as unidades desse
  * dia ganham +1,5×.
  *
  * Fora de escopo por decisão do Junior (08/09): guardrail de no-show e de
@@ -21,8 +23,6 @@ import type { OrigemComercial } from '@/lib/funnelTypes'
  * (`data_reuniao_realizada` / `data_venda` preenchida), então o guardrail de
  * no-show já cai por construção.
  */
-
-export type Origem = OrigemComercial | null
 
 export interface SpeedTier {
   /** Limite superior da faixa, em dias (inclusivo). `null` = faixa aberta (última). */
@@ -49,9 +49,37 @@ export const CLOSER_SPEED_TIERS: readonly SpeedTier[] = [
   { limiteDias: null, mult: 0.5, tag: 'Lento' },
 ]
 
-/** Peso de volume da tabela do doc: outbound (Prospecção Ativa) = 2, inbound = 1. */
-export function pesoOrigem(origem: Origem): number {
-  return origem === 'Prospecção Ativa' ? 2 : 1
+/* ── Peso de volume por Fonte Macro ────────────────────────────────────── */
+
+/** Fontes que valem 1 ponto (chave já normalizada — ver `normalizarFonte`). */
+const FONTES_UM_PONTO = new Set<string>([
+  'inbound',
+  'indicacao',
+  'parceiro',
+  'inbound - repasse',
+  'sem classificacao',
+])
+
+/**
+ * Normaliza o valor de Fonte Macro pra comparação: sem acento, minúsculo,
+ * espaço colapsado e padronizado em volta do "-". Cobre as variantes de
+ * digitação que existem no RD ("INBOUND", "inbound - Repasse", "Outro CRM").
+ */
+export function normalizarFonte(fonte: string | null | undefined): string {
+  return (fonte ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s*-\s*/g, ' - ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Peso de volume da unidade pela Fonte Macro: 1 pt pras fontes "fáceis", 2 pro restante. Vazio → 1. */
+export function pesoFonte(fonte: string | null | undefined): 1 | 2 {
+  const f = normalizarFonte(fonte)
+  if (f === '') return 1
+  return FONTES_UM_PONTO.has(f) ? 1 : 2
 }
 
 /** Diferença em dias corridos (fracionária) entre dois timestamps ISO. `null` se faltar um dos lados ou for inválido. */
@@ -81,7 +109,7 @@ export function classificarVelocidade(dias: number | null, tiers: readonly Speed
 /** 1 RR realizada no mês (trilha SDR). */
 export interface RrUnidade {
   nome: string // nome_sdr canônico
-  origem: Origem
+  fonte: string | null // fonte_macro
   dataMql: string | null // data_novo_mql
   dataAgendamento: string | null // data_agendamento_reuniao_sql
   dataRr: string // data_reuniao_realizada (já filtrada no mês)
@@ -90,7 +118,7 @@ export interface RrUnidade {
 /** 1 venda fechada no mês (trilha Closer). */
 export interface VendaUnidade {
   nome: string // nome_closer canônico
-  origem: Origem
+  fonte: string | null // fonte_macro
   dataRr: string | null // data_reuniao_realizada
   dataVenda: string // data_venda (já filtrada no mês)
 }
@@ -101,8 +129,8 @@ export interface LinhaTrilha {
   nome: string
   /** nº de RR / vendas no mês. */
   volume: number
-  /** quantas dessas foram outbound (Prospecção Ativa). */
-  volumeOutbound: number
+  /** quantas dessas unidades vieram de fonte que pesa 2 pts. */
+  volume2pts: number
   /** Σ (volume_unidade × mult_velocidade), arredondado a 1 casa decimal. */
   pontos: number
   /** Tempo mediano (dias) das unidades com data completa; `null` se nenhuma tem. */
@@ -113,7 +141,7 @@ export interface LinhaTrilha {
 
 interface UnidadeCalc {
   nome: string
-  origem: Origem
+  fonte: string | null
   leadtime: number | null
   /** Dia (Brasília) que define o bônus "+1 no mesmo dia"; `null` = fora do agrupamento. */
   diaBonus: string | null
@@ -146,26 +174,27 @@ function mediana(xs: number[]): number | null {
 
 function agrega(nomes: string[], unidades: UnidadeCalc[], tiers: readonly SpeedTier[]): LinhaTrilha[] {
   const bonus = bonusMesmoDia(unidades)
-  const acc = new Map<string, { volume: number; outbound: number; pontos: number; leadtimes: number[] }>()
+  const acc = new Map<string, { volume: number; dois: number; pontos: number; leadtimes: number[] }>()
 
   for (const u of unidades) {
-    const cur = acc.get(u.nome) ?? { volume: 0, outbound: 0, pontos: 0, leadtimes: [] }
-    const base = pesoOrigem(u.origem) * (bonus.get(u) ? 1.5 : 1)
+    const cur = acc.get(u.nome) ?? { volume: 0, dois: 0, pontos: 0, leadtimes: [] }
+    const peso = pesoFonte(u.fonte)
+    const base = peso * (bonus.get(u) ? 1.5 : 1)
     const mult = classificarVelocidade(u.leadtime, tiers).mult
     cur.volume += 1
-    if (u.origem === 'Prospecção Ativa') cur.outbound += 1
+    if (peso === 2) cur.dois += 1
     cur.pontos += base * mult
     if (u.leadtime !== null) cur.leadtimes.push(Math.max(0, u.leadtime))
     acc.set(u.nome, cur)
   }
 
   return nomes.map(nome => {
-    const c = acc.get(nome) ?? { volume: 0, outbound: 0, pontos: 0, leadtimes: [] }
+    const c = acc.get(nome) ?? { volume: 0, dois: 0, pontos: 0, leadtimes: [] }
     const med = mediana(c.leadtimes)
     return {
       nome,
       volume: c.volume,
-      volumeOutbound: c.outbound,
+      volume2pts: c.dois,
       pontos: Math.round(c.pontos * 10) / 10,
       tempoMedianoDias: med,
       tagVelocidade: classificarVelocidade(med, tiers).tag,
@@ -179,7 +208,7 @@ export function pontosSdr(rrs: RrUnidade[], nomes: string[]): LinhaTrilha[] {
     nomes,
     rrs.map(r => ({
       nome: r.nome,
-      origem: r.origem,
+      fonte: r.fonte,
       leadtime: difDias(r.dataMql, r.dataAgendamento),
       diaBonus: toLocalDate(r.dataRr),
     })),
@@ -193,7 +222,7 @@ export function pontosCloser(vendas: VendaUnidade[], nomes: string[]): LinhaTril
     nomes,
     vendas.map(v => ({
       nome: v.nome,
-      origem: v.origem,
+      fonte: v.fonte,
       leadtime: difDias(v.dataRr, v.dataVenda),
       diaBonus: toLocalDate(v.dataVenda),
     })),

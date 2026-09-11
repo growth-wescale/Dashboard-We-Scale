@@ -664,10 +664,35 @@ function legacyMtdHTML(){
       </div>
       <div class="mqlcmp-metric-lab" style="font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--tinta-suave);margin:10px 0 6px">${r.lab}</div>`;
   }).join('');
+  // Funil de negociações — snapshot manual (numérico direto do RD).
+  // Complementa o chart 7d de captação: mostra o que já está trabalhado no CRM
+  // + a coorte "em cadência" da safra anterior. Atualizado semanalmente junto
+  // com LEGACY_7D.
+  const funil = [
+    { lab:'Tentando contato',   n:58 },
+    { lab:'Contato efetivo',    n:18, nota:'14 perdidos' },
+    { lab:'Em cadência (Ago)',  n:3,  nota:'ICP · deixaram de responder' },
+  ];
+  const funilRows = funil.map(e => `<tr>
+      <td style="padding:5px 0;color:var(--tinta-forte)">
+        ${e.lab}${e.nota ? `<span style="margin-left:6px;font-size:10px;color:var(--tinta-suave)">· ${e.nota}</span>` : ''}
+      </td>
+      <td style="padding:5px 0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:var(--roxo)">${e.n}</td>
+    </tr>`).join('');
   return `<div class="mqlcmp">
     <div class="mqlcmp-head">Comparativo 7d · cumulativo</div>
     <div class="mqlcmp-rows">${rows}</div>
     <div class="mqlcmp-note">Últimos 7d vs 7d anteriores · fonte: leads + mídia Marketing</div>
+  </div>
+  <div class="mqlcmp" style="margin-top:12px">
+    <div class="mqlcmp-head" style="display:flex;justify-content:space-between;align-items:baseline">
+      <span>Funil de negociações</span>
+      <span style="font-weight:500;text-transform:none;letter-spacing:normal;color:var(--tinta-suave);font-size:9.5px">snapshot 11/09</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px">
+      <tbody>${funilRows}</tbody>
+    </table>
+    <div class="mqlcmp-note" style="margin-top:6px">Snapshot manual · 3 em cadência = ICP da safra de agosto que deixaram de responder</div>
   </div>`;
 }
 

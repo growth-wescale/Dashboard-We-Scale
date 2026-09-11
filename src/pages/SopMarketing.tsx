@@ -1184,7 +1184,30 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     },
   ]
   // Odonto Legacy: 4 cards — Invest · MQL · (CP-MQL + Custo/membro) · Receita.
-  // Custo/membro = Invest MTD ÷ total de membros hardcoded em COMUNIDADE_LEGACY_ATUAL.
+  // Custo/membro = invest CUMULATIVO LIFETIME de campanhas de Comunidade
+  // ([LEGACY]/[CMD]) ÷ total de membros (COMUNIDADE_LEGACY_ATUAL.total). Bate
+  // com o valor do dia mais recente do chart 7d — ambos usam a mesma métrica.
+  // Antes: mtdInvest ÷ 170 usando invest ODL Consultoria (funil errado, e MTD
+  // não bate com o cumulativo do chart). Junior 11/09.
+  const custoLifetimeMembro = useMemo(() => {
+    if (!isOdontoLegacy || COMUNIDADE_LEGACY_ATUAL.total <= 0) return 0
+    const seen = new Set<string>()
+    let total = 0
+    const add = (rows: MediaDailyRaw[]) => {
+      for (const r of rows) {
+        // Dedupe entre fetches sobrepostos (5 semanas cobre parte de Ago).
+        const key = `${r.dia}|${r.canal}|${r.campanha ?? ''}|${r.conjunto ?? ''}|${r.anuncio ?? ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        total += r.spend_brl
+      }
+    }
+    add(mediaAllComunidade.data)
+    add(mediaPrev2Comunidade.data)
+    add(mediaPrev3Comunidade.data)
+    return total / COMUNIDADE_LEGACY_ATUAL.total
+  }, [isOdontoLegacy, mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data])
+
   // Card RECEITA usa valor 7d (consistente com outros cards do slide) + extra
   // mostrando MTD do mês inteiro vs meta mensal (metasReceitaLegacy).
   const kpiCards: KpiCard[] = isOdontoLegacy
@@ -1194,9 +1217,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           .map(c => c.label === 'CP-MQL'
             ? { ...c, extra: {
                 label: 'CUSTO/MEMBRO',
-                value: COMUNIDADE_LEGACY_ATUAL.total > 0
-                  ? fmtBRL(mtdInvest / COMUNIDADE_LEGACY_ATUAL.total)
-                  : '—',
+                value: custoLifetimeMembro > 0 ? fmtBRL(custoLifetimeMembro) : '—',
               } }
             : c),
         {

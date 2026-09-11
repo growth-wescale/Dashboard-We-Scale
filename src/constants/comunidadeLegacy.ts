@@ -31,3 +31,35 @@ export const COMUNIDADE_LEGACY_ATUAL: ComunidadeLegacy = {
   sampleN: 170,
   duplicados: { leads: 12, pico: '1 pessoa se cadastrou 5x' },
 }
+
+/**
+ * Snapshot manual do funil de negociações da Odonto Legacy (Consultoria).
+ * Junior atualiza semanalmente — número de deals em cada etapa direto do RD,
+ * fora do que o dashboard consegue derivar (a leitura automática pega tudo,
+ * mas separa "safra Ago em cadência não-respondendo" precisa de contexto de
+ * negócio).
+ */
+export interface FunilLegacyEtapa {
+  label: string
+  deals: number
+  /** Só se houver — ex.: "14 perdidos" dos 18 Contato efetivo. */
+  nota?: string
+}
+
+export interface FunilLegacy {
+  /** Data do snapshot (DD/MM). */
+  ate: string
+  etapas: FunilLegacyEtapa[]
+  /** Rodapé opcional pra contexto sobre a linha "em cadência" etc. */
+  rodape?: string
+}
+
+export const FUNIL_ODONTO_LEGACY_ATUAL: FunilLegacy = {
+  ate: '11/09',
+  etapas: [
+    { label: 'Tentando contato',   deals: 58 },
+    { label: 'Contato efetivo',    deals: 18, nota: '14 perdidos' },
+    { label: 'Em cadência (Ago)',  deals: 3,  nota: 'ICP · deixaram de responder' },
+  ],
+  rodape: 'Snapshot manual · 3 em cadência = ICP da safra de agosto que deixaram de responder',
+}

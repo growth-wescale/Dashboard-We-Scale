@@ -13,7 +13,7 @@ import { InverseFunnel } from '@/components/ui/InverseFunnel'
 import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
-import { COMUNIDADE_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -1395,6 +1395,44 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ height: 110 }}>
                 <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
               </div>
+            </div>
+          )}
+          {isOdontoLegacy && (
+            // Snapshot manual do funil (número de deals em cada etapa direto do RD).
+            // Complementa o chart de MQL/Membros acima — junta captação com o que
+            // já está trabalhado no CRM, incluindo a coorte "em cadência" da safra
+            // anterior que o Junior acompanha à parte.
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span>Funil de negociações</span>
+                <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
+                  snapshot {FUNIL_ODONTO_LEGACY_ATUAL.ate}
+                </span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <tbody>
+                  {FUNIL_ODONTO_LEGACY_ATUAL.etapas.map(e => (
+                    <tr key={e.label} style={{ borderTop: '1px solid var(--ws-border)' }}>
+                      <td style={{ padding: '5px 0', color: 'var(--ws-text-primary)' }}>
+                        {e.label}
+                        {e.nota && (
+                          <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--ws-text-secondary)' }}>
+                            · {e.nota}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: acc }}>
+                        {e.deals}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {FUNIL_ODONTO_LEGACY_ATUAL.rodape && (
+                <div style={{ marginTop: 6, fontSize: 10, color: 'var(--ws-text-secondary)', lineHeight: 1.4 }}>
+                  {FUNIL_ODONTO_LEGACY_ATUAL.rodape}
+                </div>
+              )}
             </div>
           )}
         </div>

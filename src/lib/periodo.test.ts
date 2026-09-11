@@ -43,6 +43,20 @@ describe('rangeForPeriod', () => {
   it('valor inválido cai no período atual em vez de quebrar', () => {
     expect(rangeForPeriod('mes', 'lixo', HOJE)).toEqual({ start: '2026-08-01', end: '2026-08-14' })
   })
+
+  // Regressão: com `hoje` no sentinela SEM_CLAMP (ano 275760, usado por
+  // `periodoEmCurso` pra pedir o fim "sem truncar"), o fallback de valor
+  // inválido recomputava `periodoAtual(mode, hoje)` com esse MESMO `hoje` —
+  // "275760-09" tem ano de 6 dígitos, nunca bate no regex de 4 dígitos, e a
+  // recursão de auto-correção nunca convergia. Achado em produção: Visão
+  // Macro travava com "Maximum call stack size exceeded" sempre que o
+  // usuário desmarcava todos os meses (`periodValue` vira '').
+  it('valor inválido com hoje extremo (sentinela SEM_CLAMP) não recursiona pra sempre', () => {
+    const SEM_CLAMP_LIKE = new Date(8640000000000000)
+    expect(() => rangeForPeriod('mes', '', SEM_CLAMP_LIKE)).not.toThrow()
+    expect(() => rangeForPeriod('trimestre', '', SEM_CLAMP_LIKE)).not.toThrow()
+    expect(() => rangeForPeriod('ano', '', SEM_CLAMP_LIKE)).not.toThrow()
+  })
 })
 
 describe('periodoAtual', () => {
@@ -89,6 +103,17 @@ describe('periodoEmCurso', () => {
     expect(periodoEmCurso('trimestre', '2026-Q3', HOJE)).toBe(true)
     expect(periodoEmCurso('ano', '2025', HOJE)).toBe(false)
     expect(periodoEmCurso('ano', '2026', HOJE)).toBe(true)
+  })
+
+  // Regressão: Visão Macro chama `periodoEmCurso(periodMode, periodValue)`
+  // (sem 3º argumento) toda vez que o `useMemo` de "período em curso" roda —
+  // inclusive antes de qualquer guard de filtro obrigatório, porque hooks
+  // sempre rodam. Com todos os meses desmarcados, `periodValue` vira '' e a
+  // chamada travava o dashboard inteiro (ver teste de `rangeForPeriod` acima).
+  it('período vazio (nenhum mês selecionado) não trava, não quebra a tela', () => {
+    expect(() => periodoEmCurso('mes', '')).not.toThrow()
+    expect(() => periodoEmCurso('trimestre', '')).not.toThrow()
+    expect(() => periodoEmCurso('ano', '')).not.toThrow()
   })
 })
 

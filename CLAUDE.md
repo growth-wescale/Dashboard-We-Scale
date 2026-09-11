@@ -367,6 +367,46 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-11 (2) — Visão Macro travava com stack overflow ao desmarcar todos os meses
+
+Junior reportou quebras intermitentes nas abas de Vendas (print de
+"Maximum call stack size exceeded"), sempre na Visão Macro. Ele mesmo
+achou o gatilho: acontece ao desmarcar todos os meses no filtro de
+Período, e "some" ao trocar de aba e selecionar um mês em Performance/
+Análise de Perda — o que mascarava a causa, porque o período é
+compartilhado (`SharedFiltersContext`) entre as três abas.
+
+Causa raiz em `rangeForPeriod` (`periodo.ts`): com `value` inválido, a
+função se autocorrige recursando com `periodoAtual(mode, hoje)` como
+substituto. `periodoEmCurso` — usada só pela Visão Macro, via
+`rangeAnteriorComparavel` (comparação "vs. período anterior") — chama
+`rangeForPeriod` duas vezes, uma delas com o sentinela `SEM_CLAMP`
+(`new Date(8640000000000000)`, ano 275760, usado pra pedir o fim do
+período "sem truncar em hoje"). `periodoAtual(mode, SEM_CLAMP)` devolve
+`"275760-09"` — ano de 6 dígitos, nunca bate no regex de 4 dígitos que
+valida o formato. Com `periodValues` vazio (`periodValue = periodValues[0]
+?? ''`, o estado "nenhum mês selecionado" que já existia desde 09/09) e
+`hoje = SEM_CLAMP`, a autocorreção recomputa sempre o mesmo substituto
+inválido — recursão infinita, confirmada batendo o stack trace minificado
+da produção linha a linha contra um build local com sourcemap.
+
+Fix: `periodoAtualSeguro(mode, hoje)` valida o substituto antes de
+recursar; só cai pro `hoje` real (`new Date()`) quando o `hoje` passado é
+extremo demais pra caber no formato — comportamento idêntico ao anterior
+pra qualquer `hoje` normal (inclusive mockado em teste), só quebra o ciclo
+quando `hoje` em si já é a causa da invalidade. 2 testes de regressão
+novos em `periodo.test.ts` (isolado, via `rangeForPeriod` com `hoje`
+extremo, e pelo caminho real via `periodoEmCurso` com período vazio) — os
+dois reproduziam o mesmo `RangeError` antes do fix.
+
+Sessão trabalhou em git worktree isolado (`~/ws-dashboard-worktree-*`):
+outra sessão estava ativa na mesma pasta, mudando de branch sob os pés
+(ver `feedback_multiplas_sessoes_mesma_pasta` na memória).
+
+Verificado: `npx vitest run` (307 testes) + `npm run build` (tsc -b) em
+worktree isolado, fora do OneDrive. App exige login — não visto
+renderizado. PR #128.
+
 ### 2026-09-11 — Visão Macro mostra as 12 etapas completas do funil
 
 Junior: as abas de Visão Macro (Performance, Aging, Atual) estavam

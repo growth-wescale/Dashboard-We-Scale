@@ -7,6 +7,7 @@ import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHist
 import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
+import { TICKET_FAIXAS } from '@/lib/corridaPerformance'
 import type { LinhaTrilha } from '@/lib/corridaPerformance'
 import {
   VOLTAS_F1,
@@ -499,9 +500,9 @@ function diasFmt(n: number): string {
 function pontosFmt(n: number): string {
   return (Math.round(n * 10) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
 }
-/** Multiplicador com no máx. 2 casas, sem zero à toa ("1,25×", "2×"). */
+/** Multiplicador com 1-2 casas, nunca sem decimal ("1,0×", "1,25×", "2,0×"). */
 function multFmt(n: number): string {
-  return `${n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}×`
+  return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}×`
 }
 
 function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
@@ -551,10 +552,28 @@ function RegraFonteTicketCard() {
         </RegraBloco>
 
         <RegraBloco titulo="Ticket" subtitulo="investimento do franqueado na marca">
-          <RegraLinha rotulo="1,0×" valor="B2Case · Eletrovias" />
-          <RegraLinha rotulo="1,25×" valor="Inpot · Lisô Laser" />
-          <RegraLinha rotulo="1,5×" valor="Oral Unic" />
-          <RegraLinha rotulo="2,0×" valor="Viva" />
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={thTicket}>Faixa</th>
+                <th style={thTicket}>Marcas</th>
+                <th style={{ ...thTicket, textAlign: 'right' }}>Mult.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {TICKET_FAIXAS.map(f => (
+                <tr key={f.tier}>
+                  <td style={tdTicket}>{f.label}</td>
+                  <td style={{ ...tdTicket, color: 'var(--ws-text-secondary)' }}>{f.marcas.join(' · ')}</td>
+                  <td style={{ ...tdTicket, textAlign: 'right' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: '#B91C1C' }}>
+                      {multFmt(f.mult)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </RegraBloco>
 
         <RegraBloco titulo="Bônus" subtitulo="mais de 1 unidade no mesmo dia">
@@ -571,6 +590,13 @@ function RegraFonteTicketCard() {
     </div>
   )
 }
+
+const thTicket: React.CSSProperties = {
+  padding: '0 8px 4px 0', textAlign: 'left',
+  fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4,
+  color: 'var(--ws-text-secondary)', borderBottom: '1px solid var(--ws-border)',
+}
+const tdTicket: React.CSSProperties = { padding: '4px 8px 4px 0', fontSize: 12, verticalAlign: 'top' }
 
 /** Uma coluna da régua compartilhada (Fonte / Ticket / Bônus), com título + linhas de rótulo→valor. */
 function RegraBloco({ titulo, subtitulo, children }: { titulo: string; subtitulo: string; children: React.ReactNode }) {

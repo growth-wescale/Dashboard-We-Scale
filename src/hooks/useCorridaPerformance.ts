@@ -19,7 +19,7 @@ import {
  * `useHistoricoAtingimento`, que também consultam a view por conta própria) —
  * **sem** filtro de origem: a pontuação pesa cada unidade pela `fonte_macro`
  * dela (1 pt Inbound/Indicação/Parceiro/Repasse, 2 pt o restante) e pela
- * `marca` dela (multiplicador de ticket — ver `TICKET_TIERS` em
+ * `marca` dela (multiplicador de ticket — ver `TICKET_FAIXAS` em
  * `corridaPerformance.ts`), então precisa de todas as fontes e marcas juntas.
  * Três recortes do mês:
  *   - RR realizada  (`data_reuniao_realizada`)         → trilha SDR + realizado RR

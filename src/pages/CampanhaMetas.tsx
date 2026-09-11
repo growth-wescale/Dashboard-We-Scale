@@ -499,6 +499,10 @@ function diasFmt(n: number): string {
 function pontosFmt(n: number): string {
   return (Math.round(n * 10) / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })
 }
+/** Multiplicador com no máx. 2 casas, sem zero à toa ("1,25×", "2×"). */
+function multFmt(n: number): string {
+  return `${n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}×`
+}
 
 function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
   return (
@@ -537,8 +541,10 @@ function TrilhaCard({
         <div><b>Volume</b> · {regra.volumeLabel}: peso pela Fonte Macro · ×1,5 se +1 no mesmo dia</div>
         <div style={{ paddingLeft: 8 }}><b>1 pt</b> · Inbound · Indicação · Parceiro · Repasse · sem classificação</div>
         <div style={{ paddingLeft: 8 }}><b>2 pts</b> · Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado</div>
+        <div><b>Ticket</b> · investimento do franqueado na marca:</div>
+        <div style={{ paddingLeft: 8 }}>B2Case · Eletrovias <b>1,0×</b> &nbsp;·&nbsp; Inpot · Lisô Laser <b>1,25×</b> &nbsp;·&nbsp; Oral Unic <b>1,5×</b> &nbsp;·&nbsp; Viva <b>2,0×</b></div>
         <div><b>Velocidade</b> · {regra.velocidadeLabel}: {regra.degraus}</div>
-        <div style={{ marginTop: 2, fontStyle: 'italic' }}>Pontos = Σ (volume × multiplicador), por unidade</div>
+        <div style={{ marginTop: 2, fontStyle: 'italic' }}>Pontos = Σ (volume × ticket × multiplicador), por unidade</div>
       </div>
 
       {loading ? (
@@ -566,6 +572,7 @@ function TrilhaCard({
                   <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
                     {l.volume} {regra.unidade === 'RR' ? 'RR' : 'vendas'}
                     {l.volume2pts > 0 && ` · ${l.volume2pts} de 2 pts`}
+                    {l.ticketMedio !== 1 && ` · ticket ${multFmt(l.ticketMedio)}`}
                     {' · '}
                     {l.tempoMedianoDias === null ? 'sem tempo' : `${diasFmt(l.tempoMedianoDias)}d · ${l.tagVelocidade}`}
                   </div>

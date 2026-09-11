@@ -367,6 +367,29 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-11 (4) — Campanha de Metas: régua de Fonte/Ticket unificada, sem repetir nos 2 cards
+
+Junior mandou print: a régua de peso por Fonte Macro e por ticket da
+marca (entradas 09/09-11/09 (3) acima) aparecia **idêntica** dentro dos
+dois `TrilhaCard` da Corrida de Performance (SDR e Closer) — informação
+repetida na tela, já que as duas regras valem igual pras duas trilhas
+(só a Velocidade de fato difere).
+
+Extraída pra um bloco só, `RegraFonteTicketCard`
+(`src/pages/CampanhaMetas.tsx`), entre o título da seção e os 2 cards de
+trilha — layout em 3 colunas (Fonte · Ticket · Bônus mesmo dia), pill
+"Vale para SDR e Closer" no cabeçalho, fórmula completa como rodapé.
+Cada `TrilhaCard` voltou a mostrar só a Velocidade. Colapsa pra 1 coluna
+em tela estreita (mesmo grid `auto-fit` já usado no resto da página).
+
+Puramente visual — `corridaPerformance.ts` intacto, nenhuma pontuação
+mudou.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes,
+inalterados) + `oxlint` limpo, em worktree fora do OneDrive. Visto
+renderizado numa rota temporária sem autenticação (removida antes do
+commit, mesmo padrão de sessões anteriores). PR #131.
+
 ### 2026-09-11 (3) — Corrida de Performance pontua venda pelo ticket da marca
 
 Ponto 2 de 2 do pedido do Junior (o 1 foi peso por Fonte Macro, PR #117,

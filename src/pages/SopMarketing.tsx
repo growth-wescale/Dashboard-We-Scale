@@ -12,6 +12,7 @@ import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
 import { InverseFunnel } from '@/components/ui/InverseFunnel'
 import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
+import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
@@ -808,6 +809,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const leadsPrev3Odl  = useLeads({ marca: 'Odonto Scale', dataInicio: mtdN.prev3.start, dataFim: mtdN.prev3.end })
   const mediaPrev2Odl  = useMediaOdontoLegacy({ dataInicio: mtdN.prev2.start, dataFim: mtdN.prev2.end })
   const mediaPrev3Odl  = useMediaOdontoLegacy({ dataInicio: mtdN.prev3.start, dataFim: mtdN.prev3.end })
+  // Invest da COMUNIDADE (campanhas [LEGACY]/[CMD]) — base do Custo/membro do
+  // chart Odonto Legacy. Antes o chart dividia invest ODL (Consultoria) por
+  // membros da Comunidade, misturando dois funis diferentes. Junior 11/09.
+  const mediaAllComunidade   = useMediaComunidadeLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const mediaPrev2Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev2.start,     dataFim: mtdN.prev2.end })
+  const mediaPrev3Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev3.start,     dataFim: mtdN.prev3.end })
   const { data: allLeads } = leadsAll
   const { data: prevLeads } = leadsPrev
   const { data: rawCrmCur } = crmCurRes
@@ -896,36 +903,115 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const funnelPrior = useMemo(() => buildFunnel(crmPrior, weekPriorStart, weekPriorEnd), [crmPrior, weekPriorStart, weekPriorEnd])
 
   // ── Séries MTD dia-a-dia (4 meses) — chart Comparativo MTD do Odonto Legacy ─
-  // Para cada mês (Set/Ago/Jul/Jun): MQL acumulado, membros acumulados, custo
-  // acumulado (= invest ÷ membros). Membros = leads com formulario='comunidade_multistep'
-  // (só Odonto Scale). Jul/Jun ficam com 0 membros (comunidade nasceu em 04/08).
+  //
+  // Para cada mês (Set/Ago/Jul/Jun):
+  //   - MQL:     acumulado dentro do mês (reset em dia 1).
+  //   - Membros: TOTAL absoluto da comunidade no fim de cada dia. É calculado
+  //     com âncora em COMUNIDADE_LEGACY_ATUAL.total (170 hoje) — Junior faz
+  //     limpeza manual das listas e o total vem daí, não da soma cadastros site.
+  //     Baseline = ANCHOR_TOTAL - cadastros site lifetime até a data-âncora
+  //     (soma dos que não vêm pelo form: iscas, newsletter, Odontoclub, indireta).
+  //     members(D) = BASELINE + cadastros_site_lifetime_até_D.
+  //   - Custo/membro: cumulativo lifetime de invest de COMUNIDADE ([LEGACY]/[CMD])
+  //     dividido pelos membros do dia — antes usava invest ODL (Consultoria),
+  //     que é outro funil, e dava número enganoso.
+  //
+  // Jul/Jun ficam com membros = 0 (comunidade nasceu em 04/08); custo N/A ali.
   const legacyMtdSeries = useMemo(() => {
     if (!isOdontoLegacy) return null
     const days = mtdN.days
-    const buildMonth = (leadsRows: Lead[], mediaRows: MediaDailyRaw[], monthStart: string) => {
-      const [y, mm] = monthStart.slice(0, 7).split('-').map(Number)
-      const invByDay = Array.from({ length: days }, () => 0)
-      const mqlByDay = Array.from({ length: days }, () => 0)
-      const memByDay = Array.from({ length: days }, () => 0)
-      const dedupF = filterLeads(deduplicateLeads(leadsRows.filter(l =>
-        l.dia && l.dia.slice(0, 7) === `${y}-${String(mm).padStart(2, '0')}`
-      )))
-      for (const r of mediaRows) {
-        if (r.dia.slice(0, 7) !== `${y}-${String(mm).padStart(2, '0')}`) continue
-        const d = parseInt(r.dia.slice(-2), 10) - 1
-        if (d >= 0 && d < days) invByDay[d] += r.spend_brl
+
+    // Data em que a comunidade começou a existir — nada de membros antes disso.
+    const COMMUNITY_START = '2026-08-04'
+
+    // Constrói lookup lifetime de "novos cadastros site por dia" a partir da
+    // união dos fetches disponíveis (5 semanas atuais + Jul + Jun).
+    const siteByDay = new Map<string, number>()
+    const addSite = (leads: Lead[]) => {
+      for (const l of leads) {
+        if (l.formulario !== 'comunidade_multistep' || !l.dia) continue
+        siteByDay.set(l.dia, (siteByDay.get(l.dia) ?? 0) + 1)
       }
+    }
+    addSite(allLeads); addSite(leadsPrev2Odl.data); addSite(leadsPrev3Odl.data)
+
+    // Ordena datas com cadastro pra permitir cumulativo eficiente.
+    const siteDatesOrdenadas = [...siteByDay.keys()].sort()
+    const cumulativoSiteAte = (D: string): number => {
+      let acc = 0
+      for (const d of siteDatesOrdenadas) {
+        if (d > D) break
+        acc += siteByDay.get(d) ?? 0
+      }
+      return acc
+    }
+
+    // Âncora — total conhecido em data específica (Junior atualiza manualmente).
+    // Baseline representa os membros que não vieram pelo form site (iscas,
+    // newsletter, Odontoclub, indireta) — assumidos constantes desde community start.
+    const parseAncora = (br: string): string | null => {
+      // "08/09" → "2026-09-08" (ano corrente).
+      const [dd, mm] = br.split('/').map(Number)
+      if (!dd || !mm) return null
+      const ano = new Date().getFullYear()
+      return `${ano}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+    }
+    const anchorDate = parseAncora(COMUNIDADE_LEGACY_ATUAL.ate)
+    const siteAtAnchor = anchorDate ? cumulativoSiteAte(anchorDate) : 0
+    const baseline = Math.max(0, COMUNIDADE_LEGACY_ATUAL.total - siteAtAnchor)
+
+    // Invest cumulativo lifetime de Comunidade — soma até o dia D, sem reset mensal.
+    const investByDay = new Map<string, number>()
+    const addInvest = (rows: MediaDailyRaw[]) => {
+      for (const r of rows) {
+        investByDay.set(r.dia, (investByDay.get(r.dia) ?? 0) + r.spend_brl)
+      }
+    }
+    addInvest(mediaAllComunidade.data)
+    addInvest(mediaPrev2Comunidade.data)
+    addInvest(mediaPrev3Comunidade.data)
+    const investDatesOrdenadas = [...investByDay.keys()].sort()
+    const cumulativoInvestAte = (D: string): number => {
+      let acc = 0
+      for (const d of investDatesOrdenadas) {
+        if (d > D) break
+        acc += investByDay.get(d) ?? 0
+      }
+      return acc
+    }
+
+    // MQL segue reset mensal (Consultoria captation por mês, faz sentido comparar
+    // Set MTD vs Ago MTD como corrida separada).
+    const buildMonth = (leadsRows: Lead[], monthStart: string) => {
+      const [y, mm] = monthStart.slice(0, 7).split('-').map(Number)
+      const monthPref = `${y}-${String(mm).padStart(2, '0')}`
+      const daysInMonth = new Date(y, mm, 0).getDate()
+
+      const mqlByDay = Array.from({ length: days }, () => 0)
+      const dedupF = filterLeads(deduplicateLeads(leadsRows.filter(l =>
+        l.dia && l.dia.slice(0, 7) === monthPref
+      )))
       for (const l of dedupF) {
         const d = parseInt(l.dia.slice(-2), 10) - 1
         if (d < 0 || d >= days) continue
         if (isLeadMql(l)) mqlByDay[d]++
-        if (l.formulario === 'comunidade_multistep') memByDay[d]++
       }
       const cum = (arr: number[]) => { let s = 0; return arr.map(v => (s += v)) }
-      const invCum = cum(invByDay)
       const mqlCum = cum(mqlByDay)
-      const memCum = cum(memByDay)
-      const custoCum = memCum.map((m, i) => (m > 0 ? invCum[i] / m : 0))
+
+      // Membros e Custo/membro: absolutos por data — não resetam no dia 1.
+      const memCum: number[] = []
+      const custoCum: number[] = []
+      for (let i = 0; i < days; i++) {
+        const dayNum = Math.min(i + 1, daysInMonth)
+        const dateStr = `${monthPref}-${String(dayNum).padStart(2, '0')}`
+        const antesDaComunidade = dateStr < COMMUNITY_START
+        const members = antesDaComunidade ? 0 : baseline + cumulativoSiteAte(dateStr)
+        const invest  = antesDaComunidade ? 0 : cumulativoInvestAte(dateStr)
+        memCum.push(members)
+        custoCum.push(members > 0 ? invest / members : 0)
+      }
+
       return { days, mqlCum, memCum, custoCum }
     }
     const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
@@ -938,18 +1024,23 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     const prev  = shortM(1)
     const prev2 = shortM(2)
     const prev3 = shortM(3)
-    // Cur e Prev vêm de allLeads/activeMedia (5 semanas cobertas)
-    // Prev2 e Prev3 vêm dos fetches dedicados
+    // Cur e Prev vêm de allLeads (5 semanas cobertas). Prev2 e Prev3 vêm dos
+    // fetches dedicados. Invest da Comunidade fica no lookup lifetime acima —
+    // buildMonth não precisa mais receber mediaRows.
     return {
       series: [
-        { label: cur.label,   dashed: false, data: buildMonth(allLeads,          activeMedia,           cur.start) },
-        { label: prev.label,  dashed: true,  data: buildMonth(allLeads,          activeMedia,           prev.start) },
-        { label: prev2.label, dashed: true,  data: buildMonth(leadsPrev2Odl.data, mediaPrev2Odl.data,   prev2.start) },
-        { label: prev3.label, dashed: true,  data: buildMonth(leadsPrev3Odl.data, mediaPrev3Odl.data,   prev3.start) },
+        { label: cur.label,   dashed: false, data: buildMonth(allLeads,           cur.start) },
+        { label: prev.label,  dashed: true,  data: buildMonth(allLeads,           prev.start) },
+        { label: prev2.label, dashed: true,  data: buildMonth(leadsPrev2Odl.data, prev2.start) },
+        { label: prev3.label, dashed: true,  data: buildMonth(leadsPrev3Odl.data, prev3.start) },
       ],
       days,
     }
-  }, [isOdontoLegacy, mtdN.days, allLeads, activeMedia, leadsPrev2Odl.data, leadsPrev3Odl.data, mediaPrev2Odl.data, mediaPrev3Odl.data, filterLeads, dates.monthStart])
+  }, [
+    isOdontoLegacy, mtdN.days, allLeads, leadsPrev2Odl.data, leadsPrev3Odl.data,
+    mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data,
+    filterLeads, dates.monthStart,
+  ])
 
   const [legacyMtdMetric, setLegacyMtdMetric] = useState<'mql' | 'membros' | 'custo'>('mql')
   const [legacyMtdChart,  setLegacyMtdChart]  = useState<'linha' | 'barras'>('linha')

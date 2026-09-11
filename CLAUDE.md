@@ -367,6 +367,44 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-11 (6) — Campanha de Metas: separa Fonte/Ticket/Bônus e clareia as linhas por pessoa
+
+3ª rodada de polimento da régua "Como a pontuação funciona" (depois de
+(4) unificar e (5) detalhar o Ticket). Junior: os 3 blocos ficavam
+grudados um no outro, e as linhas por pessoa (SDR/Closer) eram texto
+corrido demais pra entender o que cada número queria dizer — "se os
+pontos querem dizer a multiplicação, está pior ainda, pois nem dá pra
+perceber que é isso".
+
+**Separação dos 3 blocos.** Cada `RegraBloco` (Fonte/Ticket/Bônus) virou
+um sub-card com fundo (`#F9FAFB`) e borda própria, em vez de só ficar
+lado a lado no grid sem fronteira; gap 20→24px. A caixa da fórmula no
+rodapé ganhou fundo branco + borda tracejada, se destacando dos 3
+blocos cinzas acima dela.
+
+**Linha por pessoa vira chips rotulados.** Era `"3 RR · ticket 1,17× ·
+2,1d · Padrão"` — nenhum rótulo dizia o que cada trecho significava, e
+`"1 de 2 pts"` lia como fração, não "1 unidade valendo 2 pts". Componente
+novo `EstatChip` (rótulo pequeno em caps + valor) substitui o texto
+corrido: **VOLUME** · **FONTE 2 PTS** (só quando há) · **TICKET** (só
+quando ≠1,0×) · **VELOCIDADE** — mesmo padrão "rótulo → valor" que a
+régua de cima já usava, agora consistente ponta a ponta. O número de
+pontos ganhou o rótulo **PONTOS** explícito acima dele — resolve a
+reclamação de que não dava pra perceber que aquele número é o resultado
+da multiplicação dos fatores ao lado.
+
+Bônus: `"1 vendas"` virava `"1 venda"` — `unidadeLabel()` novo pluraliza
+"venda"/"vendas" pela quantidade; "RR" (sigla) não pluraliza.
+
+Puramente visual — nenhuma lógica de pontuação mudou, `corridaPerformance.ts`
+intacto.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes,
+inalterados) + `oxlint` limpo, em worktree fora do OneDrive. Visto
+renderizado numa rota temporária sem autenticação (removida antes do
+commit) — blocos claramente separados, chips legíveis, "1 venda"
+correto. PR #135.
+
 ### 2026-09-11 (5) — Campanha de Metas: tabela de faixas de ticket (faixa + marcas + multiplicador)
 
 Continuação direta da entrada anterior (4). Junior: a régua unificada

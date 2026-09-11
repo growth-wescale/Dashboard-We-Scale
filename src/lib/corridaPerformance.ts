@@ -20,7 +20,7 @@ import { toLocalDate } from '@/lib/dateUtils'
  *
  * Multiplicador de ticket: por **marca** — reconhece que uma venda de marca
  * de ticket alto (mais investimento do franqueado, ciclo mais longo, comprador
- * mais sofisticado) vale mais que uma de ticket baixo. Ver `TICKET_TIERS`.
+ * mais sofisticado) vale mais que uma de ticket baixo. Ver `TICKET_FAIXAS`.
  * Validado com o Brunno em 10-11/09.
  *
  * Fora de escopo por decisão do Junior (08/09): guardrail de no-show e de
@@ -103,21 +103,31 @@ export interface TicketTier {
  * Junior, validada com o Brunno em 10-11/09/2026, mantida aqui à mão — mesmo
  * espírito das metas hardcoded de `constants/metasVendas.ts`.
  *
- * Marca fora do mapa (marca nova, Odonto Legacy, Premium Club, Repasse…) cai
- * em `TICKET_PADRAO` (tier 1 · ×1,0): nunca é penalizada, só não ganha o
- * bônus até alguém classificar. Adicione a marca aqui quando ela entrar de
- * fato na campanha.
+ * `TICKET_FAIXAS` é a fonte única: o motor (`multTicket`/`ticketTierDe`, via
+ * `TICKET_POR_MARCA` derivado dela) E a régua "Como a pontuação funciona" na
+ * aba Campanha de Metas leem daqui — nunca duplique a lista de marcas por
+ * faixa em outro lugar, senão a régua visível e o cálculo real podem divergir
+ * (é exatamente a pergunta que o Junior antecipou: "o que foi usado pra
+ * definir o multiplicador de cada marca" tem que ter UMA resposta só).
+ *
+ * Marca fora daqui (marca nova, Odonto Legacy, Premium Club, Repasse…) cai em
+ * `TICKET_PADRAO` (tier 1 · ×1,0): nunca é penalizada, só não ganha o bônus
+ * até alguém classificar. Adicione a marca na faixa certa quando ela entrar
+ * de fato na campanha.
  */
-const TICKET_TIERS: Readonly<Record<string, TicketTier>> = {
-  b2case: { tier: 1, mult: 1.0, label: 'até R$ 200 mil' },
-  eletrovias: { tier: 1, mult: 1.0, label: 'até R$ 200 mil' },
-  inpot: { tier: 2, mult: 1.25, label: 'R$ 201 mil – 500 mil' },
-  'liso laser': { tier: 2, mult: 1.25, label: 'R$ 201 mil – 500 mil' },
-  'oral unic': { tier: 3, mult: 1.5, label: 'R$ 501 mil – 1 milhão' },
-  viva: { tier: 4, mult: 2.0, label: 'acima de R$ 1 milhão' },
+export interface TicketFaixa extends TicketTier {
+  /** Marcas nessa faixa hoje, nome de exibição (não normalizado). */
+  marcas: readonly string[]
 }
 
-/** Faixa padrão pra marca fora de `TICKET_TIERS` — tier 1, sem bônus. */
+export const TICKET_FAIXAS: readonly TicketFaixa[] = [
+  { tier: 1, mult: 1.0, label: 'até R$ 200 mil', marcas: ['B2Case', 'Eletrovias'] },
+  { tier: 2, mult: 1.25, label: 'R$ 201 mil – 500 mil', marcas: ['Inpot', 'Lisô Laser'] },
+  { tier: 3, mult: 1.5, label: 'R$ 501 mil – 1 milhão', marcas: ['Oral Unic'] },
+  { tier: 4, mult: 2.0, label: 'acima de R$ 1 milhão', marcas: ['Viva'] },
+]
+
+/** Faixa padrão pra marca fora de `TICKET_FAIXAS` — tier 1, sem bônus. */
 const TICKET_PADRAO: TicketTier = { tier: 1, mult: 1.0, label: 'até R$ 200 mil' }
 
 /** Normaliza marca pra chave de lookup: sem acento, minúsculo, espaço colapsado. */
@@ -130,9 +140,16 @@ export function normalizarMarca(marca: string | null | undefined): string {
     .trim()
 }
 
+/** Lookup marca normalizada → faixa, derivado de `TICKET_FAIXAS` (nunca digitado à parte). */
+const TICKET_POR_MARCA: ReadonlyMap<string, TicketTier> = new Map(
+  TICKET_FAIXAS.flatMap(f => f.marcas.map(
+    m => [normalizarMarca(m), { tier: f.tier, mult: f.mult, label: f.label }] as const,
+  )),
+)
+
 /** Faixa de ticket completa (tier/multiplicador/rótulo) da marca. Fora do mapa → `TICKET_PADRAO`. */
 export function ticketTierDe(marca: string | null | undefined): TicketTier {
-  return TICKET_TIERS[normalizarMarca(marca)] ?? TICKET_PADRAO
+  return TICKET_POR_MARCA.get(normalizarMarca(marca)) ?? TICKET_PADRAO
 }
 
 /** Multiplicador de ticket da marca — atalho pra `ticketTierDe(marca).mult`. */

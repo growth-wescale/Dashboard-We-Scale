@@ -367,6 +367,42 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-11 (5) — Campanha de Metas: tabela de faixas de ticket (faixa + marcas + multiplicador)
+
+Continuação direta da entrada anterior (4). Junior: a régua unificada
+mostrava só marca → multiplicador no bloco Ticket, sem a faixa de
+investimento que justifica o número — previu que o time ia sempre
+perguntar "o que foi usado pra definir o multiplicador de cada marca".
+
+O bloco Ticket virou mini-tabela (Faixa · Marcas · Mult.), uma linha por
+faixa, respondendo as 3 perguntas juntas:
+
+| Faixa | Marcas | Mult. |
+|---|---|---|
+| até R$ 200 mil | B2Case · Eletrovias | 1,0× |
+| R$ 201 mil – 500 mil | Inpot · Lisô Laser | 1,25× |
+| R$ 501 mil – 1 milhão | Oral Unic | 1,5× |
+| acima de R$ 1 milhão | Viva | 2,0× |
+
+**Refatoração de fonte única, não só de UI.** `corridaPerformance.ts`
+ganhou `TICKET_FAIXAS` (exportado) — substitui o antigo `TICKET_TIERS`
+interno (mapa marca→faixa digitado à mão só pro motor). O lookup do
+motor (`TICKET_POR_MARCA`) agora é **derivado** de `TICKET_FAIXAS`, e a
+UI lê o mesmo array pra montar a tabela. Motivo: com marca→multiplicador
+e faixa→marcas digitados em dois lugares (motor e UI), uma reclassificação
+futura de marca podia atualizar um e esquecer o outro — exatamente o
+padrão de bug que várias entradas anteriores deste changelog documentam
+(marca/etapa/responsável divergindo entre fontes). `ticketTierDe()`/
+`multTicket()` mantiveram a mesma assinatura, nenhum teste mudou.
+
+Bônus: `multFmt()` não mostrava decimal pra 1,0 (virava "1×", inconsistente
+com "1,25×"/"1,5×"/"2,0×") — corrigido pra sempre mostrar ao menos 1 casa.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes,
+inalterados) + `oxlint` limpo, em worktree fora do OneDrive. Visto
+renderizado numa rota temporária sem autenticação (removida antes do
+commit). PR #133.
+
 ### 2026-09-11 (4) — Campanha de Metas: régua de Fonte/Ticket unificada, sem repetir nos 2 cards
 
 Junior mandou print: a régua de peso por Fonte Macro e por ticket da

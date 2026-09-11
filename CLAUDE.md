@@ -326,8 +326,9 @@ Marketing:
 
 **Como cadastrar um novo usuário `marca` (ex.: Inpot):**
 
-1. Supabase Studio (projeto Marketing) → Authentication → Users →
-   **Add user** → Send invite ou Create user com senha.
+**Opção A (recomendada) — Supabase Studio:**
+1. Studio (projeto Marketing) → Authentication → Users → **Add user**
+   → "Create new user" com email e senha (marca "Auto Confirm User").
 2. SQL Editor → rodar:
    ```sql
    UPDATE auth.users
@@ -336,6 +337,19 @@ Marketing:
    WHERE email = 'pessoa@inpot.com.br';
    ```
    O `marca` é o **slug** de `BRAND_LIST` (`inpot`, `oral-unic`, `viva`, etc.).
+
+**Opção B (via SQL direto — cuidado com armadilha):** SE criar user via
+`INSERT INTO auth.users` direto no SQL, ATENÇÃO: o GoTrue quebra com
+"Database error querying schema" no login se os campos de token forem
+NULL — ele espera **string vazia**. Sempre setar `confirmation_token`,
+`recovery_token`, `email_change`, `email_change_token_new`,
+`email_change_token_current`, `reauthentication_token`, `phone_change`
+e `phone_change_token` como `''` (não deixar `NULL`), `is_super_admin`
+como `NULL` (não `false`), e `raw_user_meta_data` como
+`{"email_verified": true}`. Caiu na primeira tentativa de criar Elen +
+Camila (11/09/2026) — precisou UPDATE depois. Studio (Opção A) trata
+esses defaults sozinho.
+
 3. Login normal em https://dashboard.srv1816822.hstgr.cloud — a sidebar
    já mostra só o que aquela marca pode ver.
 

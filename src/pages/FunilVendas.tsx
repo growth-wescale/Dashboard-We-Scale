@@ -43,13 +43,10 @@ import { nf, money, moneyK } from '@/lib/format'
 import { shortMonth } from '@/lib/dateUtils'
 import { downloadCsv } from '@/lib/csv'
 
-/** Subconjunto de etapas mostrado na Visão Macro — o funil completo (12
- *  etapas) fica na Performance Detalhada, pra não operacionalizar o snapshot
- *  executivo. Rótulo local: "Oportunidade" em vez do técnico "Oportunidade · COF". */
-const MACRO_STAGES: StageKey[] = [
-  'MQL', 'Contato Efetivo', 'Conexão', 'Reunião Agendada SQL', 'Diagnóstico', 'SAL', 'Oportunidade COF',
-  'Comitê', 'Pré-Contrato', 'Fechamento',
-]
+/** Etapas mostradas na Visão Macro — as 12 do catálogo (`STAGE_ORDER`), mesmo
+ *  funil completo da Performance Detalhada. Rótulo local: "Oportunidade" em
+ *  vez do técnico "Oportunidade · COF". */
+const MACRO_STAGES: StageKey[] = STAGE_ORDER
 const MACRO_STAGE_LABEL: Partial<Record<StageKey, string>> = {
   'Oportunidade COF': 'Oportunidade',
 }

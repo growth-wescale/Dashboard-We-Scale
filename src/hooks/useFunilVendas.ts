@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { normalizeMarcaRaw } from '@/constants/brands'
 import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
 
 /**
@@ -59,6 +60,9 @@ async function fetchAll(origem: OrigemComercial): Promise<{ rows: FunnelRow[]; e
     if (error) return { rows: [], error: error.message }
 
     const rows = (data ?? []) as unknown as FunnelRow[]
+    // Normaliza aliases de marca (ex.: 'Odonto Legacy' → 'Odonto Scale') antes
+    // de qualquer filtro/agrupamento por marca — ver MARCA_ALIASES em brands.ts.
+    for (const r of rows) r.marca = normalizeMarcaRaw(r.marca) ?? r.marca
     out.push(...rows)
     if (rows.length < PAGE_SIZE) break
   }

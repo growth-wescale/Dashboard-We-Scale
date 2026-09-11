@@ -46,10 +46,33 @@ export function findBrand(key: string | undefined): BrandDef | undefined {
   return BRAND_LIST.find(b => b.key === key)
 }
 
+/**
+ * Alias de valores crus de `marca` que o RD já não usa mais, mas que ainda
+ * aparecem em dados antigos ou recém-migrados. Chave = valor visto no banco,
+ * valor = valor canônico usado em `BRAND_LIST[].marca`.
+ *
+ * 'Odonto Legacy': em 11/09/2026 o campo "Marca" no RD foi trocado de
+ * 'Odonto Scale' para 'Odonto Legacy' (rename de negócio, não engano de
+ * digitação) — o nome antigo deixou de existir. `vw_funil_vendas.marca` passa
+ * a trazer os dois valores, dependendo de quando cada deal foi sincronizado.
+ * Sem este alias os deals recém-migrados ficam numa marca "fantasma" que não
+ * bate com nenhuma entrada de `BRAND_LIST` — somem do filtro e do funil.
+ */
+const MARCA_ALIASES: Record<string, string> = {
+  'Odonto Legacy': 'Odonto Scale',
+}
+
+/** Normaliza um valor cru de `marca` (do banco) para a forma canônica usada em `BRAND_LIST`. */
+export function normalizeMarcaRaw(marca: string | null | undefined): string | null | undefined {
+  if (!marca) return marca
+  return MARCA_ALIASES[marca] ?? marca
+}
+
 /** Retorna a BrandDef pelo nome da marca canônica. */
 export function findBrandByMarca(marca: string | null | undefined): BrandDef | undefined {
   if (!marca) return undefined
-  return BRAND_LIST.find(b => b.marca === marca)
+  const norm = normalizeMarcaRaw(marca)
+  return BRAND_LIST.find(b => b.marca === norm)
 }
 
 /**

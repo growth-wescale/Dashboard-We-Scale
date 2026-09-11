@@ -367,6 +367,49 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-11 (7) — Campanha de Metas: degraus de Velocidade em tabela legível
+
+4ª rodada de polimento da régua da Corrida (depois de (4) unificar,
+(5) detalhar Ticket, (6) separar blocos + chips). Junior mandou print:
+a caixa **Velocidade** dentro de cada `TrilhaCard` (SDR/Closer) ainda
+estava em notação crua — `≤0,5d 1,5× · ≤1d 1,2× · ≤3d 1,0× · ≤7d 0,8×
+· +7d 0,5×` — ilegível pra quem abre o dash pela 1ª vez.
+
+Virou tabela, mesmo padrão do Ticket (**Até · Ritmo · Mult.**), com o
+nome do ritmo (Resposta Relâmpago, Ritmo Ideal, Padrão, Atenção, Lento
+— os mesmos que já apareciam nos chips por pessoa desde a entrada (6))
+em vez de só o multiplicador cru:
+
+| Até | Ritmo | Mult. |
+|---|---|---|
+| até 0,5 dias | Resposta Relâmpago | 1,5× |
+| até 1 dia | Ritmo Ideal | 1,2× |
+| até 3 dias | Padrão | 1,0× |
+| até 7 dias | Atenção | 0,8× |
+| mais de 7 dias | Lento | 0,5× |
+
+Ganhou frase simples acima explicando o que é medido — "quanto mais
+rápido agendar a reunião depois do MQL, maior o multiplicador" (SDR) /
+"...fechar a venda depois da reunião..." (Closer) — no lugar do rótulo
+técnico "tempo MQL → agendamento".
+
+**Consistência, não só cosmética.** Reaproveita `RegraBloco` (mesmo
+sub-card com fundo/borda da régua Fonte/Ticket/Bônus da entrada (6)) —
+Velocidade segue a mesma linguagem visual das outras 3 regras, em vez
+de estilo à parte. Tabela é **derivada** de `SDR_SPEED_TIERS`/
+`CLOSER_SPEED_TIERS` (já exportados de `corridaPerformance.ts`), nunca
+digitada à mão — mesmo princípio de fonte única da entrada (5) pro
+Ticket. `TrilhaRegra.volumeLabel` (campo morto desde a unificação da
+entrada (4)) foi removido.
+
+Puramente visual — nenhuma lógica de pontuação mudou.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes,
+inalterados) + `oxlint` limpo, em worktree fora do OneDrive. Visto
+renderizado numa rota temporária sem autenticação (removida antes do
+commit) — tabela legível, nomes de ritmo batendo com os chips por
+pessoa. PR #137.
+
 ### 2026-09-11 (6) — Campanha de Metas: separa Fonte/Ticket/Bônus e clareia as linhas por pessoa
 
 3ª rodada de polimento da régua "Como a pontuação funciona" (depois de

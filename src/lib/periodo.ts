@@ -52,6 +52,26 @@ export function periodoAtual(mode: Exclude<PeriodMode, 'dia'>, hoje = new Date()
   return String(y)
 }
 
+/** A chave de período bate no formato esperado da granularidade? */
+function periodoValido(mode: Exclude<PeriodMode, 'dia'>, value: string): boolean {
+  if (mode === 'mes') return /^\d{4}-\d{2}$/.test(value)
+  if (mode === 'trimestre') return /^\d{4}-Q[1-4]$/.test(value)
+  return /^\d{4}$/.test(value)
+}
+
+/**
+ * Substituto pra um valor de período inválido: o período atual segundo
+ * `hoje`. Se o próprio `hoje` for extremo demais pra caber no formato (ex.:
+ * o sentinela SEM_CLAMP, ano 275760, usado por `periodoEmCurso` pra pedir o
+ * fim sem truncar), cai pra hoje de verdade — sem isso, `rangeForPeriod`
+ * recomputava sempre o mesmo substituto inválido e a recursão de
+ * auto-correção nunca convergia (`Maximum call stack size exceeded`).
+ */
+function periodoAtualSeguro(mode: Exclude<PeriodMode, 'dia'>, hoje: Date): string {
+  const candidato = periodoAtual(mode, hoje)
+  return periodoValido(mode, candidato) ? candidato : periodoAtual(mode)
+}
+
 /**
  * Range de um período. Trunca em hoje quando o período ainda está correndo.
  * Valor irreconhecível cai no período atual — o filtro nunca deve quebrar a tela.
@@ -66,14 +86,14 @@ export function rangeForPeriod(
 
   if (mode === 'mes') {
     const m = /^(\d{4})-(\d{2})$/.exec(value)
-    if (!m) return rangeForPeriod('mes', periodoAtual('mes', hoje), hoje)
+    if (!m) return rangeForPeriod('mes', periodoAtualSeguro('mes', hoje), hoje)
     const y = Number(m[1]), mes = Number(m[2])
     return { start: iso(y, mes, 1), end: clamp(iso(y, mes, ultimoDia(y, mes))) }
   }
 
   if (mode === 'trimestre') {
     const m = /^(\d{4})-Q([1-4])$/.exec(value)
-    if (!m) return rangeForPeriod('trimestre', periodoAtual('trimestre', hoje), hoje)
+    if (!m) return rangeForPeriod('trimestre', periodoAtualSeguro('trimestre', hoje), hoje)
     const y = Number(m[1]), q = Number(m[2])
     const mesInicio = (q - 1) * 3 + 1
     const mesFim = mesInicio + 2
@@ -81,7 +101,7 @@ export function rangeForPeriod(
   }
 
   const m = /^(\d{4})$/.exec(value)
-  if (!m) return rangeForPeriod('ano', periodoAtual('ano', hoje), hoje)
+  if (!m) return rangeForPeriod('ano', periodoAtualSeguro('ano', hoje), hoje)
   const y = Number(m[1])
   return { start: iso(y, 1, 1), end: clamp(iso(y, 12, 31)) }
 }

@@ -276,15 +276,17 @@ src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 Modos do card do funil: **Performance** (volume no período, `TrapFunnel`),
 **Aging** (há quanto tempo parados) e **Atual** (onde estão agora, ignora
 período) — os dois últimos renderizam `EtapaLeadtimeList`, não o funil visual:
-uma etapa por linha, na mesma sequência de 10 do Performance, com 2 médias —
+uma etapa por linha, na mesma sequência do Performance, com 2 médias —
 tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde o MQL).
 Aging lê de `vw_deal_etapa_periodos` (tempo por etapa) cruzado com
 `data_novo_mql` de `vw_funil_vendas` (tempo em andamento); Atual computa as
 duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
-aging. A Visão Macro mostra um subconjunto de 10 etapas (MQL → Contato
-Efetivo → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
-Oportunidade → Comitê → Pré-Contrato → Fechamento) em todos os 3 modos; o
-funil completo de 12 etapas fica em Performance.
+aging. Desde 11/09 a Visão Macro mostra as **12 etapas completas** do
+catálogo (`STAGE_ORDER` — MQL → Tentando Contato → Contato Efetivo →
+Interesse Reunião → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
+Oportunidade → Comitê → Pré-Contrato → Fechamento) em todos os 3 modos —
+mesmo funil completo usado em Performance (antes a Visão Macro escondia
+Tentando Contato e Interesse Reunião, um subconjunto de 10).
 
 **Multi-seleção de período é união exata, não intervalo.** Selecionar Junho +
 Agosto mostra só esses dois meses — Julho não entra, mesmo estando entre os
@@ -364,6 +366,32 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-11 — Visão Macro mostra as 12 etapas completas do funil
+
+Junior: as abas de Visão Macro (Performance, Aging, Atual) estavam
+ocultando etapas do processo — `MACRO_STAGES` (`FunilVendas.tsx`) era um
+subconjunto de 10 das 12 etapas do catálogo (`STAGE_ORDER`), faltando
+**Tentando Contato** e **Interesse Reunião**. As duas já existiam no
+catálogo (`STAGE_DATE_FIELD`) e no funil de SDR da Performance
+(`SDR_STAGES`, que sempre teve as 8 etapas completas) — só estavam fora
+do subconjunto "executivo" da Visão Macro.
+
+Fix de uma linha: `MACRO_STAGES` passou a ser `STAGE_ORDER` direto, em
+vez de um array próprio com 10 etapas. Os 3 modos herdam de graça — todos
+iteram sobre `MACRO_STAGES` (`funnel` no modo Performance,
+`ordenarPorMacroStages` em Aging/Atual). Nada mais mudou: rótulo
+"Oportunidade" (`MACRO_STAGE_LABEL`), travas de contagem (Fechamento pela
+trava de venda, "Reunião Agendada SQL" só no Closer) e popups de deal
+ficam intactos.
+
+Nota de leitura: como o funil não é monotônico e Tentando Contato/
+Interesse Reunião têm uso desigual entre funis, alguns degraus dessas
+etapas vêm pequenos ou com conversão acima de 100% — comportamento já
+esperado, mesmo padrão das etapas menos usadas (Comitê, Conexão).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (305 testes) via
+`~/ws-dashboard-build`. App exige login — não visto renderizado. PR #126.
 
 ### 2026-09-10 (2) — Assistente flutuante sai das abas de Vendas
 

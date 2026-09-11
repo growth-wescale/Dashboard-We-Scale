@@ -506,9 +506,95 @@ function multFmt(n: number): string {
 
 function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-      <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={SDR_VISUAL} loading={loading} />
-      <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={CLOSER_VISUAL} loading={loading} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <RegraFonteTicketCard />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={SDR_VISUAL} loading={loading} />
+        <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={CLOSER_VISUAL} loading={loading} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Regra de Volume (peso por Fonte Macro + bônus de mesmo dia) e de Ticket
+ * (multiplicador por marca) — únicas pras duas trilhas, então vivem num
+ * bloco só entre o título da seção e os 2 cards, em vez de repetidas dentro
+ * de cada `TrilhaCard`. Só a Velocidade difere por trilha e continua dentro
+ * de cada card.
+ */
+function RegraFonteTicketCard() {
+  return (
+    <div style={{
+      background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12,
+      padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 8, height: 8, background: '#E10600' }} />
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>
+            Como a pontuação funciona
+          </span>
+        </div>
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 999,
+          background: '#FEF2F2', color: '#B91C1C', letterSpacing: 0.4, textTransform: 'uppercase',
+        }}>
+          Vale para SDR e Closer
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20 }}>
+        <RegraBloco titulo="Fonte" subtitulo="peso pela Fonte Macro do deal">
+          <RegraLinha rotulo="1 pt" valor="Inbound · Indicação · Parceiro · Repasse · sem classificação" />
+          <RegraLinha rotulo="2 pts" valor="Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado" />
+        </RegraBloco>
+
+        <RegraBloco titulo="Ticket" subtitulo="investimento do franqueado na marca">
+          <RegraLinha rotulo="1,0×" valor="B2Case · Eletrovias" />
+          <RegraLinha rotulo="1,25×" valor="Inpot · Lisô Laser" />
+          <RegraLinha rotulo="1,5×" valor="Oral Unic" />
+          <RegraLinha rotulo="2,0×" valor="Viva" />
+        </RegraBloco>
+
+        <RegraBloco titulo="Bônus" subtitulo="mais de 1 unidade no mesmo dia">
+          <RegraLinha rotulo="×1,5" valor="Em todas as unidades daquele dia" />
+        </RegraBloco>
+      </div>
+
+      <div style={{
+        padding: '10px 14px', borderRadius: 8, background: '#F9FAFB',
+        fontSize: 12, color: 'var(--ws-text-secondary)', fontStyle: 'italic', textAlign: 'center',
+      }}>
+        Pontos = Σ (peso da fonte × ticket da marca × bônus × velocidade), por unidade — a velocidade tem degraus próprios por trilha, ver abaixo
+      </div>
+    </div>
+  )
+}
+
+/** Uma coluna da régua compartilhada (Fonte / Ticket / Bônus), com título + linhas de rótulo→valor. */
+function RegraBloco({ titulo, subtitulo, children }: { titulo: string; subtitulo: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>{titulo}</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>{subtitulo}</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>{children}</div>
+    </div>
+  )
+}
+
+/** 1 linha "rótulo em destaque → valor" dentro de um `RegraBloco`. */
+function RegraLinha({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12, lineHeight: 1.4 }}>
+      <span style={{
+        flexShrink: 0, minWidth: 34, fontFamily: 'var(--font-display)', fontWeight: 600, color: '#B91C1C',
+      }}>
+        {rotulo}
+      </span>
+      <span style={{ color: 'var(--ws-text-secondary)' }}>{valor}</span>
     </div>
   )
 }
@@ -538,13 +624,7 @@ function TrilhaCard({
         padding: '8px 10px', borderRadius: 8, background: '#F9FAFB',
         fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.65,
       }}>
-        <div><b>Volume</b> · {regra.volumeLabel}: peso pela Fonte Macro · ×1,5 se +1 no mesmo dia</div>
-        <div style={{ paddingLeft: 8 }}><b>1 pt</b> · Inbound · Indicação · Parceiro · Repasse · sem classificação</div>
-        <div style={{ paddingLeft: 8 }}><b>2 pts</b> · Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado</div>
-        <div><b>Ticket</b> · investimento do franqueado na marca:</div>
-        <div style={{ paddingLeft: 8 }}>B2Case · Eletrovias <b>1,0×</b> &nbsp;·&nbsp; Inpot · Lisô Laser <b>1,25×</b> &nbsp;·&nbsp; Oral Unic <b>1,5×</b> &nbsp;·&nbsp; Viva <b>2,0×</b></div>
         <div><b>Velocidade</b> · {regra.velocidadeLabel}: {regra.degraus}</div>
-        <div style={{ marginTop: 2, fontStyle: 'italic' }}>Pontos = Σ (volume × ticket × multiplicador), por unidade</div>
       </div>
 
       {loading ? (

@@ -7,8 +7,8 @@ import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHist
 import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
-import { TICKET_FAIXAS } from '@/lib/corridaPerformance'
-import type { LinhaTrilha } from '@/lib/corridaPerformance'
+import { CLOSER_SPEED_TIERS, SDR_SPEED_TIERS, TICKET_FAIXAS } from '@/lib/corridaPerformance'
+import type { LinhaTrilha, SpeedTier } from '@/lib/corridaPerformance'
 import {
   VOLTAS_F1,
   janelasDasVoltas,
@@ -468,24 +468,22 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
 
 interface TrilhaRegra {
   titulo: string
-  volumeLabel: string
-  velocidadeLabel: string
-  degraus: string
+  /** Frase simples do que é medido e por que — pra quem nunca viu a régua entender de cara. */
+  velocidadeDescricao: string
+  tiers: readonly SpeedTier[]
   unidade: 'RR' | 'vendas'
 }
 
 const TRILHA_SDR: TrilhaRegra = {
   titulo: 'Trilha SDR',
-  volumeLabel: 'RR realizada',
-  velocidadeLabel: 'tempo MQL → agendamento',
-  degraus: '≤0,5d 1,5× · ≤1d 1,2× · ≤3d 1,0× · ≤7d 0,8× · +7d 0,5×',
+  velocidadeDescricao: 'quanto mais rápido agendar a reunião depois do MQL, maior o multiplicador',
+  tiers: SDR_SPEED_TIERS,
   unidade: 'RR',
 }
 const TRILHA_CLOSER: TrilhaRegra = {
   titulo: 'Trilha Closer',
-  volumeLabel: 'venda fechada',
-  velocidadeLabel: 'tempo reunião → venda',
-  degraus: '≤14d 1,5× · ≤17d 1,2× · ≤28d 1,0× · ≤40d 0,8× · +40d 0,5×',
+  velocidadeDescricao: 'quanto mais rápido fechar a venda depois da reunião, maior o multiplicador',
+  tiers: CLOSER_SPEED_TIERS,
   unidade: 'vendas',
 }
 
@@ -507,6 +505,24 @@ function multFmt(n: number): string {
 /** "RR" não pluraliza (sigla); "venda"/"vendas" concorda com a quantidade. */
 function unidadeLabel(unidade: 'RR' | 'vendas', volume: number): string {
   return unidade === 'RR' ? 'RR' : (volume === 1 ? 'venda' : 'vendas')
+}
+/** "dia"/"dias" concorda com a quantidade. */
+function diaLabel(n: number): string {
+  return n === 1 ? 'dia' : 'dias'
+}
+/**
+ * Rótulo em português da faixa de tempo de um degrau de velocidade —
+ * "até X dias", ou "mais de Y dias" no último degrau (faixa aberta, sem
+ * teto). Junior: os degraus em notação "≤0,5d 1,5×" não eram claros pra
+ * quem abre o dash pela 1ª vez.
+ */
+function faixaVelocidadeLabel(tiers: readonly SpeedTier[], i: number): string {
+  const atual = tiers[i]
+  if (atual.limiteDias === null) {
+    const anterior = tiers[i - 1]?.limiteDias
+    return anterior != null ? `mais de ${diasFmt(anterior)} ${diaLabel(anterior)}` : 'qualquer tempo'
+  }
+  return `até ${diasFmt(atual.limiteDias)} ${diaLabel(atual.limiteDias)}`
 }
 
 function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
@@ -603,9 +619,10 @@ const thTicket: React.CSSProperties = {
 const tdTicket: React.CSSProperties = { padding: '4px 8px 4px 0', fontSize: 12, verticalAlign: 'top' }
 
 /**
- * Uma coluna da régua compartilhada (Fonte / Ticket / Bônus) — sub-card com
- * fundo e borda próprios, pra ficar claramente separada das outras duas em
- * vez de só encostada lado a lado (Junior reportou que ficavam grudadas).
+ * Um bloco de regra (Fonte / Ticket / Bônus na régua compartilhada; Velocidade
+ * dentro de cada `TrilhaCard`) — sub-card com fundo e borda próprios, pra
+ * ficar claramente separado dos vizinhos em vez de só encostado lado a lado
+ * (Junior reportou que ficavam grudados).
  */
 function RegraBloco({ titulo, subtitulo, children }: { titulo: string; subtitulo: string; children: React.ReactNode }) {
   return (
@@ -681,12 +698,30 @@ function TrilhaCard({
         <span style={{ fontSize: 14, fontWeight: 600 }}>{regra.titulo}</span>
       </div>
 
-      <div style={{
-        padding: '8px 10px', borderRadius: 8, background: '#F9FAFB',
-        fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.65,
-      }}>
-        <div><b>Velocidade</b> · {regra.velocidadeLabel}: {regra.degraus}</div>
-      </div>
+      <RegraBloco titulo="Velocidade" subtitulo={regra.velocidadeDescricao}>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={thTicket}>Até</th>
+              <th style={thTicket}>Ritmo</th>
+              <th style={{ ...thTicket, textAlign: 'right' }}>Mult.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {regra.tiers.map((t, i) => (
+              <tr key={t.tag}>
+                <td style={tdTicket}>{faixaVelocidadeLabel(regra.tiers, i)}</td>
+                <td style={{ ...tdTicket, color: 'var(--ws-text-secondary)' }}>{t.tag}</td>
+                <td style={{ ...tdTicket, textAlign: 'right' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: '#B91C1C' }}>
+                    {multFmt(t.mult)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </RegraBloco>
 
       {loading ? (
         <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Carregando…</div>

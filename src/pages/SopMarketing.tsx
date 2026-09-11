@@ -1342,15 +1342,17 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         }}>
 
         {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado)
-             Odonto Legacy: chart cumulativo 7d com seletor MQL/Membros/Custo/membro. */}
+             Odonto Legacy: chart cumulativo 7d com seletor MQL/Membros/Custo/membro +
+             tabela do funil abaixo. Card fica scrollável se os dois não couberem
+             de uma vez, e o chart tem piso de altura pra não achatar. */}
         {!dates.isClosed && (
-        <div style={cardStyle}>
+        <div style={isOdontoLegacy ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
           <div style={{ marginBottom: 6 }}>
             <div style={colTitle(acc)}>
               {isOdontoLegacy ? 'Comparativo 7d · cumulativo' : 'MQL Semanal'}
             </div>
           </div>
-          <div style={isOdontoLegacy ? { flex: 1, minHeight: 0 } : { height: 180 }}>
+          <div style={isOdontoLegacy ? { minHeight: 260, flexShrink: 0 } : { height: 180 }}>
             {isOdontoLegacy && legacyMtdSeries ? (() => {
               const days = legacyMtdSeries.days
               const pick = (m: typeof legacyMtdMetric) => (w: (typeof legacyMtdSeries.series)[number]['data']) =>

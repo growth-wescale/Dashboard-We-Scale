@@ -367,6 +367,64 @@ sem conversão de fuso.
 
 ## 9. Histórico de mudanças
 
+### 2026-09-11 (3) — Corrida de Performance pontua venda pelo ticket da marca
+
+Ponto 2 de 2 do pedido do Junior (o 1 foi peso por Fonte Macro, PR #117,
+10/09). Racional completo desenhado antes num artifact (comparação de
+faixas por taxa de franquia vs. investimento total, simulação real com
+SDRs de agosto) e **validado por ele com o Brunno** antes desta sessão
+implementar — pediu pra ir direto pra implementação + deploy, sem passar
+por outra rodada de aprovação.
+
+Toda unidade da Corrida (`src/lib/corridaPerformance.ts`, ver
+[[corrida-performance-pontuacao]]) passa a multiplicar também pelo
+**ticket/porte da marca** — uma venda de marca de investimento alto vale
+mais que uma de investimento baixo.
+
+**Faixas (investimento total do franqueado pra montar a unidade — não a
+taxa de franquia de `DB_Valor_Franquia`, que é outra coisa e não bate com
+o agrupamento que o Junior queria):**
+- até R$ 200 mil — B2Case, Eletrovias → **1,0×**
+- R$ 201 mil – 500 mil — Inpot, Lisô Laser → **1,25×**
+- R$ 501 mil – 1 milhão — Oral Unic → **1,5×**
+- acima de R$ 1 milhão — Viva → **2,0×**
+
+Número em si não vem de tabela nenhuma do banco — é decisão de negócio do
+Junior, mantida na mão em `TICKET_TIERS` (mesmo espírito das metas
+hardcoded de `metasVendas.ts`). Marca fora do mapa (marca nova, Odonto
+Legacy, Premium Club, Repasse) cai no **padrão faixa 1 / 1,0×**: nunca
+penaliza, só não ganha bônus até alguém classificar — comentário no
+código lembra de adicionar a marca quando ela entrar de fato na campanha.
+`normalizarMarca()` tolera acento/caixa/espaço, mesmo padrão que
+`normalizarFonte()` já usava (PR #117).
+
+**Fórmula final:** `pontos = Σ (peso da fonte × bônus mesmo dia × ticket
+× velocidade)`, por unidade, nas duas trilhas (SDR e Closer) — decisão
+tomada porque ambas são especializadas por marca (meta por
+pessoa×marca em `DB_Metas_Performance`). `LinhaTrilha.ticketMedio` guarda
+a média do multiplicador das unidades da pessoa no mês, pro subtítulo
+mostrar "· ticket ×1,5" quando ≠ 1,0 (transparência: explica por que
+alguém com menos volume pode pontuar mais).
+
+**Nota de fairness registrada no racional, não resolvida no código:** SDR
+e Closer não escolhem a marca que trabalham, então o multiplicador
+premia em parte a alocação, não só o esforço. Mitigado por 3 escolhas de
+desenho: piso em 1,0× (só bônus, nunca penalidade), faixas (não escala
+contínua) e o fato de a campanha rodar por volta/mês (a alocação gira).
+O spread final (1,0/1,25/1,5/2,0, "forte") foi escolha explícita do
+Junior sobre um spread mais suave que também tinha sido desenhado.
+
+**Visual.** A régua cinza de cada `TrilhaCard` (SDR/Closer) na aba
+Campanha de Metas ganhou a linha das 4 faixas de ticket, do lado da
+régua de fonte que já existia — mesmo padrão, uma tabela só, sem
+precisar sair da tela pra entender a regra.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes, 12
+novos em `corridaPerformance.test.ts` — mapa de faixas, acento/caixa,
+marca fora do mapa, composição com fonte/velocidade, `ticketMedio`) +
+`oxlint` limpo nos arquivos tocados, em worktree fora do OneDrive. App
+exige login — não visto renderizado. PR #129.
+
 ### 2026-09-11 (2) — Visão Macro travava com stack overflow ao desmarcar todos os meses
 
 Junior reportou quebras intermitentes nas abas de Vendas (print de

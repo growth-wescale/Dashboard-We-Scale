@@ -504,6 +504,10 @@ function pontosFmt(n: number): string {
 function multFmt(n: number): string {
   return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}×`
 }
+/** "RR" não pluraliza (sigla); "venda"/"vendas" concorda com a quantidade. */
+function unidadeLabel(unidade: 'RR' | 'vendas', volume: number): string {
+  return unidade === 'RR' ? 'RR' : (volume === 1 ? 'venda' : 'vendas')
+}
 
 function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
   return (
@@ -545,7 +549,7 @@ function RegraFonteTicketCard() {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
         <RegraBloco titulo="Fonte" subtitulo="peso pela Fonte Macro do deal">
           <RegraLinha rotulo="1 pt" valor="Inbound · Indicação · Parceiro · Repasse · sem classificação" />
           <RegraLinha rotulo="2 pts" valor="Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado" />
@@ -582,10 +586,10 @@ function RegraFonteTicketCard() {
       </div>
 
       <div style={{
-        padding: '10px 14px', borderRadius: 8, background: '#F9FAFB',
+        padding: '10px 14px', borderRadius: 8, background: '#fff', border: '1px dashed var(--ws-border)',
         fontSize: 12, color: 'var(--ws-text-secondary)', fontStyle: 'italic', textAlign: 'center',
       }}>
-        Pontos = Σ (peso da fonte × ticket da marca × bônus × velocidade), por unidade — a velocidade tem degraus próprios por trilha, ver abaixo
+        <b style={{ fontStyle: 'normal', color: 'var(--ws-text-primary)' }}>Pontos</b> = Σ (peso da fonte × ticket da marca × bônus × velocidade), por unidade — a velocidade tem degraus próprios por trilha, ver abaixo
       </div>
     </div>
   )
@@ -598,16 +602,47 @@ const thTicket: React.CSSProperties = {
 }
 const tdTicket: React.CSSProperties = { padding: '4px 8px 4px 0', fontSize: 12, verticalAlign: 'top' }
 
-/** Uma coluna da régua compartilhada (Fonte / Ticket / Bônus), com título + linhas de rótulo→valor. */
+/**
+ * Uma coluna da régua compartilhada (Fonte / Ticket / Bônus) — sub-card com
+ * fundo e borda próprios, pra ficar claramente separada das outras duas em
+ * vez de só encostada lado a lado (Junior reportou que ficavam grudadas).
+ */
 function RegraBloco({ titulo, subtitulo, children }: { titulo: string; subtitulo: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 10,
+      background: '#F9FAFB', border: '1px solid var(--ws-border)', borderRadius: 10,
+      padding: '14px 16px',
+    }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{titulo}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ws-text-primary)' }}>{titulo}</div>
         <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>{subtitulo}</div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>{children}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
     </div>
+  )
+}
+
+/**
+ * 1 "estatística" rotulada na linha de uma pessoa (Volume / Fonte 2 pts /
+ * Ticket / Velocidade) — cada fator que entra na multiplicação que gera
+ * "Pontos" vira um chip com nome, não um texto corrido separado por "·"
+ * (ficava difícil de ler o que cada número queria dizer).
+ */
+function EstatChip({ rotulo, valor }: { rotulo: string; valor: string }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+      padding: '3px 8px', borderRadius: 999, background: '#F3F4F6',
+    }}>
+      <span style={{
+        fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3,
+        color: '#9CA3AF',
+      }}>
+        {rotulo}
+      </span>
+      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--ws-text-primary)' }}>{valor}</span>
+    </span>
   )
 }
 
@@ -674,20 +709,31 @@ function TrilhaCard({
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>{v?.iniciais ?? l.nome.slice(0, 3).toUpperCase()}</span>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{l.nome}</div>
-                  <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
-                    {l.volume} {regra.unidade === 'RR' ? 'RR' : 'vendas'}
-                    {l.volume2pts > 0 && ` · ${l.volume2pts} de 2 pts`}
-                    {l.ticketMedio !== 1 && ` · ticket ${multFmt(l.ticketMedio)}`}
-                    {' · '}
-                    {l.tempoMedianoDias === null ? 'sem tempo' : `${diasFmt(l.tempoMedianoDias)}d · ${l.tagVelocidade}`}
+                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{l.nome}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    <EstatChip rotulo="Volume" valor={`${l.volume} ${unidadeLabel(regra.unidade, l.volume)}`} />
+                    {l.volume2pts > 0 && (
+                      <EstatChip rotulo="Fonte 2 pts" valor={`${l.volume2pts} de ${l.volume}`} />
+                    )}
+                    {l.ticketMedio !== 1 && (
+                      <EstatChip rotulo="Ticket" valor={multFmt(l.ticketMedio)} />
+                    )}
+                    <EstatChip
+                      rotulo="Velocidade"
+                      valor={l.tempoMedianoDias === null ? 'sem tempo' : `${diasFmt(l.tempoMedianoDias)}d · ${l.tagVelocidade}`}
+                    />
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <div style={{
+                    fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4,
+                    color: 'var(--ws-text-secondary)', marginBottom: 1,
+                  }}>
+                    Pontos
+                  </div>
                   <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500 }}>
                     {pontosFmt(l.pontos)}
                   </span>
-                  <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}> pts</span>
                 </div>
               </div>
             )

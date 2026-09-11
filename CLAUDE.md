@@ -314,6 +314,42 @@ gh pr create --base main
 
 Convenções em `CONTRIBUTING.md`. Commits em pt-BR, Conventional Commits.
 
+### Papéis de acesso (RBAC frontend)
+
+Dois papéis, guardados em `auth.users.raw_app_meta_data` no Supabase de
+Marketing:
+
+- `admin` (default): time interno, vê tudo. É o que qualquer usuário sem
+  `role` explícito ganha — fail-safe.
+- `marca`: pessoa da marca cliente (ex.: franqueado Inpot). Vê SÓ Visão
+  Geral (fixada na própria marca) e Saúde da Marca > [minha marca].
+
+**Como cadastrar um novo usuário `marca` (ex.: Inpot):**
+
+1. Supabase Studio (projeto Marketing) → Authentication → Users →
+   **Add user** → Send invite ou Create user com senha.
+2. SQL Editor → rodar:
+   ```sql
+   UPDATE auth.users
+   SET raw_app_meta_data = raw_app_meta_data
+     || '{"role":"marca","marca":"inpot"}'::jsonb
+   WHERE email = 'pessoa@inpot.com.br';
+   ```
+   O `marca` é o **slug** de `BRAND_LIST` (`inpot`, `oral-unic`, `viva`, etc.).
+3. Login normal em https://dashboard.srv1816822.hstgr.cloud — a sidebar
+   já mostra só o que aquela marca pode ver.
+
+**Bugs a evitar:**
+- `raw_user_meta_data` é editável pelo próprio usuário via API. NÃO use
+  esse campo pra role — só `raw_app_meta_data` (Service Role only).
+- `role=marca` sem `marca` definida = estado inválido; `useAuth` faz
+  fallback pra admin nesse caso pra não travar o dashboard em limbo.
+
+**Limite conhecido (aceito):** MVP frontend-only. Um usuário `marca`
+determinado poderia abrir DevTools, forçar state e ver dados de outra
+marca. Aceitável pra franqueado legítimo. Fase 2 (RLS backend) trava
+isso no banco quando o time achar necessário.
+
 ---
 
 ## 7. Armadilhas do ambiente (custaram tempo)

@@ -25,6 +25,7 @@ import { PacingCard, MiniCard } from '@/pages/Pacing'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { MultiSelect } from '@/components/ui/MultiSelect'
+import { useAuth } from '@/hooks/useAuth'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
@@ -797,9 +798,18 @@ const MEDIA_COLS = [
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function VisaoGeral() {
   const initDates = getMtdDates()
+  // Papel `marca` (ex.: franqueado Inpot): vê a Visão Geral filtrada só na
+  // marca dele. Sem opção de trocar — a `brandKeys` fica travada, o dropdown
+  // do BrandSelect e o clique na StatusTable ficam desabilitados.
+  const { role, marcaPermitida } = useAuth()
+  const marcaLocked = role === 'marca' && !!marcaPermitida
   // brandKeys: multi-seleção estilo Excel. [] == Consolidado (todas as marcas
   // somadas). Selecionar 2 marcas soma os dados delas.
-  const [brandKeys, setBrandKeys] = useState<string[]>([])
+  const [brandKeys, setBrandKeys] = useState<string[]>(marcaLocked ? [marcaPermitida!] : [])
+  // Se o role muda (login/logout), força a seleção de novo.
+  useEffect(() => {
+    if (marcaLocked && marcaPermitida) setBrandKeys([marcaPermitida])
+  }, [marcaLocked, marcaPermitida])
   const [range,  setRange]  = useState({ start: initDates.start, end: initDates.end })
   const [filterFonte, setFilterFonte] = useState('__all__')
   const today = new Date()
@@ -948,7 +958,9 @@ export function VisaoGeral() {
         subtitle={`${scopeLabel} · ${curLabel}`}
         actions={
           <>
-            <BrandSelect brands={brands} selected={brandKeys} onChange={setBrandKeys} />
+            {!marcaLocked && (
+              <BrandSelect brands={brands} selected={brandKeys} onChange={setBrandKeys} />
+            )}
             <select
               value={filterFonte}
               onChange={e => setFilterFonte(e.target.value)}
@@ -1001,9 +1013,11 @@ export function VisaoGeral() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
         <StatusTable
-          brands={brands}
+          brands={marcaLocked ? brands.filter(b => b.key === marcaPermitida) : brands}
           selectedKeys={brandKeys}
-          onToggle={(k) => setBrandKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
+          onToggle={marcaLocked
+            ? () => { /* trava — usuário `marca` não muda seleção */ }
+            : (k) => setBrandKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
           periodLabel={curLabel}
         />
         <MtdChart groups={mtdGroups} scopeLabel={scopeLabel} days={days} />

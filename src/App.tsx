@@ -4,6 +4,7 @@ import { Login } from '@/pages/Login'
 import { PrivateRoute } from '@/components/PrivateRoute'
 import { AppLayout } from '@/components/AppLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { RoleGuard } from '@/components/RoleGuard'
 import { SharedFiltersProvider } from '@/contexts/SharedFiltersContext'
 
 /**
@@ -63,6 +64,7 @@ function RoutedContent() {
   return (
     <ErrorBoundary key={pathname} scope={pathname}>
       <Suspense fallback={<PageLoader />}>
+       <RoleGuard pathname={pathname}>
         <Routes>
           <Route path="/"              element={<VisaoGeral />} />
           <Route path="/marca"         element={<SaudeDaMarca />} />
@@ -80,6 +82,7 @@ function RoutedContent() {
           <Route path="/analise-termos"    element={<Navigate to="/marca" replace />} />
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Routes>
+       </RoleGuard>
       </Suspense>
     </ErrorBoundary>
   )

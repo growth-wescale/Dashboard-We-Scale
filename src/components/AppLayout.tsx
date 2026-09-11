@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play } from 'lucide-react'
 import { Sidebar } from '@/components/ui/Sidebar'
@@ -6,6 +6,7 @@ import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
+import { useAuth } from '@/hooks/useAuth'
 import { GpIntro } from '@/components/gp/GpIntro'
 import { GpStrip } from '@/components/gp/GpStrip'
 import { SennaCard } from '@/components/gp/SennaCard'
@@ -102,12 +103,43 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [activeBrand, setActiveBrand] = useState<string>('oral-unic')
+  const { role, marcaPermitida } = useAuth()
+  const isMarcaRole = role === 'marca' && !!marcaPermitida
+  const [activeBrand, setActiveBrandState] = useState<string>(marcaPermitida ?? 'oral-unic')
+
+  // Trava a marca ativa quando o usuário é do papel `marca` — não deixa nem
+  // um bug de código local levar pro sub de outra marca.
+  const setActiveBrand = useCallback((b: string) => {
+    if (isMarcaRole && marcaPermitida) {
+      setActiveBrandState(marcaPermitida)
+      return
+    }
+    setActiveBrandState(b)
+  }, [isMarcaRole, marcaPermitida])
+
+  // Se o role muda (login/logout), garante que activeBrand fica correto.
+  useEffect(() => {
+    if (isMarcaRole && marcaPermitida && activeBrand !== marcaPermitida) {
+      setActiveBrandState(marcaPermitida)
+    }
+  }, [isMarcaRole, marcaPermitida, activeBrand])
+
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('sidebarOpen') !== 'false' } catch { return true }
   })
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
+
+  // NAV filtrado: papel `marca` vê só Visão Geral + Saúde da Marca da própria
+  // marca (sub-item único). Outros grupos (OKRs, S&OP, Vendas) somem.
+  const navItems = useMemo(() => {
+    if (!isMarcaRole || !marcaPermitida) return NAV_ITEMS
+    return NAV_ITEMS
+      .filter(item => item.key === 'geral' || item.key === 'saude')
+      .map(item => item.key === 'saude'
+        ? { ...item, subItems: BRANDS_SUB.filter(b => b.key === marcaPermitida) }
+        : item)
+  }, [isMarcaRole, marcaPermitida])
 
   const handleSync = useCallback(() => {
     if (syncing) return
@@ -192,7 +224,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         <Sidebar
           variant="glass"
-          items={NAV_ITEMS}
+          items={navItems}
           active={activeKey}
           onSelect={handleNav}
           activeSub={isSaude ? activeBrand : isVendas ? getVendasActiveSub(location.pathname) : null}

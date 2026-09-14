@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play, Menu } from 'lucide-react'
-import { Sidebar } from '@/components/ui/Sidebar'
+import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play, Menu, Users } from 'lucide-react'
+import { Sidebar, type SidebarItem } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
-import { useAuth } from '@/hooks/useAuth'
+import { useAcesso } from '@/contexts/AcessoContext'
+import { PERM_GERENCIAR_USUARIOS, ROTA_ACESSOS, permissaoDaRota } from '@/lib/permissoes'
 import { GpIntro } from '@/components/gp/GpIntro'
 import { GpStrip } from '@/components/gp/GpStrip'
 import { SennaCard } from '@/components/gp/SennaCard'
@@ -79,7 +80,16 @@ const NAV_ITEMS = [
   },
 ]
 
+// Rota de cada item do menu — a permissão exigida sai de permissaoDaRota() (lib/permissoes).
+const ROTA_MENU: Record<string, string> = { geral: '/', saude: '/marca', okrs: '/okrs', sop: '/sop-marketing' }
+
+function podeRota(pode: (chave: string) => boolean, rota: string | undefined): boolean {
+  const permissao = rota ? permissaoDaRota(rota) : null
+  return permissao !== null && pode(permissao)
+}
+
 function getActiveKey(pathname: string): string {
+  if (pathname.startsWith(ROTA_ACESSOS)) return 'acessos'
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
@@ -104,8 +114,8 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { role, marcaPermitida } = useAuth()
-  const isMarcaRole = role === 'marca' && !!marcaPermitida
+  const { marca: marcaPermitida, pode } = useAcesso()
+  const isMarcaRole = !!marcaPermitida
   const [activeBrand, setActiveBrandState] = useState<string>(marcaPermitida ?? 'oral-unic')
 
   // Trava a marca ativa quando o usuário é do papel `marca` — não deixa nem
@@ -142,16 +152,28 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
 
-  // NAV filtrado: papel `marca` vê só Visão Geral + Saúde da Marca da própria
-  // marca (sub-item único). Outros grupos (OKRs, S&OP, Vendas) somem.
-  const navItems = useMemo(() => {
-    if (!isMarcaRole || !marcaPermitida) return NAV_ITEMS
-    return NAV_ITEMS
-      .filter(item => item.key === 'geral' || item.key === 'saude')
-      .map(item => item.key === 'saude'
-        ? { ...item, subItems: BRANDS_SUB.filter(b => b.key === marcaPermitida) }
-        : item)
-  }, [isMarcaRole, marcaPermitida])
+  // Menu segue o controle de acessos: some o que o papel não libera. Usuário
+  // travado numa marca vê só o sub-item dela em Saúde da Marca.
+  const navItems = useMemo<SidebarItem[]>(() => {
+    const itens: SidebarItem[] = []
+    for (const item of NAV_ITEMS) {
+      if (item.key === 'vendas') {
+        const subs = VENDAS_SUB.filter(s => podeRota(pode, `/${s.key}`))
+        if (subs.length > 0) itens.push({ ...item, subItems: subs })
+        continue
+      }
+      if (!podeRota(pode, ROTA_MENU[item.key])) continue
+      if (item.key === 'saude' && isMarcaRole) {
+        itens.push({ ...item, subItems: BRANDS_SUB.filter(b => b.key === marcaPermitida) })
+        continue
+      }
+      itens.push(item)
+    }
+    if (pode(PERM_GERENCIAR_USUARIOS)) {
+      itens.push({ key: 'acessos', label: 'Usuários & Acessos', icon: <Users size={16} /> })
+    }
+    return itens
+  }, [pode, isMarcaRole, marcaPermitida])
 
   const handleSync = useCallback(() => {
     if (syncing) return
@@ -179,7 +201,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'saude') navigate('/marca')
     else if (key === 'okrs') navigate('/okrs')
     else if (key === 'sop') navigate('/sop-marketing')
-    else if (key === 'vendas') navigate('/funil-vendas')
+    else if (key === 'vendas') {
+      const primeira = VENDAS_SUB.find(s => podeRota(pode, `/${s.key}`))
+      if (primeira) handleSubNav(primeira.key)
+    }
+    else if (key === 'acessos') navigate(ROTA_ACESSOS)
   }
 
   function handleSubNav(key: string) {
@@ -358,7 +384,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Assistente flutuante só nas abas de Marketing — fora das abas de Vendas (Junior) */}
-        {!isVendas && <AiChat />}
+        {!isVendas && pode('acao.assistente-ia') && <AiChat />}
         {gpAtivo && <GpIntro />}
       </div>
     </MarcaContext.Provider>

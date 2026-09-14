@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { buscarEstadoVersao, useMetaMes, type DistribuicaoSemanalItem, type EstadoMesMarca, type VersaoMeta } from '@/hooks/useMetaMes'
 import { ativarVersao } from '@/hooks/useSalvarMeta'
+import { useAcesso } from '@/contexts/AcessoContext'
 import { gerarSemanas, type ConfigEtapa, type DiaSemana, type EtapaMeta, type Semana } from '@/lib/metasEngine'
 import { PassoSemanas } from '@/components/metas/PassoSemanas'
 import { PassoTaxas } from '@/components/metas/PassoTaxas'
@@ -402,6 +403,7 @@ function LinhaVersao({ versao: v, ocupado, onAtivar, onUsarComoBase }: {
   const pill = (bg: string, fg: string): CSSProperties => ({
     fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: bg, color: fg, whiteSpace: 'nowrap',
   })
+  const podeAtivar = useAcesso().pode('acao.metas-publicar')
 
   return (
     <div style={{
@@ -437,7 +439,7 @@ function LinhaVersao({ versao: v, ocupado, onAtivar, onUsarComoBase }: {
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {!v.ativa && (
+        {!v.ativa && podeAtivar && (
           <button disabled={ocupado} onClick={onAtivar} style={botaoPequeno}>{ocupado ? 'Aguarde…' : 'Ativar'}</button>
         )}
         <button disabled={ocupado} onClick={onUsarComoBase} style={botaoPequeno}>Nova versão a partir desta</button>

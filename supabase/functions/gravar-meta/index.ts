@@ -37,7 +37,7 @@ function respond(body: unknown, status: number) {
 
 async function validarSessao(
   admin: ReturnType<typeof createClient>, token: string,
-): Promise<{ ok: boolean; email?: string }> {
+): Promise<{ ok: boolean; email?: string; podePublicar?: boolean }> {
   const { data: marketingUrl } = await admin.rpc('get_secret', { secret_name: 'marketing_supabase_url' })
   const { data: marketingAnonKey } = await admin.rpc('get_secret', { secret_name: 'marketing_supabase_anon_key' })
   if (!marketingUrl || !marketingAnonKey) return { ok: false }
@@ -47,7 +47,16 @@ async function validarSessao(
   })
   if (!resp.ok) return { ok: false }
   const user = await resp.json()
-  return { ok: true, email: user.email }
+
+  // Permissão vem do controle de acessos, no mesmo Supabase do login (Marketing).
+  // Qualquer falha na consulta = sem permissão.
+  const perm = await fetch(`${marketingUrl}/rest/v1/rpc/tem_permissao`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, apikey: marketingAnonKey as string, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chave: 'acao.metas-publicar' }),
+  })
+  const podePublicar = perm.ok && (await perm.json().catch(() => false)) === true
+  return { ok: true, email: user.email, podePublicar }
 }
 
 Deno.serve(async (req) => {
@@ -62,8 +71,9 @@ Deno.serve(async (req) => {
   // plataforma pro projeto Expansão (o mesmo onde esta função é implantada).
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
-  const { ok, email } = await validarSessao(admin, token)
+  const { ok, email, podePublicar } = await validarSessao(admin, token)
   if (!ok) return respond({ error: 'sessão inválida' }, 401)
+  if (!podePublicar) return respond({ error: 'Seu acesso não permite publicar ou ativar metas.' }, 403)
 
   let payload: Payload
   try {

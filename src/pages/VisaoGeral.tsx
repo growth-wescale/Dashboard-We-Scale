@@ -25,7 +25,7 @@ import { PacingCard, MiniCard } from '@/pages/Pacing'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { MultiSelect } from '@/components/ui/MultiSelect'
-import { useAuth } from '@/hooks/useAuth'
+import { useAcesso } from '@/contexts/AcessoContext'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
@@ -800,11 +800,12 @@ const MEDIA_COLS = [
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function VisaoGeral() {
   const initDates = getMtdDates()
-  // Papel `marca` (ex.: franqueado Inpot): vê a Visão Geral filtrada só na
-  // marca dele. Sem opção de trocar — a `brandKeys` fica travada, o dropdown
-  // do BrandSelect e o clique na StatusTable ficam desabilitados.
-  const { role, marcaPermitida } = useAuth()
-  const marcaLocked = role === 'marca' && !!marcaPermitida
+  // Usuário travado numa marca no controle de acessos (ex.: franqueado Inpot):
+  // vê a Visão Geral filtrada só na marca dele. Sem opção de trocar — a
+  // `brandKeys` fica travada, o dropdown do BrandSelect e o clique na
+  // StatusTable ficam desabilitados.
+  const { marca: marcaPermitida } = useAcesso()
+  const marcaLocked = !!marcaPermitida
   // brandKeys: multi-seleção estilo Excel. [] == Consolidado (todas as marcas
   // somadas). Selecionar 2 marcas soma os dados delas.
   const [brandKeys, setBrandKeys] = useState<string[]>(marcaLocked ? [marcaPermitida!] : [])

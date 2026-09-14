@@ -431,6 +431,54 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-14 (3) — Hub de Metas: versões por mês + layout novo
+
+Junior perguntou se as metas lançadas ficavam salvas como lançamento, porque o
+chefe queria um forecast (meta menor) sem perder o original. **Não ficavam**:
+publicar de novo apagava e regravava o mês inteiro, e o `meta_log` só guardava
+"publicado", sem os números. Nenhum mês tinha sido publicado pelo Hub ainda,
+então deu pra mudar o modelo sem migrar dado.
+
+**Modelo novo (decisão do Junior):** cada publicação vira uma **versão imutável**
+do mês (V1 lançamento, V2+ forecast/revisões, com nome e motivo). Só **uma**
+fica ativa por mês e é ela que o dashboard inteiro usa. Dá pra ativar a V2 e
+depois voltar pra V1.
+
+- `meta_versao` (nova): número, rótulo, motivo, `ativa`, `linhas_espelho`
+  (jsonb com as linhas exatas de `DB_Metas_Performance`, congeladas na
+  publicação). Índice único parcial garante 1 ativa por mês.
+- `meta_semana` e `meta_marca` passaram a pertencer à versão (`meta_versao_id`);
+  `meta_mes` virou só o contêiner do mês (perdeu status/publicado_*).
+- Triggers `*_imutavel` bloqueiam UPDATE/DELETE no conteúdo de versão publicada
+  e em `meta_versao` (exceto `ativa`/`ativada_*`). Versão nunca é apagada.
+- `publicar_meta_versao(p jsonb, autor, ativar)` e `ativar_meta_versao(id, autor)`:
+  uma transação cada, execução só pra `service_role`. **Ativar regrava
+  `DB_Metas_Performance` do mês a partir de `linhas_espelho`**, então reativar a
+  V1 devolve os números da V1 mesmo que o motor mude depois.
+- Edge Function `gravar-meta` (v5, `verify_jwt: false`) só valida a sessão e
+  chama uma das duas funções.
+- Setembro/2026 importado como **V1 · Lançamento (ativa, origem `importado`)** a
+  partir das 17 linhas que já estavam no banco. Funil por marca reconstruído
+  com etapas fixas e pessoas com peso igual; distribuição semanal não importada
+  (`meta_closer_semana` é por pessoa somando marcas, não dá pra separar).
+
+**Achado junto:** o espelho do Hub não gravava `meta_volume_sal` (SAL), que
+`useMetasPerformance` lê. Publicar pelo Hub zeraria a meta de SAL no dash.
+
+**Layout:** stepper numerado; Passo 0 virou "Mês e versões" (lista com Ativar /
+Nova versão a partir desta); seletor de mês em 2 selects (o `<input type="month">`
+nativo parecia não responder ao clique); Passo 6 publica como V{n} comparando
+com a versão ativa. Estilos compartilhados em `src/components/metas/metasUi.ts`.
+Também: "Começar do zero" deixava as semanas vazias, e trocar de mês não limpava
+o rascunho.
+
+Verificado: build + 317 testes; SQL com rollback (publicar V1/V2, ativar V2 →
+espelho muda, reativar V1 → volta idêntico, UPDATE bloqueado); reativar a V1 de
+setembro gera md5 idêntico às 17 linhas atuais.
+
+**Pendente:** `gravar-meta` valida sessão mas não o papel (`admin`) — hoje só a
+UI restringe `/metas` via `RoleGuard`.
+
 ### 2026-09-14 (2) — Cabeçalhos de tabela/lista quebrando linha no celular
 
 Junior testou o PR #141 no celular real e mandou print: na aba Campanha de

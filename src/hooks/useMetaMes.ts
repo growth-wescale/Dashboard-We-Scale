@@ -17,8 +17,30 @@ export interface DistribuicaoSemanalItem {
   valor: number
 }
 
+/**
+ * Uma versão publicada das metas de um mês (V1 = lançamento, V2+ = revisões /
+ * forecast). Imutável depois de criada — o banco bloqueia UPDATE/DELETE nas
+ * tabelas da versão. A única coisa que muda é QUAL versão está ativa, e é a
+ * ativa que alimenta `DB_Metas_Performance` (o que o dashboard inteiro lê).
+ */
+export interface VersaoMeta {
+  id: number
+  numero: number
+  rotulo: string
+  motivo: string | null
+  origem: 'hub' | 'importado'
+  ativa: boolean
+  publicadoEm: string
+  publicadoPor: string | null
+  ativadaEm: string | null
+  ativadaPor: string | null
+  /** Somados das linhas congeladas do espelho (só Closers carregam venda/faturamento). */
+  totalVendas: number
+  totalFaturamento: number
+}
+
 export interface EstadoMes {
-  status: 'inexistente' | 'rascunho' | 'publicado'
+  status: 'inexistente' | 'publicado'
   diaViradaSemana: DiaSemana
   semanas: Semana[]
   marcas: EstadoMesMarca[]
@@ -27,15 +49,47 @@ export interface EstadoMes {
 
 const VAZIO: EstadoMes = { status: 'inexistente', diaViradaSemana: 'terca', semanas: [], marcas: [], distribuicaoSemanal: [] }
 
-async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error: string | null }> {
-  const { data: mesRow, error: erroMes } = await supabaseVendas
-    .from('meta_mes').select('status, dia_virada_semana').eq('mes_referencia', mesReferencia).maybeSingle()
-  if (erroMes) return { estado: VAZIO, error: erroMes.message }
-  if (!mesRow) return { estado: VAZIO, error: null }
+function totaisEspelho(linhas: unknown): { vendas: number; faturamento: number } {
+  if (!Array.isArray(linhas)) return { vendas: 0, faturamento: 0 }
+  let vendas = 0
+  let faturamento = 0
+  for (const l of linhas as Array<Record<string, unknown>>) {
+    if (l.funcao !== 'Closer') continue
+    vendas += Number(l.meta_qtd_vendas) || 0
+    faturamento += Number(l.meta_financeira) || 0
+  }
+  return { vendas, faturamento }
+}
+
+async function buscarVersoes(mesReferencia: string): Promise<{ versoes: VersaoMeta[]; error: string | null }> {
+  const { data, error } = await supabaseVendas
+    .from('meta_versao')
+    .select('id, numero, rotulo, motivo, origem, ativa, publicado_em, publicado_por, ativada_em, ativada_por, linhas_espelho')
+    .eq('mes_referencia', mesReferencia)
+    .order('numero')
+  if (error) return { versoes: [], error: error.message }
+  const versoes = (data ?? []).map((v: any): VersaoMeta => {
+    const t = totaisEspelho(v.linhas_espelho)
+    return {
+      id: v.id, numero: v.numero, rotulo: v.rotulo, motivo: v.motivo, origem: v.origem, ativa: v.ativa,
+      publicadoEm: v.publicado_em, publicadoPor: v.publicado_por,
+      ativadaEm: v.ativada_em, ativadaPor: v.ativada_por,
+      totalVendas: t.vendas, totalFaturamento: t.faturamento,
+    }
+  })
+  return { versoes, error: null }
+}
+
+/** Estado completo (semanas, funil por marca, pessoas, distribuição) de UMA versão. */
+export async function buscarEstadoVersao(versaoId: number): Promise<{ estado: EstadoMes; error: string | null }> {
+  const { data: versaoRow, error: erroVersao } = await supabaseVendas
+    .from('meta_versao').select('dia_virada_semana').eq('id', versaoId).maybeSingle()
+  if (erroVersao) return { estado: VAZIO, error: erroVersao.message }
+  if (!versaoRow) return { estado: VAZIO, error: null }
 
   const [{ data: semanasRows, error: erroSemanas }, { data: marcasRows, error: erroMarcas }] = await Promise.all([
-    supabaseVendas.from('meta_semana').select('numero, data_inicio, data_fim').eq('mes_referencia', mesReferencia).order('numero'),
-    supabaseVendas.from('meta_marca').select('id, marca, ticket_medio').eq('mes_referencia', mesReferencia),
+    supabaseVendas.from('meta_semana').select('numero, data_inicio, data_fim').eq('meta_versao_id', versaoId).order('numero'),
+    supabaseVendas.from('meta_marca').select('id, marca, ticket_medio').eq('meta_versao_id', versaoId).order('marca'),
   ])
   if (erroSemanas) return { estado: VAZIO, error: erroSemanas.message }
   if (erroMarcas) return { estado: VAZIO, error: erroMarcas.message }
@@ -56,8 +110,8 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
     marca: m.marca,
     ticketMedio: Number(m.ticket_medio) || 0,
     etapas: (etapasRows ?? []).filter((e: any) => e.meta_marca_id === m.id).map((e: any) => ({
-      etapa: e.etapa as EtapaMeta, modo: e.modo, valorFixo: e.valor_fixo ?? undefined,
-      etapaOrigem: e.etapa_origem ?? undefined, taxa: e.taxa ?? undefined,
+      etapa: e.etapa as EtapaMeta, modo: e.modo, valorFixo: e.valor_fixo != null ? Number(e.valor_fixo) : undefined,
+      etapaOrigem: e.etapa_origem ?? undefined, taxa: e.taxa != null ? Number(e.taxa) : undefined,
       taxaOrigem: e.taxa_origem ?? undefined,
     })),
     pessoas: (pessoasRows ?? []).filter((p: any) => p.meta_marca_id === m.id).map((p: any) => ({
@@ -71,8 +125,8 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
 
   return {
     estado: {
-      status: mesRow.status,
-      diaViradaSemana: mesRow.dia_virada_semana,
+      status: 'publicado',
+      diaViradaSemana: versaoRow.dia_virada_semana,
       semanas: (semanasRows ?? []).map(s => ({ numero: s.numero, inicio: s.data_inicio, fim: s.data_fim })),
       marcas,
       distribuicaoSemanal,
@@ -81,7 +135,12 @@ async function buscar(mesReferencia: string): Promise<{ estado: EstadoMes; error
   }
 }
 
+/**
+ * Versões do mês + estado completo da versão ativa (ou da última publicada, se
+ * nenhuma estiver ativa). Quem precisa de outra versão chama `buscarEstadoVersao`.
+ */
 export function useMetaMes(mesReferencia: string) {
+  const [versoes, setVersoes] = useState<VersaoMeta[]>([])
   const [estado, setEstado] = useState<EstadoMes | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,9 +152,19 @@ export function useMetaMes(mesReferencia: string) {
     async function run(showLoading: boolean) {
       if (showLoading) setLoading(true)
       setError(null)
-      const { estado: e, error: err } = await buscar(mesReferencia)
+      const { versoes: vs, error: erroVersoes } = await buscarVersoes(mesReferencia)
       if (cancelled) return
-      if (err) { setError(err); setLoading(false); return }
+      if (erroVersoes) { setError(erroVersoes); setLoading(false); return }
+
+      const alvo = vs.find(v => v.ativa) ?? vs[vs.length - 1] ?? null
+      let e = VAZIO
+      if (alvo) {
+        const r = await buscarEstadoVersao(alvo.id)
+        if (cancelled) return
+        if (r.error) { setError(r.error); setLoading(false); return }
+        e = r.estado
+      }
+      setVersoes(vs)
       setEstado(e)
       setLoading(false)
     }
@@ -115,5 +184,8 @@ export function useMetaMes(mesReferencia: string) {
     }
   }, [mesReferencia])
 
-  return { estado, loading, error, reload: () => { void runRef.current?.(false) } }
+  const versaoAtiva = versoes.find(v => v.ativa) ?? null
+  const versaoExibida = versaoAtiva ?? versoes[versoes.length - 1] ?? null
+
+  return { versoes, versaoAtiva, versaoExibida, estado, loading, error, reload: () => { void runRef.current?.(false) } }
 }

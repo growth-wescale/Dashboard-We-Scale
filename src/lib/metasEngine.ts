@@ -318,6 +318,8 @@ export interface LinhaEspelho {
   meta_sql: number | null
   meta_agendamento: number | null
   meta_reuniao_realizada: number | null
+  /** Coluna `text` no banco (legado) — `useMetasPerformance` converte com Number(). */
+  meta_volume_sal: string | null
   meta_cof: number | null
   meta_financeira: number | null
   meta_qtd_vendas: number | null
@@ -344,12 +346,14 @@ export function gerarLinhasEspelho(
 
     const sql = resolucao.valores['Reunião Agendada SQL']
     const reuniao = resolucao.valores['Reunião Realizada']
+    const sal = resolucao.valores['SAL']
     const cof = resolucao.valores['Oportunidade COF']
     const fechamento = resolucao.valores['Fechamento']
     const faturamento = resolucao.faturamento
 
     const rateioSql = sql != null ? ratearPorPeso(sql, sdrs) : {}
     const rateioReuniao = reuniao != null ? ratearPorPeso(reuniao, sdrs) : {}
+    const rateioSal = sal != null ? ratearPorPeso(sal, sdrs) : {}
     const rateioCof = cof != null ? ratearPorPeso(cof, closers) : {}
     const rateioFaturamento = faturamento != null ? ratearPorPeso(faturamento, closers) : {}
     const rateioQtd = fechamento != null ? ratearPorPeso(fechamento, closers) : {}
@@ -363,6 +367,7 @@ export function gerarLinhasEspelho(
         meta_sql: rateioSql[sdr.nome] ?? null,
         meta_agendamento: rateioSql[sdr.nome] ?? null,
         meta_reuniao_realizada: rateioReuniao[sdr.nome] ?? null,
+        meta_volume_sal: rateioSal[sdr.nome] != null ? String(Math.round(rateioSal[sdr.nome] * 100) / 100) : null,
         meta_cof: null,
         meta_financeira: null,
         meta_qtd_vendas: null,
@@ -378,6 +383,7 @@ export function gerarLinhasEspelho(
         meta_sql: null,
         meta_agendamento: null,
         meta_reuniao_realizada: null,
+        meta_volume_sal: null,
         meta_cof: rateioCof[closer.nome] ?? null,
         meta_financeira: rateioFaturamento[closer.nome] ?? null,
         meta_qtd_vendas: rateioQtd[closer.nome] ?? null,

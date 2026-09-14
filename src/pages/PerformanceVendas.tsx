@@ -167,7 +167,7 @@ function LeadtimeSection({ titulo, itens, accent }: { titulo: string; itens: Lea
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', marginBottom: 10 }}>
         {titulo}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(itens.length, 3)}, 1fr)`, gap: 14 }}>
+      <div className={`rs-grid rs-cols-${Math.min(itens.length, 3)}`} style={{ '--rs-gap': '14px' } as React.CSSProperties}>
         {itens.map(it => <LeadtimeCard key={it.label} {...it} accent={accent} />)}
       </div>
     </div>
@@ -183,7 +183,8 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
       <div style={{ background: SDR_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         PRÉ-VENDAS · EXECUTIVOS DE EXPANSÃO
       </div>
-      <div style={{ padding: '6px 8px' }}>
+      <div className="rs-scroll-x">
+      <div style={{ padding: '6px 8px', minWidth: 720 }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>{mqlLbl}</span>
@@ -213,6 +214,7 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
           </div>
         ))}
       </div>
+      </div>
     </SCard>
   )
 }
@@ -224,7 +226,8 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
       <div style={{ background: CLOSER_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         VENDAS · CLOSERS
       </div>
-      <div style={{ padding: '6px 8px' }}>
+      <div className="rs-scroll-x">
+      <div style={{ padding: '6px 8px', minWidth: 860 }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>DIAG</span>
@@ -256,6 +259,7 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
           </div>
         ))}
       </div>
+      </div>
     </SCard>
   )
 }
@@ -266,9 +270,11 @@ function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: s
   return (
     <SCard>
       <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 14 }}>{titulo}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, background: 'var(--ws-border)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+      {/* Divisórias por sombra na própria célula (não pelo gap mostrando o fundo):
+          com número ímpar de itens a célula vazia da última linha fica branca, não cinza. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
         {linhas.map((c, i) => (
-          <div key={i} style={{ background: 'var(--ws-surface)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div key={i} style={{ boxShadow: '1px 0 0 var(--ws-border), 0 1px 0 var(--ws-border)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', lineHeight: 1.3 }}>{c.label}</span>
             <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 22, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {pct(c.val)}
@@ -601,7 +607,7 @@ export function PerformanceVendas() {
 
   if (faltandoObrigatorio.length > 0) {
     return (
-      <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
+      <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
         <PageTop title="Performance" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
         <FilterBar
           marcasDisponiveis={marcasDisponiveis}
@@ -617,7 +623,7 @@ export function PerformanceVendas() {
   }
 
   return (
-    <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
       {...(marcasSelecionadas.length === 1 ? { 'data-brand': marcasSelecionadas[0].key } : {})}>
 
       <PageTop
@@ -653,7 +659,7 @@ export function PerformanceVendas() {
           <SectionHeader title="Executivos de Expansão (SDR)"
             sub={`Do ${mqlLbl} ao SQL — cadência, contato efetivo e agendamento`} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+          <div className="rs-grid rs-cols-4 rs-stack-sm" style={{ '--rs-gap': '14px', margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' } as React.CSSProperties}>
             <MetaRitmoCard label={`${mqlLbl} no período`} realizado={strip.mql} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
             <MetaRitmoCard label="SQL" realizado={strip.sql}
@@ -700,7 +706,7 @@ export function PerformanceVendas() {
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
               Só as etapas do SDR — clique numa etapa pra ver os deals.
             </div>
-            <SCard style={{ padding: '18px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+            <SCard style={{ padding: '18px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
               <TrapFunnel stages={funilSdr} invest={0} accent={SDR_ACCENT} dark={SDR_ACCENT_DARK}
                 onStageClick={key => setClickedSdrStage(key as StageKey)} />
             </SCard>
@@ -713,7 +719,7 @@ export function PerformanceVendas() {
           <SectionHeader title="Closer"
             sub="Do diagnóstico ao fechamento — SAL, oportunidade e receita" />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+          <div className="rs-grid rs-cols-5 rs-stack-sm" style={{ '--rs-gap': '14px', margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' } as React.CSSProperties}>
             <MetaRitmoCard label="Diagnóstico" realizado={strip.rr} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
             <MetaRitmoCard label="SAL" realizado={strip.sal} metaMensal={0}
@@ -764,7 +770,7 @@ export function PerformanceVendas() {
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
               Só as etapas do Closer — clique numa etapa pra ver os deals.
             </div>
-            <SCard style={{ padding: '18px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+            <SCard style={{ padding: '18px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
               <TrapFunnel stages={funilCloser} invest={0} accent={CLOSER_ACCENT} dark={CLOSER_ACCENT_DARK}
                 onStageClick={key => setClickedCloserStage(key as StageKey)} />
             </SCard>

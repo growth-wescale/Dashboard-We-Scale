@@ -53,7 +53,7 @@ export function HubMetas() {
   }, [estado, rascunho])
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', maxWidth: 1200, margin: '0 auto' }}>
       <PageTop
         title="Metas"
         subtitle="Lançamento mensal de metas — funil configurável por marca, semanas e pessoas"
@@ -63,8 +63,8 @@ export function HubMetas() {
         {PASSOS.map((label, i) => (
           <button key={label} onClick={() => setPasso(i)} style={{
             padding: '6px 14px', borderRadius: 999,
-            border: '1px solid ' + (i === passo ? 'var(--ws-brand)' : 'var(--ws-border)'),
-            background: i === passo ? 'var(--ws-brand)' : '#fff',
+            border: '1px solid ' + (i === passo ? 'var(--brand-accent)' : 'var(--ws-border)'),
+            background: i === passo ? 'var(--brand-accent)' : '#fff',
             color: i === passo ? '#fff' : 'var(--ws-text-primary)',
             fontSize: 12, cursor: 'pointer',
           }}>{i}. {label}</button>
@@ -201,9 +201,9 @@ function PassoAbrirMes({
           Este mês já está {estado!.status === 'publicado' ? 'publicado' : 'em rascunho'}. Avance pelos passos pra editar.
         </p>
       ) : (
-        <div style={{ marginTop: 16, display: 'flex', gap: 12 }}>
+        <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {estadoAnterior && estadoAnterior.status !== 'inexistente' && (
-            <button onClick={onCopiarMesAnterior} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: 'var(--ws-brand)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+            <button onClick={onCopiarMesAnterior} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: 'var(--brand-accent)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
               Copiar do mês anterior
             </button>
           )}

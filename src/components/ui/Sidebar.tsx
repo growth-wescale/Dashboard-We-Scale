@@ -53,8 +53,9 @@ export function Sidebar({
         left: 0,
         height: isGlass ? 'calc(100vh - 24px)' : '100vh',
         overflow: 'hidden',
-        transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.2s ease',
+        transform: open ? 'translateX(0)' : 'translateX(calc(-100% - 24px))',
+        visibility: open ? 'visible' : 'hidden',
+        transition: 'transform 0.2s ease, visibility 0.2s',
         ...style,
       }}>
       {/* diagonal signature texture */}

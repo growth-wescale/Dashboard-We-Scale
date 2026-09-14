@@ -40,8 +40,8 @@ function LinhaTaxa({
   const { taxa: taxaMesAnterior } = useTaxaMesAnterior(mesAnterior, marca, etapa)
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--ws-border)' }}>
-      <span style={{ fontSize: 13, minWidth: 220 }}>{etapaOrigem} → {etapa}</span>
+    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: '10px 0', borderTop: '1px solid var(--ws-border)' }}>
+      <span style={{ fontSize: 13, minWidth: 'min(220px, 100%)' }}>{etapaOrigem} → {etapa}</span>
       <input type="number" step="0.1" min="0" max="100"
         value={taxaAtual != null ? Math.round(taxaAtual * 1000) / 10 : ''}
         onChange={e => onMudarTaxa(marca, etapa, Number(e.target.value) / 100, 'manual')}

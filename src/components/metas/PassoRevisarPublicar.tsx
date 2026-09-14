@@ -44,7 +44,7 @@ export function PassoRevisarPublicar({
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 24 }}>
       <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Consolidado — {mesReferencia}</h3>
 
-      <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Vendas</div>
           <div style={{ fontSize: 24, fontWeight: 600 }}>{totalVendas}</div>
@@ -69,7 +69,7 @@ export function PassoRevisarPublicar({
       )}
 
       <button onClick={publicar} disabled={publicando || temErro}
-        style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: temErro ? 'var(--ws-border)' : 'var(--ws-brand)', color: '#fff', cursor: temErro ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500 }}>
+        style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: temErro ? 'var(--ws-border)' : 'var(--brand-accent)', color: '#fff', cursor: temErro ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500 }}>
         {publicando ? 'Publicando…' : 'Publicar mês'}
       </button>
     </div>

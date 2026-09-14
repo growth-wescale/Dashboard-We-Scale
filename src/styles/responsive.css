@@ -1,0 +1,135 @@
+/* =====================================================================
+   Responsividade — celular, tablet e desktop.
+
+   O app é todo em `style={{…}}` inline, que não aceita media query. Por isso:
+   - espaçamentos que mudam por tela viram TOKENS (--page-pad-x…), lidos no
+     inline via var();
+   - grades que mudam de colunas viram CLASSES `rs-*` (sem gridTemplateColumns
+     inline, senão o inline ganha da classe);
+   - mudança de ESTRUTURA (menu vira gaveta, filtros viram painel) fica no
+     hook `useMediaQuery` (src/hooks/useMediaQuery.ts), com os mesmos cortes.
+
+   Cortes: celular ≤ 640px · compacto (celular + tablet em pé) ≤ 1023px.
+   ===================================================================== */
+
+:root {
+  --page-pad-x: 32px;
+  --page-pad-top: 32px;
+  --topbar-pad-x: 24px;
+  --topbar-gap: 12px;
+}
+@media (max-width: 1023px) {
+  :root { --page-pad-x: 24px; --page-pad-top: 24px; --topbar-pad-x: 16px; }
+}
+@media (max-width: 640px) {
+  :root {
+    --page-pad-x: 14px; --page-pad-top: 18px; --topbar-pad-x: 10px; --topbar-gap: 6px;
+    --fs-metric: 28px;
+  }
+}
+
+html { -webkit-text-size-adjust: 100%; }
+
+/* ── Grades de cards ─────────────────────────────────────────────────── */
+/* rs-cols-N: N colunas no desktop, reduz no tablet e no celular. */
+.rs-grid { display: grid; gap: var(--rs-gap, 16px); }
+.rs-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.rs-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.rs-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rs-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rs-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 1279px) {
+  .rs-cols-6, .rs-cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .rs-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .rs-cols-3 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .rs-cols-6, .rs-cols-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rs-cols-2 { grid-template-columns: minmax(0, 1fr); }
+  /* número ímpar de cards em 2 colunas: o último ocupa a linha inteira */
+  .rs-cols-6 > :last-child:nth-child(odd),
+  .rs-cols-5 > :last-child:nth-child(odd),
+  .rs-cols-4 > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* cards "ricos" (barra de ritmo, 3 números embaixo) não cabem em 2 colunas */
+  .rs-stack-sm { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media (max-width: 380px) {
+  .rs-cols-6, .rs-cols-5, .rs-cols-4 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* rs-split: 2 colunas lado a lado (proporção em --rs-split), empilha abaixo de 1100px. */
+.rs-split {
+  display: grid;
+  gap: var(--rs-gap, 24px);
+  grid-template-columns: var(--rs-split, minmax(0, 1fr) minmax(0, 1fr));
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .rs-split { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Utilitários ─────────────────────────────────────────────────────── */
+.rs-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 640px) {
+  .rs-hide-sm { display: none !important; }
+}
+
+/* ── Popups laterais de deals ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .rs-drawer { width: 100vw !important; border-left: none !important; }
+  .rs-drawer-head { padding: 14px 16px !important; }
+  .rs-drawer-head h2 { font-size: 17px !important; }
+  .rs-drawer-sec { padding-left: 16px !important; padding-right: 16px !important; }
+  /* Celular: gráficos, filtros e tabela rolam juntos — com cabeçalho fixo a
+     tabela ficaria com 1/3 da tela. */
+  .rs-drawer-body { overflow-y: auto; }
+  .rs-drawer-body > .rs-drawer-table { flex: none !important; overflow: auto hidden !important; }
+}
+
+/* ── Funil em trapézios ──────────────────────────────────────────────── */
+/* Coluna de custo encolhe quando o card fica estreito (container query:
+   depende da largura do card, não da tela). */
+.rs-trap { container-type: inline-size; }
+.rs-trap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--trap-cost, 0px);
+  column-gap: var(--trap-gap, 20px);
+}
+@container (max-width: 520px) {
+  .rs-trap-row { grid-template-columns: minmax(0, 1fr) min(var(--trap-cost, 0px), 84px); column-gap: var(--trap-gap-sm, 10px); }
+  .rs-trap-cost-label { font-size: 9.5px !important; }
+  .rs-trap-cost-value { font-size: 13px !important; }
+}
+
+/* ── Barra de filtros no modo compacto (painel) ──────────────────────── */
+.ws-filter-sheet .ws-ms,
+.ws-filter-sheet .ws-ms-btn { width: 100%; }
+.ws-filter-sheet .ws-ms-pop { right: 0; }
+.rs-cols-1 { grid-template-columns: minmax(0, 1fr); }
+
+/* Lista de etapas (Aging/Atual da Visão Macro): colunas de média mais estreitas no celular */
+@media (max-width: 640px) {
+  :root { --etapa-col: 62px; }
+}
+
+/* Toque: itens de lista dos seletores com altura de dedo, não de mouse */
+@media (pointer: coarse) {
+  .ws-ms-pop label { padding-top: 9px !important; padding-bottom: 9px !important; }
+}
+
+/* ── Modo GP no celular ──────────────────────────────────────────────── */
+.gp-strip { margin-left: var(--page-pad-x); margin-right: var(--page-pad-x); }
+@media (max-width: 640px) {
+  .gp-strip { gap: 8px; padding: 11px 14px; }
+  .gp-strip__chip { font-size: 11px; padding: 4px 10px; }
+  .gp-strip__cta { margin-left: 0; }
+  .gp-intro__stage { padding: 0 20px; }
+  .gp-intro__word { font-size: clamp(40px, 13vw, 54px); }
+  .gp-intro__actions { flex-direction: column; gap: 14px; }
+  .gp-intro__skipwrap { top: 16px; right: 16px; }
+}

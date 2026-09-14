@@ -101,14 +101,14 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
         zIndex: 1000, backdropFilter: 'blur(2px)',
       }} />
 
-      <div style={{
+      <div className="rs-drawer" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(980px, 96vw)',
         background: 'var(--ws-surface)', borderLeft: '1px solid var(--ws-border)',
         boxShadow: '-8px 0 40px rgba(0,0,0,.18)', zIndex: 1001,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         {/* header */}
-        <div style={{
+        <div className="rs-drawer-head" style={{
           padding: '20px 24px', borderBottom: '1px solid var(--ws-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0,
         }}>
@@ -129,8 +129,10 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
           </button>
         </div>
 
+        {/* gráficos + filtros + tabela: no celular rolam juntos (ver .rs-drawer-body) */}
+        <div className="rs-drawer-body" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {/* mini gráficos */}
-        <div style={{
+        <div className="rs-drawer-sec" style={{
           padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
           display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
         }}>
@@ -139,7 +141,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
         </div>
 
         {/* filtros */}
-        <div style={{
+        <div className="rs-drawer-sec" style={{
           padding: '12px 24px', borderBottom: '1px solid var(--ws-border)',
           display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
         }}>
@@ -169,7 +171,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
         </div>
 
         {/* tabela */}
-        <div style={{ overflow: 'auto', flex: 1 }}>
+        <div className="rs-drawer-table" style={{ overflow: 'auto', flex: 1 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
@@ -229,6 +231,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </>

@@ -3,6 +3,7 @@ import { resolverFunilMarca, gerarLinhasEspelho } from '@/lib/metasEngine'
 import { salvarMeta } from '@/hooks/useSalvarMeta'
 import type { EstadoMes, EstadoMesMarca, DistribuicaoSemanalItem } from '@/hooks/useMetaMes'
 import type { DiaSemana, Semana } from '@/lib/metasEngine'
+import { cardStyle, bannerStyle, primaryButtonStyle, disabledButtonStyle } from '@/components/metas/metasUi'
 
 export function PassoRevisarPublicar({
   mesReferencia, diaViradaSemana, semanas, marcas, distribuicaoSemanal, estadoMesAnterior, onPublicado,
@@ -41,8 +42,8 @@ export function PassoRevisarPublicar({
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 24 }}>
-      <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Consolidado — {mesReferencia}</h3>
+    <div style={cardStyle}>
+      <h3 style={{ margin: '0 0 16px', fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, color: 'var(--ws-text-primary)' }}>Consolidado — {mesReferencia}</h3>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, marginBottom: 16 }}>
         <div>
@@ -57,19 +58,18 @@ export function PassoRevisarPublicar({
       </div>
 
       {temErro && (
-        <div style={{ padding: 10, background: '#FEE2E2', borderRadius: 8, fontSize: 12, color: '#B91C1C', marginBottom: 16 }}>
+        <div style={{ ...bannerStyle('erro'), marginBottom: 16 }}>
           Existem marcas com erro de configuração — corrija no Passo 3 antes de publicar.
         </div>
       )}
 
       {msg && (
-        <div style={{ padding: 10, borderRadius: 8, fontSize: 12, marginBottom: 16, background: msg.startsWith('Erro') ? '#FEE2E2' : '#DCFCE7', color: msg.startsWith('Erro') ? '#B91C1C' : '#166534' }}>
+        <div style={{ ...bannerStyle(msg.startsWith('Erro') ? 'erro' : 'sucesso'), marginBottom: 16 }}>
           {msg}
         </div>
       )}
 
-      <button onClick={publicar} disabled={publicando || temErro}
-        style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: temErro ? 'var(--ws-border)' : 'var(--brand-accent)', color: '#fff', cursor: temErro ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 500 }}>
+      <button onClick={publicar} disabled={publicando || temErro} style={temErro ? disabledButtonStyle : primaryButtonStyle}>
         {publicando ? 'Publicando…' : 'Publicar mês'}
       </button>
     </div>

@@ -1,6 +1,7 @@
 import { useTaxaMesAnterior } from '@/hooks/useSalvarMeta'
 import type { EtapaMeta } from '@/lib/metasEngine'
 import type { EstadoMesMarca } from '@/hooks/useMetaMes'
+import { cardStyle, sectionTitleStyle, inputStyle } from '@/components/metas/metasUi'
 
 export function PassoTaxas({
   marcas, mesAnterior, onMudarTaxa,
@@ -12,8 +13,8 @@ export function PassoTaxas({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {marcas.map(m => (
-        <div key={m.marca} style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 20 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>{m.marca}</h3>
+        <div key={m.marca} style={cardStyle}>
+          <h3 style={sectionTitleStyle}>{m.marca}</h3>
           {m.etapas.filter(e => e.modo === 'derivado' && e.etapaOrigem).map(e => (
             <LinhaTaxa key={e.etapa} marca={m.marca} etapa={e.etapa} etapaOrigem={e.etapaOrigem as EtapaMeta}
               taxaAtual={e.taxa} mesAnterior={mesAnterior} onMudarTaxa={onMudarTaxa} />
@@ -45,11 +46,11 @@ function LinhaTaxa({
       <input type="number" step="0.1" min="0" max="100"
         value={taxaAtual != null ? Math.round(taxaAtual * 1000) / 10 : ''}
         onChange={e => onMudarTaxa(marca, etapa, Number(e.target.value) / 100, 'manual')}
-        style={{ width: 90, padding: '6px 10px', border: '1px solid var(--ws-border)', borderRadius: 6 }} />
+        style={{ ...inputStyle, width: 90 }} />
       <span style={{ fontSize: 12 }}>%</span>
       {taxaMesAnterior != null && (
         <button onClick={() => onMudarTaxa(marca, etapa, taxaMesAnterior, 'mes_anterior')}
-          style={{ fontSize: 11, padding: '4px 10px', borderRadius: 999, border: '1px solid var(--ws-border)', background: 'var(--ws-bg)', cursor: 'pointer' }}>
+          style={{ fontSize: 11, padding: '4px 10px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--ws-border)', background: 'var(--ws-bg)', color: 'var(--ws-text-primary)', cursor: 'pointer' }}>
           usar mês anterior · {(taxaMesAnterior * 100).toFixed(1)}%
         </button>
       )}

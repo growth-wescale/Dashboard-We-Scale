@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useMetaMes, type EstadoMes, type EstadoMesMarca, type DistribuicaoSemanalItem } from '@/hooks/useMetaMes'
 import type { ConfigEtapa, DiaSemana, EtapaMeta, Semana } from '@/lib/metasEngine'
@@ -8,6 +8,7 @@ import { PassoFunilMarca } from '@/components/metas/PassoFunilMarca'
 import { PassoPessoas } from '@/components/metas/PassoPessoas'
 import { PassoDistribuicaoSemanal } from '@/components/metas/PassoDistribuicaoSemanal'
 import { PassoRevisarPublicar } from '@/components/metas/PassoRevisarPublicar'
+import { cardStyle, primaryButtonStyle, secondaryButtonStyle } from '@/components/metas/metasUi'
 
 // 7 entradas, índice 0–6 — Passo 0 é a única "fora da contagem" do spec
 // (abrir/copiar o mês, não uma etapa de configuração em si); Passo 1–6 são
@@ -59,16 +60,34 @@ export function HubMetas() {
         subtitle="Lançamento mensal de metas — funil configurável por marca, semanas e pessoas"
       />
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        {PASSOS.map((label, i) => (
-          <button key={label} onClick={() => setPasso(i)} style={{
-            padding: '6px 14px', borderRadius: 999,
-            border: '1px solid ' + (i === passo ? 'var(--brand-accent)' : 'var(--ws-border)'),
-            background: i === passo ? 'var(--brand-accent)' : '#fff',
-            color: i === passo ? '#fff' : 'var(--ws-text-primary)',
-            fontSize: 12, cursor: 'pointer',
-          }}>{i}. {label}</button>
-        ))}
+      <div className="rs-scroll-x" style={{ display: 'flex', gap: 0, marginBottom: 28, paddingBottom: 4 }}>
+        {PASSOS.map((label, i) => {
+          const ativo = i === passo
+          const concluido = i < passo
+          return (
+            <button key={label} onClick={() => setPasso(i)} style={{
+              display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+              border: 'none', background: 'none', cursor: 'pointer', padding: '4px 0',
+            }}>
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)',
+                background: ativo || concluido ? 'var(--brand-accent)' : 'var(--ws-surface)',
+                color: ativo || concluido ? 'var(--brand-accent-contrast)' : 'var(--ws-text-secondary)',
+                border: '1.5px solid ' + (ativo || concluido ? 'var(--brand-accent)' : 'var(--ws-border-strong)'),
+              }}>{i}</span>
+              <span style={{
+                fontSize: 13, whiteSpace: 'nowrap',
+                fontWeight: ativo ? 600 : 400,
+                color: ativo ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)',
+              }}>{label}</span>
+              {i < PASSOS.length - 1 && (
+                <span style={{ width: 28, height: 1.5, background: concluido ? 'var(--brand-accent)' : 'var(--ws-border)', margin: '0 4px' }} />
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {loading && <div style={{ padding: 40, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>Carregando…</div>}
@@ -177,6 +196,18 @@ export function HubMetas() {
   )
 }
 
+const MESES_LABEL = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+function selectStyle(): CSSProperties {
+  return {
+    padding: '8px 12px', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)',
+    fontSize: 14, color: 'var(--ws-text-primary)', background: 'var(--ws-surface)', cursor: 'pointer',
+  }
+}
+
 function PassoAbrirMes({
   mesReferencia, setMesReferencia, estado, estadoAnterior, onCopiarMesAnterior, onIniciarVazio,
 }: {
@@ -188,26 +219,34 @@ function PassoAbrirMes({
   onIniciarVazio: () => void
 }) {
   const jaAberto = estado != null && estado.status !== 'inexistente'
+  const [ano, mes] = mesReferencia.split('-').map(Number) // mes: 1-12
+  const anoAtual = new Date().getFullYear()
+  const anos = [anoAtual - 1, anoAtual, anoAtual + 1]
+
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 24 }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 240 }}>
-        <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Mês de referência</span>
-        <input type="month" value={mesReferencia.slice(0, 7)} onChange={e => setMesReferencia(`${e.target.value}-01`)}
-          style={{ padding: '8px 12px', border: '1px solid var(--ws-border)', borderRadius: 6 }} />
-      </label>
+    <div style={cardStyle}>
+      <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)', display: 'block', marginBottom: 8 }}>Mês de referência</span>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <select value={mes} onChange={e => setMesReferencia(`${ano}-${String(e.target.value).padStart(2, '0')}-01`)} style={selectStyle()}>
+          {MESES_LABEL.map((label, i) => <option key={label} value={i + 1}>{label}</option>)}
+        </select>
+        <select value={ano} onChange={e => setMesReferencia(`${e.target.value}-${String(mes).padStart(2, '0')}-01`)} style={selectStyle()}>
+          {anos.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </div>
 
       {jaAberto ? (
         <p style={{ marginTop: 16, fontSize: 13, color: 'var(--ws-text-secondary)' }}>
           Este mês já está {estado!.status === 'publicado' ? 'publicado' : 'em rascunho'}. Avance pelos passos pra editar.
         </p>
       ) : (
-        <div style={{ marginTop: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ marginTop: 20, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {estadoAnterior && estadoAnterior.status !== 'inexistente' && (
-            <button onClick={onCopiarMesAnterior} style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: 'var(--brand-accent)', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 500 }}>
+            <button onClick={onCopiarMesAnterior} style={primaryButtonStyle}>
               Copiar do mês anterior
             </button>
           )}
-          <button onClick={onIniciarVazio} style={{ padding: '10px 18px', borderRadius: 8, border: '1px solid var(--ws-border)', background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+          <button onClick={onIniciarVazio} style={secondaryButtonStyle}>
             Começar vazio
           </button>
         </div>

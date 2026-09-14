@@ -1,5 +1,6 @@
 import { resolverFunilMarca, type EtapaMeta, type Semana } from '@/lib/metasEngine'
 import type { DistribuicaoSemanalItem, EstadoMesMarca } from '@/hooks/useMetaMes'
+import { cardStyle, sectionTitleStyle, inputStyle } from '@/components/metas/metasUi'
 
 const ETAPAS_DISTRIBUIVEIS: EtapaMeta[] = ['Ligações', 'Reunião Agendada SQL', 'Oportunidade COF', 'Fechamento']
 
@@ -16,8 +17,8 @@ export function PassoDistribuicaoSemanal({
       {marcas.map(m => {
         const resolucao = resolverFunilMarca(m.etapas, m.ticketMedio)
         return (
-          <div key={m.marca} style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 20 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>{m.marca}</h3>
+          <div key={m.marca} style={cardStyle}>
+            <h3 style={sectionTitleStyle}>{m.marca}</h3>
             {m.pessoas.map(p => (
               <div key={`${p.nome}-${p.funcao}`} style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{p.nome} ({p.funcao})</div>
@@ -34,10 +35,10 @@ export function PassoDistribuicaoSemanal({
                           <input key={s.numero} type="number" value={valorAtual}
                             onChange={e => onMudarValor(m.marca, p.nome, s.numero, etapa, Number(e.target.value))}
                             title={`S${s.numero}`}
-                            style={{ width: 56, padding: '4px 6px', border: '1px solid var(--ws-border)', borderRadius: 6, fontSize: 12 }} />
+                            style={{ ...inputStyle, width: 56, padding: '4px 6px', fontSize: 12 }} />
                         )
                       })}
-                      <span style={{ fontSize: 11, color: alocado > metaPessoa + 0.01 ? '#B91C1C' : 'var(--ws-text-secondary)' }}>
+                      <span style={{ fontSize: 11, color: alocado > metaPessoa + 0.01 ? 'var(--status-risco)' : 'var(--ws-text-secondary)' }}>
                         {Math.round(alocado * 10) / 10} / {Math.round(metaPessoa * 10) / 10}
                         {alocado > metaPessoa + 0.01 ? ' ▸ passou da meta' : alocado < metaPessoa - 0.01 ? ` ▸ faltam ${Math.round((metaPessoa - alocado) * 10) / 10}` : ' ✓'}
                       </span>

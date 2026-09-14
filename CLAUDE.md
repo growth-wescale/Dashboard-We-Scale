@@ -431,6 +431,37 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-14 (2) — Cabeçalhos de tabela/lista quebrando linha no celular
+
+Junior testou o PR #141 no celular real e mandou print: na aba Campanha de
+Metas, "Metas por Marca", os cabeçalhos "META UN"/"REAL UN" quebravam em duas
+linhas ("META" / "UN"). Pedido: nenhuma palavra ou número pode quebrar linha,
+e aplicar sem passar por aprovação de novo.
+
+Causa: `thMarca`/`thHist`/`thTicket` (Campanha de Metas), os cabeçalhos das
+tabelas SDR/Closer (Performance) e do heatmap Motivo×Etapa (Análise de Perda)
+não tinham `whiteSpace: 'nowrap'` — com a coluna estreita no celular, o
+navegador quebra no espaço entre as duas palavras. Adicionado `nowrap` nos
+quatro pontos; as tabelas já tinham `rs-scroll-x` com `minWidth`, então forçar
+nowrap só faz o conteúdo crescer dentro do scroll, sem vazar.
+
+**Achado no processo, não no print do Junior:** a lista de etapas do modo
+Aging/Atual (Visão Macro) também tinha esse cabeçalho quebrando
+("Média em andamento" → "Média em" / "andamento"), mas não tinha rolagem
+horizontal — só `nowrap` ali teria feito o texto vazar por cima do valor ao
+lado (visto renderizado antes de decidir a correção: "MÉDIA EM AN" sobrepondo
+"10d"). Corrigido enrolando a lista inteira em `rs-scroll-x` com colunas em px
+fixo (150px pra "Média em andamento" caber), no mesmo padrão das outras
+tabelas — e removido o token `--etapa-col` que só servia pro layout antigo
+sem scroll.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + oxlint
+limpo, em worktree fora do OneDrive. Visto renderizado em 375×812 com bypass
+de login só em dev (removido antes do commit) — Metas por Marca, tabela SDR
+da Performance, heatmap da Análise de Perda e a lista de etapas em Aging/Atual
+(as duas colunas de média rolando lado a lado, sem sobrepor). PR aberto e
+mesclado sem aprovação prévia, por pedido explícito do Junior nesta sessão.
+
 ### 2026-09-14 — Dashboard responsivo: celular, tablet e desktop
 
 Junior pediu layout bom em qualquer formato. Diagnóstico no celular (375px),

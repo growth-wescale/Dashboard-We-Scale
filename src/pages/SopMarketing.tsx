@@ -1821,15 +1821,15 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
   const pct = (n: number, d: number): number | null => d > 0 ? Math.round((n / d) * 100) : null
   const abbr = (s: string) => s.slice(0, 3).toUpperCase()
 
-  const rows: { label: string; vol: number; rate: number | null; prevRate: number | null }[] = [
-    { label: 'MQL',              vol: cur.mql,              rate: null,                                          prevRate: null },
-    { label: 'Tent. Contato',    vol: cur.tentando_contato, rate: pct(cur.tentando_contato, cur.mql),            prevRate: pct(prev.tentando_contato, prev.mql) },
-    { label: 'Cont. Efetivo',   vol: cur.contato_efetivo,  rate: pct(cur.contato_efetivo, cur.tentando_contato), prevRate: pct(prev.contato_efetivo, prev.tentando_contato) },
-    { label: 'SQL',              vol: cur.sql,              rate: pct(cur.sql,  cur.contato_efetivo),            prevRate: pct(prev.sql,  prev.contato_efetivo) },
-    { label: 'Diagnóstico',      vol: cur.diag,             rate: pct(cur.diag, cur.sql),                        prevRate: pct(prev.diag, prev.sql) },
-    { label: 'SAL',              vol: cur.sal,              rate: pct(cur.sal,  cur.diag),                       prevRate: pct(prev.sal,  prev.diag) },
-    { label: 'Oportunidade',     vol: cur.oportunidade,     rate: pct(cur.oportunidade, cur.sal),                prevRate: pct(prev.oportunidade, prev.sal) },
-    { label: 'Venda',            vol: cur.fech,             rate: pct(cur.fech, cur.oportunidade),               prevRate: pct(prev.fech, prev.oportunidade) },
+  const rows: { label: string; vol: number; prevVol: number; rate: number | null; prevRate: number | null }[] = [
+    { label: 'MQL',             vol: cur.mql,              prevVol: prev.mql,              rate: null,                                           prevRate: null },
+    { label: 'Tent. Contato',   vol: cur.tentando_contato, prevVol: prev.tentando_contato, rate: pct(cur.tentando_contato, cur.mql),             prevRate: pct(prev.tentando_contato, prev.mql) },
+    { label: 'Cont. Efetivo',   vol: cur.contato_efetivo,  prevVol: prev.contato_efetivo,  rate: pct(cur.contato_efetivo, cur.tentando_contato),  prevRate: pct(prev.contato_efetivo, prev.tentando_contato) },
+    { label: 'SQL',             vol: cur.sql,              prevVol: prev.sql,              rate: pct(cur.sql,  cur.contato_efetivo),             prevRate: pct(prev.sql,  prev.contato_efetivo) },
+    { label: 'Diagnóstico',     vol: cur.diag,             prevVol: prev.diag,             rate: pct(cur.diag, cur.sql),                         prevRate: pct(prev.diag, prev.sql) },
+    { label: 'SAL',             vol: cur.sal,              prevVol: prev.sal,              rate: pct(cur.sal,  cur.diag),                        prevRate: pct(prev.sal,  prev.diag) },
+    { label: 'Oportunidade',    vol: cur.oportunidade,     prevVol: prev.oportunidade,     rate: pct(cur.oportunidade, cur.sal),                 prevRate: pct(prev.oportunidade, prev.sal) },
+    { label: 'Venda',           vol: cur.fech,             prevVol: prev.fech,             rate: pct(cur.fech, cur.oportunidade),                prevRate: pct(prev.fech, prev.oportunidade) },
   ]
 
   return (
@@ -1838,15 +1838,18 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
 
       {/* Cabeçalho de colunas */}
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 36px 42px 42px 40px', gap: 4,
+        display: 'grid', gridTemplateColumns: '1fr 44px 42px 42px 40px', gap: 4,
         paddingBottom: 5, borderBottom: '1px solid #e2e8f0', marginBottom: 2,
       }}>
-        {(['Etapa', 'Vol.', abbr(curLabel), abbr(prevLabel), 'Δ pp'] as const).map((h, i) => (
-          <span key={h} style={{
-            fontSize: 10, fontWeight: 600, textAlign: i === 0 ? 'left' : 'right',
-            color: i === 2 ? accent : 'var(--ws-text-secondary)',
-            textTransform: 'uppercase', letterSpacing: '0.03em',
-          }}>{h}</span>
+        {([{ h: 'Etapa', sub: null }, { h: 'Vol.', sub: `${abbr(curLabel)}/${abbr(prevLabel)}` }, { h: abbr(curLabel), sub: null }, { h: abbr(prevLabel), sub: null }, { h: 'Δ pp', sub: null }]).map(({ h, sub }, i) => (
+          <div key={h} style={{ display: 'flex', flexDirection: 'column', alignItems: i === 0 ? 'flex-start' : 'flex-end', gap: 1 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 600,
+              color: i === 2 ? accent : 'var(--ws-text-secondary)',
+              textTransform: 'uppercase', letterSpacing: '0.03em',
+            }}>{h}</span>
+            {sub && <span style={{ fontSize: 9, color: 'var(--ws-text-secondary)', opacity: 0.7 }}>{sub}</span>}
+          </div>
         ))}
       </div>
 
@@ -1866,16 +1869,17 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
                 <div style={{ color: '#cbd5e1', fontSize: 10, textAlign: 'left', paddingLeft: 8, lineHeight: 1.2 }}>↓</div>
               )}
               <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 36px 42px 42px 40px', gap: 4,
+                display: 'grid', gridTemplateColumns: '1fr 44px 42px 42px 40px', gap: 4,
                 alignItems: 'center', padding: '5px 8px', borderRadius: 6,
                 background: isFirst ? '#f8fafc' : isLast ? `${accent}14` : '#fff',
               }}>
                 <span style={{ fontSize: 12, fontWeight: isFirst || isLast ? 600 : 400, color: isLast ? accent : '#334155' }}>
                   {row.label}
                 </span>
-                <span style={{ fontSize: 12, fontWeight: 600, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#334155' }}>
-                  {row.vol}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isLast ? accent : '#334155' }}>{row.vol}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{row.prevVol}</span>
+                </div>
                 <span style={{ fontSize: 12, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: row.rate != null ? '#334155' : 'var(--ws-text-secondary)' }}>
                   {row.rate != null ? `${row.rate}%` : '—'}
                 </span>

@@ -9,8 +9,7 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
 import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
-import { InverseFunnel } from '@/components/ui/InverseFunnel'
-import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
+import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
@@ -694,8 +693,6 @@ interface SopSlideProps {
 function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, closedMonthLabel, onReady }: SopSlideProps) {
   const acc = slide.accent
   const [filterFonte, setFilterFonte] = useState('__all__')
-  const [funilPeriod, setFunilPeriod] = useState<'semana' | 'mes'>('mes')
-  const [funilUnit, setFunilUnit] = useState<'one' | 'target'>('target')
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
 
   // Compare range dinâmico (dropdown de mês). Default = mês anterior.
@@ -1663,93 +1660,22 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </div>
         )}
 
-        {/* Col 3: Funil inverso — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
+        {/* Col 3: Taxas de conversão — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
           <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} />
-        ) : (() => {
-          const mesKey = dates.monthStart.slice(0, 7)
-          const metaMes = getMetaVendas(slide.marca, mesKey)
-          const [yStr, mStr] = mesKey.split('-')
-          const diasNoMes = new Date(Number(yStr), Number(mStr), 0).getDate()
-          const dayNum = Number(dates.mtdCurEnd.slice(-2))
-          const pctMes = dates.isClosed ? 1 : Math.max(0.01, dayNum / diasNoMes)
-
-          // Ajustes por período (semana = weeks[4], meta / 4, pct = 1 pois é semana completa)
-          const isSemana = funilPeriod === 'semana'
-          const actualData = isSemana ? rawCrmWeek : rawCrmCur
-          const metaPeriodo = metaMes == null
-            ? null
-            : isSemana ? metaMes / 4 : metaMes
-          const pctPeriod = isSemana ? 1 : pctMes
-          const periodLabel = isSemana ? 'semana' : 'mês'
-          // Override manual de vendas (só em período mês):
-          // - Mês fechado → getVendasRealizadasOverride (números confirmados manualmente)
-          // - Mês corrente → getUnidadesVendidasOverride (RD Marketing não popula quantidade_unidades)
-          const vendasOverride = isSemana
-            ? null
-            : dates.isClosed
-              ? getVendasRealizadasOverride(slide.marca, mesKey)
-              : getUnidadesVendidasOverride(slide.marca, mesKey)
-
-          return (
-            <div style={dates.isClosed
-              ? { ...cardStyle, overflow: 'hidden' }
-              : { ...cardStyle, overflowY: 'auto' }}>
-              <div style={{
-                marginBottom: 6, flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
-              }}>
-                <div style={colTitle(acc)}>Funil inverso</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <ToggleGroup
-                    accent={acc}
-                    value={funilPeriod}
-                    onChange={v => setFunilPeriod(v as 'semana' | 'mes')}
-                    options={[
-                      { key: 'semana', label: 'Semana' },
-                      { key: 'mes',    label: 'Mês' },
-                    ]}
-                  />
-                  {!(dates.isClosed && !isSemana) && (
-                    <ToggleGroup
-                      accent={acc}
-                      value={funilUnit}
-                      onChange={v => setFunilUnit(v as 'one' | 'target')}
-                      options={[
-                        { key: 'one',    label: '1 venda' },
-                        { key: 'target', label: 'Meta' },
-                      ]}
-                    />
-                  )}
-                </div>
-              </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible', flexShrink: 0 }}>
-                {dates.isClosed && !isSemana ? (
-                  <ClosedInverseFunnel
-                    marca={slide.marca}
-                    meta={metaMes}
-                    vendas={vendasOverride}
-                    accent={acc}
-                    monthLabel={closedMonthLabel}
-                  />
-                ) : (
-                  <InverseFunnel
-                    histData={rawCrmAll}
-                    actualData={actualData}
-                    meta={metaPeriodo}
-                    pctPeriod={pctPeriod}
-                    unit={funilUnit}
-                    periodLabel={periodLabel}
-                    accent={acc}
-                    vendasOverride={vendasOverride}
-                  />
-                )}
-              </div>
-            </div>
-          )
-        })()}
+        ) : (
+          <div style={cardStyle}>
+            <ConversaoFunilTable
+              cur={funnelMtd}
+              prev={funnelMtdP}
+              curLabel={dates.mtdLabel}
+              prevLabel={compareRange.label}
+              accent={acc}
+            />
+          </div>
+        )}
       </div>
 
         {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (receita) e We Scale (Eventos sem deals ainda) ── */}
@@ -1791,39 +1717,6 @@ function colTitle(accent: string): React.CSSProperties {
   return { fontSize: 14, fontWeight: 700, color: accent, marginBottom: 2, letterSpacing: '-0.01em' }
 }
 
-interface ToggleGroupProps {
-  value: string
-  onChange: (v: string) => void
-  options: { key: string; label: string }[]
-  accent: string
-}
-function ToggleGroup({ value, onChange, options, accent }: ToggleGroupProps) {
-  return (
-    <div style={{
-      display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 8,
-      overflow: 'hidden', background: '#fff',
-    }}>
-      {options.map(opt => {
-        const on = value === opt.key
-        return (
-          <button
-            key={opt.key}
-            onClick={() => onChange(opt.key)}
-            style={{
-              padding: '3px 9px', border: 'none', cursor: 'pointer',
-              fontSize: 10, fontWeight: 700, outline: 'none',
-              background: on ? accent : 'transparent',
-              color: on ? '#fff' : 'var(--ws-text-secondary)',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 // ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
 // Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
@@ -1912,142 +1805,89 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; acc
   )
 }
 
-// ── ClosedInverseFunnel — funil inverso simplificado pra mês fechado ────────────────
-// Projeta volumes necessários por etapa a partir da meta + taxas históricas hardcoded.
-// Zero fetch — cálculo puro. Usado só quando o toggle "Julho" está ativo + período Mês.
-interface ClosedInverseFunnelProps {
-  marca: Marca
-  meta: number | null
-  vendas: number | null   // realizado em unidades
+// ── ConversaoFunilTable — taxas de conversão entre etapas (MTD atual vs mês anterior) ─
+interface ConversaoFunilTableProps {
+  cur:  { mql: number; sql: number; diag: number; sal: number; fech: number }
+  prev: { mql: number; sql: number; diag: number; sal: number; fech: number }
+  curLabel:  string
+  prevLabel: string
   accent: string
-  monthLabel: string
 }
-function ClosedInverseFunnel({ marca, meta, vendas, accent, monthLabel }: ClosedInverseFunnelProps) {
-  if (meta == null) {
-    return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
-        Sem meta cadastrada para {monthLabel}
-      </div>
-    )
-  }
-  const taxas = getFunilTaxas(marca)
-  // Volumes necessários (topo → base) para bater a META.
-  // Cada etapa = próxima ÷ taxa. Ex: Opp = Vendas / taxa_venda_por_opp.
-  const oppNeeded  = meta / taxas.venda_por_opp
-  const salNeeded  = oppNeeded / taxas.opp_por_sal
-  const diagNeeded = salNeeded / taxas.sal_por_diag
-  const sqlNeeded  = diagNeeded / taxas.diag_por_sql
-  const mqlNeeded  = sqlNeeded / taxas.sql_por_mql
+function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: ConversaoFunilTableProps) {
+  const pct = (n: number, d: number): number | null => d > 0 ? Math.round((n / d) * 100) : null
 
-  const stages = [
-    { key: 'venda',   label: 'Vendas',      needed: meta,       rate: taxas.venda_por_opp, rateLabel: 'Vendas/Opp', isTop: true },
-    { key: 'opp',     label: 'Oportunidades', needed: oppNeeded, rate: taxas.opp_por_sal,   rateLabel: 'Opp/SAL' },
-    { key: 'sal',     label: 'SAL',         needed: salNeeded,  rate: taxas.sal_por_diag,  rateLabel: 'SAL/R1' },
-    { key: 'diag',    label: 'R1 (Diag.)',  needed: diagNeeded, rate: taxas.diag_por_sql,  rateLabel: 'R1/SQL' },
-    { key: 'sql',     label: 'SQL',         needed: sqlNeeded,  rate: taxas.sql_por_mql,   rateLabel: 'SQL/MQL' },
-    { key: 'mql',     label: 'MQL',         needed: mqlNeeded,  rate: null,                rateLabel: '' },
+  const rows: { label: string; vol: number; rate: number | null; prevRate: number | null }[] = [
+    { label: 'MQL',         vol: cur.mql,  rate: null,                         prevRate: null },
+    { label: 'SQL',         vol: cur.sql,  rate: pct(cur.sql,  cur.mql),       prevRate: pct(prev.sql,  prev.mql) },
+    { label: 'Diagnóstico', vol: cur.diag, rate: pct(cur.diag, cur.sql),       prevRate: pct(prev.diag, prev.sql) },
+    { label: 'SAL',         vol: cur.sal,  rate: pct(cur.sal,  cur.diag),      prevRate: pct(prev.sal,  prev.diag) },
+    { label: 'Venda',       vol: cur.fech, rate: pct(cur.fech, cur.sal),       prevRate: pct(prev.fech, prev.sal) },
   ]
 
-  const v = vendas ?? 0
-  const pctVendas = meta > 0 ? (v / meta) * 100 : 0
-  const colorVendas = pctVendas >= 100 ? '#16a34a' : pctVendas >= 70 ? '#eab308' : '#dc2626'
-
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: '#334155' }}>
-      {/* Header com meta */}
-      <div style={{ padding: '8px 10px', background: accent, color: '#fff', borderRadius: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.9 }}>
-            Meta de vendas · {monthLabel}
-          </span>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}>
-            {meta}
-          </span>
-        </div>
-        <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
-          Volumes abaixo = <strong>necessário pra bater {meta} venda{meta === 1 ? '' : 's'}</strong> · ~{formatNum(mqlNeeded / meta)} MQL por venda
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+      <div style={{ ...colTitle(accent), marginBottom: 8 }}>Taxas de conversão</div>
+
+      {/* Cabeçalho de colunas */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 36px 44px 44px 42px', gap: 4,
+        paddingBottom: 5, borderBottom: '1px solid #e2e8f0', marginBottom: 2,
+      }}>
+        {(['Etapa', 'Vol.', curLabel, prevLabel, 'Δ pp'] as const).map((h, i) => (
+          <span key={h} style={{
+            fontSize: 10, fontWeight: 600, textAlign: i === 0 ? 'left' : 'right',
+            color: i === 2 ? accent : 'var(--ws-text-secondary)',
+            textTransform: 'uppercase', letterSpacing: '0.03em',
+          }}>{h}</span>
+        ))}
       </div>
 
-      {/* Linhas do funil */}
-      {stages.map((s) => {
-        const isVenda = s.key === 'venda'
-        const displayNeeded = Math.ceil(s.needed)
-        const showActual = isVenda   // só na linha vendas mostramos o realizado
-        const progressPct = isVenda ? Math.min(200, pctVendas) : 100
-        const color = isVenda ? colorVendas : '#64748b'
-
-        return (
-          <div key={s.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '78px 1fr 60px',
-              gap: 8, alignItems: 'center', padding: '5px 8px',
-              background: s.isTop ? '#fef3c7' : '#f8fafc',
-              border: `1px solid ${s.isTop ? '#fbbf24' : '#e2e8f0'}`,
-              borderRadius: 6,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#0f172a' }}>
-                {s.label}
-              </span>
-              <div style={{ position: 'relative', height: 14, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${Math.min(100, progressPct)}%`, background: color,
-                }} />
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700, color: progressPct > 50 ? '#fff' : '#0f172a',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {showActual ? `${v} de ${displayNeeded}` : `precisa ${displayNeeded}`}
-                </div>
-              </div>
-              <span style={{
-                textAlign: 'right', fontSize: 10, fontWeight: 700,
-                color: isVenda ? color : '#94a3b8', fontVariantNumeric: 'tabular-nums',
-              }}>
-                {isVenda ? `${Math.round(pctVendas)}%` : '—'}
-              </span>
-            </div>
-
-            {/* Taxa até a próxima etapa */}
-            {s.rate !== null && (
+      {/* Linhas */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+        {rows.map((row, i) => {
+          const delta = row.rate != null && row.prevRate != null ? row.rate - row.prevRate : null
+          const deltaColor = delta == null ? 'var(--ws-text-secondary)'
+            : delta > 0 ? 'var(--status-positivo)'
+            : delta < 0 ? 'var(--status-critico)'
+            : 'var(--ws-text-secondary)'
+          const isFirst = i === 0
+          const isLast  = i === rows.length - 1
+          return (
+            <div key={row.label}>
+              {i > 0 && (
+                <div style={{ color: '#cbd5e1', fontSize: 10, textAlign: 'left', paddingLeft: 8, lineHeight: 1.2 }}>↓</div>
+              )}
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                paddingLeft: 78 + 8, paddingRight: 8,
-                fontSize: 9.5, color: '#64748b',
+                display: 'grid', gridTemplateColumns: '1fr 36px 44px 44px 42px', gap: 4,
+                alignItems: 'center', padding: '5px 8px', borderRadius: 6,
+                background: isFirst ? '#f8fafc' : isLast ? `${accent}14` : '#fff',
               }}>
-                <div style={{ flex: 0, color: '#cbd5e1', fontSize: 10, lineHeight: 1 }}>▲</div>
-                <div style={{
-                  flex: 0, padding: '1px 6px', borderRadius: 8,
-                  background: '#eef2f7', border: '1px solid #e2e8f0',
-                  fontSize: 9.5, fontWeight: 700, color: '#334155',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {(s.rate * 100).toFixed(0)}%
-                </div>
-                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-                <div style={{ fontSize: 9, color: '#94a3b8', fontStyle: 'italic' }}>
-                  taxa {s.rateLabel}
-                </div>
+                <span style={{ fontSize: 12, fontWeight: isFirst || isLast ? 600 : 400, color: isLast ? accent : '#334155' }}>
+                  {row.label}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#334155' }}>
+                  {row.vol}
+                </span>
+                <span style={{ fontSize: 12, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: row.rate != null ? '#334155' : 'var(--ws-text-secondary)' }}>
+                  {row.rate != null ? `${row.rate}%` : '—'}
+                </span>
+                <span style={{ fontSize: 12, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>
+                  {row.prevRate != null ? `${row.prevRate}%` : '—'}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, textAlign: 'right', color: deltaColor }}>
+                  {delta == null ? '—' : delta === 0 ? '=' : `${delta > 0 ? '+' : ''}${delta}`}
+                </span>
               </div>
-            )}
-          </div>
-        )
-      })}
+            </div>
+          )
+        })}
+      </div>
 
-      {/* Legenda */}
-      <div style={{ marginTop: 4, padding: '5px 8px', background: '#f1f5f9', borderRadius: 6, fontSize: 9, color: '#64748b' }}>
-        Taxas históricas · vendas em unidades · projeção calculada, sem consulta ao CRM
+      <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 6, paddingTop: 5, borderTop: '1px solid #e2e8f0', fontStyle: 'italic' }}>
+        Taxa = % de conversão da etapa anterior para esta · comparando {curLabel} MTD vs {prevLabel} MTD
       </div>
     </div>
   )
-}
-
-function formatNum(n: number): string {
-  if (n < 10) return n.toFixed(1)
-  if (n < 1000) return Math.round(n).toString()
-  return `${(n / 1000).toFixed(1)}k`
 }
 
 // ── SopMarketing ───────────────────────────────────────────────────────────────

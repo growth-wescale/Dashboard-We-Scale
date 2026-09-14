@@ -160,7 +160,8 @@ function computeRanges(closedMonth?: string): DateRanges {
 // ── CRM helpers ────────────────────────────────────────────────────────────────
 
 interface Funnel {
-  mql: number; sql: number; diag: number; sal: number; fech: number
+  mql: number; tentando_contato: number; contato_efetivo: number
+  sql: number; diag: number; sal: number; oportunidade: number; fech: number
   perdido: { mql: number; sql: number; diagnostico: number; sal: number }
 }
 
@@ -172,10 +173,13 @@ function unidadesVendidas(r: VwMarketingFunil): number {
 function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
-    mql:  d.filter(r => inPeriod(r.data_mql, di, df)).length,
-    sql:  d.filter(r => inPeriod(r.data_sql, di, df)).length,
-    diag: d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
-    sal:  d.filter(r => inPeriod(r.data_sal, di, df)).length,
+    mql:              d.filter(r => inPeriod(r.data_mql, di, df)).length,
+    tentando_contato: d.filter(r => inPeriod(r.data_tentando_contato, di, df)).length,
+    contato_efetivo:  d.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length,
+    sql:              d.filter(r => inPeriod(r.data_sql, di, df)).length,
+    diag:             d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
+    sal:              d.filter(r => inPeriod(r.data_sal, di, df)).length,
+    oportunidade:     d.filter(r => inPeriod(r.data_oportunidade, di, df)).length,
     fech: d
       .filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
       .reduce((sum, r) => sum + unidadesVendidas(r), 0),
@@ -1668,8 +1672,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
-              cur={funnelMtd}
-              prev={funnelMtdP}
+              cur={{ ...funnelMtd, mql: mtdMql }}
+              prev={{ ...funnelMtdP, mql: mtdPrevMql }}
               curLabel={dates.mtdLabel}
               prevLabel={compareRange.label}
               accent={acc}
@@ -1807,21 +1811,25 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; acc
 
 // ── ConversaoFunilTable — taxas de conversão entre etapas (MTD atual vs mês anterior) ─
 interface ConversaoFunilTableProps {
-  cur:  { mql: number; sql: number; diag: number; sal: number; fech: number }
-  prev: { mql: number; sql: number; diag: number; sal: number; fech: number }
+  cur:  { mql: number; tentando_contato: number; contato_efetivo: number; sql: number; diag: number; sal: number; oportunidade: number; fech: number }
+  prev: { mql: number; tentando_contato: number; contato_efetivo: number; sql: number; diag: number; sal: number; oportunidade: number; fech: number }
   curLabel:  string
   prevLabel: string
   accent: string
 }
 function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: ConversaoFunilTableProps) {
   const pct = (n: number, d: number): number | null => d > 0 ? Math.round((n / d) * 100) : null
+  const abbr = (s: string) => s.slice(0, 3).toUpperCase()
 
   const rows: { label: string; vol: number; rate: number | null; prevRate: number | null }[] = [
-    { label: 'MQL',         vol: cur.mql,  rate: null,                         prevRate: null },
-    { label: 'SQL',         vol: cur.sql,  rate: pct(cur.sql,  cur.mql),       prevRate: pct(prev.sql,  prev.mql) },
-    { label: 'Diagnóstico', vol: cur.diag, rate: pct(cur.diag, cur.sql),       prevRate: pct(prev.diag, prev.sql) },
-    { label: 'SAL',         vol: cur.sal,  rate: pct(cur.sal,  cur.diag),      prevRate: pct(prev.sal,  prev.diag) },
-    { label: 'Venda',       vol: cur.fech, rate: pct(cur.fech, cur.sal),       prevRate: pct(prev.fech, prev.sal) },
+    { label: 'MQL',              vol: cur.mql,              rate: null,                                          prevRate: null },
+    { label: 'Tent. Contato',    vol: cur.tentando_contato, rate: pct(cur.tentando_contato, cur.mql),            prevRate: pct(prev.tentando_contato, prev.mql) },
+    { label: 'Cont. Efetivo',   vol: cur.contato_efetivo,  rate: pct(cur.contato_efetivo, cur.tentando_contato), prevRate: pct(prev.contato_efetivo, prev.tentando_contato) },
+    { label: 'SQL',              vol: cur.sql,              rate: pct(cur.sql,  cur.contato_efetivo),            prevRate: pct(prev.sql,  prev.contato_efetivo) },
+    { label: 'Diagnóstico',      vol: cur.diag,             rate: pct(cur.diag, cur.sql),                        prevRate: pct(prev.diag, prev.sql) },
+    { label: 'SAL',              vol: cur.sal,              rate: pct(cur.sal,  cur.diag),                       prevRate: pct(prev.sal,  prev.diag) },
+    { label: 'Oportunidade',     vol: cur.oportunidade,     rate: pct(cur.oportunidade, cur.sal),                prevRate: pct(prev.oportunidade, prev.sal) },
+    { label: 'Venda',            vol: cur.fech,             rate: pct(cur.fech, cur.oportunidade),               prevRate: pct(prev.fech, prev.oportunidade) },
   ]
 
   return (
@@ -1830,10 +1838,10 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
 
       {/* Cabeçalho de colunas */}
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 36px 44px 44px 42px', gap: 4,
+        display: 'grid', gridTemplateColumns: '1fr 36px 42px 42px 40px', gap: 4,
         paddingBottom: 5, borderBottom: '1px solid #e2e8f0', marginBottom: 2,
       }}>
-        {(['Etapa', 'Vol.', curLabel, prevLabel, 'Δ pp'] as const).map((h, i) => (
+        {(['Etapa', 'Vol.', abbr(curLabel), abbr(prevLabel), 'Δ pp'] as const).map((h, i) => (
           <span key={h} style={{
             fontSize: 10, fontWeight: 600, textAlign: i === 0 ? 'left' : 'right',
             color: i === 2 ? accent : 'var(--ws-text-secondary)',
@@ -1858,7 +1866,7 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
                 <div style={{ color: '#cbd5e1', fontSize: 10, textAlign: 'left', paddingLeft: 8, lineHeight: 1.2 }}>↓</div>
               )}
               <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 36px 44px 44px 42px', gap: 4,
+                display: 'grid', gridTemplateColumns: '1fr 36px 42px 42px 40px', gap: 4,
                 alignItems: 'center', padding: '5px 8px', borderRadius: 6,
                 background: isFirst ? '#f8fafc' : isLast ? `${accent}14` : '#fff',
               }}>
@@ -1884,7 +1892,7 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
       </div>
 
       <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 6, paddingTop: 5, borderTop: '1px solid #e2e8f0', fontStyle: 'italic' }}>
-        Taxa = % de conversão da etapa anterior para esta · comparando {curLabel} MTD vs {prevLabel} MTD
+        Taxa = % de conversão da etapa anterior para esta · {abbr(curLabel)} MTD vs {abbr(prevLabel)} MTD
       </div>
     </div>
   )

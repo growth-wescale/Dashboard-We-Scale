@@ -112,9 +112,9 @@ function Heatmap({ motivos, etapas, celulas, onCellClick, origem }: {
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 6, minWidth: 480 }}>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase' }}>MOTIVO</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>MOTIVO</div>
         {etapas.map(e => (
-          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em' }}>{stageLabel(e.etapa, origem)}</div>
+          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em', whiteSpace: 'nowrap' }}>{stageLabel(e.etapa, origem)}</div>
         ))}
         {motivos.map(m => (
           <>

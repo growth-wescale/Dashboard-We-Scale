@@ -112,11 +112,6 @@ html { -webkit-text-size-adjust: 100%; }
 .ws-filter-sheet .ws-ms-pop { right: 0; }
 .rs-cols-1 { grid-template-columns: minmax(0, 1fr); }
 
-/* Lista de etapas (Aging/Atual da Visão Macro): colunas de média mais estreitas no celular */
-@media (max-width: 640px) {
-  :root { --etapa-col: 62px; }
-}
-
 /* Toque: itens de lista dos seletores com altura de dedo, não de mouse */
 @media (pointer: coarse) {
   .ws-ms-pop label { padding-top: 9px !important; padding-bottom: 9px !important; }

@@ -95,9 +95,15 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
   }
   const maxDeals = Math.max(...linhas.map(l => l.deals), 1)
 
+  // Colunas de média em px fixo (não var(--etapa-col)) porque "Média em
+  // andamento" não cabe sem quebrar mesmo no card mais largo — a lista inteira
+  // rola na horizontal (igual as tabelas de Performance/Campanha) em vez de
+  // vazar o cabeçalho por cima do valor, como acontecia antes desse fix.
+  const cols = 'minmax(150px, 1fr) 100px 150px'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) var(--etapa-col, 84px) var(--etapa-col, 84px)', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
+    <div className="rs-scroll-x">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 440 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
         <span>Etapa · negócios parados</span>
         <span style={{ textAlign: 'right' }}>Média na etapa</span>
         <span style={{ textAlign: 'right' }}>Média em andamento</span>
@@ -110,7 +116,7 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           tabIndex={onRowClick ? 0 : undefined}
           title={onRowClick ? `Ver deals em ${l.label}` : undefined}
           style={{
-            display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) var(--etapa-col, 84px) var(--etapa-col, 84px)', gap: 12, alignItems: 'center',
+            display: 'grid', gridTemplateColumns: cols, gap: 12, alignItems: 'center',
             cursor: onRowClick ? 'pointer' : undefined,
             borderRadius: 6, padding: onRowClick ? '5px 6px' : undefined, margin: onRowClick ? '0 -6px' : undefined,
             transition: 'background .12s',
@@ -135,6 +141,7 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           </span>
         </div>
       ))}
+    </div>
     </div>
   )
 }

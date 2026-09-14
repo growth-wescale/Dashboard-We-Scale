@@ -612,7 +612,7 @@ function RegraFonteTicketCard() {
 }
 
 const thTicket: React.CSSProperties = {
-  padding: '0 8px 4px 0', textAlign: 'left',
+  padding: '0 8px 4px 0', textAlign: 'left', whiteSpace: 'nowrap',
   fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4,
   color: 'var(--ws-text-secondary)', borderBottom: '1px solid var(--ws-border)',
 }
@@ -1037,7 +1037,7 @@ function HistoricoTable({
 }
 
 const thHist: React.CSSProperties = {
-  padding: '10px 12px', textAlign: 'center',
+  padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap',
   fontSize: 10, fontWeight: 600, letterSpacing: 0.8, color: 'var(--ws-text-secondary)',
 }
 const tdHist: React.CSSProperties = { padding: '10px 12px', textAlign: 'center' }
@@ -1322,7 +1322,7 @@ function MetasMarcaSection() {
 }
 
 const thMarca: React.CSSProperties = {
-  padding: '10px 16px', textAlign: 'left',
+  padding: '10px 16px', textAlign: 'left', whiteSpace: 'nowrap',
   fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5,
   color: 'var(--ws-text-secondary)',
 }

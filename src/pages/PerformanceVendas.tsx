@@ -185,7 +185,7 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
       </div>
       <div className="rs-scroll-x">
       <div style={{ padding: '6px 8px', minWidth: 720 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>{mqlLbl}</span>
           <span style={{ textAlign: 'right' }}>SQL</span>
@@ -228,7 +228,7 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
       </div>
       <div className="rs-scroll-x">
       <div style={{ padding: '6px 8px', minWidth: 860 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>DIAG</span>
           <span style={{ textAlign: 'right' }}>SAL</span>

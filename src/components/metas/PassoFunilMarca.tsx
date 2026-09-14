@@ -33,7 +33,7 @@ function CartaoMarca({
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>{marca.marca}</h3>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
           Ticket médio
@@ -42,6 +42,9 @@ function CartaoMarca({
         </label>
       </div>
 
+      {/* 4 colunas fixas (~420px): no celular rola na horizontal em vez de sobrepor */}
+      <div className="rs-scroll-x">
+      <div style={{ minWidth: 460 }}>
       {ETAPAS_META_ORDEM.map(etapa => {
         const cfg = porEtapa.get(etapa) ?? { etapa, modo: 'desligado' as ModoEtapa }
         const valor = resolucao.valores[etapa]
@@ -72,8 +75,10 @@ function CartaoMarca({
           </div>
         )
       })}
+      </div>
+      </div>
 
-      <div style={{ marginTop: 10, padding: '8px 0', borderTop: '2px solid var(--ws-brand)', display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600 }}>
+      <div style={{ marginTop: 10, padding: '8px 0', borderTop: '2px solid var(--brand-accent)', display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 600 }}>
         <span>Faturamento</span>
         <span>{resolucao.faturamento != null ? `R$ ${resolucao.faturamento.toLocaleString('pt-BR')}` : '—'}</span>
       </div>

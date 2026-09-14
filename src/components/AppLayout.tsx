@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play } from 'lucide-react'
+import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play, Menu } from 'lucide-react'
 import { Sidebar } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { GpIntro } from '@/components/gp/GpIntro'
 import { GpStrip } from '@/components/gp/GpStrip'
 import { SennaCard } from '@/components/gp/SennaCard'
+import { useMediaQuery, MQ_COMPACTO } from '@/hooks/useMediaQuery'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -127,6 +128,17 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('sidebarOpen') !== 'false' } catch { return true }
   })
+  // Celular/tablet: o menu vira gaveta por cima do conteúdo — começa fechada,
+  // fecha ao navegar e não mexe na preferência de menu aberto/fechado do desktop.
+  const compacto = useMediaQuery(MQ_COMPACTO)
+  const [gavetaAberta, setGavetaAberta] = useState(false)
+  const menuAberto = compacto ? gavetaAberta : sidebarOpen
+  useEffect(() => {
+    if (!compacto || !gavetaAberta) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setGavetaAberta(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [compacto, gavetaAberta])
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
 
@@ -149,6 +161,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [syncing])
 
   function toggleSidebar() {
+    if (compacto) { setGavetaAberta(v => !v); return }
     setSidebarOpen(v => {
       const next = !v
       try { localStorage.setItem('sidebarOpen', String(next)) } catch {}
@@ -161,6 +174,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isVendas = activeKey === 'vendas'
 
   function handleNav(key: string) {
+    setGavetaAberta(false)
     if (key === 'geral') navigate('/')
     else if (key === 'saude') navigate('/marca')
     else if (key === 'okrs') navigate('/okrs')
@@ -169,6 +183,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }
 
   function handleSubNav(key: string) {
+    setGavetaAberta(false)
     if (key === 'funil-vendas') navigate('/funil-vendas')
     else if (key === 'performance-vendas') navigate('/performance-vendas')
     else if (key === 'analise-perda') navigate('/analise-perda')
@@ -230,12 +245,19 @@ export function AppLayout({ children }: AppLayoutProps) {
           activeSub={isSaude ? activeBrand : isVendas ? getVendasActiveSub(location.pathname) : null}
           onSelectSub={handleSubNav}
           footer={footer}
-          open={sidebarOpen}
+          open={menuAberto}
+          style={compacto ? { zIndex: 950, height: 'calc(100dvh - 24px)' } : undefined}
         />
+
+        {compacto && gavetaAberta && (
+          <div onClick={() => setGavetaAberta(false)} aria-hidden="true" style={{
+            position: 'fixed', inset: 0, zIndex: 940, background: 'rgba(0,0,0,.35)', backdropFilter: 'blur(2px)',
+          }} />
+        )}
 
         {/* Content wrapper — 12px extra pra folga da sidebar flutuante glass */}
         <div style={{
-          marginLeft: sidebarOpen ? 'calc(var(--sidebar-w) + 12px)' : 0,
+          marginLeft: !compacto && sidebarOpen ? 'calc(var(--sidebar-w) + 12px)' : 0,
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
@@ -256,18 +278,19 @@ export function AppLayout({ children }: AppLayoutProps) {
             borderBottom: '1px solid var(--ws-border)',
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
-            padding: '0 24px',
+            gap: 'var(--topbar-gap)',
+            padding: '0 var(--topbar-pad-x)',
             position: 'sticky',
             top: 0,
             zIndex: 10,
           }}>
             <button
               onClick={toggleSidebar}
-              title={sidebarOpen ? 'Ocultar menu' : 'Mostrar menu'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8, flexShrink: 0 }}
+              title={menuAberto ? 'Ocultar menu' : 'Mostrar menu'}
+              aria-expanded={menuAberto}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: compacto ? 6 : 4, borderRadius: 8, flexShrink: 0 }}
             >
-              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+              {compacto ? <Menu size={20} /> : sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>
             <div style={{ flex: 1 }} />
             <button
@@ -307,7 +330,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </button>
             )}
             <ThemeToggle />
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
+            <button className="rs-hide-sm" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
               <Bell size={18} />
             </button>
             <div style={{

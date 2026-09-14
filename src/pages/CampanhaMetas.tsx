@@ -132,7 +132,7 @@ export function CampanhaMetas() {
   const volta = voltaAtual(dia)
 
   return (
-    <div style={{ padding: '24px 32px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
       <PageTop
         title="Campanha de Metas"
         subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${DIAS_MES}`}
@@ -162,7 +162,7 @@ export function CampanhaMetas() {
         toggleVolta={toggleVolta}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 20, marginTop: 20 }}>
+      <div className="rs-split" style={{ '--rs-split': 'minmax(260px, 320px) minmax(0, 1fr)', '--rs-gap': '20px', marginTop: 20 } as React.CSSProperties}>
         <ClassificacaoCard ranking={ranking} voltaLabel={rotuloJanela} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -211,8 +211,8 @@ function HeroBanner({ volta, diasRestantes, pole }: { volta: number; diasRestant
   return (
     <div style={{
       position: 'relative', background: '#141419', borderRadius: 16, overflow: 'hidden',
-      padding: '28px 32px', marginBottom: 20,
-      display: 'grid', gridTemplateColumns: '1fr auto', gap: 24, alignItems: 'center',
+      padding: 'clamp(20px, 5vw, 28px) clamp(18px, 5vw, 32px)', marginBottom: 20,
+      display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 24, alignItems: 'center',
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: '#E10600' }} />
       <div style={{
@@ -223,11 +223,11 @@ function HeroBanner({ volta, diasRestantes, pole }: { volta: number; diasRestant
         pointerEvents: 'none',
       }} />
 
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      <div style={{ position: 'relative', zIndex: 1, flex: '1 1 280px', minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#E10600', letterSpacing: 1.5, textTransform: 'uppercase' }}>
           Fórmula 1 · {MES_LABEL}
         </div>
-        <h1 style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', fontSize: 42, fontWeight: 500, color: '#fff', lineHeight: 1.05 }}>
+        <h1 style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 8vw, 42px)', fontWeight: 500, color: '#fff', lineHeight: 1.05 }}>
           GP We Scale
         </h1>
         <div style={{ marginTop: 6, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
@@ -420,7 +420,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
   const pctBar = Math.max(0, Math.min(100, pctAtingido))
 
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 16, padding: 24 }}>
+    <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 16, padding: 'clamp(16px, 4vw, 24px)' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
@@ -440,7 +440,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
       </div>
 
       <div style={{ marginTop: 20, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 500, color: 'var(--brand-accent)', lineHeight: 1 }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 8vw, 40px)', fontWeight: 500, color: 'var(--brand-accent)', lineHeight: 1 }}>
           {loading ? '—' : money(realFin)}
         </span>
         <span style={{ fontSize: 15, color: 'var(--ws-text-secondary)' }}>
@@ -452,7 +452,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
         <div style={{ width: `${pctBar}%`, height: '100%', background: 'var(--brand-accent)', transition: 'width 400ms ease' }} />
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px 12px', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
         <span>ritmo esperado · {pct(pctEsperado, 0)} do período</span>
         <span>bandeirada · 30 · set</span>
       </div>
@@ -529,7 +529,7 @@ function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: Lin
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <RegraFonteTicketCard />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
         <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={SDR_VISUAL} loading={loading} />
         <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={CLOSER_VISUAL} loading={loading} />
       </div>
@@ -565,7 +565,7 @@ function RegraFonteTicketCard() {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 24 }}>
         <RegraBloco titulo="Fonte" subtitulo="peso pela Fonte Macro do deal">
           <RegraLinha rotulo="1 pt" valor="Inbound · Indicação · Parceiro · Repasse · sem classificação" />
           <RegraLinha rotulo="2 pts" valor="Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado" />
@@ -794,7 +794,7 @@ function PilotosGrid({
   )
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 16 }}>
       {ranking.map((c, i) => {
         const posicao = i + 1
         const hist = historico.find(h => h.nome === c.nome)
@@ -850,7 +850,7 @@ function PilotoCard({
           </span>
         </div>
 
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12 }}>
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px 10px', fontSize: 12 }}>
           <span>
             <span style={{ fontWeight: 500 }}>{loading ? '—' : money(closer.realizado)}</span>
             <span style={{ color: 'var(--ws-text-secondary)' }}> de {moneyCompact(closer.metaFinanceira)} · </span>
@@ -995,7 +995,7 @@ function HistoricoTable({
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: 'var(--ws-bg)', borderTop: '1px solid var(--ws-border)', borderBottom: '1px solid var(--ws-border)' }}>
               <th style={{ ...thHist, textAlign: 'left' }}>PILOTO</th>
@@ -1107,7 +1107,7 @@ function SdrsSection({
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 16 }}>
         {sdrs.map(sdr => (
           <SdrCard
             key={sdr.nome}
@@ -1264,7 +1264,7 @@ function MetasMarcaSection() {
             Meta e realizado do mês, por marca — mesma meta cadastrada que alimenta o resto da página.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {MESES.map(m => (
             <button key={m.key} onClick={() => setMesMarcaRef(m.key)} style={{
               padding: '6px 12px', borderRadius: 999,
@@ -1279,7 +1279,7 @@ function MetasMarcaSection() {
 
       <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)' }}>
                 <th style={thMarca}>Marca</th>

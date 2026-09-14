@@ -398,6 +398,19 @@ Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
 (`dateUtils.ts`) já trata isso: string no formato `YYYY-MM-DD` passa direto,
 sem conversão de fuso.
 
+**Inline style não aceita media query.** O app inteiro é `style={{…}}`. Pra
+layout que muda por tamanho de tela (ver `src/styles/responsive.css`):
+1. valor que muda (padding da página, colunas estreitas) → token CSS lido via
+   `var(--page-pad-x)` no inline;
+2. grade que muda de colunas → classe `rs-grid rs-cols-N` / `rs-split`, **sem**
+   `gridTemplateColumns` inline (o inline ganha da classe e anula o corte);
+3. estrutura que muda (menu vira gaveta, filtros viram painel) →
+   `useMediaQuery(MQ_COMPACTO)` de `src/hooks/useMediaQuery.ts`.
+Grade `auto-fit` de cards: `minmax(min(240px, 100%), 1fr)` — sem o `min()` ela
+estoura em tela mais estreita que o mínimo. Tabela de colunas fixas: embrulhe
+em `rs-scroll-x` com `minWidth` no miolo (card com `overflow: hidden` corta sem
+avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023px.
+
 ---
 
 ## 8. Pendências conhecidas
@@ -411,11 +424,76 @@ sem conversão de fuso.
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
 - [ ] Dados de Expansão no Supabase ainda não usados: `db_tarefas_sdr` (38k linhas), `DB_Reunioes_MeetRox`, `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências
 - [ ] **`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia** — o insert de evento `'perda'` não tem `EXCEPTION WHEN unique_violation` pro índice `ux_deal_eventos_perda_por_dia` (só o `ON CONFLICT` do índice de timestamp exato). Se um deal for perdido, reaberto e perdido de novo no mesmo dia calendário, a segunda perda derruba a função inteira — visto 1x num backfill em 25/08. Raro, mas real
+- [ ] **Páginas de Marketing ainda não responsivas** — Visão Geral, Saúde da Marca, Meta & OKRs e S&OP herdaram o menu em gaveta e a barra do topo compacta (14/09), mas as grades internas seguem com colunas fixas e quebram no celular. São do Gabriel; aplicar o mesmo padrão `rs-*` da seção 7 quando ele quiser
 - [ ] **Chave `service_role` do Supabase de Expansão e token do RD circularam em texto plano** (JSONs de workflow do n8n, exportados pra debug em 25/08). `service_role` ignora RLS por completo — rotacionar as duas quando der
 
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-14 — Dashboard responsivo: celular, tablet e desktop
+
+Junior pediu layout bom em qualquer formato. Diagnóstico no celular (375px),
+antes: o menu lateral fixo ocupava 260px e sobravam ~110px de conteúdo; a
+barra de filtros empilhava os 10 controles e, grudada no topo, cobria a tela;
+grades fixas de 6/5/4 colunas; tabelas SDR/Closer em grid de colunas em px,
+cortadas pelo `overflow: hidden` do card; popups a 96vw com cabeçalho, gráficos
+e filtros fixos, deixando 1/3 da tela pra tabela; calendário do filtro de Dia
+com 450px de largura.
+
+**Escopo.** Esqueleto compartilhado (`AppLayout`, `Sidebar`, `PageTop`,
+`FilterBar`, `MultiSelect`, `DateRangePicker`, os 5 popups de Vendas,
+`TrapFunnel`, faixa e intro do Modo GP) + abas de Vendas (Visão Macro,
+Performance, Análise de Perda, Campanha de Metas, Metas). **Fora:** páginas de
+Marketing (do Gabriel — herdam menu e topo novos, grades internas seguem
+fixas; ver pendência na seção 8) e Análise de Objeções (iframe).
+
+**Como.** Três mecanismos, porque inline style não aceita media query (ver
+armadilha na seção 7): tokens + classes `rs-*` em `src/styles/responsive.css`;
+hook `useMediaQuery` (`MQ_CELULAR` ≤640px, `MQ_COMPACTO` ≤1023px) só pra mudança
+de estrutura; container query no funil (`.rs-trap`), que encolhe a coluna de
+custo pela largura do card e não da tela.
+
+**O que muda:**
+- **Compacto (≤1023px):** menu vira gaveta sobreposta — hambúrguer, fundo
+  escurecido, Esc e navegação fecham, e a preferência salva de menu
+  aberto/fechado do desktop não é tocada. A `FilterBar` vira uma linha
+  (botão Filtros + resumo "Consolidado · Setembro 2026" + contador de filtros
+  extras + reset), gruda logo abaixo da barra do topo (o hambúrguer continua
+  alcançável) e abre um painel inferior com os mesmos controles, aplicando na
+  hora. Filtro obrigatório vazio deixa botão e resumo em vermelho.
+- **Sidebar fechada some de verdade** (vale no desktop também): o glass tem
+  12px de margem e `translateX(-100%)` deixava uma lasca; agora desloca com a
+  margem e ganha `visibility: hidden`, então os itens saem do Tab.
+- **Grades:** KPIs 6 → 3 (≤1279) → 2 (≤640) → 1 (≤380); os cards de ritmo da
+  Performance vão pra 1 coluna no celular; funil + laterais (Visão Macro) e
+  Classificação + cards (Campanha) empilham abaixo de 1100px.
+- **Tabelas largas** (SDR/Closer da Performance, Histórico e Metas por Marca
+  da Campanha, funil por marca em Metas): rolagem horizontal com largura mínima.
+- **Popups:** 100vw no celular; no popup de etapa, gráficos + filtros + tabela
+  rolam juntos; listas "Por Marca/Por SDR" quebram em 1 coluna.
+- **Calendário do Dia:** atalhos viram chips em cima do calendário, dias com 36px.
+- **Análise de Perda:** separadores do card escuro viraram gap de 1px (valem
+  lado a lado e empilhado). **Performance:** divisórias do card Conversões por
+  sombra na célula — com número ímpar de itens a célula vazia ficava cinza.
+
+**Bug de brinde:** `var(--ws-brand)` (token inexistente, mesmo bug de
+09/09 (4)) em `HubMetas`, `PassoFunilMarca` e `PassoRevisarPublicar` →
+`--brand-accent`. O passo ativo do assistente de Metas e os botões "Copiar do
+mês anterior" / "Publicar mês" estavam transparentes.
+
+Desktop (≥1280px) sem mudança visual — conferido: 6 colunas de KPI, funil e
+laterais em 1,5:1, barra de filtros aberta.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + `oxlint`
+sem avisos novos, em worktree fora do OneDrive. **Visto renderizado** em
+375×812, 768×1024 e 1440×900 com bypass de login só em dev (removido antes do
+commit): Visão Macro (funil, painel de filtros, calendário do Dia, gaveta do
+menu, popup de etapa), Performance, Análise de Perda, Campanha de Metas e
+Metas — varredura por script sem nenhum elemento vazando da largura da tela.
+Nota pra quem for testar no painel de navegador: depois de rolar via script, a
+captura às vezes mostra uma faixa branca no topo — é artefato da captura
+(`header.getBoundingClientRect().top` = 0), não do layout.
 
 ### 2026-09-11 (7) — Campanha de Metas: degraus de Velocidade em tabela legível
 

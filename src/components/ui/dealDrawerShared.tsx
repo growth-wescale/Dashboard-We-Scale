@@ -89,7 +89,7 @@ export interface BarRow { label: string; count: number; color: string }
 export function BarList({ title, rows }: { title: string; rows: BarRow[] }) {
   const max = Math.max(...rows.map(r => r.count), 1)
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: '1 1 220px', minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600, marginBottom: 10 }}>
         {title}
       </div>

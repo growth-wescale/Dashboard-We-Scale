@@ -5,7 +5,9 @@
  * etapas) e Performance Detalhada (12 etapas).
  */
 
+import type { CSSProperties } from 'react'
 import { Repeat, CornerDownRight } from 'lucide-react'
+import { useMediaQuery, MQ_CELULAR } from '@/hooks/useMediaQuery'
 import { money, nf } from '@/lib/format'
 
 export interface FunnelStage { key: string; label: string; value: number }
@@ -20,8 +22,12 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
   noShow?: number
   noShowRepeated?: number
 }) {
+  // Celular: largura mínima maior — a 30% de um card de ~300px o trapézio do
+  // fundo fica com ~90px e o rótulo ("Oportunidade") não cabe.
+  const celular = useMediaQuery(MQ_CELULAR)
+  const base = celular ? 44 : 30
   const v0 = Math.max(stages[0]?.value ?? 1, 1)
-  const width = (v: number) => 30 + 70 * Math.sqrt(Math.max(0, v) / v0)
+  const width = (v: number) => base + (100 - base) * Math.sqrt(Math.max(0, v) / v0)
 
   function shade(i: number) {
     const pct = Math.max(38, 100 - i * 5)
@@ -29,7 +35,8 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
   }
 
   return (
-    <div>
+    // Linhas em .rs-trap-row: a coluna de custo (--trap-cost) encolhe quando o card fica estreito.
+    <div className="rs-trap" style={{ '--trap-cost': invest > 0 ? '150px' : '0px' } as CSSProperties}>
       {stages.map((s, i) => {
         const last = i === stages.length - 1
         const wTop = width(s.value)
@@ -46,7 +53,7 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
         return (
           <div key={s.key}>
             {i > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center', padding: '7px 0' }}>
+              <div className="rs-trap-row" style={{ alignItems: 'center', padding: '7px 0' }}>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
                     <span style={{ color: subiu ? 'var(--status-positivo)' : 'var(--status-risco)', fontSize: 10 }}>
@@ -58,7 +65,7 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
                 <div />
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, alignItems: 'center' }}>
+            <div className="rs-trap-row" style={{ alignItems: 'center' }}>
               <div style={{ position: 'relative', height: 46 }}>
                 <div
                   onClick={onStageClick ? () => onStageClick(s.key) : undefined}
@@ -80,17 +87,17 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
               </div>
               {invest > 0 && (
                 <div style={{ lineHeight: 1.3 }}>
-                  <div style={{ fontSize: 10.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                  <div className="rs-trap-cost-label" style={{ fontSize: 10.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
                     Custo / {s.label.split(' · ')[0]}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                  <div className="rs-trap-cost-value" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                     {s.value > 0 ? money(cost) : '—'}
                   </div>
                 </div>
               )}
             </div>
             {repeated > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '4px 0 6px' }}>
+              <div className="rs-trap-row" style={{ margin: '4px 0 6px' }}>
                 <div style={{ textAlign: 'center' }}>
                   <button
                     type="button"
@@ -109,7 +116,7 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
               </div>
             )}
             {s.key === 'Reunião Agendada SQL' && !!noShow && (
-              <div style={{ display: 'grid', gridTemplateColumns: `1fr ${invest > 0 ? '150px' : '0px'}`, gap: 20, margin: '6px 0 10px' }}>
+              <div className="rs-trap-row" style={{ margin: '6px 0 10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <div
                     onClick={onRepeatClick && noShowRepeated ? () => onRepeatClick('No Show') : undefined}

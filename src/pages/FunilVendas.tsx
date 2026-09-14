@@ -97,7 +97,7 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) var(--etapa-col, 84px) var(--etapa-col, 84px)', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
         <span>Etapa · negócios parados</span>
         <span style={{ textAlign: 'right' }}>Média na etapa</span>
         <span style={{ textAlign: 'right' }}>Média em andamento</span>
@@ -110,7 +110,7 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           tabIndex={onRowClick ? 0 : undefined}
           title={onRowClick ? `Ver deals em ${l.label}` : undefined}
           style={{
-            display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, alignItems: 'center',
+            display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) var(--etapa-col, 84px) var(--etapa-col, 84px)', gap: 12, alignItems: 'center',
             cursor: onRowClick ? 'pointer' : undefined,
             borderRadius: 6, padding: onRowClick ? '5px 6px' : undefined, margin: onRowClick ? '0 -6px' : undefined,
             transition: 'background .12s',
@@ -119,9 +119,9 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           onMouseLeave={onRowClick ? e => { (e.currentTarget as HTMLDivElement).style.background = '' } : undefined}
         >
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-              <span style={{ color: 'var(--ws-text-primary)' }}>{l.label}</span>
-              <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{nf(l.deals)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12.5, marginBottom: 3 }}>
+              <span style={{ color: 'var(--ws-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.label}>{l.label}</span>
+              <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{nf(l.deals)}</span>
             </div>
             <div style={{ height: 7, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
               <div style={{ width: `${(l.deals / maxDeals) * 100}%`, height: '100%', background: accent, borderRadius: 4 }} />
@@ -818,7 +818,7 @@ export function FunilVendas() {
 
   if (faltandoObrigatorio.length > 0) {
     return (
-      <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
+      <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
         <PageTop title="Visão Macro" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
         <FilterBar
           marcasDisponiveis={marcasDisponiveis}
@@ -834,7 +834,7 @@ export function FunilVendas() {
   }
 
   return (
-    <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
       {...(marcasSelecionadas.length === 1 ? { 'data-brand': marcasSelecionadas[0].key } : {})}>
 
       <PageTop
@@ -887,7 +887,7 @@ export function FunilVendas() {
       )}
 
       {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+      <div className="rs-grid rs-cols-6" style={{ marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
         <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={delta(kpis.deltas.receita)} deltaLabel={prevLabel} accent={false}
           onClick={() => setPopupKpi('receita')}
           description={deltasFull && <DeltaSecundario delta={deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
@@ -903,10 +903,10 @@ export function FunilVendas() {
       </div>
 
       {/* ── Funil + laterais ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
+      <div className="rs-split" style={{ '--rs-split': 'minmax(0, 1.5fr) minmax(0, 1fr)', marginBottom: 24 } as CSSProperties}>
 
         <SCard style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '18px 24px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ padding: '18px clamp(14px, 4vw, 24px) 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 21 }}>Funil de vendas</div>
               <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
@@ -915,7 +915,7 @@ export function FunilVendas() {
                 {modo === 'atual' && `Onde os negócios estão agora, independente do período · ${scopeLabel}`}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <ModeToggle value={modo} onChange={setModo} />
               {totalRepeated > 0 && (
                 <button type="button" onClick={() => setTotalRepeatsOpen(true)} title="Ver todos os repetidos" style={{
@@ -929,7 +929,7 @@ export function FunilVendas() {
               )}
             </div>
           </div>
-          <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+          <div style={{ padding: '14px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
               ? <EtapaLeadtimeList linhas={aging} accent={accent} onRowClick={setClickedStage} />
               : modo === 'atual'
@@ -978,7 +978,7 @@ export function FunilVendas() {
       </div>
 
       <SectionHead title="Tempo de ciclo" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+      <div className="rs-grid rs-cols-2">
         <LeadtimeCard label="Leadtime médio até a perda" value={leadtimes.perda.value}
           sub="Média das negociações perdidas no período" tone="risco" icon={<TrendingDown size={17} />} />
         <LeadtimeCard label="Leadtime médio de fechamento" value={leadtimes.fechamento.value}

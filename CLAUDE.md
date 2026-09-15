@@ -448,6 +448,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 (2) — "Último acesso" congelado na tela de acessos
+
+Junior aparecia "há 29 dias" usando o dashboard todo dia. `auth.users.last_sign_in_at`
+só muda em login com senha; quem continua logado só renova a sessão (medido:
+login 17/08, sessão renovada hoje). `acesso_listar_usuarios()` passou a devolver
+`greatest(last_sign_in_at, max(auth.sessions.updated_at/refreshed_at))` —
+`docs/sql/2026-09-15-acesso-ultimo-acesso.sql`, rodado pelo Junior no SQL Editor.
+Sem mudança no front. "Nunca entrou" continua olhando só `last_sign_in_at`.
+
 ### 2026-09-15 — Controle de acessos: várias marcas por pessoa, restrição em todas as abas, filtros e ordenação
 
 Pedido do Junior depois de ver a tela no ar (PR #144):

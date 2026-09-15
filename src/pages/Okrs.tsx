@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Target, TrendingUp, Award, Users, Zap, Mail, TrendingDown, BarChart3, Trophy, Flag } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useOkrs, updateOkrValor, USE_MOCK, type Okr } from '@/hooks/useOkrs'
+import { useAcesso } from '@/contexts/AcessoContext'
 import { useVendasSemestre, type VendaMarca } from '@/hooks/useVendasSemestre'
 import { money, pct } from '@/lib/format'
 import { MetaCopaB2B } from '@/pages/MetaCopaB2B'
@@ -491,6 +492,7 @@ function moneyCompact(v: number): string {
 function OkrCard({ okr, numero, onEditar }: { okr: Okr; numero: number; onEditar: (o: Okr) => void }) {
   const isReduzir = okr.direcao === 'reduzir'
   const IconTendencia = isReduzir ? TrendingDown : Mail
+  const podeEditar = useAcesso().pode('acao.okrs-editar')
   const atingimento = calcAtingimento(okr)
 
   return (
@@ -601,7 +603,7 @@ function OkrCard({ okr, numero, onEditar }: { okr: Okr; numero: number; onEditar
             </span>
           )}
         </div>
-        <button
+        {podeEditar && <button
           onClick={() => onEditar(okr)}
           style={{
             padding: '8px 16px',
@@ -615,7 +617,7 @@ function OkrCard({ okr, numero, onEditar }: { okr: Okr; numero: number; onEditar
           }}
         >
           Atualizar valor
-        </button>
+        </button>}
       </div>
     </div>
   )

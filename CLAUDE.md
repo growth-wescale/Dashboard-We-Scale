@@ -428,6 +428,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
+- [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
+- [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
+
 - [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
@@ -443,6 +447,197 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-14 — Controle de acessos: tela Usuários & Acessos (entrega 1 de 2)
+
+Junior pediu um "login forte": até aqui qualquer conta do Supabase Auth
+(Marketing) via e fazia tudo — `PrivateRoute` só checava sessão. A única
+restrição era um papel `marca` em `app_metadata` (2 franqueados Inpot),
+editável só pelo painel do Supabase. Gabriel (dono do banco de Marketing)
+autorizou a mudança.
+
+**Modelo (Supabase de Marketing, `docs/sql/2026-09-14-acesso-usuarios-papeis.sql`):**
+- `acesso_papeis` (tipos de acesso editáveis; `acesso_total` só no
+  Administrador; `sistema` = não apaga/renomeia), `acesso_papel_permissoes`
+  (papel × chave), `acesso_usuarios` (usuário → papel, `marca` opcional, `ativo`).
+- `minhas_permissoes()` (o app lê ao carregar e ao voltar pra aba),
+  `tem_permissao(chave)` (RLS e Edge Functions — é o que a entrega 2 vai usar
+  nas views), `acesso_listar_usuarios()` (junta `auth.users`, só pra quem gerencia).
+- Travas no banco: sempre sobra 1 administrador ativo; papéis padrão não
+  apagam; RLS com grants por coluna (cliente não consegue marcar `acesso_total`).
+- Carga inicial: Junior e Gabriel = Administrador; os 2 da Inpot = "Cliente da
+  marca" travado em `inpot`; os outros 28 = "Acesso total (legado)" (tudo menos
+  gerenciar usuários). Ninguém perdeu acesso no deploy.
+
+**Catálogo de permissões no código** (`src/lib/permissoes.ts`, testado): 10
+telas (`aba.*`) + 4 ações (`acao.metas-publicar`, `acao.okrs-editar`,
+`acao.assistente-ia`, `acao.usuarios-gerenciar`). Tela nova no dashboard =
+1 linha em `ABAS`; só o Administrador ganha acesso automático.
+**Usuário com marca definida só passa das telas que sabem travar marca**
+(Visão Geral, Saúde da Marca) e nenhuma ação — mesmo que o papel marque mais.
+
+**Front:** `AcessoProvider` + `PortaoDeAcesso` (sem acesso → tela "sua conta
+ainda não tem acesso"; desativado → desloga; erro → falha fechada) e
+`GuardaRota` (substitui `RoleGuard`, removido) no `App.tsx`. Menu, sub-abas
+de Vendas, assistente IA, botão "Atualizar valor" (OKRs), "Ativar" e
+"Publicar" (Hub de Metas) seguem a permissão. `useAuth` voltou a ser só
+sessão. Tela nova `/acessos` (só com `acao.usuarios-gerenciar`): aba Usuários
+(convidar por e-mail, trocar tipo/marca, desativar/reativar, último acesso) e
+aba Tipos de acesso (criar/editar/apagar com checklist). `/definir-senha`
+recebe o link do convite.
+
+**Edge Functions:** `gerenciar-usuarios` (nova, Marketing) — convidar
+(`inviteUserByEmail`; conta existente recebe link de redefinir senha),
+definir_acesso, desativar (ban + apaga `auth.sessions`), reativar.
+`gravar-meta` (Expansão) passou a exigir `acao.metas-publicar` via
+`tem_permissao` no Marketing — **checagem no servidor, não só no botão**.
+
+**Limite honesto:** o resto das permissões é aplicado no app, não no banco. As
+views de Vendas continuam legíveis pela chave anon sem login — é a entrega 2
+(pendência abaixo).
+
+### 2026-09-14 (3) — Hub de Metas: versões por mês + layout novo
+
+Junior perguntou se as metas lançadas ficavam salvas como lançamento, porque o
+chefe queria um forecast (meta menor) sem perder o original. **Não ficavam**:
+publicar de novo apagava e regravava o mês inteiro, e o `meta_log` só guardava
+"publicado", sem os números. Nenhum mês tinha sido publicado pelo Hub ainda,
+então deu pra mudar o modelo sem migrar dado.
+
+**Modelo novo (decisão do Junior):** cada publicação vira uma **versão imutável**
+do mês (V1 lançamento, V2+ forecast/revisões, com nome e motivo). Só **uma**
+fica ativa por mês e é ela que o dashboard inteiro usa. Dá pra ativar a V2 e
+depois voltar pra V1.
+
+- `meta_versao` (nova): número, rótulo, motivo, `ativa`, `linhas_espelho`
+  (jsonb com as linhas exatas de `DB_Metas_Performance`, congeladas na
+  publicação). Índice único parcial garante 1 ativa por mês.
+- `meta_semana` e `meta_marca` passaram a pertencer à versão (`meta_versao_id`);
+  `meta_mes` virou só o contêiner do mês (perdeu status/publicado_*).
+- Triggers `*_imutavel` bloqueiam UPDATE/DELETE no conteúdo de versão publicada
+  e em `meta_versao` (exceto `ativa`/`ativada_*`). Versão nunca é apagada.
+- `publicar_meta_versao(p jsonb, autor, ativar)` e `ativar_meta_versao(id, autor)`:
+  uma transação cada, execução só pra `service_role`. **Ativar regrava
+  `DB_Metas_Performance` do mês a partir de `linhas_espelho`**, então reativar a
+  V1 devolve os números da V1 mesmo que o motor mude depois.
+- Edge Function `gravar-meta` (v5, `verify_jwt: false`) só valida a sessão e
+  chama uma das duas funções.
+- Setembro/2026 importado como **V1 · Lançamento (ativa, origem `importado`)** a
+  partir das 17 linhas que já estavam no banco. Funil por marca reconstruído
+  com etapas fixas e pessoas com peso igual; distribuição semanal não importada
+  (`meta_closer_semana` é por pessoa somando marcas, não dá pra separar).
+
+**Achado junto:** o espelho do Hub não gravava `meta_volume_sal` (SAL), que
+`useMetasPerformance` lê. Publicar pelo Hub zeraria a meta de SAL no dash.
+
+**Layout:** stepper numerado; Passo 0 virou "Mês e versões" (lista com Ativar /
+Nova versão a partir desta); seletor de mês em 2 selects (o `<input type="month">`
+nativo parecia não responder ao clique); Passo 6 publica como V{n} comparando
+com a versão ativa. Estilos compartilhados em `src/components/metas/metasUi.ts`.
+Também: "Começar do zero" deixava as semanas vazias, e trocar de mês não limpava
+o rascunho.
+
+Verificado: build + 317 testes; SQL com rollback (publicar V1/V2, ativar V2 →
+espelho muda, reativar V1 → volta idêntico, UPDATE bloqueado); reativar a V1 de
+setembro gera md5 idêntico às 17 linhas atuais.
+
+**Pendente:** `gravar-meta` valida sessão mas não o papel (`admin`) — hoje só a
+UI restringe `/metas` via `RoleGuard`.
+
+### 2026-09-14 (2) — Cabeçalhos de tabela/lista quebrando linha no celular
+
+Junior testou o PR #141 no celular real e mandou print: na aba Campanha de
+Metas, "Metas por Marca", os cabeçalhos "META UN"/"REAL UN" quebravam em duas
+linhas ("META" / "UN"). Pedido: nenhuma palavra ou número pode quebrar linha,
+e aplicar sem passar por aprovação de novo.
+
+Causa: `thMarca`/`thHist`/`thTicket` (Campanha de Metas), os cabeçalhos das
+tabelas SDR/Closer (Performance) e do heatmap Motivo×Etapa (Análise de Perda)
+não tinham `whiteSpace: 'nowrap'` — com a coluna estreita no celular, o
+navegador quebra no espaço entre as duas palavras. Adicionado `nowrap` nos
+quatro pontos; as tabelas já tinham `rs-scroll-x` com `minWidth`, então forçar
+nowrap só faz o conteúdo crescer dentro do scroll, sem vazar.
+
+**Achado no processo, não no print do Junior:** a lista de etapas do modo
+Aging/Atual (Visão Macro) também tinha esse cabeçalho quebrando
+("Média em andamento" → "Média em" / "andamento"), mas não tinha rolagem
+horizontal — só `nowrap` ali teria feito o texto vazar por cima do valor ao
+lado (visto renderizado antes de decidir a correção: "MÉDIA EM AN" sobrepondo
+"10d"). Corrigido enrolando a lista inteira em `rs-scroll-x` com colunas em px
+fixo (150px pra "Média em andamento" caber), no mesmo padrão das outras
+tabelas — e removido o token `--etapa-col` que só servia pro layout antigo
+sem scroll.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + oxlint
+limpo, em worktree fora do OneDrive. Visto renderizado em 375×812 com bypass
+de login só em dev (removido antes do commit) — Metas por Marca, tabela SDR
+da Performance, heatmap da Análise de Perda e a lista de etapas em Aging/Atual
+(as duas colunas de média rolando lado a lado, sem sobrepor). PR aberto e
+mesclado sem aprovação prévia, por pedido explícito do Junior nesta sessão.
+
+### 2026-09-14 — Dashboard responsivo: celular, tablet e desktop
+
+Junior pediu layout bom em qualquer formato. Diagnóstico no celular (375px),
+antes: o menu lateral fixo ocupava 260px e sobravam ~110px de conteúdo; a
+barra de filtros empilhava os 10 controles e, grudada no topo, cobria a tela;
+grades fixas de 6/5/4 colunas; tabelas SDR/Closer em grid de colunas em px,
+cortadas pelo `overflow: hidden` do card; popups a 96vw com cabeçalho, gráficos
+e filtros fixos, deixando 1/3 da tela pra tabela; calendário do filtro de Dia
+com 450px de largura.
+
+**Escopo.** Esqueleto compartilhado (`AppLayout`, `Sidebar`, `PageTop`,
+`FilterBar`, `MultiSelect`, `DateRangePicker`, os 5 popups de Vendas,
+`TrapFunnel`, faixa e intro do Modo GP) + abas de Vendas (Visão Macro,
+Performance, Análise de Perda, Campanha de Metas, Metas). **Fora:** páginas de
+Marketing (do Gabriel — herdam menu e topo novos, grades internas seguem
+fixas; ver pendência na seção 8) e Análise de Objeções (iframe).
+
+**Como.** Três mecanismos, porque inline style não aceita media query (ver
+armadilha na seção 7): tokens + classes `rs-*` em `src/styles/responsive.css`;
+hook `useMediaQuery` (`MQ_CELULAR` ≤640px, `MQ_COMPACTO` ≤1023px) só pra mudança
+de estrutura; container query no funil (`.rs-trap`), que encolhe a coluna de
+custo pela largura do card e não da tela.
+
+**O que muda:**
+- **Compacto (≤1023px):** menu vira gaveta sobreposta — hambúrguer, fundo
+  escurecido, Esc e navegação fecham, e a preferência salva de menu
+  aberto/fechado do desktop não é tocada. A `FilterBar` vira uma linha
+  (botão Filtros + resumo "Consolidado · Setembro 2026" + contador de filtros
+  extras + reset), gruda logo abaixo da barra do topo (o hambúrguer continua
+  alcançável) e abre um painel inferior com os mesmos controles, aplicando na
+  hora. Filtro obrigatório vazio deixa botão e resumo em vermelho.
+- **Sidebar fechada some de verdade** (vale no desktop também): o glass tem
+  12px de margem e `translateX(-100%)` deixava uma lasca; agora desloca com a
+  margem e ganha `visibility: hidden`, então os itens saem do Tab.
+- **Grades:** KPIs 6 → 3 (≤1279) → 2 (≤640) → 1 (≤380); os cards de ritmo da
+  Performance vão pra 1 coluna no celular; funil + laterais (Visão Macro) e
+  Classificação + cards (Campanha) empilham abaixo de 1100px.
+- **Tabelas largas** (SDR/Closer da Performance, Histórico e Metas por Marca
+  da Campanha, funil por marca em Metas): rolagem horizontal com largura mínima.
+- **Popups:** 100vw no celular; no popup de etapa, gráficos + filtros + tabela
+  rolam juntos; listas "Por Marca/Por SDR" quebram em 1 coluna.
+- **Calendário do Dia:** atalhos viram chips em cima do calendário, dias com 36px.
+- **Análise de Perda:** separadores do card escuro viraram gap de 1px (valem
+  lado a lado e empilhado). **Performance:** divisórias do card Conversões por
+  sombra na célula — com número ímpar de itens a célula vazia ficava cinza.
+
+**Bug de brinde:** `var(--ws-brand)` (token inexistente, mesmo bug de
+09/09 (4)) em `HubMetas`, `PassoFunilMarca` e `PassoRevisarPublicar` →
+`--brand-accent`. O passo ativo do assistente de Metas e os botões "Copiar do
+mês anterior" / "Publicar mês" estavam transparentes.
+
+Desktop (≥1280px) sem mudança visual — conferido: 6 colunas de KPI, funil e
+laterais em 1,5:1, barra de filtros aberta.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + `oxlint`
+sem avisos novos, em worktree fora do OneDrive. **Visto renderizado** em
+375×812, 768×1024 e 1440×900 com bypass de login só em dev (removido antes do
+commit): Visão Macro (funil, painel de filtros, calendário do Dia, gaveta do
+menu, popup de etapa), Performance, Análise de Perda, Campanha de Metas e
+Metas — varredura por script sem nenhum elemento vazando da largura da tela.
+Nota pra quem for testar no painel de navegador: depois de rolar via script, a
+captura às vezes mostra uma faixa branca no topo — é artefato da captura
+(`header.getBoundingClientRect().top` = 0), não do layout.
 
 ### 2026-09-15 (7) — Abas de Vendas carregam em paralelo, com cache entre abas; eventos paginavam errado
 

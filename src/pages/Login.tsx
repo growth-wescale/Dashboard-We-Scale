@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -23,6 +23,8 @@ export function Login() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [focusField, setFocusField] = useState<string | null>(null)
+  const [params] = useSearchParams()
+  const foiDesativado = params.get('motivo') === 'desativado'
 
   if (loading) return null
   if (session) return <Navigate to="/" replace />
@@ -32,7 +34,12 @@ export function Login() {
     setError(null)
     setSubmitting(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) setError('E-mail ou senha incorretos.')
+    if (error) {
+      // Conta desativada no controle de acessos fica "banned" no Supabase Auth.
+      setError(/banned/i.test(error.message)
+        ? 'Seu acesso está desativado. Fale com um administrador do dashboard.'
+        : 'E-mail ou senha incorretos.')
+    }
     setSubmitting(false)
   }
 
@@ -82,6 +89,15 @@ export function Login() {
             Dashboard de performance
           </div>
         </div>
+
+        {foiDesativado && !error && (
+          <div style={{
+            fontSize: 13, color: 'var(--status-risco)', background: 'var(--status-risco-bg)',
+            borderRadius: 'var(--radius-sm)', padding: '10px 14px', marginBottom: 18,
+          }}>
+            Seu acesso foi desativado. Fale com um administrador do dashboard.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

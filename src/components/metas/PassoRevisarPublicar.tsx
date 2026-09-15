@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { resolverFunilMarca, gerarLinhasEspelho, type DiaSemana, type Semana } from '@/lib/metasEngine'
 import { publicarVersao } from '@/hooks/useSalvarMeta'
+import { useAcesso } from '@/contexts/AcessoContext'
 import type { EstadoMes, EstadoMesMarca, DistribuicaoSemanalItem, VersaoMeta } from '@/hooks/useMetaMes'
 import { cardStyle, bannerStyle, primaryButtonStyle, disabledButtonStyle, inputStyle } from '@/components/metas/metasUi'
 
@@ -41,6 +42,7 @@ export function PassoRevisarPublicar({
   const [rotulo, setRotulo] = useState(proximoNumero === 1 ? 'Lançamento' : 'Forecast')
   const [motivo, setMotivo] = useState('')
   const [ativar, setAtivar] = useState(true)
+  const { pode } = useAcesso()
 
   const resolucoes = marcas.map(m => ({ marca: m.marca, resolucao: resolverFunilMarca(m.etapas, m.ticketMedio), pessoas: m.pessoas }))
   const totalVendas = resolucoes.reduce((s, r) => s + (r.resolucao.valores['Fechamento'] ?? 0), 0)
@@ -54,7 +56,8 @@ export function PassoRevisarPublicar({
 
   const faltaMotivo = proximoNumero > 1 && motivo.trim() === ''
   const semMarcas = marcas.length === 0
-  const bloqueado = temErro || faltaMotivo || semMarcas || rotulo.trim() === ''
+  const semPermissao = !pode('acao.metas-publicar')
+  const bloqueado = temErro || faltaMotivo || semMarcas || semPermissao || rotulo.trim() === ''
 
   async function publicar() {
     setPublicando(true)
@@ -118,6 +121,7 @@ export function PassoRevisarPublicar({
         Ativar esta versão ao publicar (o dashboard passa a usar esses números)
       </label>
 
+      {semPermissao && <div style={{ ...bannerStyle('atencao'), marginBottom: 12 }}>Seu acesso permite montar a meta, mas não publicar. Peça a alguém com a permissão "Publicar e ativar metas".</div>}
       {semMarcas && <div style={{ ...bannerStyle('atencao'), marginBottom: 12 }}>Nenhuma marca configurada ainda — monte o funil no Passo 3.</div>}
       {temErro && <div style={{ ...bannerStyle('erro'), marginBottom: 12 }}>Existem marcas com erro de configuração — corrija no Passo 3 antes de publicar.</div>}
       {msg && <div style={{ ...bannerStyle('erro'), marginBottom: 12 }}>{msg}</div>}

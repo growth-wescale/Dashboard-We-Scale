@@ -431,6 +431,41 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 (4) — We Scale SOP React: KPIs hardcoded (27 MQL, R$ 3.745)
+
+Meta Instant Forms do Meta não chegam ao Supabase, então `useLeads` só retornava
+~13 dos 27 leads reais de We Scale — e o KPI strip usava apenas a semana calendário
+07-13/09 (2 leads nessa janela), exibindo "2 MQL / 2 leads".
+
+Solução (mesmo padrão de `comunidadeLegacy.ts`):
+
+- **`src/constants/weScaleSop.ts`** (novo): struct `WE_SCALE_SOP_ATUAL` com
+  snapshot manual — MTD Set 01-15, R$ 3.745 invest, 27 leads, 27 MQL, R$ 139
+  CP-MQL, duas semanas (S1 01-07: 12, S2 08-14: 15). Atualizar semanalmente
+  junto com o `sop-weekly.html`.
+- **`SopMarketing.tsx`**: para `isWeScale`, `kpiCards` usa valores hardcoded
+  com comparações `"—"` (marca nova, sem histórico anterior); badge `Semana · X`
+  → `MTD · MTD Set (01-15)`; `WeeklyBarChart` mostra as 2 barras de setembro em
+  vez das 5 semanas do calendário; sparkline CP-MQL oculta (sem invest por semana).
+
+PR #152, deploy automático.
+
+### 2026-09-15 (3) — Odonto Legacy SOP React: MQL MTD corrigido (166 em vez de 32)
+
+A janela do MQL do slide Odonto Legacy no React (`/sop-marketing`) estava travada
+em 7 dias corridos (01-08/09 → 09-15/09 = 7d = ~32 MQL) em vez de MTD (01-15/09
+= ~166 MQL). O changelog do PR #149 documentava a mudança para MTD, mas o código
+nunca foi atualizado — o bloco `if (isOdontoLegacy)` que sobrescrevia `mtdCurStart`
+para os últimos 7 dias existia há semanas sem ser percebido.
+
+Fix: removido o override `if (isOdontoLegacy)` em `mtdCurStart` e `mtdPrevStart`
+— ambos passam a usar `dates.mtdCurStart` / `dates.mtdPrevStart` como todas as
+outras marcas. `mtdPrevEnd` para Odonto Legacy mantém override próprio: `último dia
+do mês anterior` (Ago fechado = 31/08), em vez do dia N do mês anterior (MTD-vs-MTD
+usual). Isso é intencional — "comparativo MTD ago" do slide usa o mês fechado.
+
+PR #151, deploy automático.
+
 ### 2026-09-15 (2) — We Scale SOP: 27 MQL MTD, gráfico semanal e leads reais do CRM
 
 Atualização da marca We Scale no `sop-weekly.html` com dados de set/26:

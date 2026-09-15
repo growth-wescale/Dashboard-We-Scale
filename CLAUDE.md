@@ -431,6 +431,51 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 (6) — Filtros do pop-up de deals: nome à mostra e opções cruzadas
+
+Junior: nos pop-ups de deals, os 5 filtros mostravam todos o mesmo texto
+("Todas") e ele tinha que abrir um por um pra descobrir qual era qual.
+
+**Causa:** o botão do `MultiSelect` renderiza só o *resumo* da seleção — o
+`label` aparece dentro do popover, não no botão. Na `FilterBar` isso não
+incomoda porque cada controle já tem o nome em cima (`labelStyle`); no
+`StageDealsPanel` os controles estavam soltos numa linha depois de um
+"Filtrar por" genérico. Fix: helper `CampoFiltro` põe o nome em cima de cada
+um (MARCA · FUNIL · FONTE · SDR · CLOSER), mesmo padrão visual da barra do
+dashboard; o "Filtrar por" sai, virou redundante. `MultiSelect` não mudou.
+
+**Junto, as opções passaram a ser cruzadas entre si** (o Junior cobrou que a
+lista siga "certinho os dados que aparecem na tabela"). Antes cada filtro
+listava os valores de TODOS os deals do recorte: com Marca = Inpot, o filtro
+de SDR seguia oferecendo gente que não tem nenhum deal de Inpot — escolher
+zerava a tabela. Agora as opções de um campo saem das linhas que sobram
+depois dos OUTROS 4 filtros, mesma regra "estilo Excel" que a `FilterBar` já
+usava desde 31/08 (`funilFilterOptions`), inclusive o escape hatch: o valor
+já marcado continua na lista mesmo sem linha restante, senão não dava pra
+desmarcar. O próprio campo não se estreita — senão Marca colapsaria na marca
+escolhida e não daria pra trocar sem limpar.
+
+O recorte do dashboard (origem, marca, período, fonte, SDR/Closer da barra)
+já vinha aplicado antes, via `scoped`/`dealsInStage` — isso não mudou; o
+cruzamento novo é só entre os 5 filtros de dentro do pop-up.
+
+**Implementação.** A lógica saiu do `useMemo` do hook pra duas funções puras
+em `useStageDealsFilters.ts` — `filtrarStageDeals` e `opcoesCruzadas` —, as
+duas testadas. Vale de uma vez pros 3 lugares que usam o painel: Visão Macro,
+funil da Performance e os pop-ups dos cards da Performance (entrada (5)).
+`MqlDrawer` (abas de Marketing) ficou de fora de propósito: usa `<select>`
+nativo cujas opções já se identificam ("Todas as campanhas", "Todos os
+anúncios").
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (329 testes, 7 novos
+em `useStageDealsFilters.test.ts`) + `oxlint` limpo, em cópia fora do
+OneDrive. **Visto renderizado** contra a base real (cópia de teste com login/
+RoleGuard desligados, patch fora do commit): no pop-up do card MQL os 5
+rótulos aparecem sobre os controles e, marcando Marca = Inpot (58 de 768
+deals), o filtro de SDR passou de 7 opções pra 3 (Douglas, Sarah Padilha,
+Xayane) — sumiram Vanessa Daniel, Thiago e Bruna, que não têm MQL de Inpot.
+Console sem erros.
+
 ### 2026-09-15 (5) — Performance: cards abrem em qualquer período e o popup mostra os deals
 
 Junior pediu 2 ajustes nos cards da aba **Performance** (exemplificou no SDR,

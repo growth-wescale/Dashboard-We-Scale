@@ -5,9 +5,20 @@ import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, money } from '@/lib/format'
 import { BarList, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
-import { MultiSelect } from './MultiSelect'
+import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
+
+/** Filtro com o nome em cima, igual à FilterBar — o botão do MultiSelect
+ *  sozinho mostra só o resumo ("Todas"), que não diz qual campo é. */
+function CampoFiltro({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={labelStyle}>{label}</span>
+      {children}
+    </div>
+  )
+}
 
 // ─── StageDealsPanel ────────────────────────────────────────────────────────
 // Corpo do popup (gráficos + filtros + tabela), sem overlay nem cabeçalho —
@@ -76,29 +87,40 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
         <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} />
       </div>
 
-      {/* filtros */}
+      {/* filtros — cada um com o nome em cima (mesmo padrão da FilterBar do
+          dashboard): sem isso todos mostram só "Todas" e só dá pra saber do
+          que se trata abrindo um por um. */}
       <div className="rs-drawer-sec" style={{
         padding: '12px 24px', borderBottom: '1px solid var(--ws-border)',
-        display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
+        display: 'flex', gap: 10, alignItems: 'flex-end', flexShrink: 0, flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>Filtrar por</span>
-        <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: marcaLabel(v) }))}
-          selected={filters.marca} onChange={v => setFilters(s => ({ ...s, marca: v }))} />
-        <MultiSelect label="Funil" options={options.funil.map(v => ({ value: v, label: v }))}
-          selected={filters.funil} onChange={v => setFilters(s => ({ ...s, funil: v }))} />
-        <MultiSelect label="Fonte" options={options.fonte.map(v => ({ value: v, label: v }))}
-          selected={filters.fonte} onChange={v => setFilters(s => ({ ...s, fonte: v }))} />
-        <MultiSelect label="SDR" options={options.sdr.map(v => ({ value: v, label: v }))}
-          selected={filters.sdr} onChange={v => setFilters(s => ({ ...s, sdr: v }))} />
-        <MultiSelect label="Closer" options={options.closer.map(v => ({ value: v, label: v }))}
-          selected={filters.closer} onChange={v => setFilters(s => ({ ...s, closer: v }))} />
+        <CampoFiltro label="Marca">
+          <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: marcaLabel(v) }))}
+            selected={filters.marca} onChange={v => setFilters(s => ({ ...s, marca: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="Funil">
+          <MultiSelect label="Funil" options={options.funil.map(v => ({ value: v, label: v }))}
+            selected={filters.funil} onChange={v => setFilters(s => ({ ...s, funil: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="Fonte">
+          <MultiSelect label="Fonte" options={options.fonte.map(v => ({ value: v, label: v }))}
+            selected={filters.fonte} onChange={v => setFilters(s => ({ ...s, fonte: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="SDR">
+          <MultiSelect label="SDR" options={options.sdr.map(v => ({ value: v, label: v }))}
+            selected={filters.sdr} onChange={v => setFilters(s => ({ ...s, sdr: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="Closer">
+          <MultiSelect label="Closer" options={options.closer.map(v => ({ value: v, label: v }))}
+            selected={filters.closer} onChange={v => setFilters(s => ({ ...s, closer: v }))} />
+        </CampoFiltro>
         {hasFilters && (
           <button
             onClick={() => setFilters(EMPTY_STAGE_DEALS_FILTERS)}
             style={{
               border: '1px solid var(--ws-border)', borderRadius: 6, background: 'transparent',
               cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--ws-text-secondary)',
-              padding: '5px 10px', whiteSpace: 'nowrap',
+              padding: '6px 10px', whiteSpace: 'nowrap',
             }}
           >
             Limpar

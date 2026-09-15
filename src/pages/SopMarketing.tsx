@@ -14,6 +14,7 @@ import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { WE_SCALE_SOP_ATUAL } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -1225,9 +1226,16 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         },
       ]
-    // We Scale: sem SQL/SAL/CP-SQL — funil de Eventos ainda sem deals, foco em captação MTD.
+    // We Scale: valores MTD hardcoded de WE_SCALE_SOP_ATUAL — Meta Instant Forms não chegam ao
+  // Supabase, então o Supabase só tem ≈ metade dos leads reais. "—" nas comparações porque a
+  // marca só começou a receber dados em set/26, sem histórico anterior.
     : isWeScale
-      ? kpiCardsAll.filter(c => ['INVEST.', 'LEADS', 'MQL', 'CP-MQL'].includes(c.label))
+      ? [
+          { label: 'INVEST.', value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.invest), semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
+          { label: 'LEADS',   value: String(WE_SCALE_SOP_ATUAL.mtd.leads),   semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
+          { label: 'MQL',     value: String(WE_SCALE_SOP_ATUAL.mtd.mql),     semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
+          { label: 'CP-MQL',  value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.cpMql),  semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
+        ] satisfies KpiCard[]
       : kpiCardsAll
 
   // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
@@ -1376,7 +1384,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            Semana · {effectiveWeeks[4].label}
+            {isWeScale ? `MTD · ${WE_SCALE_SOP_ATUAL.mtd.periodo}` : `Semana · ${effectiveWeeks[4].label}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -1486,13 +1494,13 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               )
             })() : (
               <WeeklyBarChart
-                values={weeklyData.map(w => w.mql)}
-                labels={effectiveWeeks.map(w => w.label)}
+                values={isWeScale ? WE_SCALE_SOP_ATUAL.semanas.map(s => s.mql) : weeklyData.map(w => w.mql)}
+                labels={isWeScale ? WE_SCALE_SOP_ATUAL.semanas.map(s => s.label) : effectiveWeeks.map(w => w.label)}
                 accent={acc}
               />
             )}
           </div>
-          {!isOdontoLegacy && (
+          {!isOdontoLegacy && !isWeScale && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
                 CP-MQL

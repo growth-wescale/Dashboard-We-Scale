@@ -26,6 +26,7 @@ import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { MultiSelect } from '@/components/ui/MultiSelect'
 import { useAcesso } from '@/contexts/AcessoContext'
+import { restringirMarcas } from '@/lib/permissoes'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
@@ -800,19 +801,18 @@ const MEDIA_COLS = [
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function VisaoGeral() {
   const initDates = getMtdDates()
-  // Usuário travado numa marca no controle de acessos (ex.: franqueado Inpot):
-  // vê a Visão Geral filtrada só na marca dele. Sem opção de trocar — a
-  // `brandKeys` fica travada, o dropdown do BrandSelect e o clique na
-  // StatusTable ficam desabilitados.
-  const { marca: marcaPermitida } = useAcesso()
-  const marcaLocked = !!marcaPermitida
-  // brandKeys: multi-seleção estilo Excel. [] == Consolidado (todas as marcas
-  // somadas). Selecionar 2 marcas soma os dados delas.
-  const [brandKeys, setBrandKeys] = useState<string[]>(marcaLocked ? [marcaPermitida!] : [])
-  // Se o role muda (login/logout), força a seleção de novo.
-  useEffect(() => {
-    if (marcaLocked && marcaPermitida) setBrandKeys([marcaPermitida])
-  }, [marcaLocked, marcaPermitida])
+  // Pessoa limitada a marcas no controle de acessos (ex.: franqueado Inpot):
+  // escolhe só entre as marcas dela, e "nada selecionado" vira a soma delas —
+  // nunca o Consolidado de todas as marcas.
+  const { marcas: marcasPermitidas } = useAcesso()
+  const marcaLocked = marcasPermitidas !== null
+  // brandKeysSelecionadas: multi-seleção estilo Excel. [] == Consolidado (todas
+  // as marcas somadas). Selecionar 2 marcas soma os dados delas.
+  const [brandKeysSelecionadas, setBrandKeys] = useState<string[]>([])
+  const brandKeys = useMemo(
+    () => (marcasPermitidas ? restringirMarcas(brandKeysSelecionadas, marcasPermitidas) : brandKeysSelecionadas),
+    [brandKeysSelecionadas, marcasPermitidas],
+  )
   const [range,  setRange]  = useState({ start: initDates.start, end: initDates.end })
   const [filterFonte, setFilterFonte] = useState('__all__')
   const today = new Date()
@@ -821,7 +821,7 @@ export function VisaoGeral() {
   const marcasSelecionadas = useMemo(() => {
     return brandKeys.map(k => SLUG_TO_MARCA[k]).filter((m): m is Marca => !!m)
   }, [brandKeys])
-  const isConsolidado = brandKeys.length === 0 || brandKeys.length === BRAND_LIST.length
+  const isConsolidado = !marcaLocked && (brandKeys.length === 0 || brandKeys.length === BRAND_LIST.length)
   // Lista efetiva pra passar às pipelines: em Consolidado, `[]` sinaliza "sem
   // restrição" (mais simples que enumerar as 8 marcas — evita drift se BRAND_LIST muda).
   const marcasEfetivas = isConsolidado ? [] : marcasSelecionadas
@@ -961,9 +961,11 @@ export function VisaoGeral() {
         subtitle={`${scopeLabel} · ${curLabel}`}
         actions={
           <>
-            {!marcaLocked && (
-              <BrandSelect brands={brands} selected={brandKeys} onChange={setBrandKeys} />
-            )}
+            <BrandSelect
+              brands={marcasPermitidas ? brands.filter(b => marcasPermitidas.includes(b.key)) : brands}
+              selected={brandKeysSelecionadas}
+              onChange={setBrandKeys}
+            />
             <select
               value={filterFonte}
               onChange={e => setFilterFonte(e.target.value)}
@@ -1016,11 +1018,9 @@ export function VisaoGeral() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
         <StatusTable
-          brands={marcaLocked ? brands.filter(b => b.key === marcaPermitida) : brands}
-          selectedKeys={brandKeys}
-          onToggle={marcaLocked
-            ? () => { /* trava — usuário `marca` não muda seleção */ }
-            : (k) => setBrandKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
+          brands={marcasPermitidas ? brands.filter(b => marcasPermitidas.includes(b.key)) : brands}
+          selectedKeys={brandKeysSelecionadas}
+          onToggle={(k) => setBrandKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
           periodLabel={curLabel}
         />
         <MtdChart groups={mtdGroups} scopeLabel={scopeLabel} days={days} />

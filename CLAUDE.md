@@ -448,6 +448,37 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 — Controle de acessos: várias marcas por pessoa, restrição em todas as abas, filtros e ordenação
+
+Pedido do Junior depois de ver a tela no ar (PR #144):
+
+**Marcas viram lista.** `acesso_usuarios.marca text` → `marcas text[]`
+(`docs/sql/2026-09-15-acesso-multimarca.sql`, rodado por ele no SQL Editor —
+DDL no banco de Marketing é barrada pelo classificador do Claude Code).
+`minhas_permissoes()` devolve `marcas` (e `marca` = 1ª, só pra transição);
+`acesso_listar_usuarios()` recriada com `marcas`. `null` = todas as marcas.
+
+**Restrição de marca vale em todas as telas que têm filtro de marca**
+(`TELAS_COM_FILTRO_DE_MARCA` em `src/lib/permissoes.ts`): Visão Geral, Saúde
+da Marca, S&OP Marketing, Visão Macro, Performance, Análise de Perda. A pessoa
+escolhe entre as marcas dela; "nada selecionado" = soma das marcas dela, nunca
+o Consolidado. Pontos de aplicação: `restringirMarcas()` (puro, testado) em
+`SharedFiltersContext` (as 3 abas de Vendas herdam), `FilterBar` (opções e
+rótulo "Todas as suas marcas"), `VisaoGeral` (BrandSelect/StatusTable),
+`AppLayout` (sub-itens de Saúde da Marca e marca ativa) e `SopMarketing`
+(slides filtrados). Meta & OKRs, Campanha de Metas, Análise de Objeções, Metas
+e todas as ações seguem **bloqueadas** pra quem é limitado a marcas — mostram
+dado do time ou de todas as marcas juntas (decisão do Junior).
+
+**Aba Usuários:** filtros (busca, Situação, Tipo de acesso, Marca — inclusive
+"sem limite") e ordenação por coluna (Pessoa, Tipo, Marcas, Situação, Último
+acesso; "nunca entrou" sempre no fim). Lógica em `filtrarUsuarios`/
+`ordenarUsuarios`/`proximaOrdem` (`src/lib/acessosAdmin.ts`, testada). Marcas
+editadas num modal (todas × só algumas + checklist), também no convite.
+
+**Limite de sempre:** nas abas de Vendas os dados de todas as marcas ainda
+chegam ao navegador e são filtrados na tela — só a entrega 2 fecha isso.
+
 ### 2026-09-14 — Controle de acessos: tela Usuários & Acessos (entrega 1 de 2)
 
 Junior pediu um "login forte": até aqui qualquer conta do Supabase Auth

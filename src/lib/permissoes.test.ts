@@ -1,20 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ABAS, ACESSO_VAZIO, ACOES, parseMinhasPermissoes, pode, permissaoDaRota, primeiraRotaPermitida,
+  ABAS, ACESSO_VAZIO, ACOES, parseMinhasPermissoes, pode, permissaoDaRota, primeiraRotaPermitida, restringirMarcas,
   type EstadoAcesso,
 } from './permissoes'
 
-const base: EstadoAcesso = { registrado: true, ativo: true, papel: 'X', acessoTotal: false, marca: null, permissoes: [] }
+const base: EstadoAcesso = { registrado: true, ativo: true, papel: 'X', acessoTotal: false, marcas: null, permissoes: [] }
 
 describe('parseMinhasPermissoes', () => {
-  it('lê o jsonb do banco', () => {
+  it('lê o jsonb do banco com lista de marcas', () => {
     expect(parseMinhasPermissoes({
-      registrado: true, ativo: true, papel: 'Cliente da marca', acesso_total: false, marca: 'inpot',
+      registrado: true, ativo: true, papel: 'Cliente da marca', acesso_total: false, marcas: ['inpot', 'liso-laser', 'inpot'],
       permissoes: ['aba.visao-geral', 42, 'aba.saude-marca'],
     })).toEqual({
-      registrado: true, ativo: true, papel: 'Cliente da marca', acessoTotal: false, marca: 'inpot',
+      registrado: true, ativo: true, papel: 'Cliente da marca', acessoTotal: false, marcas: ['inpot', 'liso-laser'],
       permissoes: ['aba.visao-geral', 'aba.saude-marca'],
     })
+  })
+
+  it('formato antigo com marca única ainda funciona', () => {
+    expect(parseMinhasPermissoes({ registrado: true, ativo: true, marca: 'inpot' }).marcas).toEqual(['inpot'])
+  })
+
+  it('lista vazia ou nula = sem limite de marca', () => {
+    expect(parseMinhasPermissoes({ registrado: true, ativo: true, marcas: [] }).marcas).toBeNull()
+    expect(parseMinhasPermissoes({ registrado: true, ativo: true, marcas: null }).marcas).toBeNull()
   })
 
   it('formato estranho vira sem acesso', () => {
@@ -40,11 +49,31 @@ describe('pode', () => {
     expect(pode(e, 'aba.performance')).toBe(false)
   })
 
-  it('usuário travado numa marca só vê as abas que sabem travar, mesmo que o papel marque outras', () => {
-    const e = { ...base, marca: 'inpot', permissoes: ['aba.visao-geral', 'aba.visao-macro', 'acao.assistente-ia'] }
-    expect(pode(e, 'aba.visao-geral')).toBe(true)
-    expect(pode(e, 'aba.visao-macro')).toBe(false)
+  it('limitado a marcas: só telas com filtro de marca, nenhuma ação', () => {
+    const e = { ...base, marcas: ['inpot'], permissoes: ['aba.visao-macro', 'aba.sop-marketing', 'aba.okrs', 'aba.metas', 'acao.assistente-ia'] }
+    expect(pode(e, 'aba.visao-macro')).toBe(true)
+    expect(pode(e, 'aba.sop-marketing')).toBe(true)
+    expect(pode(e, 'aba.okrs')).toBe(false)
+    expect(pode(e, 'aba.metas')).toBe(false)
     expect(pode(e, 'acao.assistente-ia')).toBe(false)
+  })
+
+  it('limitado a marcas não libera tela que o papel não marca', () => {
+    expect(pode({ ...base, marcas: ['inpot'], permissoes: ['aba.visao-geral'] }, 'aba.performance')).toBe(false)
+  })
+})
+
+describe('restringirMarcas', () => {
+  it('sem limite devolve a seleção como veio, inclusive vazia', () => {
+    expect(restringirMarcas(['viva'], null)).toEqual(['viva'])
+    expect(restringirMarcas([], null)).toEqual([])
+  })
+  it('corta o que está fora das marcas permitidas', () => {
+    expect(restringirMarcas(['inpot', 'viva', 'b2case'], ['inpot', 'b2case'])).toEqual(['inpot', 'b2case'])
+  })
+  it('nada selecionado ou nada dentro → todas as permitidas', () => {
+    expect(restringirMarcas([], ['inpot', 'b2case'])).toEqual(['inpot', 'b2case'])
+    expect(restringirMarcas(['viva'], ['inpot'])).toEqual(['inpot'])
   })
 })
 

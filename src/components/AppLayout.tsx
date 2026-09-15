@@ -114,26 +114,22 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { marca: marcaPermitida, pode } = useAcesso()
-  const isMarcaRole = !!marcaPermitida
-  const [activeBrand, setActiveBrandState] = useState<string>(marcaPermitida ?? 'oral-unic')
+  const { marcas: marcasPermitidas, pode } = useAcesso()
+  const [activeBrand, setActiveBrandState] = useState<string>(marcasPermitidas?.[0] ?? 'oral-unic')
 
-  // Trava a marca ativa quando o usuário é do papel `marca` — não deixa nem
-  // um bug de código local levar pro sub de outra marca.
+  // Pessoa limitada a marcas: a marca ativa da Saúde da Marca só pode ser uma
+  // das dela — nem um bug de código local leva pro sub de outra marca.
   const setActiveBrand = useCallback((b: string) => {
-    if (isMarcaRole && marcaPermitida) {
-      setActiveBrandState(marcaPermitida)
-      return
-    }
+    if (marcasPermitidas && !marcasPermitidas.includes(b)) return
     setActiveBrandState(b)
-  }, [isMarcaRole, marcaPermitida])
+  }, [marcasPermitidas])
 
-  // Se o role muda (login/logout), garante que activeBrand fica correto.
+  // Acesso carregou/mudou: garante que a marca ativa está entre as permitidas.
   useEffect(() => {
-    if (isMarcaRole && marcaPermitida && activeBrand !== marcaPermitida) {
-      setActiveBrandState(marcaPermitida)
+    if (marcasPermitidas && !marcasPermitidas.includes(activeBrand)) {
+      setActiveBrandState(marcasPermitidas[0])
     }
-  }, [isMarcaRole, marcaPermitida, activeBrand])
+  }, [marcasPermitidas, activeBrand])
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('sidebarOpen') !== 'false' } catch { return true }
@@ -152,8 +148,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
 
-  // Menu segue o controle de acessos: some o que o papel não libera. Usuário
-  // travado numa marca vê só o sub-item dela em Saúde da Marca.
+  // Menu segue o controle de acessos: some o que o papel não libera. Pessoa
+  // limitada a marcas vê só os sub-itens delas em Saúde da Marca.
   const navItems = useMemo<SidebarItem[]>(() => {
     const itens: SidebarItem[] = []
     for (const item of NAV_ITEMS) {
@@ -163,8 +159,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         continue
       }
       if (!podeRota(pode, ROTA_MENU[item.key])) continue
-      if (item.key === 'saude' && isMarcaRole) {
-        itens.push({ ...item, subItems: BRANDS_SUB.filter(b => b.key === marcaPermitida) })
+      if (item.key === 'saude' && marcasPermitidas) {
+        itens.push({ ...item, subItems: BRANDS_SUB.filter(b => marcasPermitidas.includes(b.key)) })
         continue
       }
       itens.push(item)
@@ -173,7 +169,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       itens.push({ key: 'acessos', label: 'Usuários & Acessos', icon: <Users size={16} /> })
     }
     return itens
-  }, [pode, isMarcaRole, marcaPermitida])
+  }, [pode, marcasPermitidas])
 
   const handleSync = useCallback(() => {
     if (syncing) return

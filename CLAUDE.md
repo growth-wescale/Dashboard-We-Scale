@@ -240,6 +240,8 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
+src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
+src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
@@ -391,6 +393,17 @@ header Authorization. Campos obrigatórios vazios (ex.: Marca) fazem qualquer
 `PUT` falhar com 422 — o erro vem em `deal_required_custom_fields`. `PUT` de
 custom fields faz **merge**, não substitui os demais.
 
+**Paginação por OFFSET exige ORDEM TOTAL.** O PostgREST limita 1000 linhas por
+request; se a ordenação tiver empate (ex.: só `order=dia`), páginas vizinhas se
+sobrepõem e linhas se repetem/somem — de forma **determinística**, então nunca
+parece flutuação. Em 15/09 isso escondia 81 eventos/mês. Desempate até a chave
+(ou todas as colunas selecionadas). Use `buscarTodasPaginas` (`paginacao.ts`).
+
+**Lentidão: medir antes de mexer no banco.** `response.origin_time` nos
+`edge_logs` (query_logs) mostra o tempo do servidor; comparar com o tempo no
+cliente. curl abre TLS por request e distorce — medir com Node `fetch`
+(keep-alive), que se comporta como o browser.
+
 **`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
 noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
 Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
@@ -430,6 +443,58 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-15 (7) — Abas de Vendas carregam em paralelo, com cache entre abas; eventos paginavam errado
+
+Junior: a Visão Macro voltou a levar ~10 s pra carregar.
+
+**Não era o banco.** Logs da API (24 h): cada página de `vw_funil_vendas`
+volta com p50 ~230 ms / p95 ~350 ms, só 1 request acima de 3 s; refresh da
+matview estável em ~2,4 s há 10 dias; plano Pro, sem throttling. O gargalo era
+o **cliente**: `useFunilVendas` baixava a base inteira (5,9 mil linhas Inbound,
+~7 MB cru / ~650 KB gzip) em **6 páginas em série**, e `useFunilEventos` em
+mais 3–7 — qualquer oscilação de rede multiplicava por página. Medido do Mac do
+Junior, mesma sequência: 31,9 s / 26,2 s / 4,0 s. E cada troca entre Visão
+Macro, Performance e Análise de Perda baixava tudo de novo.
+
+**Fix, só front (nenhuma view/tabela tocada):**
+- `src/lib/paginacao.ts` (novo, testado) — `buscarTodasPaginas`: 1ª página
+  com `count=exact`, demais em paralelo com limite de concorrência (4 em
+  vendas, 3 em eventos — cada página de eventos recalcula a view inteira,
+  ~450 ms). Contagem em `vw_funil_vendas` custa 45 ms. Medido com conexão
+  reaproveitada (como o browser): vendas Inbound 2,4–14 s → **~1,0 s**;
+  eventos set/26 1,55 s → 0,8 s.
+- `src/lib/cacheConsulta.ts` (novo, testado) — cache em memória por chave,
+  dedup de carga em voo, erro não sobrescreve o último valor bom, máx. 16
+  chaves. Os dois hooks mostram o cache na hora ao montar e só revalidam em
+  segundo plano se ele tiver > 60 s. Troca de aba fica instantânea. Polling de
+  5 min e botão de refresh inalterados. Arrays compartilhados por referência —
+  **nenhum consumidor pode mutar as linhas** (conferido: nenhum muta hoje).
+
+**Bug de contagem achado no caminho.** `useFunilEventos` ordenava só por
+`dia` — milhares de empates — e OFFSET sobre ordem com empate devolve páginas
+sobrepostas. Determinístico (mesma resposta sempre), por isso nunca apareceu
+como flutuação: set/26 Inbound vinha com **81 eventos duplicados e 81
+faltando**. Agora a ordem desempata por todas as colunas selecionadas
+(`rn_deal_etapa_mes` distingue as repetições legítimas). **Números de etapa
+mudam** — set/26 Inbound, deals únicos: Novo MQL 802→818, Tentando Contato
+585→609, Contato Efetivo 277→282, Conexão 112→117, Interesse Reunião 134→140,
+SQL 59→61; ago/26 muda 0–8 por etapa; Prospecção Ativa (1 página) sem
+diferença. `vw_funil_vendas` não perdia linha (chave única conferida), mas
+ganhou desempate `id_lead, ciclo` por garantia.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (350 testes, 16 novos)
++ `oxlint` limpo, em worktree fora do OneDrive. Teste de integração temporário
+(removido antes do commit) com supabase-js contra a base real: vendas Inbound
+5.925 e Prospecção 1.758 linhas **idênticas** ao caminho antigo, `count` =
+linhas, 0 chave duplicada; eventos set/26 2.904 linhas, 0 duplicata, igual à
+leitura sequencial com ordem total. App exige login — não visto renderizado.
+
+**Fora do escopo, registrado:** subir "Max rows" da API do Supabase (1 request
+só) é config global do projeto — não aplicado. `remix-dashboard-expansao.lovable.app`
+faz ~4,6 mil requests/dia no mesmo banco (algumas RPCs com timeout). Visão
+Geral/Saúde da Marca seguem lendo `vw_marketing_funil` (~6,9 mil requests/dia,
+até 6 hooks por página) com paginação sequencial.
 
 ### 2026-09-15 (6) — Filtros do pop-up de deals: nome à mostra e opções cruzadas
 

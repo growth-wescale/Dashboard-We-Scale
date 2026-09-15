@@ -7,6 +7,7 @@ export type Marca =
   | 'B2Case'
   | 'Viva'
   | 'We Scale'
+  | 'Instituto do Autismo'
 
 export type Canal = 'meta' | 'google'
 

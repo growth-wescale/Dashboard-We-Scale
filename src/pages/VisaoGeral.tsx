@@ -29,7 +29,9 @@ import { useAuth } from '@/hooks/useAuth'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
-const BRAND_DEFS = BRAND_LIST.map(b => ({ key: b.key, label: b.label, accent: b.accent }))
+// Marca `vendasOnly` fica de fora: sem lead nem mídia no Supabase de Marketing,
+// ela viraria card zerado aqui (e inflaria o Consolidado sem investimento por trás).
+const BRAND_DEFS = BRAND_LIST.filter(b => !b.vendasOnly).map(b => ({ key: b.key, label: b.label, accent: b.accent }))
 
 const VALID_MARCAS = new Set<string>(Object.values(SLUG_TO_MARCA))
 

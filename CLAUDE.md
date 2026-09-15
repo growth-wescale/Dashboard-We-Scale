@@ -722,6 +722,67 @@ Nota pra quem for testar no painel de navegador: depois de rolar via script, a
 captura às vezes mostra uma faixa branca no topo — é artefato da captura
 (`header.getBoundingClientRect().top` = 0), não do layout.
 
+### 2026-09-15 — Instituto do Autismo (IDA) invisível em todas as abas de Vendas
+
+Junior mandou o link de um deal no RD ("José Batista de Almeida",
+`6aa1f93ac4579e000158381f`, marca **Instituto do Autismo**) perguntando por que
+não aparecia no dash, e sugeriu backfill do histórico do RD.
+
+**Não era backfill — o dado já estava todo no banco.** `deal_snapshot`
+atualizado 14/09 20:42 UTC, 8 eventos em `deal_eventos` batendo etapa a etapa
+com o histórico do RD (Sarah Padilha movendo o deal em 14/09 17:42 BRT), e 1
+linha em `vw_funil_vendas` com as datas de MQL → Tentando Contato → Contato
+Efetivo → Interesse Reunião → Conexão preenchidas. `espelho_rd_edge` e
+`wf_5_sync_incremental` rodando com `status=success`.
+
+**Causa raiz: a marca não existia no front.** `BRAND_LIST` (`brands.ts`) tinha
+8 marcas e nenhuma era 'Instituto do Autismo'. Como `TODAS_MARCAS`
+(`SharedFiltersContext`) é derivado de `BRAND_LIST`, a seleção padrão nunca
+incluía IDA, e `buildScopeFilter` (`metrics.ts`, `if (marcas.length &&
+!marcas.includes(r.marca))`) descartava **100%** das 17 linhas da marca nas 3
+abas. Pior: como `opcoesMarcaDisponiveis` também filtra por `BRAND_LIST`, ela
+não aparecia nem como opção no filtro de Marca — não dava pra selecionar na
+mão. Mesmo padrão de falha do alias 'Odonto Legacy' (11/09): marca que o RD
+conhece e o front não vira marca fantasma.
+
+**Fix.** `Marca` (`types.ts`) ganhou `'Instituto do Autismo'`; a entrada entrou
+em `BRAND_LIST` (accent `#E0A82E`). Junto foram 3 entradas zeradas nos
+`Record<Marca, …>` **exaustivos** de `copab2b.ts` — sem elas o `tsc -b` do
+build de produção quebra (mesmo pedágio pago quando We Scale entrou).
+
+**`BrandDef.vendasOnly` (novo).** `BRAND_LIST` é compartilhado com a Visão
+Geral (Marketing, do Gabriel). Em 15/09 o Supabase de Marketing não tinha
+**nenhum** lead nem linha de `media_daily_raw` de IDA, então entrar lá criaria
+um card zerado **e** puxaria os 17 deals pro Consolidado dele sem investimento
+por trás. A flag mantém a marca só nas abas de Vendas
+(`BRAND_DEFS = BRAND_LIST.filter(b => !b.vendasOnly)`); tirar a flag é 1 linha
+quando o Marketing rodar mídia. Decisão do Junior nesta sessão.
+
+**Nota de leitura — o deal do print não conta como SQL.** Ele está em "Reunião
+Agendada SQL" no funil do **SDR** (`69380917e00ed10014daaa68`), não no do
+Closer, então a trava documentada mantém o degrau SQL em 0 e ele some do modo
+**Atual** — comportamento de propósito, não regressão.
+
+**Dois achados colaterais, NÃO corrigidos aqui:**
+- **216 deals com evento mas sem linha de ciclo** — deals perdidos e depois
+  movidos de etapa no mesmo ciclo somem de `vw_deal_ciclo_enriquecido` (logo, de
+  `vw_funil_vendas`). É transversal, não é de IDA: Inpot 54, Oral Unic 50,
+  B2Case 33, Viva 28, Lisô 19, Eletrovias 15, Odonto Scale 13, IDA 4.
+- **`Scale Partner` (44 deals) ≠ `We Scale`** — `BRAND_LIST` aponta pra
+  'We Scale' (1 deal); os outros 44 estão gravados como 'Scale Partner' e no
+  funil "Eventos", fora do allowlist de `vw_funil_vendas`. Invisíveis de dois
+  jeitos ao mesmo tempo.
+- **Funil de IDA mostra 8 MQL onde o banco tem 14 deals com evento de MQL na
+  janela** (Tentando Contato 4 × 14; Contato Efetivo/Interesse/Conexão batem
+  exato). Os 6 de fora são Elis Regina, José Rafael, Thais Nunes, Formação,
+  gabriel limas e Gabriel. Não é da marca nem deste fix — precisa de
+  investigação própria na contagem de etapa.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (21 arquivos, 322
+testes, 5 novos em `brands.test.ts`) em worktree fora do OneDrive, e **visto
+renderizado** numa rota temporária sem autenticação (removida antes do commit):
+a marca aparece no filtro, isola o recorte e o funil desenha em dourado.
+
 ### 2026-09-11 (7) — Campanha de Metas: degraus de Velocidade em tabela legível
 
 4ª rodada de polimento da régua da Corrida (depois de (4) unificar,

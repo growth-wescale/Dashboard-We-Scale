@@ -1088,6 +1088,40 @@ testes, 5 novos em `brands.test.ts`) em worktree fora do OneDrive, e **visto
 renderizado** numa rota temporária sem autenticação (removida antes do commit):
 a marca aparece no filtro, isola o recorte e o funil desenha em dourado.
 
+### 2026-09-15 — Performance/Closer: coluna GANHOS passa a respeitar o toggle Negócios×Unidades
+
+Junior reportou: na aba Performance, aba Closer, a coluna **GANHOS** da
+tabela "VENDAS · CLOSERS" ignorava o toggle **Vendas** (Negócios ×
+Unidades) da `FilterBar` — Jéssica seguia com 2 nos dois lados enquanto
+o card Fechamentos logo acima já mudava (3 → 4 em set/2026).
+
+Causa: `buildCloserRows` (`performanceRows.ts`) fazia `cur.ganhos++`
+cru, sem olhar `viewModes.salesMode`. Tudo o mais que conta venda na
+aba (card Fechamentos, funil Diagnóstico→Fechamento, conversões de fundo
+de funil) e na Visão Macro (KPIs, card de Meta por marca) já passava por
+`countSales`, que aplica `saleUnits()` no modo Unidades. Era o único
+ponto que ficou de fora — auditado: Análise de Perda esconde o toggle,
+Campanha de Metas/OKRs/GpStrip não leem a `FilterBar`.
+
+Fix: `buildCloserRows` ganhou 5º parâmetro opcional `salesMode`
+(default `'deals'`, chamadas antigas inalteradas) e soma
+`salesMode === 'units' ? saleUnits(r) : 1` — a mesma regra de
+`countSales`, inclusive o piso de 1 unidade pra deal ganho sem produto.
+`PerformanceVendas.tsx` passa `viewModes.salesMode` nas duas chamadas
+(período e "hoje", pro popup). Rótulos seguem o padrão da Visão Macro:
+cabeçalho da coluna vira **UNIDADES**, e o card + popup viram
+"Fechamentos (unidades)". Faturamento e % da meta não dependem do toggle;
+**Win rate passa a seguir o toggle** (unidades ÷ Diagnóstico), coerente
+com "SAL → Fechamento" e "COF → Fechamento" do card de conversões, que já
+seguiam. Popup "Fechamentos" herda de graça — lê `closerRows.ganhos`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (372 testes, 2
+novos em `performanceRows.test.ts`) + `oxlint` limpo, em worktree fora do
+OneDrive. **Visto renderizado** numa rota temporária sem autenticação (só
+na cópia local de build, nunca no worktree): set/2026 Consolidado —
+Negócios: Jéssica 2 · Douglas 1 (card 3); Unidades: Jéssica 3 · Douglas 1
+(card "Fechamentos (unidades)" 4, popup idem).
+
 ### 2026-09-11 (7) — Campanha de Metas: degraus de Velocidade em tabela legível
 
 4ª rodada de polimento da régua da Corrida (depois de (4) unificar,

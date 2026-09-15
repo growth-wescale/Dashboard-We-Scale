@@ -431,6 +431,29 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 — Odonto Legacy SOP: 190 membros por qualidade, 166 MQL, comparativo MTD
+
+Atualização manual dos dados estáticos da Odonto Legacy nas duas superfícies do
+SOP (`sop-weekly.html` + `src/constants/comunidadeLegacy.ts`):
+
+**Comunidade:** total subiu de 170 → **190** após aplicar filtro de qualidade
+(recebe link da comunidade quem tem `tem_clinica=sim OR is_dentista=sim`). Com o
+filtro, o quadrante "Não-dentista sem clínica" (antes 38% do total bruto) sai da
+contagem — a comunidade ativa passa a ter 3 tiers:
+- Dentista com clínica: **42%** (~80 pessoas · ICP alto)
+- Dentista sem clínica: **45%** (~85 · quer abrir/franquia)
+- Não-dentista com clínica: **13%** (~25 · investidor com dentista sócio)
+
+Origens atualizadas: Newsletter 3→6, Iscas 4→2, Legacy site 138→157.
+
+**MQL Consultoria MTD set/26:** 58 (01-08/09) → **166** (01-15/09, via CRM).
+
+**Comparativo do gráfico:** trocado de janela 7d para **MTD setembro vs Ago
+fechado** — "No Odonto Legacy pode puxar sempre MTD, não precisa ser na semana"
+(Junior, 15/09). Anterior = Ago fechado (47 MQL / 170 membros).
+
+PR #149, deploy automático.
+
 ### 2026-09-14 (3) — Hub de Metas: versões por mês + layout novo
 
 Junior perguntou se as metas lançadas ficavam salvas como lançamento, porque o

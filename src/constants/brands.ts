@@ -14,6 +14,14 @@ export interface BrandDef {
   accent: string
   /** Cor escura (usada em headers/footers com contraste). */
   dark: string
+  /**
+   * Marca que hoje só existe no funil de Vendas (CRM), sem contrapartida no
+   * Supabase de Marketing (nenhum lead, nenhuma linha em `media_daily_raw`).
+   * As abas de Marketing — hoje só a Visão Geral — filtram essa flag fora, pra
+   * não criar card zerado nem mexer no Consolidado de lá. Remova a flag quando
+   * o Marketing passar a rodar mídia/lead da marca.
+   */
+  vendasOnly?: boolean
 }
 
 /** Marca especial que representa "consolidado" (todas as marcas). */
@@ -34,6 +42,9 @@ export const BRAND_LIST: BrandDef[] = [
   { key: 'viva',         label: 'Viva',         marca: 'Viva',         accent: '#FF0069', dark: '#141414' },
   // Antes 'Scale Partners' (renomeado 08/09/2026). Foco: eventos presenciais · funil "Eventos" no CRM.
   { key: 'we-scale',     label: 'We Scale',     marca: 'We Scale',     accent: '#7E0E70', dark: '#540247' },
+  // Marca nova (1os deals em 09/09/2026, funil SDR). Só Vendas: em 15/09/2026 o
+  // Supabase de Marketing não tinha nenhum lead nem mídia dela — ver `vendasOnly`.
+  { key: 'instituto-autismo', label: 'Instituto do Autismo', marca: 'Instituto do Autismo', accent: '#E0A82E', dark: '#8A5E00', vendasOnly: true },
 ]
 
 /** Lista completa com consolidado no topo (usada nos dropdowns das páginas de Vendas). */

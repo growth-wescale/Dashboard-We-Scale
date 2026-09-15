@@ -70,3 +70,29 @@ describe('opcoesMarcaDisponiveis', () => {
     expect(opcoes).toEqual(['oral-unic', 'viva'])
   })
 })
+
+describe('Instituto do Autismo (marca só de Vendas)', () => {
+  const ida = BRAND_LIST.find(b => b.key === 'instituto-autismo')
+
+  it('está em BRAND_LIST com o valor cru de marca que vem do RD', () => {
+    expect(ida).toBeDefined()
+    expect(ida!.marca).toBe('Instituto do Autismo')
+  })
+
+  it('findBrandByMarca resolve o valor cru de vw_funil_vendas', () => {
+    expect(findBrandByMarca('Instituto do Autismo')?.key).toBe('instituto-autismo')
+  })
+
+  it('aparece no filtro de Marca quando tem deal no recorte', () => {
+    expect(opcoesMarcaDisponiveis(['instituto-autismo']).map(b => b.key)).toEqual(['instituto-autismo'])
+  })
+
+  it('é vendasOnly — é por essa flag que a Visão Geral (Marketing) a exclui', () => {
+    expect(ida!.vendasOnly).toBe(true)
+  })
+
+  it('é a única vendasOnly hoje — as demais marcas seguem visíveis no Marketing', () => {
+    const outras = BRAND_LIST.filter(b => b.key !== 'instituto-autismo')
+    expect(outras.every(b => !b.vendasOnly)).toBe(true)
+  })
+})

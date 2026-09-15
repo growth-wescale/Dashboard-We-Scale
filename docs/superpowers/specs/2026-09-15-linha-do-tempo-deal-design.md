@@ -32,14 +32,29 @@ numa bolinha paralela à pista (sem encostar). Identidade We Scale: vinho
 
 | Porta | Comportamento |
 |---|---|
-| Menu Vendas → **Linha do Tempo** (`/linha-do-tempo`) | busca de deal por nome, ou colando id/link do RD. Resultado = cartões no nível Macro (a pista de 4 setas com as durações). Clicar abre o deal |
-| `/linha-do-tempo/:idDeal` | a tela do deal |
+| Menu Vendas → **Linha do Tempo** (`/linha-do-tempo`) | a "casa": **os mesmos filtros das outras abas de Vendas** (`OrigemToggle` ao lado do título + `FilterBar` compartilhada: Marca, Período, Fonte, Sub-fonte, SDR, Closer, "Deals criados no período"; toggles de Vendas e Contagem escondidos) + campo de busca por nome, id ou link do RD. A lista mostra os deals do recorte como cartões no nível Macro (a pista de 4 setas com as durações), ordenados do mais recente. Clicar abre o deal |
+| `/linha-do-tempo/:idDeal` | a tela do deal. Sem `FilterBar` (é um deal só); origem, marca, SDR e Closer aparecem como chips no cabeçalho |
 | Popups de deal existentes (`StageDealsDrawer`, `SimpleDealsDrawer`, `PerdaDealsDrawer`, `RepeatedDealsDrawer`) | ícone de "linha do tempo" ao lado do link externo pro RD, em cada linha, navegando pra rota acima. Nenhuma outra mudança nos popups |
 
-A busca **não** aplica o toggle de Origem nem a `FilterBar` (é um deal só; os
-filtros de recorte não fazem sentido aqui). Origem, marca, SDR e Closer
-aparecem como chips no cabeçalho do deal. `AppLayout.getActiveKey` passa a
-reconhecer `/linha-do-tempo` como aba de Vendas (`isVendas`, sem `AiChat`).
+**O que o Período significa na lista** (decisão do Junior em 15/09: "precisa
+selecionar o período referente a algo"): um deal entra na lista se **alguma
+etapa dele aconteceu dentro da janela** — qualquer `STAGE_DATE_FIELD` das 12
+etapas em `ranges` — ou, com "Deals criados no período" ligado, se o
+`data_novo_mql` está na janela. É exatamente a regra `naJanela` que
+`funilFilterOptions` já usa pra cruzar as opções dos filtros; extraída pra um
+helper exportado (`dealNaJanela(row, win, cohort)`) e reutilizada pelas duas.
+Marca/Fonte/Sub-fonte/SDR/Closer aplicam `buildScopeFilter` de `metrics.ts`,
+sem regra nova. As opções de cada filtro seguem cruzadas entre si e com a
+janela, igual às outras abas. Filtro obrigatório vazio (Marca ou Período)
+mostra `FiltrosObrigatoriosAviso`, igual às outras abas.
+
+A busca por texto refina a lista já filtrada (`ilike` no cliente sobre
+`nome_negociacao`); colar um id de 24 hex ou uma URL
+`crm.rdstation.com/app/deals/<id>` navega direto pro deal, **ignorando os
+filtros** (o deal pode estar fora do recorte e mesmo assim se quer abri-lo).
+
+`AppLayout.getActiveKey` passa a reconhecer `/linha-do-tempo` como aba de
+Vendas (`isVendas`, sem `AiChat`).
 
 ## 3. Fontes de dados (Supabase de Expansão, leitura direta, zero DDL)
 
@@ -208,7 +223,8 @@ matemática no componente.
 | `MomentoPopover` | cartão do clique, por tipo: **etapa** (de → para, quem, tempo parado no trecho); **tarefa** (assunto, tipo, quem, prazo × feita, atraso em dias, notas, "abrir no RD"); **reunião** (tipo, duração, nota IA, scorecard R1–R4 com ✓/✗ por pergunta, seções do resumo, "abrir no MeetRox"); **perda** (motivo cru + categoria de `classificarMotivo`, anotação); **troca/mudança** (antes → depois) |
 | `ZoomControls` | − · + · ⤢ · pill com o nível atual |
 | `TimelineLegend` | só os símbolos que existem no nível atual |
-| `DealSearch` (página `/linha-do-tempo`) | input com debounce 300 ms; lista de cartões Macro; aceita id (24 hex) ou URL `crm.rdstation.com/app/deals/<id>` e navega direto |
+| `DealSearch` (página `/linha-do-tempo`) | `PageTop` com `OrigemToggle` + `FilterBar` (`hideVendasToggle`, `hideContagemToggle`) + input com debounce 300 ms; lista de `DealCardMacro`; aceita id (24 hex) ou URL `crm.rdstation.com/app/deals/<id>` e navega direto |
+| `DealCardMacro` | cartão de lista: nome, chips, e a mini-pista de 4 setas com durações calculada das datas da linha de `vw_funil_vendas` |
 
 Ícones: `lucide-react` (já dependência) — Search (MQL), Phone (Tentando
 contato), MessageSquare (Contato efetivo), Handshake (Interesse), Link
@@ -228,9 +244,15 @@ MessageCircle / Mail / ListTodo (tarefas).
   **Falha parcial não derruba a tela**: a fonte que falhou vira aviso
   ("tarefas indisponíveis") e o resto renderiza. Deal ausente na view →
   `naoEncontrado`.
-- **`useBuscaDeal(termo)`** — `vw_funil_vendas.ilike('nome_negociacao',
-  %termo%)`, `eh_ciclo_atual = true`, limite 20, mesmas colunas do
-  cabeçalho. Sem termo → lista vazia (não carrega a view inteira).
+- **Lista da casa** — sem hook novo: a página usa `useSharedFilters()` +
+  `useFunilVendas(origem)` (o recorte inteiro da origem, como Visão Macro,
+  Performance e Análise de Perda) e filtra no cliente com `buildScopeFilter`
+  + `dealNaJanela` + busca por texto. Só linhas `eh_ciclo_atual`. Lista
+  virtualizada por paginação simples (50 por vez, "carregar mais") — o
+  cartão Macro de cada deal é desenhado a partir das datas de etapa da
+  própria linha de `vw_funil_vendas` (`data_novo_mql`, `data_sal`,
+  `data_venda`/`data_perdido`…), **sem** consultar `deal_eventos` por deal
+  na lista; a timeline completa só carrega ao abrir o deal.
 
 Consultas por `id_deal` são pontuais e ficam longe do `statement_timeout`
 de 3 s do `anon`. Verificar na implementação se `db_tarefas_sdr.deal_id` e
@@ -256,7 +278,8 @@ Supabase de Expansão, via `apply_migration`, registrado no changelog).
 | deal com eventos mas sem tarefas/reuniões | fileira de toques não aparece; legenda diz "sem tarefas registradas" |
 | uma fonte falhou | banner `QueryErrorBanner` por fonte, resto renderiza |
 | deal só com MQL (1 evento) | pista de 1 chevron + nó terminal "hoje" |
-| busca sem resultado | "Nenhum deal com esse nome" + dica de colar o link do RD |
+| busca sem resultado | "Nenhum deal com esse nome no recorte atual" + dica de ampliar o período ou colar o link do RD |
+| Marca ou Período vazios | `FiltrosObrigatoriosAviso`, igual às outras abas |
 
 ## 11. Testes
 
@@ -274,6 +297,11 @@ Vitest, funções puras:
   fio**; bolinha a 14 px da pista; cluster de toques; texto do chevron
   some quando não cabe.
 - `nivelDeZoom`: histerese nas duas fronteiras.
+- `dealNaJanela`: etapa na janela; modo safra; janela em união de
+  `ranges` não-contígua. `funilFilterOptions` passa a usá-lo sem mudar
+  nenhum teste existente.
+- `fasesDaLinha` (cartão Macro a partir da linha de `vw_funil_vendas`):
+  deal só com MQL; ganho; perdido; em andamento termina em hoje.
 
 Render conferido numa **rota temporária sem autenticação** (mesmo padrão
 das sessões anteriores, removida antes do commit) com 3 deals reais: um
@@ -289,8 +317,9 @@ Números do cabeçalho conferidos por SQL.
   de zoom ficar frágil, trocar só o `useZoomPan` por `d3-zoom` é mudança
   contida.
 - **Handoff vira um nó só** — coerente com a trava do Closer nas contagens.
-- **Busca sem toggle de Origem** — muda o que foi dito no chat na seção 2
-  do brainstorm; justificativa: quem busca por nome não quer que um toggle
-  esconda o resultado.
+- **A casa tem os filtros de sempre** (pedido do Junior ao aprovar o spec):
+  Origem, Marca, Período, Fonte/Sub-fonte, SDR, Closer. Período = "alguma
+  etapa do deal na janela" (ou safra de MQL com o toggle). Só a entrada
+  direta por id/link do RD ignora os filtros.
 - **Caminho padrão adiado** — o modelo (`Momento`, `Desvio`, `Trecho`) foi
   desenhado pra ele reaproveitar, mas nada agregado entra neste spec.

@@ -431,6 +431,32 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 (2) — We Scale SOP: 27 MQL MTD, gráfico semanal e leads reais do CRM
+
+Atualização da marca We Scale no `sop-weekly.html` com dados de set/26:
+
+**KPIs MTD (01-15/09):** R$ 3.745 investidos · 27 MQL · 27 Leads · CP-MQL R$ 139.
+
+**Gráfico semanal:** comparativo semana 1 × semana 2 — 01-07/09: 12 MQL, 08-14/09:
+15 MQL (▲ +25%). Nota anterior era comparativo 7d × 7d vs semana anterior; trocado
+para duas semanas de setembro por ser marca nova sem histórico anterior.
+
+**Extras com leads reais do CRM** (export 15/09, funil Eventos):
+- **Scale Partner Odonto (14 leads):** 8 leads da semana 01-08/09 (Rodrigo/bc.consultoria,
+  Dr° Áureo/Reciface, Gabriel/@clinicasorrisosmart, Dra Gabriela/Igv Clinic,
+  José/Instituto José Araujo, Bruno/Redeorto, Wendell/Centter lab, Camila/Cliniplus) +
+  6 de 11/09 em lote (Irineu/Althoff, Ana Maria, Lucas Rocha/Curattio, Alex/Equipe
+  Marina Richter, Diogo/Odontonin, Wesley/NEXT EQUIPAMENTOS).
+- **Scale Partner geral (8 leads):** Lucas Arantes/Overview, Nando/WodFit,
+  Rodrigo/BPO Gerencie + 5 de 11/09 em lote (Cida Faroni/Instituto Cultural Ribanitá,
+  Michael/Energize20, Rhana/Zoomie, Octavio/VB., Emiliano/Sorria Brasil).
+
+Leads removidos: "thomas" (não consta no CRM) e Winicius Henrique (marcado
+[NJ] Dados Inválidos). Cabeçalho da tabela global atualizado: "MTD Set (01-08)"
+→ "MTD Set (01-15)".
+
+Deploy automático via PR #150.
+
 ### 2026-09-15 — Odonto Legacy SOP: 190 membros por qualidade, 166 MQL, comparativo MTD
 
 Atualização manual dos dados estáticos da Odonto Legacy nas duas superfícies do

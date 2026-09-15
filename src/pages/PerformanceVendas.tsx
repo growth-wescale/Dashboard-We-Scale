@@ -255,7 +255,7 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
   )
 }
 
-function CloserTable({ rows }: { rows: CloserRow[] }) {
+function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean }) {
   const cols = '40px 1fr 70px 70px 70px 80px 120px 110px 70px 80px'
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
@@ -269,7 +269,7 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
           <span style={{ textAlign: 'right' }}>DIAG</span>
           <span style={{ textAlign: 'right' }}>SAL</span>
           <span style={{ textAlign: 'right' }}>COF</span>
-          <span style={{ textAlign: 'right' }}>GANHOS</span>
+          <span style={{ textAlign: 'right' }}>{unidades ? 'UNIDADES' : 'GANHOS'}</span>
           <span style={{ textAlign: 'right' }}>FATURAMENTO</span>
           <span style={{ textAlign: 'right' }}>META FAT.</span>
           <span style={{ textAlign: 'right' }}>%</span>
@@ -434,9 +434,11 @@ export function PerformanceVendas() {
     [scoped, win, mesUnico, metasPessoa, roster],
   )
   const closerRows: CloserRow[] = useMemo(
-    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster),
-    [scoped, win, mesUnico, metasPessoa, roster],
+    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode),
+    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode],
   )
+  // Sufixo dos rótulos de venda quando o toggle está em Unidades — mesmo padrão da Visão Macro.
+  const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
 
   const [tab, setTab] = useState<PerfTab>('sdr')
 
@@ -449,7 +451,10 @@ export function PerformanceVendas() {
   const [cardAberto, setCardAberto] = useState<CardKey | null>(null)
   const winHoje = useMemo(() => toWindow(null, null, [{ from: todayLocal(), to: todayLocal() }]), [])
   const sdrRowsHoje = useMemo(() => buildSdrRows(scoped, winHoje, [], roster), [scoped, winHoje, roster])
-  const closerRowsHoje = useMemo(() => buildCloserRows(scoped, winHoje, [], roster), [scoped, winHoje, roster])
+  const closerRowsHoje = useMemo(
+    () => buildCloserRows(scoped, winHoje, [], roster, viewModes.salesMode),
+    [scoped, winHoje, roster, viewModes.salesMode],
+  )
 
   const detalhe = useMemo(() => {
     if (!cardAberto) return null
@@ -504,12 +509,12 @@ export function PerformanceVendas() {
 
     return {
       def, pessoas, deals, nota,
-      titulo: def.stage === 'MQL' ? mqlLbl : def.titulo,
+      titulo: def.stage === 'MQL' ? mqlLbl : cardAberto === 'closer-fechamentos' ? `${def.titulo}${unidadeSufixo}` : def.titulo,
       formatter: def.dinheiro ? moneyK : nfCeil,
       accent: def.papel === 'SDR' ? SDR_ACCENT : CLOSER_ACCENT,
     }
   }, [cardAberto, sdrRows, closerRows, sdrRowsHoje, closerRowsHoje, metasPessoa, mesUnico, fimJanela,
-    periodMode, ranges, range.start, scoped, eventos, win, viewModes, mqlLbl])
+    periodMode, ranges, range.start, scoped, eventos, win, viewModes, mqlLbl, unidadeSufixo])
 
   // ── Leadtime em horário comercial (aba SDR) ─────────────────────────────────
   // Reciclagem às vezes não gera novo evento de MQL no ciclo atual — usa a
@@ -798,7 +803,7 @@ export function PerformanceVendas() {
               metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
               onClick={() => setCardAberto('closer-cof')} />
-            <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
+            <MetaRitmoCard label={`Fechamentos${unidadeSufixo}`} realizado={strip.fechamentos}
               metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
               granularity="monthly"
@@ -814,7 +819,7 @@ export function PerformanceVendas() {
             Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído.
           </p>
 
-          <CloserTable rows={closerRows} />
+          <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />

@@ -431,6 +431,70 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-15 (5) — Performance: cards abrem em qualquer período e o popup mostra os deals
+
+Junior pediu 2 ajustes nos cards da aba **Performance** (exemplificou no SDR,
+mas vale igual no Closer).
+
+**1. O popup só abria com 1 mês selecionado.** No modo **Dia** (e em
+trimestre/ano/multi-mês) o card não era clicável: `onClick` era condicionado a
+`mesUnico && metaTimeSel.metaX > 0`, porque o desdobramento por pessoa era
+construído inteiro em cima da meta MENSAL (ritmo do mês, "esperado até hoje",
+meta do dia). Agora **todos os 9 cards** (SDR: MQL · SQL · Diagnóstico · SAL;
+Closer: Diagnóstico · SAL · COF · Fechamentos · Receita) abrem em qualquer
+recorte. A meta por pessoa passou a ter 3 leituras:
+
+- **1 mês selecionado** — inalterado: ritmo + anel "Hoje" (SQL/Diag/SAL/COF) ou
+  Realizado × Meta do mês (Fechamentos/Receita).
+- **Modo Dia dentro de um mesmo mês** — meta **proporcional**: meta mensal da
+  pessoa × dias úteis do recorte (seg–sáb, mesmo critério de
+  `businessDaysInMonth`) ÷ dias úteis do mês. 1 dia = a própria meta do dia.
+  Só pras metas diárias.
+- **Resto** (trimestre, ano, vários meses, ou recorte de dias cruzando meses) —
+  só realizado por pessoa, com nota explicando por que não há meta: a meta vem
+  de um mês só (`useMetasPerformance` busca 1 `mesKey`), e ratear entre meses
+  diferentes seria chute. Fechamentos/Receita também caem aqui — são metas
+  mensais de propósito (ver entrada de 04/09).
+
+Diferente do popup antigo, quem **não tem meta cadastrada continua na lista**
+(meta "—") — no modo Dia o que o Junior quer ver é quem produziu, não só quem
+tem meta.
+
+**2. Toggle "Por pessoa × Deals" dentro do popup.** Pedido dele: "quero
+conseguir ver quais são os deals também". O popup ganhou 2 abas no cabeçalho —
+`Por SDR`/`Por Closer` (meta × realizado, o que já existia) e `Deals (N)`, que
+é **a mesma tabela do clique numa etapa do funil** (`StageDealsPanel`): mini
+gráficos por marca/responsável, os 5 filtros MultiSelect, e as colunas
+Negociação/Funil/Marca/Status/SDR/Closer/Fonte/Unidades/Taxa de Franquia/
+Leadtime/Data. O drawer alarga de 520px pra 980px na aba de deals.
+
+**A lista nunca diverge do número do card** — usa as MESMAS funções de
+contagem: `dealsInStage(..., 'performance')` pras etapas por evento (herda a
+trava "Reunião Agendada SQL só no funil do Closer"), `rowsInStage` pro MQL
+(que o card conta por `countStage`, na linha do deal) e a trava de venda pro
+Fechamento (Fechamentos e Receita listam os mesmos ganhos).
+
+**Implementação.** `StageDealsDrawer.tsx` foi partido: o corpo virou
+`StageDealsPanel` (exportado) e o estado de filtro saiu pro hook novo
+`useStageDealsFilters.ts` — assim o cabeçalho de quem monta o drawer segue
+mostrando "X de Y deals" (e o oxlint não reclama de hook exportado junto com
+componente). `StageDealsDrawer` continua idêntico por fora; Visão Macro não
+mudou. `metaBreakdown.ts` ganhou `buildPersonPeriodoRows` e `fracaoMetaMensal`
+(puras, testadas). As 6 instâncias de `MetaBreakdownDrawer` na página viraram
+**uma só**, montada por um mapa `CARD_DEF` (título, etapa, meta, granularidade)
+— `key={cardAberto}` faz cada card abrir do zero, em "Por pessoa" e sem filtro
+herdado do card anterior. Subtítulo no modo Dia agora mostra a data
+(`11/09/2026` / `01/09/2026 – 15/09/2026`) em vez de "Setembro 2026".
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (322 testes, 8 novos em
+`metaBreakdown.test.ts`) + `oxlint` limpo nos arquivos tocados, em cópia fora do
+OneDrive. Desta vez **visto renderizado** contra a base real, numa cópia de
+teste com o login e o RoleGuard desligados (patch só nessa cópia, nunca no
+commit): modo Dia 01–15/09 abre o popup do SQL com meta proporcional por SDR
+(Thiago 12/50, Xayane 14/37, Sarah 25/37) e a aba Deals (55) lista os
+negócios; Fechamentos no Closer mostra realizado com meta "—"; e o modo Mês
+segue com o ritmo + anel "Hoje" de antes. Console sem erros.
+
 ### 2026-09-15 (4) — We Scale SOP React: KPIs hardcoded (27 MQL, R$ 3.745)
 
 Meta Instant Forms do Meta não chegam ao Supabase, então `useLeads` só retornava

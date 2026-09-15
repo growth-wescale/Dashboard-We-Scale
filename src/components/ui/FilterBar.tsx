@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import { RotateCcw, SlidersHorizontal, X } from 'lucide-react'
 import { BRAND_LIST, opcoesMarcaDisponiveis } from '@/constants/brands'
 import { PERIOD_LABEL, useSharedFilters } from '@/contexts/SharedFiltersContext'
+import { useAcesso } from '@/contexts/AcessoContext'
 import { useMediaQuery, MQ_COMPACTO } from '@/hooks/useMediaQuery'
 import { opcoesPara } from '@/lib/periodo'
 import type { OpcaoPeriodo, PeriodMode } from '@/lib/periodo'
@@ -141,10 +142,16 @@ export function FilterBar({
     }
   }, [painelVisivel])
 
+  // Pessoa limitada a marcas (controle de acessos) só vê as marcas dela como opção.
+  const { marcas: marcasPermitidas } = useAcesso()
   const opcoesMarca = useMemo(
-    () => opcoesMarcaDisponiveis(marcasDisponiveis).map(b => ({ value: b.key, label: b.label })),
-    [marcasDisponiveis],
+    () => opcoesMarcaDisponiveis(marcasDisponiveis)
+      .filter(b => !marcasPermitidas || marcasPermitidas.includes(b.key))
+      .map(b => ({ value: b.key, label: b.label })),
+    [marcasDisponiveis, marcasPermitidas],
   )
+  const universoMarcas = marcasPermitidas?.length ?? BRAND_LIST.length
+  const rotuloTodasMarcas = marcasPermitidas ? 'Todas as suas marcas' : 'Consolidado'
 
   // Opções vindas dos dados — já cruzadas com os demais filtros ativos e o
   // período (ver `opcoesFiltro` em FunilVendas). O que já está selecionado
@@ -175,8 +182,8 @@ export function FilterBar({
   // Resumo da linha compacta: o recorte que está valendo, sem abrir o painel.
   const faltaObrigatorio = brandKeys.length === 0 || (periodMode !== 'dia' && periodValues.length === 0)
   const qtdOutrosFiltros = [fontes, subFontes, sdrs, closers].filter(f => f.length > 0).length
-  const resumoMarca = brandKeys.length >= BRAND_LIST.length
-    ? 'Consolidado'
+  const resumoMarca = brandKeys.length >= universoMarcas
+    ? rotuloTodasMarcas
     : brandKeys.length === 1
       ? (BRAND_LIST.find(b => b.key === brandKeys[0])?.label ?? brandKeys[0])
       : `${brandKeys.length} marcas`
@@ -190,7 +197,7 @@ export function FilterBar({
     <>
       <Field label="Marca">
         {/* obrigatório: vazio → borda vermelha + página esconde os dados */}
-        <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} required allLabel="Consolidado" universoTotal={BRAND_LIST.length} />
+        <MultiSelect label="Marca" options={opcoesMarca} selected={brandKeys} onChange={setBrandKeys} required allLabel={rotuloTodasMarcas} universoTotal={universoMarcas} />
       </Field>
 
       <Field label="Período" largo>

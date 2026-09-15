@@ -13,7 +13,8 @@ export interface UsuarioAcesso {
   convitePendente: boolean
   papelId: string | null
   papelNome: string | null
-  marca: string | null
+  /** Slugs de BRAND_LIST. null = todas as marcas. */
+  marcas: string[] | null
   ativo: boolean
 }
 
@@ -34,7 +35,7 @@ interface LinhaListarUsuarios {
   convite_pendente: boolean
   papel_id: string | null
   papel_nome: string | null
-  marca: string | null
+  marcas: string[] | null
   ativo: boolean
 }
 
@@ -56,7 +57,7 @@ export function useUsuariosAcesso() {
         convitePendente: r.convite_pendente,
         papelId: r.papel_id,
         papelNome: r.papel_nome,
-        marca: r.marca,
+        marcas: r.marcas && r.marcas.length > 0 ? r.marcas : null,
         ativo: r.ativo,
       })))
       setErro(null)
@@ -112,8 +113,8 @@ export function usePapeisAcesso() {
 }
 
 export type AcaoGerenciarUsuarios =
-  | { acao: 'convidar'; email: string; papelId: string; marca: string | null; redirectTo: string }
-  | { acao: 'definir_acesso'; usuarioId: string; papelId: string; marca: string | null }
+  | { acao: 'convidar'; email: string; papelId: string; marcas: string[] | null; redirectTo: string }
+  | { acao: 'definir_acesso'; usuarioId: string; papelId: string; marcas: string[] | null }
   | { acao: 'desativar'; usuarioId: string }
   | { acao: 'reativar'; usuarioId: string }
 
@@ -134,9 +135,9 @@ export async function chamarGerenciarUsuarios(body: AcaoGerenciarUsuarios): Prom
   return { ok: true, error: null, data: (data ?? null) as Record<string, unknown> | null }
 }
 
-/** Troca papel/marca de quem já tem acesso. Direto na tabela — RLS confere a permissão. */
-export async function alterarAcessoUsuario(usuarioId: string, papelId: string, marca: string | null): Promise<string | null> {
-  const { error } = await supabase.from('acesso_usuarios').update({ papel_id: papelId, marca }).eq('user_id', usuarioId)
+/** Troca papel/marcas de quem já tem acesso. Direto na tabela — RLS confere a permissão. */
+export async function alterarAcessoUsuario(usuarioId: string, papelId: string, marcas: string[] | null): Promise<string | null> {
+  const { error } = await supabase.from('acesso_usuarios').update({ papel_id: papelId, marcas }).eq('user_id', usuarioId)
   return error ? traduzirErroAcesso(error) : null
 }
 

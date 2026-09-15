@@ -739,25 +739,17 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
   const isWeScale = slide.marca === 'We Scale'
 
-  // Odonto Legacy usa janela dos últimos 7 dias corridos em vez de MTD do mês
-  // (Junior 03/09: MTD Set com só 3 dias distorce leitura). Comparativo passa a
-  // ser os 7 dias anteriores (21-27/08 vs 28/08-03/09). Outras marcas seguem MTD.
-  const mtdCurEnd = dates.mtdCurEnd
-  const mtdCurStart = useMemo(() => {
-    if (!isOdontoLegacy) return dates.mtdCurStart
-    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
-    return isoDate(new Date(end.getTime() - 6 * 86400000))
-  }, [isOdontoLegacy, dates.mtdCurStart, dates.mtdCurEnd])
+  // Odonto Legacy usa MTD completo (Junior 15/09: "pode puxar sempre MTD").
+  // Comparativo = Agosto fechado (mês inteiro). Outras marcas seguem MTD-vs-MTD.
+  const mtdCurEnd   = dates.mtdCurEnd
+  const mtdCurStart = dates.mtdCurStart
   const mtdPrevEnd = useMemo(() => {
     if (!isOdontoLegacy) return dates.mtdPrevEnd
-    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
-    return isoDate(new Date(end.getTime() - 7 * 86400000))
-  }, [isOdontoLegacy, dates.mtdPrevEnd, dates.mtdCurEnd])
-  const mtdPrevStart = useMemo(() => {
-    if (!isOdontoLegacy) return dates.mtdPrevStart
-    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
-    return isoDate(new Date(end.getTime() - 13 * 86400000))
-  }, [isOdontoLegacy, dates.mtdPrevStart, dates.mtdCurEnd])
+    // Ago fechado: último dia do mês anterior
+    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
+    return isoDate(new Date(y, m - 1, 0))
+  }, [isOdontoLegacy, dates.mtdPrevEnd, dates.monthStart])
+  const mtdPrevStart = dates.mtdPrevStart
 
   // Range de comparação: pra Odonto Legacy, usa mtdPrevStart/End (7d anteriores).
   // Pra outras marcas, respeita o dropdown de mês (compareRange).
@@ -775,9 +767,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
   const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
 
-  // Semanal do slide Odonto Legacy: mesma janela do MTD (7 dias corridos)
-  // pra ficar consistente. Junior 03/09: KPI weekly de semana fechada (dom-sáb)
-  // pegava 24-30/08, agora acompanha os últimos 7 dias como o MTD.
+  // Odonto Legacy: "semana atual" = MTD completo (Set 01 → hoje), "semana ant" = Ago fechado.
   const weekCurStart   = isOdontoLegacy ? mtdCurStart   : dates.weeks[4].start
   const weekCurEnd     = isOdontoLegacy ? mtdCurEnd     : dates.weeks[4].end
   const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : dates.weeks[3].start
@@ -869,7 +859,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // mqlLeads kept for potential downstream use
 
   // ── Weekly computations ──────────────────────────────────────────────────────
-  // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser últimos 7d e 7d anteriores.
+  // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser MTD Set e Ago fechado.
   // Pra We Scale, esconde semanas de agosto (a marca só passou a receber dados em set/26):
   // preserva o comprimento de 5 posições (kpiCards leem [4]/[3]) zerando as anteriores.
   const effectiveWeeks = useMemo(() => {
@@ -1455,14 +1445,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         }}>
 
         {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado)
-             Odonto Legacy: chart cumulativo 7d com seletor MQL/Membros/Custo/membro +
+             Odonto Legacy: chart cumulativo MTD com seletor MQL/Membros/Custo/membro +
              tabela do funil abaixo. Card fica scrollável se os dois não couberem
              de uma vez, e o chart tem piso de altura pra não achatar. */}
         {!dates.isClosed && (
         <div style={isOdontoLegacy ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
           <div style={{ marginBottom: 6 }}>
             <div style={colTitle(acc)}>
-              {isOdontoLegacy ? 'Comparativo 7d · cumulativo' : 'MQL Semanal'}
+              {isOdontoLegacy ? 'Comparativo MTD · cumulativo' : 'MQL Semanal'}
             </div>
           </div>
           <div style={isOdontoLegacy ? { minHeight: 260, flexShrink: 0 } : { height: 180 }}>

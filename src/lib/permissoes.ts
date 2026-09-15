@@ -46,11 +46,15 @@ export const ACOES: readonly DefAcao[] = [
 export const ROTA_ACESSOS = '/acessos'
 
 /**
- * Abas que sabem travar os dados numa marca só. Usuário com marca definida
- * (ex.: franqueado da Inpot) nunca passa daqui, mesmo que o papel dele marque
- * outras abas — as de Vendas e as ações mostram dados de todas as marcas.
+ * Telas que sabem filtrar por marca. Pessoa limitada a algumas marcas (ex.:
+ * franqueado da Inpot) só entra nestas — sempre filtradas nas marcas dela —,
+ * mesmo que o papel marque outras. As demais (OKRs, Campanha, Objeções, Metas)
+ * e todas as ações mostram dados do time ou de todas as marcas juntas.
  */
-export const ABAS_COM_TRAVA_DE_MARCA: ReadonlySet<string> = new Set(['aba.visao-geral', 'aba.saude-marca'])
+export const TELAS_COM_FILTRO_DE_MARCA: ReadonlySet<string> = new Set([
+  'aba.visao-geral', 'aba.saude-marca', 'aba.sop-marketing',
+  'aba.visao-macro', 'aba.performance', 'aba.analise-perda',
+])
 
 export interface EstadoAcesso {
   /** Tem linha em acesso_usuarios. Conta sem linha = sem acesso nenhum. */
@@ -58,13 +62,17 @@ export interface EstadoAcesso {
   ativo: boolean
   papel: string | null
   acessoTotal: boolean
-  /** Slug de BRAND_LIST quando o usuário está travado numa marca. */
-  marca: string | null
+  /** Slugs de BRAND_LIST a que a pessoa está limitada. null = todas as marcas. */
+  marcas: string[] | null
   permissoes: string[]
 }
 
 export const ACESSO_VAZIO: EstadoAcesso = {
-  registrado: false, ativo: false, papel: null, acessoTotal: false, marca: null, permissoes: [],
+  registrado: false, ativo: false, papel: null, acessoTotal: false, marcas: null, permissoes: [],
+}
+
+function soTextos(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '') : []
 }
 
 /** Lê o jsonb de `minhas_permissoes()` sem confiar no formato — qualquer coisa estranha vira sem acesso. */
@@ -72,21 +80,36 @@ export function parseMinhasPermissoes(raw: unknown): EstadoAcesso {
   if (!raw || typeof raw !== 'object') return ACESSO_VAZIO
   const r = raw as Record<string, unknown>
   if (r.registrado !== true) return ACESSO_VAZIO
+  const marcas = Array.isArray(r.marcas)
+    ? soTextos(r.marcas)
+    : typeof r.marca === 'string' && r.marca !== '' ? [r.marca] : []
   return {
     registrado: true,
     ativo: r.ativo === true,
     papel: typeof r.papel === 'string' ? r.papel : null,
     acessoTotal: r.acesso_total === true,
-    marca: typeof r.marca === 'string' && r.marca !== '' ? r.marca : null,
-    permissoes: Array.isArray(r.permissoes) ? r.permissoes.filter((p): p is string => typeof p === 'string') : [],
+    marcas: marcas.length > 0 ? [...new Set(marcas)] : null,
+    permissoes: soTextos(r.permissoes),
   }
 }
 
 export function pode(estado: EstadoAcesso, chave: string): boolean {
   if (!estado.registrado || !estado.ativo) return false
   if (estado.acessoTotal) return true
-  if (estado.marca && !ABAS_COM_TRAVA_DE_MARCA.has(chave)) return false
+  if (estado.marcas && !TELAS_COM_FILTRO_DE_MARCA.has(chave)) return false
   return estado.permissoes.includes(chave)
+}
+
+/**
+ * Seleção de marcas que vale pra quem é limitado: só o que está dentro das
+ * marcas permitidas; se não sobrar nada (ou nada selecionado), todas as dele.
+ * Sem limite (`permitidas` null), devolve a seleção como veio.
+ */
+export function restringirMarcas(selecionadas: readonly string[], permitidas: readonly string[] | null): string[] {
+  if (!permitidas) return [...selecionadas]
+  const p = new Set(permitidas)
+  const dentro = selecionadas.filter(m => p.has(m))
+  return dentro.length > 0 ? dentro : [...permitidas]
 }
 
 /** Permissão exigida pra abrir uma rota. null = rota que só redireciona (o destino é checado depois). */

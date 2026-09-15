@@ -16,6 +16,8 @@ import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { WE_SCALE_SOP_ATUAL } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
+import { BRAND_LIST } from '@/constants/brands'
+import { useAcesso } from '@/contexts/AcessoContext'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -1898,6 +1900,13 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
 
 export function SopMarketing() {
   const [activeSlide, setActiveSlide] = useState(0)
+  // Pessoa limitada a marcas no controle de acessos vê só os slides das marcas dela.
+  const { marcas: marcasPermitidas } = useAcesso()
+  const slides = useMemo(() => {
+    if (!marcasPermitidas) return SLIDES
+    const nomes = new Set<string>(BRAND_LIST.filter(b => marcasPermitidas.includes(b.key)).flatMap(b => (b.marca ? [String(b.marca)] : [])))
+    return SLIDES.filter(s => nomes.has(s.marca))
+  }, [marcasPermitidas])
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPdfExporting, setIsPdfExporting] = useState(false)
   const [pdfProgress, setPdfProgress] = useState('')
@@ -1919,12 +1928,12 @@ export function SopMarketing() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setActiveSlide(s => (s + 1) % SLIDES.length) }
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setActiveSlide(s => (s - 1 + SLIDES.length) % SLIDES.length) }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setActiveSlide(s => (s + 1) % slides.length) }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setActiveSlide(s => (s - 1 + slides.length) % slides.length) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [slides.length])
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(!!document.fullscreenElement)
@@ -1965,8 +1974,8 @@ export function SopMarketing() {
         compress: true,
       })
 
-      for (let i = 0; i < SLIDES.length; i++) {
-        setPdfProgress(`Carregando slide ${i + 1}/${SLIDES.length}...`)
+      for (let i = 0; i < slides.length; i++) {
+        setPdfProgress(`Carregando slide ${i + 1}/${slides.length}...`)
 
         // Aguarda o SopSlide sinalizar que todos os fetches terminaram (via onReady).
         // Timeout de 30s por slide como fallback.
@@ -1988,7 +1997,7 @@ export function SopMarketing() {
 
         const el = exportSlideRef.current
         if (!el) continue
-        setPdfProgress(`Renderizando slide ${i + 1}/${SLIDES.length}...`)
+        setPdfProgress(`Renderizando slide ${i + 1}/${slides.length}...`)
 
         const canvas = await html2canvas(el, {
           scale: 1,
@@ -2019,7 +2028,16 @@ export function SopMarketing() {
     }
   }
 
-  const slide = SLIDES[activeSlide]
+  if (slides.length === 0) {
+    return (
+      <div style={{ padding: 'var(--container-pad)', color: 'var(--ws-text-secondary)', fontSize: 14 }}>
+        Nenhuma das suas marcas tem slide no S&OP Marketing.
+      </div>
+    )
+  }
+
+  const idxAtivo = Math.min(activeSlide, slides.length - 1)
+  const slide = slides[idxAtivo]
 
   return (
     <div ref={containerRef} style={{ height: '100vh', background: 'var(--ws-bg)', overflow: 'hidden' }}>
@@ -2038,9 +2056,9 @@ export function SopMarketing() {
             style={{ width: 1920, height: 1080, overflow: 'hidden', background: '#F8F9FB' }}
           >
             <SopSlide
-              key={SLIDES[exportingIdx].id}
-              slide={SLIDES[exportingIdx]} dates={dates}
-              slideIndex={exportingIdx} total={SLIDES.length}
+              key={slides[exportingIdx].id}
+              slide={slides[exportingIdx]} dates={dates}
+              slideIndex={exportingIdx} total={slides.length}
               onPrev={() => {}} onNext={() => {}}
               isFullscreen={false} onToggleFullscreen={() => {}}
               exportHeight={1080}
@@ -2067,9 +2085,9 @@ export function SopMarketing() {
 
       <SopSlide
         key={slide.id} slide={slide} dates={dates}
-        slideIndex={activeSlide} total={SLIDES.length}
-        onPrev={() => setActiveSlide(s => (s - 1 + SLIDES.length) % SLIDES.length)}
-        onNext={() => setActiveSlide(s => (s + 1) % SLIDES.length)}
+        slideIndex={idxAtivo} total={slides.length}
+        onPrev={() => setActiveSlide(s => (s - 1 + slides.length) % slides.length)}
+        onNext={() => setActiveSlide(s => (s + 1) % slides.length)}
         isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
         monthMode={monthMode} onMonthModeChange={setMonthMode}
         closedMonthLabel={CLOSED_MONTH_LABEL}
@@ -2082,13 +2100,13 @@ export function SopMarketing() {
         padding: '5px 12px', borderRadius: 20,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
       }}>
-        {SLIDES.map((s, i) => (
+        {slides.map((s, i) => (
           <button key={s.id} onClick={() => setActiveSlide(i)}
             title={`${s.label}${s.subLabel ? ` — ${s.subLabel}` : ''}`}
             style={{
-              width: i === activeSlide ? 18 : 6, height: 6,
+              width: i === idxAtivo ? 18 : 6, height: 6,
               borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0, outline: 'none',
-              background: i === activeSlide ? s.accent : '#cbd5e1', transition: 'all 0.2s',
+              background: i === idxAtivo ? s.accent : '#cbd5e1', transition: 'all 0.2s',
             }} />
         ))}
       </div>

@@ -9,8 +9,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 type Payload =
-  | { acao: 'convidar'; email: string; papelId: string; marca?: string | null; redirectTo?: string }
-  | { acao: 'definir_acesso'; usuarioId: string; papelId: string; marca?: string | null }
+  | { acao: 'convidar'; email: string; papelId: string; marcas?: string[] | null; redirectTo?: string }
+  | { acao: 'definir_acesso'; usuarioId: string; papelId: string; marcas?: string[] | null }
   | { acao: 'desativar'; usuarioId: string }
   | { acao: 'reativar'; usuarioId: string }
 
@@ -57,16 +57,19 @@ Deno.serve(async (req) => {
     return respond({ error: 'JSON inválido' }, 400)
   }
 
-  // Papel + marca: papel com acesso total nunca fica travado numa marca.
-  async function resolverPapel(papelId: string, marca: string | null | undefined) {
+  // Papel + marcas: papel com acesso total nunca fica limitado a marcas. Lista vazia = todas.
+  async function resolverPapel(papelId: string, marcas: unknown) {
     const { data, error } = await admin.from('acesso_papeis').select('id, acesso_total').eq('id', papelId).maybeSingle()
     if (error || !data) return null
-    return { papelId: data.id as string, marca: data.acesso_total ? null : (marca || null) }
+    const lista = Array.isArray(marcas)
+      ? [...new Set(marcas.filter((m): m is string => typeof m === 'string' && m.trim() !== '').map(m => m.trim()))]
+      : []
+    return { papelId: data.id as string, marcas: data.acesso_total || lista.length === 0 ? null : lista }
   }
 
-  async function gravarAcesso(usuarioId: string, papelId: string, marca: string | null) {
+  async function gravarAcesso(usuarioId: string, papelId: string, marcas: string[] | null) {
     const { error } = await admin.from('acesso_usuarios').upsert(
-      { user_id: usuarioId, papel_id: papelId, marca, ativo: true, convidado_por: quem.user!.id },
+      { user_id: usuarioId, papel_id: papelId, marcas, ativo: true, convidado_por: quem.user!.id },
       { onConflict: 'user_id' },
     )
     if (error) return error.message
@@ -77,7 +80,7 @@ Deno.serve(async (req) => {
   if (payload.acao === 'convidar') {
     const email = (payload.email ?? '').trim().toLowerCase()
     if (!EMAIL_RE.test(email)) return respond({ error: 'E-mail inválido.' }, 400)
-    const papel = await resolverPapel(payload.papelId, payload.marca)
+    const papel = await resolverPapel(payload.papelId, payload.marcas)
     if (!papel) return respond({ error: 'Papel não encontrado.' }, 400)
     const redirectTo = typeof payload.redirectTo === 'string' && /^https?:\/\//.test(payload.redirectTo) ? payload.redirectTo : undefined
 
@@ -101,15 +104,15 @@ Deno.serve(async (req) => {
       await publico.auth.resetPasswordForEmail(email, { redirectTo })
     }
 
-    const erro = await gravarAcesso(usuarioId, papel.papelId, papel.marca)
+    const erro = await gravarAcesso(usuarioId, papel.papelId, papel.marcas)
     if (erro) return respond({ error: erro }, 400)
     return respond({ ok: true, usuarioId, jaExistia }, 200)
   }
 
   if (payload.acao === 'definir_acesso') {
-    const papel = await resolverPapel(payload.papelId, payload.marca)
+    const papel = await resolverPapel(payload.papelId, payload.marcas)
     if (!papel) return respond({ error: 'Papel não encontrado.' }, 400)
-    const erro = await gravarAcesso(payload.usuarioId, papel.papelId, papel.marca)
+    const erro = await gravarAcesso(payload.usuarioId, papel.papelId, papel.marcas)
     if (erro) return respond({ error: erro }, 400)
     return respond({ ok: true }, 200)
   }

@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
-import { Plus, Search, ShieldCheck, UserPlus, X } from 'lucide-react'
+import { useEffect, useId, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Plus, Search, ShieldCheck, UserPlus, X } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
+import { MultiSelect, labelStyle as filtroLabelStyle } from '@/components/ui/MultiSelect'
 import { useAuth } from '@/hooks/useAuth'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { BRAND_LIST } from '@/constants/brands'
-import { ABAS, ACOES } from '@/lib/permissoes'
-import { fmtUltimoAcesso, statusDoUsuario, type StatusUsuario } from '@/lib/acessosAdmin'
+import { ABAS, ACOES, TELAS_COM_FILTRO_DE_MARCA } from '@/lib/permissoes'
+import {
+  FILTROS_VAZIOS, ORDEM_PADRAO, ORDEM_STATUS, SEM_LIMITE_DE_MARCA,
+  filtrarUsuarios, fmtUltimoAcesso, ordenarUsuarios, proximaOrdem, resumoMarcas, statusDoUsuario, temFiltroAtivo,
+  type ColunaOrdem, type FiltrosUsuarios, type Ordem, type StatusUsuario,
+} from '@/lib/acessosAdmin'
 import {
   alterarAcessoUsuario, apagarPapel, chamarGerenciarUsuarios, salvarPapel, usePapeisAcesso, useUsuariosAcesso,
   type PapelAcesso, type UsuarioAcesso,
@@ -23,13 +28,8 @@ const STATUS_VISUAL: Record<StatusUsuario, { label: string; bg: string; fg: stri
   'sem-acesso': { label: 'Sem acesso',   bg: 'var(--ws-bg)',              fg: 'var(--ws-text-secondary)' },
 }
 
-const FILTROS: { chave: StatusUsuario | 'todos'; label: string }[] = [
-  { chave: 'todos', label: 'Todos' },
-  { chave: 'ativo', label: 'Ativos' },
-  { chave: 'pendente', label: 'Nunca entraram' },
-  { chave: 'desativado', label: 'Desativados' },
-  { chave: 'sem-acesso', label: 'Sem acesso' },
-]
+/** Nomes das telas que funcionam pra quem é limitado a marcas, na ordem do menu. */
+const TELAS_FILTRADAS_TEXTO = ABAS.filter(a => TELAS_COM_FILTRO_DE_MARCA.has(a.chave)).map(a => a.label).join(', ')
 
 function pill(bg: string, fg: string): CSSProperties {
   return { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: bg, color: fg, whiteSpace: 'nowrap' }
@@ -43,8 +43,7 @@ function botaoTexto(cor: string): CSSProperties {
   return { border: 'none', background: 'none', padding: '6px 4px', fontSize: 13, fontWeight: 600, color: cor, cursor: 'pointer', fontFamily: 'var(--font-body)' }
 }
 
-function marcaLabel(slug: string | null): string {
-  if (!slug) return 'todas as marcas'
+function marcaLabel(slug: string): string {
   return BRAND_LIST.find(b => b.key === slug)?.label ?? slug
 }
 
@@ -101,6 +100,7 @@ export function Acessos() {
         <AbaUsuarios
           usuarios={usuariosQ.usuarios}
           papeis={papeisQ.papeis}
+          pessoasPorPapel={pessoasPorPapel}
           carregando={usuariosQ.carregando || papeisQ.carregando}
           erro={usuariosQ.erro ?? papeisQ.erro}
           meuId={session?.user.id ?? null}
@@ -122,54 +122,67 @@ export function Acessos() {
 }
 
 // ── Aba Usuários ─────────────────────────────────────────────────────────────
-function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMudou }: {
+function AbaUsuarios({ usuarios, papeis, pessoasPorPapel, carregando, erro, meuId, onAviso, onMudou }: {
   usuarios: UsuarioAcesso[]
   papeis: PapelAcesso[]
+  pessoasPorPapel: Map<string, number>
   carregando: boolean
   erro: string | null
   meuId: string | null
   onAviso: (a: Aviso) => void
   onMudou: () => Promise<void>
 }) {
-  const [busca, setBusca] = useState('')
-  const [filtro, setFiltro] = useState<StatusUsuario | 'todos'>('todos')
+  const [filtros, setFiltros] = useState<FiltrosUsuarios>(FILTROS_VAZIOS)
+  const [ordem, setOrdem] = useState<Ordem>(ORDEM_PADRAO)
   const [convidando, setConvidando] = useState(false)
   const [desativando, setDesativando] = useState<UsuarioAcesso | null>(null)
+  const [editandoMarcas, setEditandoMarcas] = useState<UsuarioAcesso | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
 
   const papelPorId = useMemo(() => new Map(papeis.map(p => [p.id, p])), [papeis])
 
-  const contagem = useMemo(() => {
-    const c: Record<StatusUsuario | 'todos', number> = { todos: usuarios.length, ativo: 0, pendente: 0, desativado: 0, 'sem-acesso': 0 }
+  const contagemStatus = useMemo(() => {
+    const c: Record<StatusUsuario, number> = { ativo: 0, pendente: 0, desativado: 0, 'sem-acesso': 0 }
     for (const u of usuarios) c[statusDoUsuario(u)] += 1
     return c
   }, [usuarios])
 
-  const termo = busca.trim().toLowerCase()
-  const visiveis = usuarios.filter(u =>
-    (filtro === 'todos' || statusDoUsuario(u) === filtro) && (termo === '' || u.email.toLowerCase().includes(termo)))
+  const opcoesStatus = ORDEM_STATUS.map(s => ({ value: s, label: `${STATUS_VISUAL[s].label} (${contagemStatus[s]})` }))
+  const opcoesPapel = papeis.map(p => ({ value: p.id, label: `${p.nome} (${pessoasPorPapel.get(p.id) ?? 0})` }))
+  const opcoesMarca = [
+    { value: SEM_LIMITE_DE_MARCA, label: 'Todas as marcas (sem limite)' },
+    ...BRAND_LIST.map(b => ({ value: b.key, label: b.label })),
+  ]
+
+  const visiveis = useMemo(
+    () => ordenarUsuarios(filtrarUsuarios(usuarios, filtros), ordem, marcaLabel),
+    [usuarios, filtros, ordem],
+  )
+
+  const ordenarPor = (coluna: ColunaOrdem) => setOrdem(o => proximaOrdem(o, coluna))
 
   async function mudarPapel(u: UsuarioAcesso, papelId: string) {
     const papel = papelPorId.get(papelId)
     if (!papel || papelId === u.papelId) return
-    const marca = papel.acessoTotal ? null : u.marca
+    const marcas = papel.acessoTotal ? null : u.marcas
     setOcupado(u.usuarioId)
     const falha = u.papelId
-      ? await alterarAcessoUsuario(u.usuarioId, papelId, marca)
-      : (await chamarGerenciarUsuarios({ acao: 'definir_acesso', usuarioId: u.usuarioId, papelId, marca })).error
+      ? await alterarAcessoUsuario(u.usuarioId, papelId, marcas)
+      : (await chamarGerenciarUsuarios({ acao: 'definir_acesso', usuarioId: u.usuarioId, papelId, marcas })).error
     setOcupado(null)
     if (falha) { onAviso({ tipo: 'erro', texto: falha }); return }
     onAviso({ tipo: 'sucesso', texto: `${u.email} agora tem o acesso "${papel.nome}".` })
     await onMudou()
   }
 
-  async function mudarMarca(u: UsuarioAcesso, marca: string | null) {
+  async function mudarMarcas(u: UsuarioAcesso, marcas: string[] | null) {
     if (!u.papelId) return
     setOcupado(u.usuarioId)
-    const falha = await alterarAcessoUsuario(u.usuarioId, u.papelId, marca)
+    const falha = await alterarAcessoUsuario(u.usuarioId, u.papelId, marcas)
     setOcupado(null)
+    setEditandoMarcas(null)
     if (falha) { onAviso({ tipo: 'erro', texto: falha }); return }
-    onAviso({ tipo: 'sucesso', texto: marca ? `${u.email} agora só vê ${marcaLabel(marca)}.` : `${u.email} agora vê todas as marcas.` })
+    onAviso({ tipo: 'sucesso', texto: marcas ? `${u.email} agora só vê ${resumoMarcas(marcas, marcaLabel)}.` : `${u.email} agora vê todas as marcas.` })
     await onMudou()
   }
 
@@ -185,53 +198,67 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
 
   if (erro) return <div style={{ ...bannerStyle('erro'), fontSize: 13 }}>{erro}</div>
 
+  const cabecalho = (coluna: ColunaOrdem, texto: string) => (
+    <ThOrdenavel coluna={coluna} ordem={ordem} onOrdenar={ordenarPor}>{texto}</ThOrdenavel>
+  )
+
   return (
     <div style={cardStyle}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-        <label style={{ position: 'relative', flex: '1 1 240px', maxWidth: 360 }}>
-          <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ws-text-secondary)' }} />
-          <input
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por e-mail"
-            aria-label="Buscar por e-mail"
-            style={{ ...inputStyle, width: '100%', padding: '8px 10px 8px 32px' }}
-          />
-        </label>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 12 }}>
+        <Filtro titulo="Buscar">
+          <label style={{ position: 'relative', display: 'block', width: 240, maxWidth: '100%' }}>
+            <Search size={14} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--ws-text-secondary)' }} />
+            <input
+              value={filtros.busca}
+              onChange={e => setFiltros(f => ({ ...f, busca: e.target.value }))}
+              placeholder="E-mail"
+              aria-label="Buscar por e-mail"
+              style={{ ...inputStyle, width: '100%', padding: '6px 10px 6px 28px' }}
+            />
+          </label>
+        </Filtro>
+        <Filtro titulo="Situação">
+          <MultiSelect label="Situação" options={opcoesStatus} selected={filtros.status}
+            onChange={v => setFiltros(f => ({ ...f, status: v as StatusUsuario[] }))} />
+        </Filtro>
+        <Filtro titulo="Tipo de acesso">
+          <MultiSelect label="Tipo de acesso" options={opcoesPapel} selected={filtros.papeis}
+            onChange={v => setFiltros(f => ({ ...f, papeis: v }))} />
+        </Filtro>
+        <Filtro titulo="Marca">
+          <MultiSelect label="Marca" options={opcoesMarca} selected={filtros.marcas}
+            onChange={v => setFiltros(f => ({ ...f, marcas: v }))} />
+        </Filtro>
+        {temFiltroAtivo(filtros) && (
+          <button onClick={() => setFiltros(FILTROS_VAZIOS)} style={{ ...botaoTexto('var(--ws-text-secondary)'), fontWeight: 500, textDecoration: 'underline' }}>
+            Limpar filtros
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         <button onClick={() => setConvidando(true)} disabled={papeis.length === 0} style={{ ...primaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <UserPlus size={16} /> Convidar pessoa
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {FILTROS.filter(f => f.chave === 'todos' || contagem[f.chave] > 0).map(f => {
-          const ativo = filtro === f.chave
-          return (
-            <button key={f.chave} onClick={() => setFiltro(f.chave)} aria-pressed={ativo} style={{
-              padding: '4px 11px', borderRadius: 999, fontSize: 12, cursor: 'pointer', fontFamily: 'var(--font-body)',
-              border: `1px solid ${ativo ? 'var(--ws-text-primary)' : 'var(--ws-border)'}`,
-              background: ativo ? 'var(--ws-text-primary)' : 'transparent',
-              color: ativo ? 'var(--ws-surface)' : 'var(--ws-text-secondary)',
-            }}>
-              {f.label} <strong style={{ fontWeight: 600 }}>{contagem[f.chave]}</strong>
-            </button>
-          )
-        })}
+      <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>
+        {visiveis.length === usuarios.length
+          ? `${usuarios.length} ${usuarios.length === 1 ? 'pessoa' : 'pessoas'}`
+          : `Mostrando ${visiveis.length} de ${usuarios.length} pessoas`}
+        {' · clique no título de uma coluna pra ordenar'}
       </div>
 
       {carregando ? (
         <div style={{ padding: 24, fontSize: 13, color: 'var(--ws-text-secondary)' }}>Carregando usuários…</div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 780 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 820 }}>
             <thead>
               <tr>
-                <th style={th}>Pessoa</th>
-                <th style={th}>Tipo de acesso</th>
-                <th style={th}>Marca</th>
-                <th style={th}>Situação</th>
-                <th style={th}>Último acesso</th>
+                {cabecalho('email', 'Pessoa')}
+                {cabecalho('papel', 'Tipo de acesso')}
+                {cabecalho('marcas', 'Marcas')}
+                {cabecalho('status', 'Situação')}
+                {cabecalho('ultimoLogin', 'Último acesso')}
                 <th style={th}><span className="sr-only">Ações</span></th>
               </tr>
             </thead>
@@ -241,7 +268,7 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
                 const eu = u.usuarioId === meuId
                 const papel = u.papelId ? papelPorId.get(u.papelId) : undefined
                 const trabalhando = ocupado === u.usuarioId
-                const marcaDesconhecida = u.marca !== null && !BRAND_LIST.some(b => b.key === u.marca)
+                const marcasTravadas = eu || trabalhando || !papel || papel.acessoTotal
                 return (
                   <tr key={u.usuarioId} style={{ borderTop: '1px solid var(--ws-border)', opacity: trabalhando ? 0.55 : 1 }}>
                     <td style={td}>
@@ -262,18 +289,20 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
                       </select>
                     </td>
                     <td style={td}>
-                      <select
-                        value={u.marca ?? ''}
-                        disabled={eu || trabalhando || !papel || papel.acessoTotal}
-                        title={papel?.acessoTotal ? 'Administrador sempre vê todas as marcas.' : undefined}
-                        onChange={e => mudarMarca(u, e.target.value || null)}
-                        aria-label={`Marca de ${u.email}`}
-                        style={selectStyle}
+                      <button
+                        type="button"
+                        onClick={() => setEditandoMarcas(u)}
+                        disabled={marcasTravadas}
+                        title={papel?.acessoTotal ? 'Administrador sempre vê todas as marcas.' : eu ? 'Seu próprio acesso só pode ser mudado por outro administrador.' : 'Escolher marcas'}
+                        aria-label={`Marcas de ${u.email}`}
+                        style={{
+                          ...selectStyle, display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                          textAlign: 'left', cursor: marcasTravadas ? 'default' : 'pointer', opacity: marcasTravadas ? 0.6 : 1,
+                        }}
                       >
-                        <option value="">Todas as marcas</option>
-                        {marcaDesconhecida && <option value={u.marca!}>{u.marca}</option>}
-                        {BRAND_LIST.map(b => <option key={b.key} value={b.key}>Só {b.label}</option>)}
-                      </select>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resumoMarcas(u.marcas, marcaLabel)}</span>
+                        {!marcasTravadas && <Pencil size={13} style={{ flex: '0 0 auto', color: 'var(--ws-text-secondary)' }} />}
+                      </button>
                     </td>
                     <td style={td}><span style={pill(status.bg, status.fg)}>{status.label}</span></td>
                     <td style={{ ...td, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{fmtUltimoAcesso(u.ultimoLogin)}</td>
@@ -286,7 +315,7 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
                 )
               })}
               {visiveis.length === 0 && (
-                <tr><td colSpan={6} style={{ ...td, padding: 24, color: 'var(--ws-text-secondary)' }}>Ninguém encontrado.</td></tr>
+                <tr><td colSpan={6} style={{ ...td, padding: 24, color: 'var(--ws-text-secondary)' }}>Ninguém com esses filtros.</td></tr>
               )}
             </tbody>
           </table>
@@ -294,7 +323,7 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
       )}
 
       <p style={{ fontSize: 12, color: 'var(--ws-text-secondary)', margin: '14px 0 0', lineHeight: 1.5 }}>
-        Quem fica travado numa marca só vê Visão Geral e Saúde da Marca dela, mesmo que o tipo de acesso libere outras telas.
+        Quem é limitado a algumas marcas só entra em {TELAS_FILTRADAS_TEXTO} — sempre só com as marcas dele, e só nas telas que o tipo de acesso libera.
       </p>
 
       {convidando && (
@@ -302,6 +331,15 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
           papeis={papeis}
           onFechar={() => setConvidando(false)}
           onConvidado={async texto => { setConvidando(false); onAviso({ tipo: 'sucesso', texto }); await onMudou() }}
+        />
+      )}
+
+      {editandoMarcas && (
+        <ModalMarcas
+          usuario={editandoMarcas}
+          salvando={ocupado === editandoMarcas.usuarioId}
+          onFechar={() => setEditandoMarcas(null)}
+          onSalvar={marcas => mudarMarcas(editandoMarcas, marcas)}
         />
       )}
 
@@ -326,6 +364,100 @@ function AbaUsuarios({ usuarios, papeis, carregando, erro, meuId, onAviso, onMud
   )
 }
 
+function Filtro({ titulo, children }: { titulo: string; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <span style={filtroLabelStyle}>{titulo}</span>
+      {children}
+    </div>
+  )
+}
+
+function ThOrdenavel({ coluna, ordem, onOrdenar, children }: {
+  coluna: ColunaOrdem
+  ordem: Ordem
+  onOrdenar: (c: ColunaOrdem) => void
+  children: ReactNode
+}) {
+  const ativa = ordem.coluna === coluna
+  const Icone = !ativa ? ArrowUpDown : ordem.direcao === 'asc' ? ArrowUp : ArrowDown
+  return (
+    <th style={th} aria-sort={ativa ? (ordem.direcao === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        onClick={() => onOrdenar(coluna)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'none', padding: 0,
+          cursor: 'pointer', font: 'inherit', letterSpacing: 'inherit', textTransform: 'inherit',
+          color: ativa ? 'var(--ws-text-primary)' : 'inherit',
+        }}
+      >
+        {children}
+        <Icone size={12} style={{ opacity: ativa ? 1 : 0.45 }} />
+      </button>
+    </th>
+  )
+}
+
+/** "Todas as marcas" ou "Só algumas marcas" + checklist. Lista vazia com "só algumas" = inválido. */
+function SeletorMarcas({ valor, onChange }: { valor: string[] | null; onChange: (v: string[] | null) => void }) {
+  const grupo = useId()
+  const opcao: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <label style={opcao}>
+        <input type="radio" name={grupo} checked={valor === null} onChange={() => onChange(null)} />
+        Todas as marcas
+      </label>
+      <label style={opcao}>
+        <input type="radio" name={grupo} checked={valor !== null} onChange={() => onChange(valor ?? [])} />
+        Só algumas marcas
+      </label>
+      {valor !== null && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, paddingLeft: 24 }}>
+          {BRAND_LIST.map(b => {
+            const marcada = valor.includes(b.key)
+            return (
+              <label key={b.key} style={opcao}>
+                <input type="checkbox" checked={marcada} onChange={() => onChange(marcada ? valor.filter(x => x !== b.key) : [...valor, b.key])} />
+                {b.label}
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ModalMarcas({ usuario, salvando, onFechar, onSalvar }: {
+  usuario: UsuarioAcesso
+  salvando: boolean
+  onFechar: () => void
+  onSalvar: (marcas: string[] | null) => void
+}) {
+  const [valor, setValor] = useState<string[] | null>(usuario.marcas)
+  const invalido = valor !== null && valor.length === 0
+  return (
+    <Modal titulo="Marcas" onFechar={onFechar}>
+      <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ws-text-primary)', margin: '0 0 16px' }}>
+        Quais marcas <strong style={{ wordBreak: 'break-all' }}>{usuario.email}</strong> pode ver?
+      </p>
+      <SeletorMarcas valor={valor} onChange={setValor} />
+      <p style={{ fontSize: 12, color: 'var(--ws-text-secondary)', margin: '16px 0 0', lineHeight: 1.5 }}>
+        Limitando a marcas, a pessoa só entra em {TELAS_FILTRADAS_TEXTO}, e escolhe entre as marcas dela em cada uma.
+      </p>
+      {invalido && <div style={{ ...bannerStyle('atencao'), fontSize: 13, marginTop: 12 }}>Marque pelo menos uma marca, ou escolha "Todas as marcas".</div>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap', marginTop: 20 }}>
+        <button onClick={onFechar} style={secondaryButtonStyle}>Cancelar</button>
+        <button onClick={() => onSalvar(valor)} disabled={invalido || salvando} style={invalido || salvando ? disabledButtonStyle : primaryButtonStyle}>
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 function ModalConvite({ papeis, onFechar, onConvidado }: {
   papeis: PapelAcesso[]
   onFechar: () => void
@@ -333,7 +465,7 @@ function ModalConvite({ papeis, onFechar, onConvidado }: {
 }) {
   const [email, setEmail] = useState('')
   const [papelId, setPapelId] = useState('')
-  const [marca, setMarca] = useState('')
+  const [marcas, setMarcas] = useState<string[] | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const papel = papeis.find(p => p.id === papelId)
@@ -342,13 +474,14 @@ function ModalConvite({ papeis, onFechar, onConvidado }: {
     e.preventDefault()
     setErro(null)
     if (!papel) { setErro('Escolha o tipo de acesso.'); return }
+    if (!papel.acessoTotal && marcas !== null && marcas.length === 0) { setErro('Marque pelo menos uma marca, ou escolha "Todas as marcas".'); return }
     setEnviando(true)
     const destino = email.trim()
     const r = await chamarGerenciarUsuarios({
       acao: 'convidar',
       email: destino,
       papelId: papel.id,
-      marca: papel.acessoTotal ? null : (marca || null),
+      marcas: papel.acessoTotal ? null : marcas,
       redirectTo: `${window.location.origin}/definir-senha`,
     })
     setEnviando(false)
@@ -376,14 +509,11 @@ function ModalConvite({ papeis, onFechar, onConvidado }: {
           {papel?.descricao && <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ws-text-secondary)' }}>{papel.descricao}</span>}
         </label>
         {papel && !papel.acessoTotal && (
-          <label style={label}>
-            Marca
-            <select value={marca} onChange={e => setMarca(e.target.value)} style={{ ...inputStyle, padding: '9px 12px', fontSize: 14 }}>
-              <option value="">Todas as marcas</option>
-              {BRAND_LIST.map(b => <option key={b.key} value={b.key}>Só {b.label}</option>)}
-            </select>
-            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ws-text-secondary)' }}>Use pra quem é de fora, como franqueados: a pessoa só vê a própria marca.</span>
-          </label>
+          <div style={label}>
+            Marcas
+            <SeletorMarcas valor={marcas} onChange={setMarcas} />
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ws-text-secondary)' }}>Use pra quem é de fora, como franqueados: a pessoa só vê as marcas marcadas.</span>
+          </div>
         )}
         <p style={{ fontSize: 12, color: 'var(--ws-text-secondary)', margin: 0, lineHeight: 1.5 }}>
           A pessoa recebe um e-mail com um link pra criar a senha. Ninguém mais fica sabendo a senha dela.
@@ -485,9 +615,10 @@ function EditorPapel({ papel, pessoas, onFechar, onSalvo }: {
   const total = papel?.acessoTotal ?? false
   const sistema = papel?.sistema ?? false
 
+  const SEM_MARCA = 'Não aparece pra quem é limitado a marcas.'
   const grupos: { titulo: string; itens: { chave: string; label: string; descricao?: string }[] }[] = [
-    { titulo: 'Telas de Marketing', itens: ABAS.filter(a => a.area === 'Marketing') },
-    { titulo: 'Telas de Vendas', itens: ABAS.filter(a => a.area === 'Vendas') },
+    { titulo: 'Telas de Marketing', itens: ABAS.filter(a => a.area === 'Marketing').map(a => ({ ...a, descricao: TELAS_COM_FILTRO_DE_MARCA.has(a.chave) ? undefined : SEM_MARCA })) },
+    { titulo: 'Telas de Vendas', itens: ABAS.filter(a => a.area === 'Vendas').map(a => ({ ...a, descricao: TELAS_COM_FILTRO_DE_MARCA.has(a.chave) ? undefined : SEM_MARCA })) },
     { titulo: 'Ações', itens: [...ACOES] },
   ]
 
@@ -569,33 +700,38 @@ function EditorPapel({ papel, pessoas, onFechar, onSalvo }: {
           <ShieldCheck size={16} /> Esse tipo de acesso vê e faz tudo, inclusive telas que ainda vão ser criadas. Não dá pra tirar permissões dele.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 20 }}>
-          {grupos.map(g => {
-            const chaves = g.itens.map(i => i.chave)
-            const todas = chaves.every(c => marcadas.has(c))
-            return (
-              <fieldset key={g.titulo} style={{ border: 'none', margin: 0, padding: 0, minWidth: 0 }}>
-                <legend style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', width: '100%', marginBottom: 8, padding: 0 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)' }}>{g.titulo}</span>
-                </legend>
-                <button type="button" onClick={() => marcarGrupo(chaves, !todas)} style={{ ...botaoTexto('var(--ws-text-secondary)'), fontSize: 12, fontWeight: 500, padding: '0 0 6px', textDecoration: 'underline' }}>
-                  {todas ? 'Desmarcar todas' : 'Marcar todas'}
-                </button>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {g.itens.map(item => (
-                    <label key={item.chave} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={marcadas.has(item.chave)} onChange={() => alternar(item.chave)} style={{ marginTop: 2 }} />
-                      <span>
-                        {item.label}
-                        {item.descricao && <span style={{ display: 'block', fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.4, marginTop: 2 }}>{item.descricao}</span>}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            )
-          })}
-        </div>
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 20 }}>
+            {grupos.map(g => {
+              const chaves = g.itens.map(i => i.chave)
+              const todas = chaves.every(c => marcadas.has(c))
+              return (
+                <fieldset key={g.titulo} style={{ border: 'none', margin: 0, padding: 0, minWidth: 0 }}>
+                  <legend style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', marginBottom: 4, padding: 0 }}>
+                    {g.titulo}
+                  </legend>
+                  <button type="button" onClick={() => marcarGrupo(chaves, !todas)} style={{ ...botaoTexto('var(--ws-text-secondary)'), fontSize: 12, fontWeight: 500, padding: '0 0 6px', textDecoration: 'underline' }}>
+                    {todas ? 'Desmarcar todas' : 'Marcar todas'}
+                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {g.itens.map(item => (
+                      <label key={item.chave} style={{ display: 'flex', gap: 9, alignItems: 'flex-start', fontSize: 13, color: 'var(--ws-text-primary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={marcadas.has(item.chave)} onChange={() => alternar(item.chave)} style={{ marginTop: 2 }} />
+                        <span>
+                          {item.label}
+                          {item.descricao && <span style={{ display: 'block', fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.4, marginTop: 2 }}>{item.descricao}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              )
+            })}
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--ws-text-secondary)', margin: '16px 0 0', lineHeight: 1.5 }}>
+            Pra quem é limitado a marcas, as ações nunca valem: todas elas mexem com dados de todas as marcas.
+          </p>
+        </>
       )}
 
       {erro && <div style={{ ...bannerStyle('erro'), fontSize: 13, marginTop: 16 }}>{erro}</div>}

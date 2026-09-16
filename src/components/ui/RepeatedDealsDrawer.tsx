@@ -4,7 +4,7 @@ import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
 import { nf, money } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
 import { marcaLabel } from '@/constants/brands'
-import { BarList, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, topBreakdown } from './dealDrawerShared'
 
 interface RepeatedDealsDrawerProps {
   open: boolean
@@ -107,6 +107,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
                       {cell(g.row.nome_negociacao)}
                       <ExternalLink size={11} />
                     </a>
+                    <LinkLinhaDoTempo idDeal={g.row.id_lead} cor={accent} />
                   </td>
                   {multiStage && (
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{STAGE_LABEL[g.stage]}</td>

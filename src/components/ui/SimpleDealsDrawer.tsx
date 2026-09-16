@@ -10,7 +10,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
+import { LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -92,6 +92,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                       {cell(r.nome_negociacao)}
                       <ExternalLink size={11} />
                     </a>
+                    <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                   </td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                   <td style={{

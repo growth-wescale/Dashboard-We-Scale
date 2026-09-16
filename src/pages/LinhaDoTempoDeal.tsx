@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ExternalLink } from 'lucide-react'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
@@ -16,18 +16,27 @@ import { TimelineLegend } from '@/components/timeline/TimelineLegend'
 import { MomentoPopover } from '@/components/timeline/MomentoPopover'
 import type { AlvoPopover } from '@/components/timeline/MomentoPopover'
 
-/** Largura medida do container da pista — o layout precisa dela em px. */
+/**
+ * Largura medida do container da pista — o layout precisa dela em px.
+ * Ref de CALLBACK, não `useRef`: o container só entra na árvore depois que o
+ * deal carrega (antes disso a tela é o "Carregando…"), e um efeito com `[]`
+ * rodaria uma vez só, com a ref ainda nula — o ResizeObserver nunca se
+ * ligaria e a Pista não renderizava (largura presa em 0).
+ */
 function useLargura<T extends HTMLElement>() {
-  const ref = useRef<T>(null)
+  const [el, setEl] = useState<T | null>(null)
   const [largura, setLargura] = useState(0)
   useEffect(() => {
-    const el = ref.current
     if (!el) return
+    // Mede na hora: a 1ª entrega do ResizeObserver é assíncrona e o navegador
+    // a adia enquanto a aba está em segundo plano — sem esta linha a Pista
+    // fica em branco até a aba voltar pra frente.
+    setLargura(Math.floor(el.getBoundingClientRect().width))
     const ro = new ResizeObserver(entries => setLargura(Math.floor(entries[0].contentRect.width)))
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
-  return { ref, largura }
+  }, [el])
+  return { ref: setEl, largura }
 }
 
 const pad = { padding: 'var(--page-pad-top) var(--page-pad-x) 60px', maxWidth: 1400, margin: '0 auto' } as const

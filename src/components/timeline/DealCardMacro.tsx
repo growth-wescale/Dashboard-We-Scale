@@ -18,7 +18,7 @@ export function DealCardMacro({ row, agora }: { row: FunnelRow; agora: Date }) {
       <div
         style={{ background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 14, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, transition: 'border-color .15s' }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = accent }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--ws-border)' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ws-text-primary)' }}>{row.nome_negociacao ?? row.id_lead}</div>

@@ -26,7 +26,7 @@ function useDebounce(v: string, ms: number): string {
   return d
 }
 /** Busca tolerante a acento e caixa — "jose" acha "José". */
-const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 export function LinhaDoTempo() {
   const navigate = useNavigate()

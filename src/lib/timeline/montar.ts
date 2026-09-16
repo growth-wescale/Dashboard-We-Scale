@@ -12,6 +12,11 @@ const PESO: Record<Momento['tipo'], number> = {
   tarefa: 4, reuniao: 4, perda: 5, ganho: 5,
 }
 
+/** Handoff SDR→Closer emite a MESMA etapa 2x em segundos; medido em deal_eventos:
+ *  1.833 de 2.699 repetições consecutivas acontecem em ≤1 min (artefato/handoff) e
+ *  396 acontecem com >1 dia (reentrada real na etapa, que não pode ser fundida). */
+const JANELA_HANDOFF_MS = 5 * 60_000
+
 function camadaDaEtapa(etapa: StageKey | null | undefined, anterior: Camada): Camada {
   if (!etapa) return anterior === 'Desfecho' ? 'SDR' : anterior
   if (etapa === 'MQL') return 'MQL'
@@ -39,8 +44,11 @@ export function montarTimeline(brutos: MomentoBruto[], cabecalho: DealCabecalho 
   let ultimoIdx = -1
   for (const b of ordenados) {
     if (b.tipo === 'retomada') { ciclo += 1; ultimoIdx = -1 }
-    if (b.tipo === 'etapa' && b.etapa && ultimoNo?.tipo === 'etapa' && ultimoNo.etapa === b.etapa && ultimoNo.ciclo === ciclo) {
-      // mesmo StageKey duas vezes seguidas = handoff de funil, não passagem nova
+    if (
+      b.tipo === 'etapa' && b.etapa && ultimoNo?.tipo === 'etapa' && ultimoNo.etapa === b.etapa && ultimoNo.ciclo === ciclo &&
+      b.instante.getTime() - ultimoNo.instante.getTime() <= JANELA_HANDOFF_MS
+    ) {
+      // mesmo StageKey 2x seguidas, a poucos minutos de distância = handoff de funil, não passagem nova
       const funilNovo = b.meta?.kind === 'etapa' ? b.meta.funil : null
       const funilAntigo = ultimoNo.meta?.kind === 'etapa' ? ultimoNo.meta.funil : null
       if (funilNovo && funilNovo !== funilAntigo) ultimoNo.detalhe = `passou pro funil do ${funilNovo}`
@@ -118,7 +126,15 @@ export function montarTimeline(brutos: MomentoBruto[], cabecalho: DealCabecalho 
   }
   const trechoDe = (t: Date): Trecho | undefined => {
     if (trechos.length === 0) return undefined
-    return trechos.find(x => t >= x.inicio && t < x.fim) ?? (t < trechos[0].inicio ? trechos[0] : trechos[trechos.length - 1])
+    const exato = trechos.find(x => t >= x.inicio && t < x.fim)
+    if (exato) return exato
+    // Fora de qualquer trecho: só faz clamp nas pontas (antes do 1º / depois do
+    // último). No meio, é o buraco perda→retomada — cai na fase Reaberto, não
+    // num trecho vizinho e sem relação (ex.: uma tarefa registrada com o deal
+    // perdido não pode inflar toques de um trecho muito depois da reabertura).
+    if (t < trechos[0].inicio) return trechos[0]
+    if (t >= trechos[trechos.length - 1].fim) return trechos[trechos.length - 1]
+    return undefined
   }
   for (const m of micro) {
     const tr = trechoDe(m.instante)

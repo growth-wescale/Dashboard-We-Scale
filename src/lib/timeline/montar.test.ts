@@ -60,6 +60,15 @@ describe('montarTimeline', () => {
     expect(tl.momentos.find(m => m.tipo === 'mudanca_funil')?.desvio).toBeUndefined()
   })
 
+  it('NÃO funde repetição da mesma etapa longe no tempo (reentrada real, não handoff)', () => {
+    const tl = montarTimeline([
+      etapa('2026-08-11T11:05:00Z', 'Diagnóstico'),
+      etapa('2026-08-13T11:05:00Z', 'Diagnóstico'), // 2 dias depois: reentrada real, não artefato de handoff
+    ], cab('Em andamento'), AGORA)
+    expect(tl.nos).toHaveLength(2)
+    expect(tl.nos.map(n => n.etapa)).toEqual(['Diagnóstico', 'Diagnóstico'])
+  })
+
   it('marca desvios: voltou, pulou, no_show, trocou_funil, perdeu, reciclou; retomada abre ciclo 2 e fase Reaberto', () => {
     const tl = montarTimeline([
       etapa('2026-08-06T12:00:00Z', 'MQL'),
@@ -84,6 +93,19 @@ describe('montarTimeline', () => {
     expect(tl.fases[2].duracaoDias).toBeCloseTo(9, 1)
     // trecho perda→retomada não existe (é a fase Reaberto)
     expect(tl.trechos.some(t => t.deId === por('perda')!.id)).toBe(false)
+  })
+
+  it('tarefa registrada durante a janela perda→retomada conta na fase Reaberto, não em nenhum trecho', () => {
+    const tl = montarTimeline([
+      etapa('2026-08-06T12:00:00Z', 'MQL'),
+      simples('2026-08-10T12:00:00Z', 'perda', 'Perdido', { meta: { kind: 'perda', motivo: 'Sem interesse', anotacao: null } }),
+      tarefa('2026-08-15T12:00:00Z'), // deal ainda perdido, sem reabrir: cai na janela perda→retomada
+      simples('2026-08-20T12:00:00Z', 'retomada', 'Reaberto'),
+      etapa('2026-08-21T12:00:00Z', 'Contato Efetivo'),
+    ], cab('Em andamento', { ciclo: 2 }), AGORA)
+    const reaberto = tl.fases.find(f => f.tipo === 'Reaberto')
+    expect(reaberto?.toques).toBe(1)
+    expect(tl.trechos.every(t => t.toques === 0)).toBe(true)
   })
 
   it('etapa crua desconhecida herda a camada do nó anterior', () => {

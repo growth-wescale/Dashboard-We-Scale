@@ -53,7 +53,7 @@ export function LinhaDoTempoDeal() {
 
   const diasTotal = timeline ? Math.max(1, timeline.totais.diasNoFunil) : 1
   const [larguraConteudo, setLarguraConteudo] = useState(0)
-  const zoom = useZoomPan({ diasTotal, larguraViewport: largura, larguraConteudo })
+  const zoom = useZoomPan({ diasTotal, larguraViewport: largura, larguraConteudo, chave: idDeal ?? '' })
   const layout = useMemo(
     () => timeline ? layoutPista(timeline, { k: zoom.k, x0: zoom.x0, largura }, zoom.nivel) : null,
     [timeline, zoom.k, zoom.x0, zoom.nivel, largura],

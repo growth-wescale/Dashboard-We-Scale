@@ -62,7 +62,13 @@ export function PistaCanvas({ layout, nivel, selecionadoId, onSelecionar, handle
       onPointerMove={handlers.onPointerMove}
       onPointerUp={handlers.onPointerUp}
       onPointerLeave={handlers.onPointerUp}
-      onClick={e => { if (e.target === e.currentTarget) onSelecionar(null) }}
+      // `<svg>` preenche o div: clique no fundo (fora de qualquer `<g>`, que
+      // já para a propagação) chega com `e.target` = o próprio `<svg>`, não
+      // o div — só comparar com `e.currentTarget` nunca disparava.
+      onClick={e => {
+        const alvo = e.target as Element
+        if (alvo === e.currentTarget || alvo.tagName.toLowerCase() === 'svg') onSelecionar(null)
+      }}
       style={{ width: '100%', overflow: 'hidden', cursor: arrastando ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}
     >
       <svg viewBox={`0 0 ${Math.max(1, largura)} ${layout.altura}`} width="100%" height={layout.altura} style={{ display: 'block', fontFamily: FONTE }}>

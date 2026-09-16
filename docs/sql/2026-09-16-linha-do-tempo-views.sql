@@ -17,6 +17,9 @@
 -- que o dash contorna o RLS hoje. Estas 3 views seguem o mesmo padrão e
 -- expõem só as colunas que a tela usa.
 --
+-- >>> DECISÃO TOMADA (Junior, 16/09/2026): rodar A **e** B. Aplicado no banco
+-- >>> nesta data pela migration `linha_do_tempo_views_bloco_a_e_b`. O texto abaixo
+-- >>> fica como registro do que a escolha significava.
 -- >>> DECISÃO DE EXPOSIÇÃO (Junior): a anon key deste projeto é pública.
 -- >>> O bloco A expõe metadado (etapas, tipos de tarefa, duração e nota de
 -- >>> reunião). O bloco B, comentado, acrescenta CONTEÚDO (notas de tarefa e

@@ -29,10 +29,10 @@ const VAZIO: Estado = { eventos: [], tarefas: [], reunioes: [], ciclos: [], erro
 
 async function buscar(idDeal: string): Promise<Estado> {
   const [ev, ta, re, de] = await Promise.allSettled([
-    supabaseVendas.from('deal_eventos').select(COLS_EVENTOS).eq('id_deal', idDeal).order('data_evento', { ascending: true }),
-    supabaseVendas.from('db_tarefas_sdr').select(COLS_TAREFAS).eq('deal_id', idDeal).order('prazo', { ascending: true }),
+    supabaseVendas.from('vw_deal_timeline_eventos').select(COLS_EVENTOS).eq('id_deal', idDeal).order('data_evento', { ascending: true }),
+    supabaseVendas.from('vw_deal_timeline_tarefas').select(COLS_TAREFAS).eq('deal_id', idDeal).order('prazo', { ascending: true }),
     // id_deal só existe em 8 de 1.550 linhas; o vínculo de verdade é crm_deal_id. idDeal já passou pelo ID_DEAL_RE.
-    supabaseVendas.from('DB_Reunioes_MeetRox').select(COLS_REUNIOES).or(`id_deal.eq.${idDeal},crm_deal_id.eq.${idDeal}`).order('call_timestamp', { ascending: true }),
+    supabaseVendas.from('vw_deal_timeline_reunioes').select(COLS_REUNIOES).or(`id_deal.eq.${idDeal},crm_deal_id.eq.${idDeal}`).order('call_timestamp', { ascending: true }),
     supabaseVendas.from('vw_funil_vendas').select(COLS_DEAL).eq('id_lead', idDeal).order('ciclo', { ascending: true }),
   ])
   const erros: ErrosTimeline = {}
@@ -50,6 +50,17 @@ async function buscar(idDeal: string): Promise<Estado> {
  * Timeline de UM deal: dispara as 4 consultas em paralelo (eventos, tarefas,
  * reuniões, ciclos do funil) e tolera falha parcial — uma fonte fora do ar
  * não derruba as outras 3, só aparece em `erros`.
+ *
+ * Lê `vw_deal_timeline_eventos`/`vw_deal_timeline_tarefas`/
+ * `vw_deal_timeline_reunioes` — VIEW, nunca tabela crua. `supabaseVendas`
+ * nunca autentica (`persistSession: false`, login vive no projeto de
+ * Marketing), então toda consulta ao Supabase de Expansão roda como role
+ * `anon`. `deal_eventos` tem RLS ligado e zero políticas; `db_tarefas_sdr` e
+ * `DB_Reunioes_MeetRox` têm 1 política cada, só para `authenticated` — as
+ * três tabelas cruas voltam vazias pro anon, sem erro nenhum. View roda com
+ * os direitos do dono e contorna o RLS da tabela por baixo, mesmo padrão que
+ * os outros 7 hooks de Vendas já usam (nenhum lê tabela crua). Ver
+ * `docs/sql/2026-09-16-linha-do-tempo-views.sql`.
  */
 export function useDealTimeline(idDeal: string | undefined) {
   const valido = !!idDeal && ID_DEAL_RE.test(idDeal)

@@ -29,6 +29,7 @@ export const ABAS: readonly DefAba[] = [
   { chave: 'aba.visao-macro',      label: 'Visão Macro',          rota: '/funil-vendas',       area: 'Vendas' },
   { chave: 'aba.performance',      label: 'Performance',          rota: '/performance-vendas', area: 'Vendas' },
   { chave: 'aba.analise-perda',    label: 'Análise de Perda',     rota: '/analise-perda',      area: 'Vendas' },
+  { chave: 'aba.linha-do-tempo',   label: 'Linha do Tempo',       rota: '/linha-do-tempo',     area: 'Vendas' },
   { chave: 'aba.analise-objecoes', label: 'Análise de Objeções',  rota: '/analise-objecoes',   area: 'Vendas' },
   { chave: 'aba.campanha-metas',   label: 'Campanha de Metas',    rota: '/gp-setembro',        area: 'Vendas' },
   { chave: 'aba.metas',            label: 'Metas',                rota: '/metas',              area: 'Vendas' },
@@ -53,7 +54,7 @@ export const ROTA_ACESSOS = '/acessos'
  */
 export const TELAS_COM_FILTRO_DE_MARCA: ReadonlySet<string> = new Set([
   'aba.visao-geral', 'aba.saude-marca', 'aba.sop-marketing',
-  'aba.visao-macro', 'aba.performance', 'aba.analise-perda',
+  'aba.visao-macro', 'aba.performance', 'aba.analise-perda', 'aba.linha-do-tempo',
 ])
 
 export interface EstadoAcesso {

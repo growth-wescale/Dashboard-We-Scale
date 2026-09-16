@@ -45,6 +45,7 @@ const VENDAS_SUB = [
   { key: 'funil-vendas',        label: 'Visão Macro' },
   { key: 'performance-vendas',  label: 'Performance' },
   { key: 'analise-perda',       label: 'Análise de Perda' },
+  { key: 'linha-do-tempo',      label: 'Linha do Tempo' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
   { key: 'metas',               label: 'Metas' },
@@ -93,7 +94,7 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/linha-do-tempo') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas')) return 'vendas'
   return 'geral'
 }
 
@@ -101,6 +102,7 @@ function getVendasActiveSub(pathname: string): string {
   if (pathname.startsWith('/gp-setembro'))        return 'gp-setembro'
   if (pathname.startsWith('/analise-objecoes'))   return 'analise-objecoes'
   if (pathname.startsWith('/analise-perda'))      return 'analise-perda'
+  if (pathname.startsWith('/linha-do-tempo'))     return 'linha-do-tempo'
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
   if (pathname.startsWith('/metas'))              return 'metas'
   return 'funil-vendas'
@@ -209,6 +211,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     if (key === 'funil-vendas') navigate('/funil-vendas')
     else if (key === 'performance-vendas') navigate('/performance-vendas')
     else if (key === 'analise-perda') navigate('/analise-perda')
+    else if (key === 'linha-do-tempo') navigate('/linha-do-tempo')
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
     else if (key === 'gp-setembro') navigate('/gp-setembro')
     else if (key === 'metas') navigate('/metas')

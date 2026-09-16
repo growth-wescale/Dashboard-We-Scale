@@ -47,6 +47,8 @@ const SopMarketing      = lazyWithRetry(() => import('@/pages/SopMarketing').the
 const FunilVendas       = lazyWithRetry(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
 const PerformanceVendas = lazyWithRetry(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
 const AnalisePerda      = lazyWithRetry(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
+const LinhaDoTempo      = lazyWithRetry(() => import('@/pages/LinhaDoTempo').then(m => ({ default: m.LinhaDoTempo })))
+const LinhaDoTempoDeal  = lazyWithRetry(() => import('@/pages/LinhaDoTempoDeal').then(m => ({ default: m.LinhaDoTempoDeal })))
 const AnaliseObjecoes   = lazyWithRetry(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
 const GpSetembro        = lazyWithRetry(() => import('@/pages/GpSetembro').then(m => ({ default: m.GpSetembro })))
 const HubMetas          = lazyWithRetry(() => import('@/pages/HubMetas').then(m => ({ default: m.HubMetas })))
@@ -83,6 +85,8 @@ function RoutedContent() {
           <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
           <Route path="/gp-setembro"        element={<GpSetembro />} />
           <Route path="/analise-perda"      element={<AnalisePerda />} />
+          <Route path="/linha-do-tempo"         element={<LinhaDoTempo />} />
+          <Route path="/linha-do-tempo/:idDeal" element={<LinhaDoTempoDeal />} />
           <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
           <Route path="/cadencias"         element={<Navigate to="/" replace />} />
           <Route path="/analise-termos"    element={<Navigate to="/marca" replace />} />

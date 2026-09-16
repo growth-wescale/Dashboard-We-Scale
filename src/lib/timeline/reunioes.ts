@@ -65,6 +65,8 @@ export function momentosDeReunioes(rows: ReuniaoRow[]): MomentoBruto[] {
         respostas: respostas(r.scorecard_answers),
         url: r.url ?? null,
         participantes: Array.isArray(r.attendees) ? r.attendees.filter((x): x is string => typeof x === 'string') : [],
+        resumoDisponivel: r.has_summary === true,
+        scorecardDisponivel: r.has_scorecard === true,
       },
     })
   }

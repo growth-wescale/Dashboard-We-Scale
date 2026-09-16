@@ -43,6 +43,15 @@ export interface MetaReuniao {
   respostas: RespostaScorecard[]
   url: string | null
   participantes: string[]
+  /**
+   * `has_summary`/`has_scorecard` da view — podem ser `true` com `resumo`/
+   * `respostas` vazios: a view devolve `summary`/`scorecard_answers` nulos de
+   * propósito (bloco B opcional de `docs/sql/2026-09-16-linha-do-tempo-views.sql`,
+   * decisão de privacidade). Sem essas flags, uma reunião com resumo OCULTADO
+   * fica indistinguível de uma sem resumo nenhum.
+   */
+  resumoDisponivel: boolean
+  scorecardDisponivel: boolean
 }
 
 export interface MetaEtapa {

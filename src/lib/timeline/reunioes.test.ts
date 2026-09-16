@@ -33,4 +33,14 @@ describe('momentosDeReunioes', () => {
     const [m] = momentosDeReunioes([r({ ai_score: null, summary: null, scorecard_answers: null, duration_minutes: null, attendees: null })])
     expect(m.meta).toMatchObject({ notaIA: null, duracaoMin: null, resumo: [], respostas: [], participantes: [] })
   })
+
+  it('has_summary/has_scorecard true com summary/scorecard_answers nulos (view oculta o conteúdo) mantém as flags true e o conteúdo vazio — não pode ficar igual a uma reunião sem resumo', () => {
+    const [m] = momentosDeReunioes([r({ summary: null, scorecard_answers: null, has_summary: true, has_scorecard: true })])
+    expect(m.meta).toMatchObject({ resumo: [], respostas: [], resumoDisponivel: true, scorecardDisponivel: true })
+  })
+
+  it('has_summary/has_scorecard false vira flag false (mesmo com conteúdo eventualmente presente)', () => {
+    const [m] = momentosDeReunioes([r({ has_summary: false, has_scorecard: false })])
+    expect(m.meta).toMatchObject({ resumoDisponivel: false, scorecardDisponivel: false })
+  })
 })

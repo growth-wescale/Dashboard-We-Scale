@@ -18,7 +18,7 @@ const L = ({ k, v }: { k: string; v: React.ReactNode }) => v == null || v === ''
   <div style={{ display: 'flex', gap: 8, fontSize: 12.5 }}><span style={{ color: 'var(--ws-text-secondary)', minWidth: 96 }}>{k}</span><span style={{ color: 'var(--ws-text-primary)' }}>{v}</span></div>
 )
 const Pill = ({ children, tom }: { children: React.ReactNode; tom: 'atencao' | 'positivo' | 'risco' | 'neutro' }) => {
-  const cores = { atencao: ['#FDF1DE', '#B7791F'], positivo: ['#E4F6F5', '#1D8F89'], risco: ['#FBE7EB', '#B4324B'], neutro: ['#F1F5F9', '#475569'] }[tom]
+  const cores = { atencao: ['var(--status-atencao-bg)', '#B7791F'], positivo: ['#E4F6F5', '#1D8F89'], risco: ['var(--status-risco-bg)', '#B4324B'], neutro: ['#F1F5F9', '#475569'] }[tom]
   return <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', background: cores[0], color: cores[1], borderRadius: 999, padding: '3px 8px' }}>{children}</span>
 }
 const linkExt = (href: string, texto: string) => (
@@ -53,20 +53,24 @@ function Corpo({ m, timeline }: { m: Momento; timeline: Timeline }) {
         <L k="Tipo" v={meta.tipoReuniao} />
         <L k="Quem" v={m.ator} />
         <L k="Participantes" v={meta.participantes.length ? meta.participantes.join(', ') : null} />
-        {meta.respostas.length > 0 && (
+        {meta.respostas.length > 0 ? (
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', margin: '6px 0 4px' }}>Scorecard · {ok}/{meta.respostas.length}</div>
             {meta.respostas.map((r, i) => (
               <div key={i} style={{ fontSize: 12, display: 'flex', gap: 6 }}><span style={{ color: r.resposta === 'yes' ? '#1D8F89' : '#B4324B', fontWeight: 700 }}>{r.resposta === 'yes' ? '✓' : '✗'}</span><span style={{ color: 'var(--ws-text-secondary)' }}>{r.categoria} ·</span><span>{r.pergunta}</span></div>
             ))}
           </div>
-        )}
-        {meta.resumo.map(s => (
+        ) : meta.scorecardDisponivel ? (
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>Scorecard disponível no MeetRox.</div>
+        ) : null}
+        {meta.resumo.length > 0 ? meta.resumo.map(s => (
           <div key={s.titulo}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', margin: '6px 0 4px' }}>{s.titulo}</div>
             <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5 }}>{s.itens.map((it, i) => <li key={i}>{it}</li>)}</ul>
           </div>
-        ))}
+        )) : meta.resumoDisponivel ? (
+          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>Resumo disponível no MeetRox.</div>
+        ) : null}
         {meta.url && linkExt(meta.url, 'Abrir no MeetRox')}
       </>
     )

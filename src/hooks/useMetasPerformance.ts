@@ -39,6 +39,9 @@ interface Filters {
 
 interface UseMetasResult {
   data: MetaAgregada[]
+  /** Linhas cruas (sem colapsar a marca) — usadas pela meta de conversão, que
+   *  precisa cruzar pessoa × marca. Ver `metasConversao` em `metaConversao.ts`. */
+  rows: RawMetaRow[]
   loading: boolean
   error: string | null
 }
@@ -115,7 +118,7 @@ export function useMetasPerformance({ mesKey, marca }: Filters): UseMetasResult 
   }, [fetchAll])
 
   const data = useMemo(() => aggregate(rawRows), [rawRows])
-  return { data, loading, error }
+  return { data, rows: rawRows, loading, error }
 }
 
 // Helper: pega meta de uma pessoa/função específica (útil pra ranking)

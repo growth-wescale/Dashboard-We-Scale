@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { layoutPista, PISTA, fmtDiasCurto, rotuloDia } from '@/lib/timeline/layout'
 import { montarTimeline } from '@/lib/timeline/montar'
 import type { MomentoBruto } from '@/lib/timeline/tipos'
-import type { StageKey } from '@/lib/metrics'
+import { STAGE_LABEL, type StageKey } from '@/lib/metrics'
 
 const AGORA = new Date('2026-09-02T12:00:00Z')
 let seq = 0
+// `titulo` já vem pronto (rótulo do catálogo), igual `momentosDeEventos` produz —
+// `layoutPista` consome `titulo`, nunca re-deriva rótulo a partir de `etapa`.
 const etapa = (iso: string, e: StageKey): MomentoBruto => ({
-  id: `evento:${++seq}`, idDeal: 'd1', instante: new Date(iso), tipo: e === 'No Show' ? 'no_show' : 'etapa', etapa: e, ator: 'Xayane', titulo: e,
+  id: `evento:${++seq}`, idDeal: 'd1', instante: new Date(iso), tipo: e === 'No Show' ? 'no_show' : 'etapa', etapa: e, ator: 'Xayane', titulo: STAGE_LABEL[e],
   meta: { kind: 'etapa', etapaAnterior: null, funil: 'SDR', idEtapa: null },
 })
 const tarefa = (iso: string, atrasada = false): MomentoBruto => ({

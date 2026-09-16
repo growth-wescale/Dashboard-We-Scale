@@ -1,5 +1,4 @@
 import { toLocalDate } from '@/lib/dateUtils'
-import { STAGE_LABEL } from '@/lib/metrics'
 import { MARGENS, type NivelZoom } from './zoom'
 import { MS_DIA, type Camada, type Desvio, type Fase, type Momento, type Timeline } from './tipos'
 
@@ -72,16 +71,6 @@ export function fmtDiasCurto(dias: number): string {
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
 const LARGURA_CHAR = 7.2
 
-/**
- * Rótulo do nó: quando o momento tem etapa canônica (`etapa`/`no_show`), usa
- * sempre `STAGE_LABEL` — a mesma fonte única de nomenclatura das outras abas
- * de Vendas ("SQL", não "Reunião Agendada SQL") — em vez do `titulo` cru do
- * momento, que pode não ter passado por essa normalização.
- */
-function tituloDoNo(m: Momento): string {
-  return m.etapa ? STAGE_LABEL[m.etapa] : m.titulo
-}
-
 function corDoNo(m: Momento): string {
   if (m.tipo === 'no_show') return CORES.noShow
   if (m.tipo === 'perda') return CORES.perda
@@ -141,7 +130,7 @@ export function layoutPista(tl: Timeline, vp: Viewport, nivel: NivelZoom): Layou
       }
       if (n.detalhe && (n.tipo === 'perda' || n.tipo === 'retomada' || n.tipo === 'etapa')) partes.push(n.detalhe)
       const p = posicionar(x(n.instante))
-      nos.push({ id: n.id, momento: n, fase: null, xReal: x(n.instante), ...p, raio: PISTA.RAIO, cor: corDoNo(n), titulo: tituloDoNo(n), detalhe: partes.join(' · '),
+      nos.push({ id: n.id, momento: n, fase: null, xReal: x(n.instante), ...p, raio: PISTA.RAIO, cor: corDoNo(n), titulo: n.titulo, detalhe: partes.join(' · '),
         terminal: false, desvio: n.desvio, icone: n.tipo === 'etapa' ? (n.etapa ?? 'desconhecida') : n.tipo })
     }
   }

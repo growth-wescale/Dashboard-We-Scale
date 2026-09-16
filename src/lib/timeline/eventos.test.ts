@@ -33,6 +33,18 @@ describe('momentosDeEventos', () => {
     expect(m.etapa).toBe('No Show')
   })
 
+  it('rótulo da etapa MQL depende da origem comercial — "MQL" no Inbound, "Lead" na Prospecção Ativa (regra da seção 4 do CLAUDE.md)', () => {
+    const [inbound] = momentosDeEventos([ev({ nome_etapa: 'Novo MQL' })], 'Inbound')
+    const [prospeccao] = momentosDeEventos([ev({ nome_etapa: 'Novo MQL' })], 'Prospecção Ativa')
+    expect(inbound.titulo).toBe('MQL')
+    expect(prospeccao.titulo).toBe('Lead')
+  })
+
+  it('origem comercial não afeta rótulo de etapas além de MQL', () => {
+    const [m] = momentosDeEventos([ev({ nome_etapa: 'Negociação SAL (7 dias)' })], 'Prospecção Ativa')
+    expect(m.titulo).toBe('SAL')
+  })
+
   it('perda, ganho, retomada, troca, funil e campo', () => {
     const ms = momentosDeEventos([
       ev({ id_evento: 2, tipo_evento: 'perda', motivo_perda: 'Sem budget', anotacao_perda: 'x' }),

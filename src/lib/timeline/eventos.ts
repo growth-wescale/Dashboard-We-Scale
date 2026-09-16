@@ -1,4 +1,5 @@
-import { resolveStage, STAGE_LABEL } from '@/lib/metrics'
+import { resolveStage, stageLabel } from '@/lib/metrics'
+import type { OrigemComercial } from '@/lib/metrics'
 import type { MomentoBruto } from './tipos'
 
 /** Linha de `deal_eventos` (só as colunas que o hook seleciona). */
@@ -29,8 +30,13 @@ const seta = (de: string | null, para: string | null) => `${de ?? '—'} → ${p
  * `deal_eventos` → momentos brutos. `deal_deletado` e tipos desconhecidos são
  * descartados. Etapa que `resolveStage` não conhece NÃO some — vira nó com o
  * nome cru (`etapaCrua`), pra história do deal não ter buraco.
+ *
+ * Único lugar que resolve o rótulo de etapa canônica (`stageLabel`, que troca
+ * MQL→Lead na Prospecção Ativa — regra da seção 4 do CLAUDE.md). `layout.ts`
+ * consome `titulo` pronto, nunca re-deriva — duas fontes pro mesmo rótulo já
+ * causou bug de divergência antes neste projeto (SDR/Closer, marca do evento).
  */
-export function momentosDeEventos(rows: DealEventoRow[]): MomentoBruto[] {
+export function momentosDeEventos(rows: DealEventoRow[], origem: OrigemComercial = 'Inbound'): MomentoBruto[] {
   const out: MomentoBruto[] = []
   for (const r of rows) {
     const instante = new Date(r.data_evento)
@@ -43,9 +49,9 @@ export function momentosDeEventos(rows: DealEventoRow[]): MomentoBruto[] {
         const etapa = resolveStage(r.nome_etapa)
         const crua = r.nome_etapa?.trim() || 'Etapa desconhecida'
         if (etapa === 'No Show') {
-          out.push({ ...base, tipo: 'no_show', etapa, titulo: STAGE_LABEL['No Show'], detalhe: r.nome_funil ?? undefined, meta: metaEtapa })
+          out.push({ ...base, tipo: 'no_show', etapa, titulo: stageLabel(etapa, origem), detalhe: r.nome_funil ?? undefined, meta: metaEtapa })
         } else if (etapa) {
-          out.push({ ...base, tipo: 'etapa', etapa, titulo: STAGE_LABEL[etapa], detalhe: r.nome_funil ?? undefined, meta: metaEtapa })
+          out.push({ ...base, tipo: 'etapa', etapa, titulo: stageLabel(etapa, origem), detalhe: r.nome_funil ?? undefined, meta: metaEtapa })
         } else {
           out.push({ ...base, tipo: 'etapa', etapa: null, etapaCrua: crua, titulo: crua, detalhe: r.nome_funil ?? undefined, meta: metaEtapa })
         }

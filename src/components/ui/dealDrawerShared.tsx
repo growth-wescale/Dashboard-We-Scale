@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { History } from 'lucide-react'
 import { toLocalDate, fmtBR } from '@/lib/dateUtils'
 import { nf } from '@/lib/format'
 
@@ -128,4 +130,19 @@ export function topBreakdown<T>(items: T[], pick: (item: T) => string | null, co
   const rows: BarRow[] = top.map(([label, count]) => ({ label, count, color: colorOf(label) }))
   if (restoCount > 0) rows.push({ label: 'Outros', count: restoCount, color: 'var(--ws-border-strong)' })
   return rows
+}
+
+/** Atalho pra Linha do Tempo do deal, ao lado do link externo pro RD nos popups. */
+export function LinkLinhaDoTempo({ idDeal, cor }: { idDeal: string; cor: string }) {
+  return (
+    <Link
+      to={`/linha-do-tempo/${idDeal}`}
+      title="Linha do tempo do deal"
+      aria-label="Linha do tempo do deal"
+      onClick={e => e.stopPropagation()}
+      style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 8, color: cor, opacity: .8 }}
+    >
+      <History size={13} />
+    </Link>
+  )
 }

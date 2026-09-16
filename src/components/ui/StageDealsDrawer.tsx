@@ -4,7 +4,7 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, money } from '@/lib/format'
-import { BarList, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
 import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
@@ -161,6 +161,7 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
                     {cell(r.nome_negociacao)}
                     <ExternalLink size={11} />
                   </a>
+                  <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                 </td>
                 <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_funil)}</td>
                 <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>

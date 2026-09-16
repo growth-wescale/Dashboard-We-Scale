@@ -94,11 +94,16 @@ export function useDealTimeline(idDeal: string | undefined) {
   const timeline = useMemo<Timeline | null>(() => {
     if (!cabecalho) return null
     const agora = new Date()
+    // A view admite a reunião por coalesce(id_deal, crm_deal_id) — uma linha
+    // com id_deal='A' e crm_deal_id='B' pertence ao deal A, mas o `.or()` da
+    // busca (necessário porque id_deal só está preenchido em 8 de 1.550
+    // linhas) também a traz ao abrir o deal B. Sem este filtro ela entraria
+    // na timeline errada, carimbada com o id do deal aberto.
     const brutos = [
-      ...momentosDeEventos(estado.eventos),
+      ...momentosDeEventos(estado.eventos, cabecalho.row.origem_comercial ?? 'Inbound'),
       ...momentosDeTarefas(estado.tarefas, agora),
       ...momentosDeReunioes(estado.reunioes),
-    ]
+    ].filter(m => m.idDeal === cabecalho.row.id_lead)
     return montarTimeline(brutos, cabecalho, agora)
   }, [estado, cabecalho])
 

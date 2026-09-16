@@ -28,7 +28,7 @@ describe('layoutPista — etapas', () => {
   it('chevron por fase com largura proporcional ao tempo e cor da camada', () => {
     expect(lp.chevrons.map(c => c.fase.tipo)).toEqual(['MQL', 'SDR', 'Closer'])
     expect(lp.chevrons[1].w).toBeCloseTo(11 * 30, 3)
-    expect(lp.chevrons[1].cor).toBe('#7E0E70')
+    expect(lp.chevrons[1].cor).toBe('var(--ws-vinho-b)')
     expect(lp.chevrons[0].labelVisivel).toBe(false) // 1 dia × 30px não cabe "MQL"? cabe: 30px < 3*7.2+24 → invisível
   })
   it('nós alternam cima/baixo e respeitam o gap mínimo na mesma fileira', () => {
@@ -62,7 +62,7 @@ describe('layoutPista — micro e macro', () => {
     const lp = layoutPista(tl(), { k: 120, x0: 0, largura: 1200 }, 'micro')
     expect(lp.toques).toHaveLength(2) // 2 tarefas a 5 min viram 1 cluster + 1 solta
     expect(lp.toques[0].cluster).toHaveLength(2)
-    expect(lp.toques[0].contorno).toBe('#F2A93B')
+    expect(lp.toques[0].contorno).toBe('var(--status-atencao)')
     expect(lp.toques[0].y).toBe(PISTA.TOQUES_Y)
   })
   it('macro: um nó por fase SDR/Closer, com resumo', () => {

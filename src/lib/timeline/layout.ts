@@ -13,8 +13,11 @@ export const PISTA = {
 } as const
 
 export const CORES = {
-  MQL: '#33032D', SDR: '#7E0E70', Closer: '#2ABCB5', Desfecho: '#E0A928',
-  ganho: '#E0A928', perda: '#E0506B', noShow: '#F2A93B', desconhecida: '#9CA3AF', hoje: '#CAD3E0', reaberto: '#CAD3E0',
+  MQL: 'var(--ws-text-primary)', SDR: 'var(--ws-vinho-b)', Closer: 'var(--ws-verde)',
+  Desfecho: '#E0A928', // sem token de design system pra esse dourado
+  ganho: '#E0A928', // idem
+  perda: 'var(--status-risco)', noShow: 'var(--status-atencao)', desconhecida: '#9CA3AF',
+  hoje: 'var(--ws-border-strong)', reaberto: 'var(--ws-border-strong)',
 } as const
 
 export function corDaCamada(c: Camada): string { return CORES[c] }

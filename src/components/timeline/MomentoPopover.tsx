@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { ExternalLink, X } from 'lucide-react'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import { fmtDuracao } from '@/components/ui/dealDrawerShared'
@@ -96,6 +97,13 @@ function Corpo({ m, timeline }: { m: Momento; timeline: Timeline }) {
 }
 
 export function MomentoPopover({ alvo, timeline, idDeal, onFechar }: Props) {
+  // Esc fecha — popover não-modal, sem foco automático nem trap de foco (não é diálogo bloqueante).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar() }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onFechar])
+
   const m: Momento | null = alvo.tipo === 'no' ? alvo.no.momento : alvo.tipo === 'toque' ? alvo.toque.momento : alvo.marcador.momento
   const titulo = alvo.tipo === 'no' ? alvo.no.titulo : m?.titulo ?? ''
   const subtitulo = m ? hora(m.instante) : alvo.tipo === 'no' ? alvo.no.detalhe : ''

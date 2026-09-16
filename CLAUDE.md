@@ -14,7 +14,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -299,6 +299,55 @@ consultas de servidor de intervalo único (ex.: mídia). Com 2+ períodos
 selecionados, a comparação "vs. período anterior" some da tela — não há
 "anterior" bem definido pra um conjunto não-contíguo.
 
+### Linha do Tempo do deal
+
+```
+src/lib/timeline/tipos.ts       tipos da timeline (Momento, Fase, Timeline, etc.) — nenhuma lógica
+src/lib/timeline/eventos.ts     deal_eventos → momentos brutos (etapa/no_show/perda/ganho/troca/mudança)
+src/lib/timeline/tarefas.ts     db_tarefas_sdr → momentos (instante = conclusão ou prazo)
+src/lib/timeline/reunioes.ts    DB_Reunioes_MeetRox → momentos (liga ao deal por id_deal ?? crm_deal_id)
+src/lib/timeline/montar.ts      momentos brutos das 3 fontes → Timeline pronta pra desenhar (ciclo, fusão de handoff, camada, desvio, desfecho)
+src/lib/timeline/layout.ts      posições/escala na pista (px por dia) a partir do Timeline + Viewport
+src/lib/timeline/zoom.ts        níveis de zoom (macro/etapas/micro) e histerese de transição
+src/lib/timeline/fasesDaLinha.ts  fases do deal (STAGE_ORDER + STAGE_DATE_FIELD) pro modo macro
+
+src/hooks/useDealTimeline.ts    busca as 4 fontes em paralelo (eventos/tarefas/reuniões/ciclos), tolera falha parcial
+src/hooks/useZoomPan.ts         estado de zoom/pan da pista (gesto do usuário, não de negócio)
+
+src/components/timeline/PistaCanvas.tsx    SVG da pista, desenha Fases/Momentos conforme o zoom
+src/components/timeline/DealCardMacro.tsx  card do deal no zoom macro
+src/components/timeline/DealHeader.tsx     cabeçalho (marca, funil, responsável, status)
+src/components/timeline/MomentoPopover.tsx popup de detalhe ao clicar num nó
+src/components/timeline/TimelineLegend.tsx legenda de cores/ícones
+src/components/timeline/ZoomControls.tsx   +/− e níveis de zoom
+src/components/timeline/iconesEtapa.tsx    ícone por StageKey
+
+Rotas: /linha-do-tempo (lista de deals) e /linha-do-tempo/:idDeal (pista de UM deal).
+```
+
+Quatro regras que já custaram tempo pra achar:
+
+- **Lê VIEW (`vw_deal_timeline_eventos`/`_tarefas`/`_reunioes`), nunca tabela
+  crua.** `supabaseVendas` nunca autentica (login vive no Marketing) — toda
+  consulta ao Supabase de Expansão roda como role `anon`. `deal_eventos` tem
+  RLS ligado e zero políticas; `db_tarefas_sdr`/`DB_Reunioes_MeetRox` têm 1
+  política cada, só pra `authenticated`. Ler a tabela direto volta vazio sem
+  erro nenhum — foi assim que a 1ª versão da tela renderizou em branco pra
+  todo mundo. As 3 views (`docs/sql/2026-09-16-linha-do-tempo-views.sql`)
+  rodam com os direitos do dono e contornam o RLS por baixo, mesmo padrão dos
+  outros 7 hooks de Vendas (nenhum lê tabela crua).
+- **Reunião liga ao deal por `coalesce(id_deal, crm_deal_id)`** —
+  `id_deal` só está preenchido em 8 de 1.550 linhas de `DB_Reunioes_MeetRox`;
+  o vínculo de verdade é `crm_deal_id`.
+- **Dois momentos consecutivos na mesma etapa só fundem se ficarem a menos de
+  5 minutos um do outro.** Medido em `deal_eventos`: 1.833 de 2.699 repetições
+  consecutivas de etapa acontecem em ≤1 minuto — é o handoff SDR→Closer
+  emitindo a mesma etapa 2x — enquanto 396 acontecem com mais de 1 dia de
+  diferença e são reentrada de verdade na etapa, que não pode ser fundida.
+- **Etapa que o catálogo não conhece vira nó cinza com o nome cru, nunca
+  some.** Assim a história do deal não fica com buraco quando `resolveStage`
+  não reconhece o rótulo (funil legado, digitação diferente no RD, etc.).
+
 ---
 
 ## 6. Deploy
@@ -447,6 +496,66 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-16 — Linha do Tempo do deal (Pista com zoom Macro · Etapas · Micro)
+
+Aba nova em Vendas: `/linha-do-tempo` (lista de deals) → `/linha-do-tempo/:idDeal`
+(pista visual da vida inteira do deal, com zoom Macro/Etapas/Micro). Junta as
+3 fontes que o dashboard ainda não usava de fato (`deal_eventos` já era lido
+por outras telas em agregado, mas nunca deal-a-deal; `db_tarefas_sdr` e
+`DB_Reunioes_MeetRox` estavam nas pendências da seção 8 desde 14/08 como
+"ainda não usados") — etapas, no-show, perda, ganho, reciclagem, troca de
+responsável, mudança de funil/campo, tarefas do SDR e reuniões do MeetRox —
+num único traçado por deal, respeitando ciclo (reciclagem vira novo trecho na
+pista) e camada (SDR/Closer/MQL).
+
+**Blocker achado testando com dado real, corrigido nesta sessão.** A 1ª versão
+lia `deal_eventos`/`db_tarefas_sdr`/`DB_Reunioes_MeetRox` direto — e a pista
+renderizava vazia pra todo mundo, só o cabeçalho (que vem de `vw_funil_vendas`)
+funcionava. Causa: `supabaseVendas.ts` nunca autentica (`persistSession:
+false`, o login vive no projeto de Marketing), então toda consulta ao Supabase
+de Expansão roda como role `anon`. Medido: `deal_eventos` tem RLS ligado e
+**zero** políticas; `db_tarefas_sdr` e `DB_Reunioes_MeetRox` têm 1 política
+cada, só pra `authenticated`. As 3 tabelas voltam vazias pro anon, sem erro —
+os outros 7 hooks de Vendas nunca bateram nisso porque nenhum lê tabela crua,
+só view (que roda com os direitos do dono e contorna o RLS por baixo). Fix:
+`useDealTimeline` passou a ler 3 views novas (`vw_deal_timeline_eventos`/
+`_tarefas`/`_reunioes`, mesmas colunas, mesmo filtro) em vez das tabelas —
+mesmo padrão do resto do dashboard, planejamento que devia ter previsto isso
+desde o início.
+
+**A tela continua em branco em produção até o script
+`docs/sql/2026-09-16-linha-do-tempo-views.sql` ser rodado** — ele só cria as
+3 views, não foi aplicado nesta sessão de propósito (não crio view no banco de
+produção sem o Junior rodar). O script tem um bloco A (obrigatório, só
+metadado — etapa, tipo de tarefa, duração, nota de reunião) e um bloco B
+opcional, comentado: decide se anotação de tarefa e resumo de reunião (nome de
+cliente, objeção, valor discutido) ficam legíveis por quem tiver a anon key —
+que hoje é pública. Bloco A sozinho já faz a tela funcionar; o Junior decide
+se roda o B também.
+
+**Decisões que dariam bug se não documentadas:**
+- Reunião liga ao deal por `coalesce(id_deal, crm_deal_id)` — `id_deal` só
+  está preenchido em 8 de 1.550 linhas de `DB_Reunioes_MeetRox`.
+- Handoff SDR→Closer emite a mesma etapa 2x em segundos; dois momentos
+  consecutivos na mesma etapa só fundem em um nó se a diferença for **menor
+  que 5 minutos** — medido em `deal_eventos`, 1.833 de 2.699 repetições
+  consecutivas de etapa acontecem em ≤1 minuto (o handoff) contra 396 com mais
+  de 1 dia de diferença (reentrada real, que a fusão não pode engolir).
+  Threshold folgado de propósito acima do que foi medido, pra não fundir uma
+  reentrada rápida de verdade por engano.
+- Etapa que `resolveStage` não reconhece vira nó cinza com o nome cru, nunca
+  some — histórico do deal sem buraco, mesmo em funil legado.
+
+Ver seção 5 para o mapa completo de módulos (`src/lib/timeline/`, os hooks
+`useDealTimeline`/`useZoomPan`, `src/components/timeline/`).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (434 testes,
+inalterados — a mudança no hook não tem teste próprio, é só o nome da tabela
+consultada) + `oxlint` limpo no arquivo tocado, em worktree fora do OneDrive
+(`~/ws-dashboard-worktree-timeline`). Coluna a coluna, o `select` do hook bate
+1:1 com a view (conferido antes de editar, não só assumido). Não visto
+renderizado — a tela depende das views, que ainda não existem no banco. PR #<n>.
 
 ### 2026-09-15 (2) — "Último acesso" congelado na tela de acessos
 

@@ -15,6 +15,7 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
+import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
 import { useMetasTimeResumo } from '@/hooks/useMetasTimeResumo'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
@@ -302,7 +303,36 @@ function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean 
 
 // ─── Conversões (SCard reutilizável) ──────────────────────────────────────
 
-function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: string; val: number }[] }) {
+/**
+ * Uma linha do card de conversões. `meta` em % (null = sem meta cadastrada pro
+ * recorte); `polaridade` diz para que lado é bom errar — 'menor' inverte a cor,
+ * porque ficar ABAIXO do teto de no-show é o resultado desejado.
+ */
+export interface ConversaoLinha {
+  label: string
+  val: number
+  meta?: number | null
+  polaridade?: 'maior' | 'menor'
+}
+
+/** Distância até a meta em pontos percentuais, já com o sinal de leitura. */
+function MetaDelta({ val, meta, polaridade }: { val: number; meta: number; polaridade: 'maior' | 'menor' }) {
+  const delta = val - meta
+  const bom = polaridade === 'menor' ? delta <= 0 : delta >= 0
+  const cor = bom ? 'var(--status-positivo)' : 'var(--status-risco)'
+  const fundo = bom ? 'var(--status-positivo-bg)' : 'var(--status-risco-bg)'
+  const sinal = delta > 0 ? '+' : delta < 0 ? '−' : ''
+  return (
+    <span style={{
+      background: fundo, color: cor, borderRadius: 999, padding: '1px 7px',
+      fontSize: 10.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+    }}>
+      {sinal}{Math.abs(delta).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.
+    </span>
+  )
+}
+
+function ConversoesCard({ titulo, linhas, nota }: { titulo: string; linhas: ConversaoLinha[]; nota?: string }) {
   return (
     <SCard>
       <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 14 }}>{titulo}</div>
@@ -315,9 +345,22 @@ function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: s
             <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 22, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {pct(c.val)}
             </span>
+            {c.meta != null ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                  {c.polaridade === 'menor' ? 'Teto' : 'Meta'} {pct(c.meta)}
+                </span>
+                <MetaDelta val={c.val} meta={c.meta} polaridade={c.polaridade ?? 'maior'} />
+              </div>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--ws-text-muted, var(--ws-text-secondary))', opacity: .65 }}>sem meta</span>
+            )}
           </div>
         ))}
       </div>
+      {nota && (
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 8, lineHeight: 1.4 }}>{nota}</div>
+      )}
     </SCard>
   )
 }
@@ -423,9 +466,21 @@ export function PerformanceVendas() {
   }, [marcasSelecionadas, metaTime])
 
   // Metas por pessoa (para a coluna % das tabelas).
-  const { data: metasPessoa, error: metasError } = useMetasPerformance({
+  const { data: metasPessoa, rows: metasRows, error: metasError } = useMetasPerformance({
     mesKey: mesUnico ?? range.start.slice(0, 7),
   })
+
+  // Meta de conversão do recorte (marca × pessoa), derivada das metas de volume
+  // do mês. Fora de um mês único ela não existe — mesma regra dos cards de meta
+  // acima: uma meta mensal contra uma janela de trimestre/ano não diz nada.
+  const metasConv = useMemo<MetasConversao | null>(() => {
+    if (!mesUnico) return null
+    return metasConversao(metasRows, {
+      marcas: marcasSelecionadas.flatMap(b => (b.marca ? [b.marca as string] : [])),
+      sdrs,
+      closers,
+    })
+  }, [mesUnico, metasRows, marcasSelecionadas, sdrs, closers])
   // Fora de um único mês (Trimestre/Ano/multi-mês) a meta mensal não faz sentido
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
   // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".
@@ -653,19 +708,27 @@ export function PerformanceVendas() {
     [clickedCloserStage, scoped, eventos, win, viewModes],
   )
 
-  const convTopo = useMemo(() => [
+  const convTopo: ConversaoLinha[] = useMemo(() => [
+    // MQL → SQL fica sem meta: não existe meta de MQL em nenhuma das tabelas de
+    // meta da Expansão (o funil cadastrado começa em Ligações → SQL).
     { label: `${mqlLbl} → SQL`, val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
-    { label: 'SQL → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
-    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
-    { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0 },
-    { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0 },
-  ], [strip, mqlLbl])
-  const convFundo = useMemo(() => [
-    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
-    { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0 },
-    { label: 'Oportunidade · COF → Fechamento', val: strip.cof > 0 ? (strip.fechamentos / strip.cof) * 100 : 0 },
-    { label: 'SAL → Fechamento', val: strip.sal > 0 ? (strip.fechamentos / strip.sal) * 100 : 0 },
-  ], [strip])
+    { label: 'SQL → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0, meta: metasConv?.sql_diag },
+    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0, meta: metasConv?.diag_sal },
+    { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0, meta: metasConv?.sql_sal },
+    { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0, meta: metasConv?.no_show, polaridade: 'menor' },
+  ], [strip, mqlLbl, metasConv])
+  const convFundo: ConversaoLinha[] = useMemo(() => [
+    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0, meta: metasConv?.diag_sal },
+    { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0, meta: metasConv?.sal_cof },
+    { label: 'Oportunidade · COF → Fechamento', val: strip.cof > 0 ? (strip.fechamentos / strip.cof) * 100 : 0, meta: metasConv?.cof_fech },
+    { label: 'SAL → Fechamento', val: strip.sal > 0 ? (strip.fechamentos / strip.sal) * 100 : 0, meta: metasConv?.sal_fech },
+  ], [strip, metasConv])
+
+  const notaConversao = mesUnico
+    ? 'Meta derivada das metas de volume do mês, no recorte de marca e pessoa selecionado — muda conforme os filtros.'
+    : 'A meta de conversão aparece quando o período é um mês único.'
+  // Só o card do topo tem a linha de no-show, então só ele explica o teto.
+  const notaConversaoTopo = mesUnico ? `${notaConversao} O teto de no-show é fixo em 10%.` : notaConversao
 
   const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
     ? `${periodValues.length} períodos selecionados`
@@ -756,7 +819,7 @@ export function PerformanceVendas() {
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
 
           <div style={{ marginTop: 14 }}>
-            <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
+            <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} nota={notaConversaoTopo} />
           </div>
 
           <div style={{ marginTop: 32 }}>
@@ -822,7 +885,7 @@ export function PerformanceVendas() {
           <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />
 
           <div style={{ marginTop: 14 }}>
-            <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
+            <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} nota={notaConversao} />
           </div>
 
           <div style={{ marginTop: 32 }}>

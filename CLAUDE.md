@@ -498,7 +498,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-09-16 — Linha do Tempo do deal (Pista com zoom Macro · Etapas · Micro)
+### 2026-09-16 (2) — Linha do Tempo do deal (Pista com zoom Macro · Etapas · Micro)
 
 Aba nova em Vendas: `/linha-do-tempo` (lista de deals) → `/linha-do-tempo/:idDeal`
 (pista visual da vida inteira do deal, com zoom Macro/Etapas/Micro). Junta as
@@ -557,6 +557,79 @@ consultada) + `oxlint` limpo no arquivo tocado, em worktree fora do OneDrive
 (`~/ws-dashboard-worktree-timeline`). Coluna a coluna, o `select` do hook bate
 1:1 com a view (conferido antes de editar, não só assumido). Não visto
 renderizado — a tela depende das views, que ainda não existem no banco. PR #<n>.
+
+### 2026-09-16 — Meta de conversão nos cards de Performance, por marca e por pessoa
+
+Junior: o time abre a Performance pra ver a performance individual, vê o
+funil e as conversões de cada etapa, mas não tem referência nenhuma de
+quanto seria o ideal — "eles querem saber o quão longe estão do ideal de
+cada conversão". Pedido: meta nos dois quadrantes (`Conversões — topo do
+funil`, do SDR, e `Conversões — fundo do funil`, do Closer), **volátil aos
+filtros de pessoa e marca** — o Douglas se seleciona e vê as metas dele;
+troca a marca e vê outras metas.
+
+**Fonte: `DB_Metas_Performance`**, a mesma tabela (pessoa × marca × mês)
+que já alimenta os cards de meta da página. A meta de conversão é a razão
+entre as metas de VOLUME das duas etapas:
+
+```
+meta de conversão = Σ meta(etapa destino) ÷ Σ meta(etapa origem)
+```
+
+Como as metas de volume já são por pessoa e por marca, a conversão herda
+as duas dimensões de graça, e acompanha sozinha quando o Hub de metas
+publica um mês novo — sem tabela nova, sem cadastro paralelo.
+
+**`DB_Metas_Conversao` NÃO é a fonte** (a tabela existe e o nome engana).
+Cadastrada em 02/07/2026 com valores **idênticos nas 7 marcas**, sem
+dimensão de pessoa, nunca consumida, RLS ligado com zero policies, e
+contradizendo as metas do mês: ela diz SQL→Diagnóstico 90%, as metas de
+set/26 dão 59%. Continua morta — não usar.
+
+**Regras** (`src/lib/metaConversao.ts`, puro e testado):
+- Etapas de SDR (SQL, Diagnóstico, SAL) saem das linhas de SDR; as de
+  Closer (COF, Fechamento) das linhas de Closer. Quando um Closer precisa
+  de SAL/Diagnóstico no denominador (`SAL → COF`, `SAL → Fechamento`), usa
+  a meta **da marca** — a linha do Closer na tabela só traz COF, vendas e
+  receita.
+- Filtrar uma pessoa **estreita o universo de marcas** às marcas dela: com
+  o Douglas selecionado, até o `Diagnóstico → SAL` vira o da Inpot, em vez
+  de mostrar o consolidado ao lado de números que já são só dele.
+- Uma marca só entra na razão com as **duas pontas > 0** — senão Odonto
+  Scale (5 vendas, zero COF em set/26) estouraria o COF→Fechamento somando
+  numerador sem denominador. Meta ausente e meta zerada são indistinguíveis
+  depois da soma, então as duas caem fora.
+- Meta só com período de **1 mês exato**, mesma regra dos cards de volume.
+
+**As duas linhas sem meta derivável.** `MQL → SQL` fica "sem meta" —
+**não existe meta de MQL em nenhuma tabela de meta da Expansão**
+(procurado: o funil cadastrado em `meta_marca_etapa` começa em `Ligações →
+Reunião Agendada SQL`; o único "MQL com meta" é o pacing da Visão Geral,
+lado Marketing, derivado de baseline histórico, não meta de pessoa).
+`SQL → No-show` ganhou teto fixo de 10% (`META_NO_SHOW_MAX` em
+`constants/metasVendas.ts`, decisão do Junior), com a **cor invertida** —
+ficar abaixo do teto é o bom resultado.
+
+**Visual.** Abaixo do número grande: `Meta 59,2%` em cinza + chip com a
+distância em p.p. (verde acima da meta, vermelho abaixo). Sem barra e sem
+selo de Gargalo/Melhor — o card segue como ficou no PR #87, onde esses dois
+foram removidos justamente porque a polaridade não é universal.
+
+`useMetasPerformance` passou a devolver também as linhas cruas (`rows`) —
+`aggregate()` colapsa a marca, e a meta de conversão precisa do cruzamento
+pessoa × marca.
+
+Números conferidos por SQL contra a base real (set/2026): consolidado SDR
+59,2% / 63,4% / 37,5%; Oral Unic 57,1% / 62,5% / 35,7%; Douglas 65,3% /
+37,9% / 47,2% / 17,9%; Aurélio em Oral Unic 45,5% de COF→Fechamento e em
+Viva 38,5%.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (399 testes, 10
+novos em `metaConversao.test.ts`) + `oxlint` limpo, em worktree fora do
+OneDrive. **Visto renderizado** numa rota temporária sem autenticação
+(removida antes do commit): metas batendo com o SQL, sensibilidade a marca
+e a pessoa confirmada na tela, polaridade do no-show conferida pelas cores
+computadas. Sem mudança de banco, sem migration, sem RLS. PR #161.
 
 ### 2026-09-15 (2) — "Último acesso" congelado na tela de acessos
 

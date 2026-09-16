@@ -556,7 +556,7 @@ inalterados — a mudança no hook não tem teste próprio, é só o nome da tab
 consultada) + `oxlint` limpo no arquivo tocado, em worktree fora do OneDrive
 (`~/ws-dashboard-worktree-timeline`). Coluna a coluna, o `select` do hook bate
 1:1 com a view (conferido antes de editar, não só assumido). Não visto
-renderizado — a tela depende das views, que ainda não existem no banco. PR #<n>.
+renderizado — a tela depende das views, que ainda não existem no banco. PR #163.
 
 ### 2026-09-16 — Meta de conversão nos cards de Performance, por marca e por pessoa
 

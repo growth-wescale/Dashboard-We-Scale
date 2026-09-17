@@ -132,17 +132,25 @@ export function topBreakdown<T>(items: T[], pick: (item: T) => string | null, co
   return rows
 }
 
-/** Atalho pra Linha do Tempo do deal, ao lado do link externo pro RD nos popups. */
+/**
+ * Atalho pra Linha do Tempo do deal, ao lado do link externo pro RD nos popups.
+ * O ícone sozinho passava despercebido (ninguém achava o atalho), então vai com
+ * rótulo escrito — em corpo menor e sem sublinhado, pra não competir com o nome
+ * da negociação, que é o link principal da célula.
+ */
 export function LinkLinhaDoTempo({ idDeal, cor }: { idDeal: string; cor: string }) {
   return (
     <Link
       to={`/linha-do-tempo/${idDeal}`}
       title="Linha do tempo do deal"
-      aria-label="Linha do tempo do deal"
       onClick={e => e.stopPropagation()}
-      style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 8, color: cor, opacity: .8 }}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 10, color: cor,
+        fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', textDecoration: 'none',
+      }}
     >
       <History size={13} />
+      linha do tempo
     </Link>
   )
 }

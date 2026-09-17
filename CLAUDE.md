@@ -1092,6 +1092,23 @@ commit): modo Dia 01–15/09 abre o popup do SQL com meta proporcional por SDR
 negócios; Fechamentos no Closer mostra realizado com meta "—"; e o modo Mês
 segue com o ritmo + anel "Hoje" de antes. Console sem erros.
 
+### 2026-09-17 — S&OP: seletor de mês no header (Jan 2026 – mês atual)
+
+O toggle binário **MTD / Agosto** da aba S&OP foi substituído por um `<select>`
+com todos os meses disponíveis desde jan/2026. Mês atual aparece como
+**"Setembro (MTD)"**; meses passados são tratados como fechados — a mesma lógica
+de `computeRanges` já existente, sem nenhuma mudança na camada de dados.
+
+Antes era necessário atualizar manualmente `SOP_CLOSED_MONTH_KEY` e
+`SOP_CLOSED_MONTH_LABEL` em `src/constants/sopConfig.ts` a cada mês fechado.
+Agora o dropdown é gerado dinamicamente pela constante `SOP_MONTH_OPTIONS`
+(módulo `SopMarketing.tsx`) — nada para atualizar no código quando outubro fechar.
+
+`sopConfig.ts` perdeu as duas constantes e pode ser removido futuramente se
+nenhum outro arquivo o referenciar.
+
+PR #153, deploy automático.
+
 ### 2026-09-15 (4) — We Scale SOP React: KPIs hardcoded (27 MQL, R$ 3.745)
 
 Meta Instant Forms do Meta não chegam ao Supabase, então `useLeads` só retornava

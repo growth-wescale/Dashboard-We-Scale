@@ -116,7 +116,7 @@ function shortMonth(year: number, month: number) {
 }
 
 // Month options for the S&OP date selector, generated once at module load.
-// Most recent first: current month (MTD) followed by past months back to Jan 2026.
+// Most recent first: current month (MTD), past months back to Jan 2026, then a custom option.
 const SOP_MONTH_OPTIONS: Array<{ value: string; label: string }> = (() => {
   const today = new Date()
   const y = today.getFullYear(), m = today.getMonth()
@@ -130,8 +130,41 @@ const SOP_MONTH_OPTIONS: Array<{ value: string; label: string }> = (() => {
     if (cy < 2026) break
     opts.push({ value: `${cy}-${String(cm + 1).padStart(2, '0')}`, label: shortMonth(cy, cm) })
   }
+  opts.push({ value: 'custom', label: 'Personalizado…' })
   return opts
 })()
+
+// Builds DateRanges for an arbitrary date window instead of a calendar month.
+// Previous period = same endpoints shifted back one month.
+function computeCustomRanges(start: string, end: string): DateRanges {
+  const anchorDate = localDate(end)
+  const dow = anchorDate.getDay()
+  const lastSun = new Date(anchorDate)
+  lastSun.setDate(anchorDate.getDate() - dow)
+  const weeks: WeekRange[] = []
+  for (let i = 4; i >= 0; i--) {
+    const wEnd = new Date(lastSun); wEnd.setDate(lastSun.getDate() - i * 7)
+    const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6)
+    const s = isoDate(wStart), e = isoDate(wEnd)
+    weeks.push({ start: s, end: e, label: weekLabel(s, e) })
+  }
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const prevSm = sm === 1 ? 12 : sm - 1; const prevSy = sm === 1 ? sy - 1 : sy
+  const prevEm = em === 1 ? 12 : em - 1; const prevEy = em === 1 ? ey - 1 : ey
+  const prevStart = `${prevSy}-${String(prevSm).padStart(2,'0')}-${String(Math.min(sd, new Date(prevSy,prevSm,0).getDate())).padStart(2,'0')}`
+  const prevEnd   = `${prevEy}-${String(prevEm).padStart(2,'0')}-${String(Math.min(ed, new Date(prevEy,prevEm,0).getDate())).padStart(2,'0')}`
+  return {
+    weeks, fiveWeeksStart: weeks[0].start,
+    mtdCurStart: start, mtdCurEnd: end,
+    mtdPrevStart: prevStart, mtdPrevEnd: prevEnd,
+    monthStart: `${sy}-${String(sm).padStart(2,'0')}-01`,
+    recentWeekLabel: weeks[4].label,
+    mtdLabel: weekLabel(start, end),
+    mtdPrevLabel: weekLabel(prevStart, prevEnd),
+    isClosed: true, monthSuffix: '(personalizado)', antShort: 'período ant',
+  }
+}
 
 function computeRanges(closedMonth?: string): DateRanges {
   const isClosed = !!closedMonth
@@ -711,10 +744,12 @@ interface SopSlideProps {
   exportHeight?: number
   monthMode: string
   onMonthModeChange: (mode: string) => void
+  customStart: string; onCustomStartChange: (v: string) => void
+  customEnd: string;   onCustomEndChange:   (v: string) => void
   onReady?: () => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
 }
 
-function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, onReady }: SopSlideProps) {
+function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
   const acc = slide.accent
   const [filterFonte, setFilterFonte] = useState('__all__')
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
@@ -1362,6 +1397,26 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        {monthMode === 'custom' && (
+          <>
+            <input
+              type="date"
+              value={customStart}
+              max={customEnd || isoDate(new Date())}
+              onChange={e => onCustomStartChange(e.target.value)}
+              style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>–</span>
+            <input
+              type="date"
+              value={customEnd}
+              min={customStart}
+              max={isoDate(new Date())}
+              onChange={e => onCustomEndChange(e.target.value)}
+              style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
+            />
+          </>
+        )}
         <select
           value={filterFonte}
           onChange={e => setFilterFonte(e.target.value)}
@@ -1916,11 +1971,19 @@ export function SopMarketing() {
   const [exportingIdx, setExportingIdx] = useState<number | null>(null)
   const exportSlideRef = useRef<HTMLDivElement | null>(null)
   const [monthMode, setMonthMode] = useState<string>('current')
+  const [customStart, setCustomStart] = useState<string>(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  })
+  const [customEnd, setCustomEnd] = useState<string>(() => isoDate(new Date()))
   const containerRef = useRef<HTMLDivElement>(null)
-  const dates = useMemo(
-    () => computeRanges(monthMode !== 'current' ? monthMode : undefined),
-    [monthMode],
-  )
+  const dates = useMemo(() => {
+    if (monthMode === 'custom' && customStart && customEnd && customStart <= customEnd)
+      return computeCustomRanges(customStart, customEnd)
+    if (monthMode !== 'current' && monthMode !== 'custom')
+      return computeRanges(monthMode)
+    return computeRanges(undefined)
+  }, [monthMode, customStart, customEnd])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -2060,6 +2123,8 @@ export function SopMarketing() {
               isFullscreen={false} onToggleFullscreen={() => {}}
               exportHeight={1080}
               monthMode={monthMode} onMonthModeChange={setMonthMode}
+              customStart={customStart} onCustomStartChange={setCustomStart}
+              customEnd={customEnd} onCustomEndChange={setCustomEnd}
               onReady={handleSlideReady}
             />
           </div>
@@ -2086,6 +2151,8 @@ export function SopMarketing() {
         onNext={() => setActiveSlide(s => (s + 1) % slides.length)}
         isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
         monthMode={monthMode} onMonthModeChange={setMonthMode}
+        customStart={customStart} onCustomStartChange={setCustomStart}
+        customEnd={customEnd} onCustomEndChange={setCustomEnd}
       />
 
       <div style={{

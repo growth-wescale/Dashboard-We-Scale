@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { SOP_CLOSED_MONTH_KEY, SOP_CLOSED_MONTH_LABEL } from '@/constants/sopConfig'
+
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucide-react'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
@@ -112,6 +112,24 @@ function shortMonth(year: number, month: number) {
     .toLocaleDateString('pt-BR', { month: 'long' })
     .replace(/^\w/, c => c.toUpperCase())
 }
+
+// Month options for the S&OP date selector, generated once at module load.
+// Most recent first: current month (MTD) followed by past months back to Jan 2026.
+const SOP_MONTH_OPTIONS: Array<{ value: string; label: string }> = (() => {
+  const today = new Date()
+  const y = today.getFullYear(), m = today.getMonth()
+  const opts: Array<{ value: string; label: string }> = [
+    { value: 'current', label: `${shortMonth(y, m)} (MTD)` },
+  ]
+  let cy = y, cm = m
+  while (true) {
+    cm--
+    if (cm < 0) { cm = 11; cy-- }
+    if (cy < 2026) break
+    opts.push({ value: `${cy}-${String(cm + 1).padStart(2, '0')}`, label: shortMonth(cy, cm) })
+  }
+  return opts
+})()
 
 function computeRanges(closedMonth?: string): DateRanges {
   const isClosed = !!closedMonth
@@ -689,13 +707,12 @@ interface SopSlideProps {
   onPrev: () => void; onNext: () => void
   isFullscreen: boolean; onToggleFullscreen: () => void
   exportHeight?: number
-  monthMode: 'current' | 'closed'
-  onMonthModeChange: (mode: 'current' | 'closed') => void
-  closedMonthLabel: string
+  monthMode: string
+  onMonthModeChange: (mode: string) => void
   onReady?: () => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
 }
 
-function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, closedMonthLabel, onReady }: SopSlideProps) {
+function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, onReady }: SopSlideProps) {
   const acc = slide.accent
   const [filterFonte, setFilterFonte] = useState('__all__')
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
@@ -1334,31 +1351,15 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
-        <div style={{
-          display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 12,
-          overflow: 'hidden', background: '#fff',
-        }}>
-          {([
-            { key: 'current' as const, label: 'MTD' },
-            { key: 'closed'  as const, label: closedMonthLabel },
-          ]).map(opt => {
-            const on = monthMode === opt.key
-            return (
-              <button
-                key={opt.key}
-                onClick={() => onMonthModeChange(opt.key)}
-                style={{
-                  padding: '4px 10px', border: 'none', cursor: 'pointer',
-                  fontSize: 11, fontWeight: 700, outline: 'none',
-                  background: on ? acc : 'transparent',
-                  color: on ? '#fff' : 'var(--ws-text-secondary)',
-                }}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
+        <select
+          value={monthMode}
+          onChange={e => onMonthModeChange(e.target.value)}
+          style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
+        >
+          {SOP_MONTH_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
         <select
           value={filterFonte}
           onChange={e => setFilterFonte(e.target.value)}
@@ -1905,14 +1906,10 @@ export function SopMarketing() {
   // pra garantir que as queries do useVendasFunil daquele slide terminem)
   const [exportingIdx, setExportingIdx] = useState<number | null>(null)
   const exportSlideRef = useRef<HTMLDivElement | null>(null)
-  const [monthMode, setMonthMode] = useState<'current' | 'closed'>('current')
-  // Mês fechado atual — atualizar quando fechar novo mês.
-  // TODO: mover pra src/constants/sopConfig.ts junto com outras configs do S&OP
-  const CLOSED_MONTH_KEY = SOP_CLOSED_MONTH_KEY
-  const CLOSED_MONTH_LABEL = SOP_CLOSED_MONTH_LABEL
+  const [monthMode, setMonthMode] = useState<string>('current')
   const containerRef = useRef<HTMLDivElement>(null)
   const dates = useMemo(
-    () => computeRanges(monthMode === 'closed' ? CLOSED_MONTH_KEY : undefined),
+    () => computeRanges(monthMode !== 'current' ? monthMode : undefined),
     [monthMode],
   )
 
@@ -2045,7 +2042,6 @@ export function SopMarketing() {
               isFullscreen={false} onToggleFullscreen={() => {}}
               exportHeight={1080}
               monthMode={monthMode} onMonthModeChange={setMonthMode}
-              closedMonthLabel={CLOSED_MONTH_LABEL}
               onReady={handleSlideReady}
             />
           </div>
@@ -2072,7 +2068,6 @@ export function SopMarketing() {
         onNext={() => setActiveSlide(s => (s + 1) % SLIDES.length)}
         isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
         monthMode={monthMode} onMonthModeChange={setMonthMode}
-        closedMonthLabel={CLOSED_MONTH_LABEL}
       />
 
       <div style={{

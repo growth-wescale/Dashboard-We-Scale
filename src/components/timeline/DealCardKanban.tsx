@@ -3,6 +3,23 @@ import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { StatusBadge } from '@/components/ui/dealDrawerShared'
 import { fmtDiasCurto } from '@/lib/timeline/layout'
 import type { CardKanban } from '@/lib/timeline/kanban'
+import type { FunnelRow } from '@/lib/funnelTypes'
+
+/**
+ * O número de `dias` é sempre "dias desde a data da etapa atual" — mas o que
+ * essa data significa muda com o status. Ganho: a etapa é Fechamento e a data
+ * é `data_venda`, então o número é mesmo "há quanto tempo foi ganho". Perdido:
+ * a data é a de entrada na etapa onde o deal morreu, não a da perda em si —
+ * então o rótulo não pode afirmar "perdido há N dias" (viraria uma mentira).
+ * Em andamento é o caso normal do quadro: dias parado na etapa atual.
+ */
+function tempoLabel(status: FunnelRow['status_atual'], dias: number | null): string {
+  if (dias === null) return 'sem data de etapa'
+  const t = fmtDiasCurto(dias).toLowerCase()
+  if (status === 'Ganho') return `ganho há ${t}`
+  if (status === 'Perdido') return `nesta etapa há ${t}`
+  return `parado há ${t}`
+}
 
 /**
  * Card de uma coluna do Kanban. A coluna tem ~280px, então não cabe a
@@ -44,7 +61,7 @@ export function DealCardKanban({ card }: { card: CardKanban }) {
           </div>
         )}
         <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-          {dias === null ? 'sem data de etapa' : `parado há ${fmtDiasCurto(dias).toLowerCase()}`}
+          {tempoLabel(row.status_atual, dias)}
         </div>
       </div>
     </Link>

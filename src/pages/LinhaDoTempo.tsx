@@ -179,7 +179,7 @@ export function LinhaDoTempo() {
             >
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8,
-                padding: '10px 12px', borderBottom: '1px solid var(--ws-border)', position: 'sticky', top: 0,
+                padding: '10px 12px', borderBottom: '1px solid var(--ws-border)',
                 background: 'var(--ws-bg)', borderRadius: '12px 12px 0 0',
               }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ws-text-primary)' }}>

@@ -1092,6 +1092,25 @@ commit): modo Dia 01–15/09 abre o popup do SQL com meta proporcional por SDR
 negócios; Fechamentos no Closer mostra realizado com meta "—"; e o modo Mês
 segue com o ritmo + anel "Hoje" de antes. Console sem erros.
 
+### 2026-09-17 (3) — S&OP: opção "Personalizado" no seletor de datas
+
+Ao selecionar **"Personalizado…"** no dropdown do header da S&OP, dois
+`<input type="date">` aparecem inline (início · – · fim). O `max` do fim é
+travado em hoje; o `min`/`max` cruzado impede range invertido.
+
+Nova função `computeCustomRanges(start, end)` constrói o `DateRanges` com:
+- 5 semanas rolantes ancoradas no `end`
+- Período anterior = mesmos endpoints deslocados um mês atrás (com clamping
+  para o último dia do mês quando necessário)
+- `mtdLabel` = rótulo compacto `"dd/mm–dd/mm"` via `weekLabel`
+- `isClosed: true`, `monthSuffix: '(personalizado)'`, `antShort: 'período ant'`
+
+Default ao abrir: 1º do mês corrente → hoje.
+Enquanto as datas estiverem inválidas ou invertidas, os slides caem de volta
+para o mês corrente.
+
+PR #154, deploy automático.
+
 ### 2026-09-17 — S&OP: seletor de mês no header (Jan 2026 – mês atual)
 
 O toggle binário **MTD / Agosto** da aba S&OP foi substituído por um `<select>`

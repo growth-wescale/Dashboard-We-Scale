@@ -64,8 +64,8 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_deal_ciclo_enriquecido` | 1 linha por **ciclo de vida** do deal. Chave composta `id_lead + ciclo` |
 | **`vw_funil_vendas`** | **base das abas de Vendas.** Projeção da anterior com allowlist de funis, sem deals de teste e sem Excluído |
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
-| `vw_deal_etapa_periodos` | entrada/saída por etapa — base do modo Aging |
-| `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
+| `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
+| `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
 `vw_marketing_funil` é a view **antiga**, sem nenhuma aba de Vendas
@@ -206,10 +206,15 @@ funis), não bug — decisão de mexer aí fica pro Junior, ver pendência.
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
 Não usar `rn_deal_etapa_mes` do banco: a partição ignora funil.
 
-**Aging exige deals vivos.** `vw_deal_etapa_periodos` não fecha o período quando
-o deal é perdido. Sem cruzar com `status_atual = 'Em andamento'` e
-`eh_ciclo_atual`, "Tentando Contato" mostra 1.959 deals parados há 95 dias em
-vez de 105 há 10 dias.
+**Aging é safra; Atual é estoque.** Os dois modos fazem a MESMA leitura — a
+etapa CORRENTE de cada deal vivo (`eh_ciclo_atual` + `status_atual = 'Em
+andamento'`, etapa por `currentStage`) — e diferem só no recorte: **Aging** só
+conta quem tem `data_novo_mql` dentro do período filtrado (a safra), **Atual**
+conta todo negócio em aberto e ignora o período. Antes de 17/09/2026 o Aging
+lia `vw_deal_etapa_periodos` sem nenhum recorte de período e devolvia
+praticamente a mesma lista do Atual. Deal sem MQL fica fora do Aging (não há
+data de criação de lead para comparar) — em Prospecção Ativa isso pode zerar
+o modo, e é o resultado correto: nada foi criado no período.
 
 **O funil não é monotônico.** Deals pulam etapas: em ago/26, Pré-Contrato (3) >
 Comitê (2). Taxa de passagem acima de 100% é normal, exibida com seta pra cima.
@@ -234,7 +239,7 @@ compete com meses fechados e todo indicador parece em queda.
 ```
 src/lib/metrics.ts            camada ÚNICA de contagem (12 etapas, toggles, trava de venda)
 src/lib/periodo.ts            granularidade, range de período e multi-seleção (puro, testado)
-src/lib/aging.ts              agregação do modo Aging (puro, testado)
+src/lib/aging.ts              agregação dos modos Aging e Atual — etapa corrente do deal vivo (puro, testado)
 src/lib/fonteMapping.ts       normaliza utm_source em grupos
 src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
@@ -257,7 +262,6 @@ src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + 
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
-src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
 src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 ```
@@ -275,15 +279,16 @@ src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
 
-Modos do card do funil: **Performance** (volume no período, `TrapFunnel`),
-**Aging** (há quanto tempo parados) e **Atual** (onde estão agora, ignora
-período) — os dois últimos renderizam `EtapaLeadtimeList`, não o funil visual:
-uma etapa por linha, na mesma sequência do Performance, com 2 médias —
-tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde o MQL).
-Aging lê de `vw_deal_etapa_periodos` (tempo por etapa) cruzado com
-`data_novo_mql` de `vw_funil_vendas` (tempo em andamento); Atual computa as
-duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
-aging. Desde 11/09 a Visão Macro mostra as **12 etapas completas** do
+Modos do card do funil: **Performance** (volume que passou no período,
+`TrapFunnel`), **Aging** (negócios **criados no período** que seguem em aberto,
+e onde estão hoje) e **Atual** (**todos** os negócios em aberto e onde estão
+hoje, ignora o período) — os dois últimos renderizam `EtapaLeadtimeList`, não o
+funil visual: uma etapa por linha, na mesma sequência do Performance, com 2
+médias — tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde
+o MQL). Aging e Atual saem da MESMA função (`computeEtapaAtual`, em
+`aging.ts`), lendo só `vw_funil_vendas`: a etapa corrente do deal e as datas da
+própria linha. A única diferença é o `PeriodWindow` — o Aging passa a janela
+(safra por `data_novo_mql`), o Atual passa `null`. Desde 11/09 a Visão Macro mostra as **12 etapas completas** do
 catálogo (`STAGE_ORDER` — MQL → Tentando Contato → Contato Efetivo →
 Interesse Reunião → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
 Oportunidade → Comitê → Pré-Contrato → Fechamento) em todos os 3 modos —
@@ -498,6 +503,69 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-17 (2) — Aging vira a safra do período; Atual continua o estoque
+
+Junior reportou: "a lógica do funil Aging e do funil Atual estão iguais,
+mostram os mesmos dados" — e definiu a diferença que ele quer:
+
+1. **Atual** — leads Em Andamento e em que etapa estão.
+2. **Aging** — leads **criados no período filtrado**, Em Andamento, e em que
+   etapa estão HOJE.
+
+**Ele estava certo, e a causa era estrutural.** O Aging lia
+`vw_deal_etapa_periodos` só com `data_saida is null` (= a etapa em que o deal
+está agora) cruzado com os deals vivos, **sem nenhum recorte de período**. Ou
+seja: as duas listas respondiam a mesma pergunta por caminhos diferentes, e o
+período — a única coisa que deveria separá-las — não entrava em nenhuma das
+duas.
+
+**Agora os dois modos saem da MESMA função** (`computeEtapaAtual`, em
+`src/lib/aging.ts`), lendo só `vw_funil_vendas`: deal vivo (`eh_ciclo_atual` +
+`status_atual = 'Em andamento'`), etapa por `currentStage` (mantém a trava de
+"Reunião Agendada SQL" só no Closer), tempo parado na etapa pela coluna
+`data_<etapa>` da própria linha e tempo em andamento desde o `data_novo_mql`.
+A ÚNICA diferença é o `PeriodWindow`: Aging passa a janela do filtro, Atual
+passa `null`. Mesma coisa no popup de deals da etapa (`dealsInEtapaAtual`), pra
+lista e número nunca divergirem.
+
+**"Criado no período" = `data_novo_mql`**, escolha confirmada pelo Junior —
+mesma convenção que o toggle "Deals criados no período" já usa como safra.
+Deal sem MQL fica fora do Aging (não há data de criação de lead pra comparar);
+medido, são **10 de 960** deals vivos no Inbound.
+
+**Impacto medido** (17/09/2026, Inbound, Consolidado, período = set/2026):
+
+| Etapa | Atual | Aging (set) |
+|---|---|---|
+| Tentando Contato | 428 | 319 |
+| Contato Efetivo | 227 | 142 |
+| Interesse Reunião | 148 | 68 |
+| Conexão | 83 | 40 |
+| SQL · Reunião Agendada | 17 | 14 |
+| Diagnóstico | 8 | 8 |
+| SAL | 16 | 8 |
+| Oportunidade | 4 | 0 |
+| Comitê | 3 | 2 |
+| Pré-Contrato | 1 | 0 |
+
+**Nota pra Prospecção Ativa:** os 1.347 deals vivos dessa origem têm 100% do
+MQL em ago/2026 (a importação de lista fria), então no toggle dela o Aging de
+setembro vem **vazio** — está certo, nada foi criado no período. O estado
+vazio do Aging agora diz isso com o período no texto, em vez do genérico
+"nenhum negócio em aberto".
+
+**Infra que saiu de cena.** `useFunilAging.ts` deletado (era o único
+consumidor de `vw_deal_etapa_periodos` e `vw_leadtime_stats`), junto com o
+tipo `EtapaPeriodoRow` e as funções `computeAging`/`dealsInAging`. Efeito
+colateral bom: o modo Aging deixou de disparar uma busca paginada de milhares
+de linhas — agora reaproveita os dados que a página já tem. As duas views
+ficam intactas no banco, sem consumidor.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (457 testes, 16 novos
+em `aging.test.ts` cobrindo safra × estoque, trava do Closer, deal sem MQL,
+data futura e o espelho lista↔contagem) em worktree fora do OneDrive. Números
+das duas leituras conferidos por SQL contra a base real antes do deploy.
 
 ### 2026-09-16 (2) — Linha do Tempo do deal (Pista com zoom Macro · Etapas · Micro)
 

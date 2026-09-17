@@ -17,21 +17,20 @@ import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
-import { useFunilAging } from '@/hooks/useFunilAging'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
-import { computeAging, dealsInAging } from '@/lib/aging'
+import { computeEtapaAtual, dealsInEtapaAtual } from '@/lib/aging'
+import type { EtapaLeadtimeAgg } from '@/lib/aging'
 import { fmtDias } from '@/components/ui/dealDrawerShared'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro } from '@/lib/fonteMapping'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  STAGE_DATE_FIELD, STAGE_ORDER, buildScopeFilter, cohortKeys, countSales, countStage,
+  STAGE_ORDER, buildScopeFilter, cohortKeys, countSales, countStage,
   mqlWord, stageLabel,
-  countStageEvents, currentStage, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage,
+  countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
-import type { FunnelRow } from '@/lib/funnelTypes'
 import {
   mesesDoPeriodo, periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
@@ -83,14 +82,16 @@ interface EtapaLeadtimeRow {
 }
 
 /** Lista de etapas com 2 leadtimes — usada pelos modos Aging e Atual. */
-function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
+function EtapaLeadtimeList({ linhas, accent, onRowClick, vazioLabel }: {
   linhas: EtapaLeadtimeRow[]; accent: string
   /** Clique numa etapa abre o popup com os deals por trás do número. */
   onRowClick?: (etapa: StageKey) => void
+  /** Texto do estado vazio — o Aging precisa explicar que o recorte é a safra. */
+  vazioLabel?: string
 }) {
   if (linhas.length === 0) {
     return <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', padding: '24px 0' }}>
-      Nenhum negócio em aberto no recorte selecionado.
+      {vazioLabel ?? 'Nenhum negócio em aberto no recorte selecionado.'}
     </div>
   }
   const maxDeals = Math.max(...linhas.map(l => l.deals), 1)
@@ -282,8 +283,8 @@ function MetaProgresso({ label, realizado, meta, formatter, accent, porMarca }: 
 function ModeToggle({ value, onChange }: { value: FunnelMode; onChange: (m: FunnelMode) => void }) {
   const opts: { v: FunnelMode; label: string; hint: string }[] = [
     { v: 'performance', label: 'Performance', hint: 'Volume que passou por cada etapa no período' },
-    { v: 'aging', label: 'Aging', hint: 'Há quanto tempo os negócios em aberto estão parados' },
-    { v: 'atual', label: 'Atual', hint: 'Onde os negócios estão agora — ignora o período' },
+    { v: 'aging', label: 'Aging', hint: 'Negócios criados no período que seguem em aberto, e onde estão hoje' },
+    { v: 'atual', label: 'Atual', hint: 'Todos os negócios em aberto e onde estão agora — ignora o período' },
   ]
   return (
     <div style={{ display: 'inline-flex', background: 'var(--ws-bg)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', padding: 2, gap: 2 }}>
@@ -402,7 +403,6 @@ export function FunilVendas() {
     // No modo safra o evento pode ser posterior à janela do MQL.
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
   })
-  const { periodos } = useFunilAging(modo === 'aging')
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
   // Marca é sempre filtrada aqui no cliente (a busca traz o recorte inteiro
@@ -507,27 +507,8 @@ export function FunilVendas() {
     }))
   }, [modo, scoped, eventos, win, viewModes, origem])
 
-  // Deal vivo (em andamento no ciclo atual e com MQL conhecido) indexado por
-  // id_lead — base do cruzamento do Aging e do popup de deals por etapa.
-  const vivosRowById = useMemo(() => {
-    const map = new Map<string, FunnelRow>()
-    for (const r of scoped) {
-      if (r.eh_ciclo_atual && r.status_atual === 'Em andamento' && r.data_novo_mql) {
-        map.set(String(r.id_lead), r)
-      }
-    }
-    return map
-  }, [scoped])
-
-  // MQL de cada deal vivo — alimenta "média em andamento" nos modos Aging e Atual.
-  const mqlPorDealVivo = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const [id, r] of vivosRowById) map.set(id, r.data_novo_mql!)
-    return map
-  }, [vivosRowById])
-
   // Etapas na mesma sequência do funil Performance — só as que têm negócio parado.
-  function ordenarPorMacroStages(porStageKey: Map<StageKey, { deals: number; mediaEtapa: number | null; mediaAndamento: number | null }>): EtapaLeadtimeRow[] {
+  function ordenarPorMacroStages(porStageKey: Map<StageKey, EtapaLeadtimeAgg>): EtapaLeadtimeRow[] {
     return MACRO_STAGES
       .map(s => {
         const a = porStageKey.get(s)
@@ -537,63 +518,28 @@ export function FunilVendas() {
       .filter((x): x is EtapaLeadtimeRow => x !== null)
   }
 
-  const aging = useMemo(() => {
-    if (modo !== 'aging') return []
-    const vivos = new Set(mqlPorDealVivo.keys())
-    const porEtapaRaw = computeAging(periodos, vivos, mqlPorDealVivo)
-    const porStageKey = new Map(
-      porEtapaRaw
-        .map(a => [resolveStage(a.etapa), a] as const)
-        .filter((x): x is [StageKey, typeof porEtapaRaw[number]] => x[0] !== null),
-    )
-    return ordenarPorMacroStages(porStageKey)
-  }, [modo, periodos, mqlPorDealVivo, origem])
+  // Aging: a SAFRA do período — negócios criados (MQL) na janela filtrada, que
+  // seguem em aberto, e a etapa em que estão HOJE.
+  const aging = useMemo(
+    () => (modo === 'aging' ? ordenarPorMacroStages(computeEtapaAtual(scoped, win)) : []),
+    [modo, scoped, win, origem],
+  )
 
-  // Atual: mesma lista/leadtimes do Aging, mas a partir da etapa corrente de
-  // cada deal vivo (ignora período de propósito) — sem depender da tabela de
-  // períodos de aging, que só carrega tempo parado numa etapa específica.
-  const atualLeadtime = useMemo(() => {
-    if (modo !== 'atual') return []
-    const agora = Date.now()
-    const DIA_MS = 86_400_000
-    const porStageKey = new Map<StageKey, { deals: number; etapaDias: number[]; andamentoDias: number[] }>()
-
-    for (const r of scoped) {
-      if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') continue
-      // currentStage (não resolveStage) para "Reunião Agendada SQL" contar
-      // só no funil do Closer — o SDR tem a etapa de mesmo nome.
-      const etapa = currentStage(r)
-      if (!etapa) continue
-
-      const bucket = porStageKey.get(etapa) ?? { deals: 0, etapaDias: [], andamentoDias: [] }
-      bucket.deals += 1
-
-      const dataEtapa = r[STAGE_DATE_FIELD[etapa]]
-      if (dataEtapa) {
-        const dias = (agora - new Date(dataEtapa).getTime()) / DIA_MS
-        if (!Number.isNaN(dias) && dias >= 0) bucket.etapaDias.push(dias)
-      }
-      if (r.data_novo_mql) {
-        const dias = (agora - new Date(r.data_novo_mql).getTime()) / DIA_MS
-        if (!Number.isNaN(dias) && dias >= 0) bucket.andamentoDias.push(dias)
-      }
-      porStageKey.set(etapa, bucket)
-    }
-
-    const media = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null
-    const resumido = new Map(
-      [...porStageKey.entries()].map(([s, b]) => [s, { deals: b.deals, mediaEtapa: media(b.etapaDias), mediaAndamento: media(b.andamentoDias) }]),
-    )
-    return ordenarPorMacroStages(resumido)
-  }, [modo, scoped, origem])
+  // Atual: a mesma leitura do Aging, sem recorte de período — todo negócio em
+  // aberto e onde ele está hoje, não importa quando entrou no funil.
+  const atualLeadtime = useMemo(
+    () => (modo === 'atual' ? ordenarPorMacroStages(computeEtapaAtual(scoped, null)) : []),
+    [modo, scoped, origem],
+  )
 
   // Deals por trás da etapa clicada no funil — mesma regra usada pra contar,
   // pra nunca mostrar uma lista diferente do número que a pessoa clicou.
   const dealsDoClique = useMemo(() => {
     if (!clickedStage) return []
-    if (modo === 'aging') return dealsInAging(periodos, vivosRowById, clickedStage)
-    return dealsInStage(scoped, eventos, clickedStage, win, viewModes, modo === 'atual' ? 'atual' : 'performance')
-  }, [clickedStage, modo, periodos, vivosRowById, scoped, eventos, win, viewModes])
+    if (modo === 'aging') return dealsInEtapaAtual(scoped, clickedStage, win)
+    if (modo === 'atual') return dealsInEtapaAtual(scoped, clickedStage, null)
+    return dealsInStage(scoped, eventos, clickedStage, win, viewModes, 'performance')
+  }, [clickedStage, modo, scoped, eventos, win, viewModes])
 
   // Deals ganhos no recorte — base dos pop-ups leves de Receita/Fechamentos/Vendas por fonte.
   const ganhosNoPeriodo = useMemo(
@@ -918,8 +864,8 @@ export function FunilVendas() {
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 21 }}>Funil de vendas</div>
               <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
                 {modo === 'performance' && `Volume por etapa, conversão de passagem e custo acumulado · ${scopeLabel}`}
-                {modo === 'aging' && `Negócios em aberto e há quanto tempo estão parados · ${scopeLabel}`}
-                {modo === 'atual' && `Onde os negócios estão agora, independente do período · ${scopeLabel}`}
+                {modo === 'aging' && `Criados no período e ainda em aberto — onde estão hoje · ${scopeLabel} · ${subtitlePeriodo}`}
+                {modo === 'atual' && `Todos os negócios em aberto e onde estão agora, independente do período · ${scopeLabel}`}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -938,7 +884,8 @@ export function FunilVendas() {
           </div>
           <div style={{ padding: '14px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
-              ? <EtapaLeadtimeList linhas={aging} accent={accent} onRowClick={setClickedStage} />
+              ? <EtapaLeadtimeList linhas={aging} accent={accent} onRowClick={setClickedStage}
+                  vazioLabel={`Nenhum negócio criado no período segue em aberto (${subtitlePeriodo}).`} />
               : modo === 'atual'
                 ? <EtapaLeadtimeList linhas={atualLeadtime} accent={accent} onRowClick={setClickedStage} />
                 : <TrapFunnel stages={funnel} invest={invest} accent={accent} dark={dark}

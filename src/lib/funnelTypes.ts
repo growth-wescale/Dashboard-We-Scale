@@ -82,13 +82,3 @@ export interface FunnelRow {
   data_venda: string | null
   data_perdido: string | null
 }
-
-/** Linha da view `vw_deal_etapa_periodos`, usada no modo Aging. */
-export interface EtapaPeriodoRow {
-  deal_id: string
-  etapa: string | null
-  data_entrada: string | null
-  /** Null = o deal ainda está nesta etapa. */
-  data_saida: string | null
-  e_ultima_passagem: boolean | null
-}

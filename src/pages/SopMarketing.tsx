@@ -1285,10 +1285,38 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // marca só começou a receber dados em set/26, sem histórico anterior.
     : isWeScale
       ? [
-          { label: 'INVEST.', value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.invest), semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
-          { label: 'LEADS',   value: String(WE_SCALE_SOP_ATUAL.mtd.leads),   semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
-          { label: 'MQL',     value: String(WE_SCALE_SOP_ATUAL.mtd.mql),     semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
-          { label: 'CP-MQL',  value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.cpMql),  semAnt: { txt: '—', col: 'var(--ws-text-secondary)' }, mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' } },
+          {
+            label: 'SP · INVEST.',
+            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.invest),
+            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+          },
+          {
+            label: 'SP · LEADS',
+            value: String(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.leads),
+            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            extra: {
+              label: 'CUSTO/LEAD',
+              value: fmtBRL(Math.round(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.invest / WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.leads)),
+            },
+          },
+          {
+            label: 'BC · INVEST.',
+            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest),
+            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+          },
+          {
+            label: 'BC · LEADS',
+            value: String(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads),
+            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            extra: {
+              label: 'CUSTO/LEAD',
+              value: fmtBRL(Math.round(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest / WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads)),
+            },
+          },
         ] satisfies KpiCard[]
       : kpiCardsAll
 
@@ -1609,9 +1637,23 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </div>
         )}
 
-        {/* Col 2: MTD comparativo — oculto pra We Scale (marca só passou a receber dados em set/26,
-             comparativo com agosto seria contra 0 e enganoso) */}
-        {!isWeScale && (
+        {/* Col 2: para We Scale mostra Vendas Scale Partner; para outras marcas mostra MTD comparativo */}
+        {isWeScale ? (
+          <div style={cardStyle}>
+            <div style={colTitle(acc)}>Vendas Scale Partner — {dates.mtdLabel} MTD</div>
+            <div style={{ display: 'flex', gap: 28, marginTop: 14 }}>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Fechadas</div>
+                <div style={{ fontSize: 44, fontWeight: 800, color: acc, lineHeight: 1 }}>{WE_SCALE_SOP_ATUAL.mtd.vendas.fechadas}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Mapeadas</div>
+                <div style={{ fontSize: 44, fontWeight: 800, color: 'var(--ws-text-secondary)', lineHeight: 1 }}>{WE_SCALE_SOP_ATUAL.mtd.vendas.mapeadas}</div>
+                <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 3 }}>aguardando resposta</div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div style={{ ...cardStyle, overflowY: 'auto' }}>
           <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={colTitle(acc)}>{compareRange.label} MTD vs {dates.mtdLabel} MTD</div>
@@ -1724,7 +1766,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
-          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} />
+          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
@@ -1789,14 +1831,19 @@ const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
   { label: 'Lisô Laser',           adsetIncludes: ['LISO_LASER_EVT', 'LISOLASER_EVT'] },
 ]
 
-function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; accent: string; monthLabel: string }) {
-  const contagem = WE_SCALE_EVENTOS.map(evento => {
+function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads }: { leads: Lead[]; accent: string; monthLabel: string; beautyConnectionLeads: number }) {
+  const contagemDigital = WE_SCALE_EVENTOS.map(evento => {
     const rows = leads.filter(l => {
       const adset = String(l.dados_extras?.adset ?? '').toUpperCase()
       return evento.adsetIncludes.some(needle => adset.includes(needle))
     })
-    return { ...evento, n: rows.length, rows }
+    return { label: evento.label, n: rows.length, rows }
   })
+  // Beauty Connection: leads de evento físico — não estão no banco We Scale
+  const contagem: Array<{ label: string; n: number; rows: Lead[] }> = [
+    { label: 'Beauty Connection (evento)', n: beautyConnectionLeads, rows: [] },
+    ...contagemDigital,
+  ]
   const total = contagem.reduce((s, e) => s + e.n, 0)
   const max = Math.max(...contagem.map(e => e.n), 1)
   const fmtDia = (dia: string) => {
@@ -1859,7 +1906,7 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; acc
         ))}
       </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Lisô Laser aguarda adset dedicado.
+        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Beauty Connection = evento físico Lisô Laser (leads fora do banco We Scale).
       </div>
     </div>
   )

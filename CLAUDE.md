@@ -555,6 +555,35 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-21 (2) — Campanha de Metas ganha Modo TV (`/gp-setembro/tv`)
+
+Junior quer a campanha na TV do time, mas a página normal é longa e feita pra
+rolar. Nova rota **`/gp-setembro/tv`**: tela cheia, sem menu nem rolagem,
+escura (mesmo clima da tela "Sprint da COF" que já roda lá), tudo dimensionado
+em `vh` pra escalar em qualquer TV 16:9. Só o essencial:
+
+- Cabeçalho: volta atual, dias pra bandeirada, relógio
+- **Meta do time no mês** (R$ e unidades, barra com marcador do ritmo esperado)
+- **Closers na volta atual**: pódio com foto, % da meta da volta (meta mensal
+  × `fatorMetaCloser`, mesma regra da página), R$, vendas e barra vertical
+- **SDRs na volta atual**: SQL e Diagnóstico vs. meta rateada (`fatorMetaSdr`)
+- **Corrida de Performance**: pontos da volta nas trilhas SDR e Closer
+
+Sem filtros: a volta é sempre a atual e vira sozinha na troca de semana. Dados
+recarregam a cada 5 min (os hooks já faziam isso) e a página inteira recarrega
+de hora em hora pra pegar deploy novo sem ninguém mexer na TV.
+
+Rota fica **fora do `AppLayout`** (sem sidebar/GpStrip), mas atrás do mesmo
+`PrivateRoute` + `PortaoDeAcesso` + `GuardaRota` — `permissaoDaRota` casa pelo
+prefixo `/gp-setembro`, então vale a mesma permissão da aba. A TV precisa estar
+logada uma vez. Botão "📺 Modo TV" no título da Campanha de Metas abre a rota em
+nova aba. `diaDaCampanha`/`voltaDoDia` saíram da página pra
+`metasCampanhaF1.ts` (testados) e as duas telas usam os mesmos.
+
+Verificado: `npm run build` + `npx vitest run` (466 testes) em worktree fora do
+OneDrive, e **visto renderizado com dado real** em 1920×1080 numa rota
+temporária sem login (removida antes do commit).
+
 ### 2026-09-21 (7) — SDR creditado = dono antes da passagem pro Closer (férias da Xay)
 
 Junior estranhou: a Xayane está de férias desde 09/09 (último dia 08/09) e

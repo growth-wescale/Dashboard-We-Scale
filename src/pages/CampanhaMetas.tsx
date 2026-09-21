@@ -16,6 +16,8 @@ import {
   pctDecorridoJanela,
   fatorMetaCloser,
   fatorMetaSdr,
+  diaDaCampanha,
+  voltaDoDia,
 } from '@/constants/metasCampanhaF1'
 
 // Ordem canônica das marcas na seção "Metas por Marca" (mesmo recorte que a
@@ -26,8 +28,6 @@ import { money, pct, nf, nfCeil } from '@/lib/format'
 const MES_ATIVO = '2026-09-01'
 const MES_LABEL = 'Setembro 2026'
 const MES_SHORT = 'Setembro 2026'
-const MES_INICIO = new Date(2026, 8, 1)   // 1º set 2026
-const MES_FIM = new Date(2026, 8, 30)     // 30 set 2026
 const DIAS_MES = 30
 const POOL_PREMIOS = 12000
 type Ciclo = 'semanal' | 'mensal'
@@ -48,24 +48,10 @@ function moneyCompact(n: number): string {
   return money(n)
 }
 
-function diaDoMes(): number {
-  const hoje = new Date()
-  if (hoje < MES_INICIO) return 0
-  if (hoje > MES_FIM) return DIAS_MES
-  return hoje.getDate()
-}
-
-function voltaAtual(dia: number): number {
-  if (dia <= 7) return 1
-  if (dia <= 14) return 2
-  if (dia <= 21) return 3
-  return 4
-}
-
 export function CampanhaMetas() {
-  const dia = diaDoMes()
+  const dia = diaDaCampanha()
   const [ciclo, setCiclo] = useState<Ciclo>('semanal')
-  const [voltasSel, setVoltasSel] = useState<number[]>([voltaAtual(dia)])
+  const [voltasSel, setVoltasSel] = useState<number[]>([voltaDoDia(dia)])
 
   const toggleVolta = (n: number) =>
     setVoltasSel(prev => {
@@ -129,7 +115,7 @@ export function CampanhaMetas() {
   const pctEsperado = pctDecorridoJanela(ciclo, voltasSel, dia)
   const metaFatorSdr = ciclo === 'mensal' ? 1 : fatorMetaSdr(voltasSel)
   const diasRestantes = Math.max(0, DIAS_MES - dia)
-  const volta = voltaAtual(dia)
+  const volta = voltaDoDia(dia)
 
   return (
     <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
@@ -137,8 +123,16 @@ export function CampanhaMetas() {
         title="Campanha de Metas"
         subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${DIAS_MES}`}
         titleAside={
-          <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--brand-accent)', color: '#fff', fontSize: 13, fontWeight: 500 }}>
-            {MES_SHORT}
+          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--brand-accent)', color: '#fff', fontSize: 13, fontWeight: 500 }}>
+              {MES_SHORT}
+            </span>
+            <a href="/gp-setembro/tv" target="_blank" rel="noopener" style={{
+              padding: '4px 12px', borderRadius: 999, border: '1px solid var(--ws-border)', background: '#fff',
+              color: 'var(--ws-text-primary)', fontSize: 13, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap',
+            }}>
+              📺 Modo TV
+            </a>
           </span>
         }
       />

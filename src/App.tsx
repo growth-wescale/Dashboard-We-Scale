@@ -52,6 +52,7 @@ const LinhaDoTempoDeal  = lazyWithRetry(() => import('@/pages/LinhaDoTempoDeal')
 const AnaliseObjecoes   = lazyWithRetry(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
 const GpSetembro        = lazyWithRetry(() => import('@/pages/GpSetembro').then(m => ({ default: m.GpSetembro })))
 const HubMetas          = lazyWithRetry(() => import('@/pages/HubMetas').then(m => ({ default: m.HubMetas })))
+const CampanhaMetasTv   = lazyWithRetry(() => import('@/pages/CampanhaMetasTv').then(m => ({ default: m.CampanhaMetasTv })))
 
 // Fallback discreto durante carga do chunk (~100-300ms)
 function PageLoader() {
@@ -122,6 +123,26 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/definir-senha" element={<DefinirSenha />} />
+        {/* Modo TV da Campanha de Metas: tela cheia, sem menu. Mesmo login e a
+            mesma permissão da aba (permissaoDaRota casa pelo prefixo /gp-setembro). */}
+        <Route
+          path="/gp-setembro/tv"
+          element={
+            <PrivateRoute>
+              <AcessoProvider>
+                <PortaoDeAcesso>
+                  <GuardaRota pathname="/gp-setembro/tv">
+                    <ErrorBoundary scope="/gp-setembro/tv">
+                      <Suspense fallback={<PageLoader />}>
+                        <CampanhaMetasTv />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </GuardaRota>
+                </PortaoDeAcesso>
+              </AcessoProvider>
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/*"
           element={

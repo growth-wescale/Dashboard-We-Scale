@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  diaDaCampanha,
+  voltaDoDia,
   fatorMetaCloser,
   fatorMetaSdr,
   emJanelas,
@@ -85,5 +87,21 @@ describe('pctDecorridoJanela', () => {
   })
   it('mensal ignora a seleção e usa o mês todo', () => {
     expect(pctDecorridoJanela('mensal', [1], 15)).toBeCloseTo((15 / 30) * 100, 5)
+  })
+})
+
+describe('diaDaCampanha / voltaDoDia', () => {
+  it('dia do mês dentro de setembro, 0 antes e 30 depois', () => {
+    expect(diaDaCampanha(new Date(2026, 8, 21, 15))).toBe(21)
+    expect(diaDaCampanha(new Date(2026, 7, 31))).toBe(0)
+    expect(diaDaCampanha(new Date(2026, 9, 2))).toBe(30)
+  })
+  it('volta pelos limites das voltas', () => {
+    expect(voltaDoDia(0)).toBe(1)
+    expect(voltaDoDia(7)).toBe(1)
+    expect(voltaDoDia(8)).toBe(2)
+    expect(voltaDoDia(21)).toBe(3)
+    expect(voltaDoDia(22)).toBe(4)
+    expect(voltaDoDia(30)).toBe(4)
   })
 })

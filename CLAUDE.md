@@ -163,6 +163,14 @@ comparando `vw_funil_vendas.id_etapa_atual` (= `deal_snapshot.id_etapa`) —
 `resolveStage(etapa_funil)` sozinho não distingue SDR de Closer, só olha o
 nome. Deal parado na "Reunião Agendada SQL" do SDR some do balde no Atual.
 
+**Exceção: Odonto Legacy agenda no próprio funil** (desde 21/09). Para deal
+de marca Odonto Legacy, o SQL é a "Reunião Agendada" do funil Odonto Legacy
+(`68b84341646c55001ed64e53`, funil `68b84341646c55001ed64e4f`, que já se
+chamou "Odonto Scale") — e a do Closer **não** conta para ele. A regra é por
+marca do DEAL: `idEtapaObrigatoria(stage, marca)` em `metrics.ts`; nos
+eventos usa `vw_funil_etapas_v2.marca_deal` (de `deal_snapshot`), no Atual
+usa `FunnelRow.marca`. Nunca `vw_funil_etapas_v2.marca` (retrato do evento).
+
 **SDR/Closer de deal vivo = dono ATUAL, não o dono da última mudança de etapa.**
 A eleição de `nome_sdr`/`nome_closer` em `vw_deal_ciclo` amostra `vw_deal_posse`
 no instante `ts_fim_sdr`/`ts_fim_closer` — o **último evento `mudanca_etapa`**
@@ -227,7 +235,10 @@ nulo em ~17% dos eventos de ago/26, e 0% preenchido na origem
 RPC do relatório diário já faz). Nunca filtrar evento por marca.
 
 **Deal sem marca é invisível.** As views exigem marca preenchida. Deals sem
-marca no RD não aparecem no dashboard, nem no Consolidado.
+marca no RD não aparecem no dashboard, nem no Consolidado. **Exceção:** deal
+no funil Odonto Legacy (`deal_snapshot.id_funil = 68b84341646c55001ed64e4f`)
+sem Marca vira `'Odonto Legacy'` em `vw_funil_vendas` e em
+`vw_funil_etapas_v2.marca_deal` — o funil é exclusivo da marca.
 
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
@@ -503,6 +514,43 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-21 (2) — Odonto Legacy: Funil Atual bate com o RD e SQL conta no próprio funil
+
+Junior comparou o Funil Atual do Odonto Legacy com o RD (Em andamento): RD
+21 Novos Leads / 243 Tentando Contato / 9 Contato Efetivo / 4 Reunião
+Agendada; dash 1 / 242 / 9 / —.
+
+**Novos Leads 1 × 21 — marca vazia.** 20 leads importados em lote hoje
+(13:37–13:39) entraram no funil Odonto Legacy **sem o campo Marca no RD**
+(conferido 1 a 1 pela API, não é atraso do espelho) e caíam na regra "deal
+sem marca é invisível". `vw_funil_vendas` passou a usar
+`COALESCE(s.marca, d.marca, 'Odonto Legacy' se s.id_funil = funil Legacy)`,
+também no `WHERE`. Checksum: +20 linhas exatas (7.500 → 7.520, todas Em
+andamento), ganhos 54 e receita R$ 2.503.179,98 inalterados, 0 linhas sem
+marca.
+
+**Reunião Agendada sem contar — regra nova do Junior.** Para Odonto Legacy
+(e só pra ela) o agendamento conta na "Reunião Agendada" do próprio funil,
+não na "Reunião Agendada SQL" do Closer. A etapa já era canonizada como
+"Reunião Agendada SQL" (60 deals no histórico), mas a trava
+`STAGE_ID_OBRIGATORIO` só aceitava o id do Closer. Virou
+`idEtapaObrigatoria(stage, marca)`: marca Odonto Legacy → etapa do funil
+Legacy; demais → Closer. A do Closer passa a NÃO contar pra deal Legacy — os
+6 deals Legacy que passaram por ela foram ida-e-volta de minutos, mesmo
+dia. Como os eventos chegam ao front recortados pela janela, a marca do deal
+tem que vir no evento: `vw_funil_etapas_v2` ganhou `marca_deal` (join por PK
+com `deal_snapshot`, mesmo fallback do funil; contagem de linhas idêntica,
+24.612; +~20 ms na página). Efeito: Atual Reunião Agendada 0 → **4**;
+Performance set/26 SQL Odonto Legacy 0 → **5**.
+
+**Não é bug do dash (dado do RD):** Tentando Contato 242 × 243 — o deal
+`6aa020f3f24eaa0001d227ce` está no funil Odonto Legacy com Marca = **Lisô
+Laser** no RD, então aparece na Lisô. **Achado, não alterado:** Scale Partner
+tem 5 agendamentos (set/26) na "Reunião Agendada SQL" do próprio funil
+(`6a99b99218a2bb002df8ec61`) que não contam em lugar nenhum; Prospecção
+Ativa idem (7 desde jun) — mesma situação do Legacy, decisão pendente do
+Junior.
 
 ### 2026-09-17 (2) — Aging vira a safra do período; Atual continua o estoque
 

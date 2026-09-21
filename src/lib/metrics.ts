@@ -24,6 +24,7 @@
  * docs/superpowers/specs/2026-08-14-funil-vendas-supabase-design.md
  */
 
+import { normalizeMarcaRaw } from '@/constants/brands'
 import { toLocalDate, toLocalYearMonth } from '@/lib/dateUtils'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
@@ -398,6 +399,13 @@ export interface FunnelEventRow {
   nome_funil?: string | null
   ciclo?: number | null
   /**
+   * Marca do DEAL (deal_snapshot, com fallback do funil Odonto Legacy) — não a
+   * marca do evento, que não é confiável. Só serve para a regra de funil
+   * obrigatório de "Reunião Agendada SQL"; o recorte por marca continua vindo
+   * de `vw_funil_vendas` (idsEscopo).
+   */
+  marca_deal?: string | null
+  /**
    * Primeira passagem do deal pela etapa no mês, segundo o banco.
    *
    * NÃO usar para deduplicar: a partição é (deal, etapa_canonica, mês), sem
@@ -415,28 +423,42 @@ export interface FunnelEventRow {
  * agenda, o negócio migra para o Closer e a MESMA reunião gera dois eventos —
  * o que inflava o SQL de 71 para 144. Regra do negócio: vale a etapa do Closer;
  * duas reuniões só quando o deal reentra nela.
+ *
+ * Exceção (Junior, 21/09/2026): **Odonto Legacy** agenda no próprio funil
+ * (68b84341646c55001ed64e4f, que já se chamou "Odonto Scale"). Para deal
+ * dessa marca, conta a "Reunião Agendada" de lá — e a do Closer NÃO conta
+ * (no histórico, as passagens de deal Legacy pelo Closer são ida-e-volta
+ * de minutos, não uma segunda reunião).
  */
-const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, string>> = {
-  'Reunião Agendada SQL': '69b1badfe1def700137f1b89', // Closer
+const ETAPA_SQL_CLOSER = '69b1badfe1def700137f1b89'
+const ETAPA_SQL_ODONTO_LEGACY = '68b84341646c55001ed64e53'
+
+function isOdontoLegacy(marca: string | null | undefined): boolean {
+  return normalizeMarcaRaw(marca) === 'Odonto Scale'
+}
+
+/** Id de etapa obrigatório para contar `stage`, dado a marca do deal. */
+function idEtapaObrigatoria(stage: StageKey | null, marca: string | null | undefined): string | undefined {
+  if (stage !== 'Reunião Agendada SQL') return undefined
+  return isOdontoLegacy(marca) ? ETAPA_SQL_ODONTO_LEGACY : ETAPA_SQL_CLOSER
 }
 
 /**
  * Etapa canônica CORRENTE de um deal, para o modo "Funil Atual".
  *
  * Vai além de `resolveStage(etapa_funil)`: quando a etapa tem regra de funil
- * obrigatório (hoje só "Reunião Agendada SQL", que vale apenas no funil do
- * Closer — a mesma etapa existe no SDR e o handoff duplicaria a contagem),
- * o deal só conta nela se `id_etapa_atual` (etapa corrente no RD) for a do
- * Closer. Um deal parado na "Reunião Agendada SQL" do SDR resolve para
- * `null` e não entra nessa etapa do funil macro — mesma regra que
- * `eventsInStage` aplica no histórico de eventos.
+ * obrigatório ("Reunião Agendada SQL" — Closer, ou o próprio funil no Odonto
+ * Legacy), o deal só conta nela se `id_etapa_atual` (etapa corrente no RD)
+ * for a etapa certa para a marca dele. Um deal parado na "Reunião Agendada
+ * SQL" do SDR resolve para `null` e não entra nessa etapa do funil macro —
+ * mesma regra que `eventsInStage` aplica no histórico de eventos.
  */
 export function currentStage(
-  row: Pick<FunnelRow, 'etapa_funil' | 'id_etapa_atual'>,
+  row: Pick<FunnelRow, 'etapa_funil' | 'id_etapa_atual'> & Partial<Pick<FunnelRow, 'marca'>>,
 ): StageKey | null {
   const stage = resolveStage(row.etapa_funil)
   if (!stage) return null
-  const idObrigatorio = STAGE_ID_OBRIGATORIO[stage]
+  const idObrigatorio = idEtapaObrigatoria(stage, row.marca)
   if (idObrigatorio && row.id_etapa_atual !== idObrigatorio) return null
   return stage
 }
@@ -475,10 +497,10 @@ export function eventsInStage(
     typeof optsOrExtra === 'function' ? { extra: optsOrExtra } : (optsOrExtra ?? {})
   const cohort = modes.funnelView === 'cohort' ? (opts.cohortIds ?? null) : null
   const alvo = resolveStage(stageLabel)
-  const idObrigatorio = alvo ? STAGE_ID_OBRIGATORIO[alvo] : undefined
 
   const elegiveis = events.filter(e => {
     if (resolveStage(e.etapa_canonica) !== alvo) return false
+    const idObrigatorio = idEtapaObrigatoria(alvo, e.marca_deal)
     if (idObrigatorio && e.id_etapa !== idObrigatorio) return false
     if (cohort) {
       if (!cohort.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))) return false

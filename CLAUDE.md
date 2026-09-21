@@ -190,6 +190,27 @@ intocada. Deal Ganho/Perdido, ciclo antigo, ou numa etapa da outra camada
 continua congelado no handoff. `sdr_fonte`/`closer_fonte` = `'posse_atual'`
 marca as linhas corrigidas por essa regra.
 
+**SDR de deal que já passou pro Closer = último SDR dono ANTES da passagem.**
+Desde 21/09, fonte `handoff` (prioridade máxima, só abaixo de
+`atribuicao_manual.sdr_override`): se o ciclo tem evento de camada Closer
+(`ts_ini_closer`), o SDR é o último intervalo de `vw_deal_posse` com dono de
+cargo `SDR`/`SDR/Closer` iniciado antes dessa entrada. Vence a `posse_atual`:
+um deal em No Show que voltou pra outro SDR reagendar mantém o SDR que fez o
+agendamento original. A `posse_atual` segue valendo pra deal que nunca saiu
+do SDR. Duas travas: só vale para `ts_ini_closer >= 01/08/2026` (antes disso,
+funis legados como Odonto Scale tinham Closer atuando como SDR) e ignora dono
+"desde sempre" sem nenhuma troca registrada (`ini = -infinity AND fim IS NULL`).
+Motivo: a âncora antiga (`ts_fim_sdr` = último `mudanca_etapa` na camada SDR)
+não via `troca_responsavel`. Um deal parado em Contato Efetivo, redistribuído
+nas férias e agendado depois direto no funil do Closer ficava com o SDR
+antigo.
+
+**Perdido, reaberto e perdido de novo no mesmo dia não abre ciclo novo.**
+Em `vw_deal_eventos_ciclo` (CTE `perdas`), com o deal perdido, uma perda só
+fecha ciclo se `_closed_at` cair em **dia posterior** (Brasília) ao da perda.
+Senão, o índice `ux_deal_eventos_perda_por_dia` descarta a 2ª perda e o
+retrabalho de minutos virava um "ciclo 2", contando SAL/etapa duas vezes.
+
 **Closer eleito nunca pode ter cargo SDR puro.** As três fontes de `nome_closer`
 (`evento`, `posse`, `posse_atual`) leem `responsavel`/`dono` — um campo de
 "quem está com o deal no RD agora", não "quem é Closer de verdade". Para um
@@ -533,6 +554,60 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-21 (7) — SDR creditado = dono antes da passagem pro Closer (férias da Xay)
+
+Junior estranhou: a Xayane está de férias desde 09/09 (último dia 08/09) e
+ainda tinha 42 MQL / 15 SQL / 17 DIAG / 14 SAL em setembro. **A maior parte
+é legítima.** A tabela do SDR credita ao SDR que agendou todas as etapas
+seguintes do deal, e 9 dos DIAG/SAL de setembro vêm de agendas dela de 25 a
+31/08.
+
+**Erro achado:** Javier e Ricardo Marques de Andrade (Inpot, SQL 17/09) foram
+redistribuídos da Xay para a Sarah em 09/09 09:23 e agendados pelo Douglas
+em 17/09, mas apareciam como Xayane. `sdr_posse` amostra o dono em
+`ts_fim_sdr` (último `mudanca_etapa` na camada SDR, aqui o Contato Efetivo
+de 04 e 06/09) e não via a `troca_responsavel`. Mesma família do bug de
+03/09, que a `posse_atual` só corrigia para deal ainda na camada SDR.
+
+**Fix 1:** fonte `handoff` em `vw_deal_ciclo` (regra na seção 4).
+Simulado numa cópia paralela antes de aplicar. A 1ª versão mexia em 16 deals
+Inpot de set/2025 (dono "desde sempre" sem troca) e em 3 do Odonto Scale de
+jul/26 (2 ganhos, Aurélio → Sarah). Daí vieram as duas travas (corte em
+01/08/2026 e ignorar dono sem troca). Resultado: **27 ciclos** trocam de SDR,
+todos de ago–set/26: Thiago → Sarah 8 (6 em No Show devolvidos a ele em
+15/09 para reagendar), Xayane → Sarah 6, Closer → SDR 7
+(Douglas/Jéssica/Bruna na coluna SDR), vazio → SDR 3, outros 3. 0 Closers
+alterados.
+
+**Override respeitado:** Ricardo Lemos (SQL 04/09) tem `sdr_override` =
+Xayane, confirmado pelo Junior em 04/09. A regra nova diria Sarah, e o
+override vence.
+
+**Fix 2:** CTE `perdas` de `vw_deal_eventos_ciclo` (regra na seção 4). Achado
+no Edmir Domingues ("Tio da Xay"): perdido às 08:37, reaberto e perdido às
+08:54 de 18/09. O SAL contava 2x. 13 deals na base com esse padrão, e 11
+linhas saem de `vw_funil_vendas`.
+
+**Checksum** (`vw_funil_vendas`): ganhos 54 e receita R$ 2.503.179,98
+inalterados; linhas 7.520 → 7.510 (fix 2; +1 deal novo do sync no meio).
+Fix de 21/09 (3) (IDA, Sarah como SDR) conferido intacto. Backups em
+`_backup_viewdefs`: `vw_deal_ciclo_pre_handoff_20260921`,
+`vw_deal_ciclo_pos_handoff_20260921`,
+`vw_deal_eventos_ciclo_pre_mesmo_dia_20260921`. `REFRESH` da matview rodado
+após cada fix.
+
+**Xayane, set/26 (Inbound, 01–21/09):** 42/15/17/14 → **42/15/16/13**. SQL
+não muda no total: saem Javier e Ricardo Marques, voltam Bruno Kreusch e
+Rogério Correia (estavam com Douglas e Bruna como SDR). Hoje são 14 SQLs até
+08/09 e 1 depois (Edmir, 10/09, indicação dela, criado no nome dela). O único
+MQL pós-férias é "Gustavo Godoy treste": negócio de teste que escapa do
+filtro por erro de digitação, pedido para apagar no RD. Material para o time:
+https://claude.ai/artifact/5zQ3VhZXupZNBApyv8ASu9
+
+**Limitação conhecida:** a API do RD não diz quem moveu a etapa. Se um Closer
+agendar um deal ainda no nome do SDR, o crédito vai pro SDR. Corrigir caso a
+caso com `atribuicao_manual.sdr_override`.
 
 ### 2026-09-21 (6) — Odonto Legacy sozinha também esconde Comitê
 

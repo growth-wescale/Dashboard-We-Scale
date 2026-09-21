@@ -208,6 +208,25 @@ const STAGE_ALIASES: Record<string, StageKey> = {
   'Venda': 'Fechamento',
 }
 
+/**
+ * Etapas que não existem no funil de uma marca no RD. Com SÓ essa marca
+ * selecionada, a etapa some do funil em vez de aparecer zerada (pedido do
+ * Junior, 21/09). Com 2+ marcas continua aparecendo — as outras têm a etapa.
+ * Chave = marca canônica (`BRAND_LIST[].marca`).
+ */
+const ETAPAS_AUSENTES_POR_MARCA: Record<string, readonly StageKey[]> = {
+  // Funil Odonto Legacy: Novos Leads → Tentando Contato → Contato Efetivo →
+  // Reunião Agendada → Diagnóstico → Negociação SAL → Documentação.
+  'Odonto Scale': ['Interesse Reunião', 'Conexão'],
+}
+
+/** `stages` sem as etapas que não existem no funil, quando há 1 marca só selecionada. */
+export function etapasDaMarca(stages: readonly StageKey[], marcas: readonly (string | null | undefined)[]): StageKey[] {
+  if (marcas.length !== 1) return [...stages]
+  const ausentes = ETAPAS_AUSENTES_POR_MARCA[normalizeMarcaRaw(marcas[0]) ?? '']
+  return ausentes ? stages.filter(s => !ausentes.includes(s)) : [...stages]
+}
+
 /** Resolve rótulo qualquer para etapa canônica, ou null se desconhecido. */
 export function resolveStage(label: string | null | undefined): StageKey | null {
   if (!label) return null

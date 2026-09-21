@@ -26,7 +26,7 @@ import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
-  rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel,
+  rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel, etapasDaMarca,
 } from '@/lib/metrics'
 import type { StageKey, StageDeal } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
@@ -647,12 +647,12 @@ export function PerformanceVendas() {
   // ── Funil SDR (MQL → SAL), clicável ─────────────────────────────────────────
   const [clickedSdrStage, setClickedSdrStage] = useState<StageKey | null>(null)
   const funilSdr: FunnelStage[] = useMemo(
-    () => SDR_STAGES.map(s => ({
+    () => etapasDaMarca(SDR_STAGES, marcasSelecionadas.map(b => b.marca)).map(s => ({
       key: s,
       label: stageLabel(s, origem),
       value: countStageEvents(eventos, s, win, viewModes, evOpts),
     })),
-    [eventos, win, viewModes, evOpts, origem],
+    [eventos, win, viewModes, evOpts, origem, marcasSelecionadas],
   )
   const dealsDoCliqueSdr = useMemo(
     () => (clickedSdrStage ? dealsInStage(scoped, eventos, clickedSdrStage, win, viewModes, 'performance') : []),

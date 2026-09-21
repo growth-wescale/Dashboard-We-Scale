@@ -25,7 +25,7 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro } from '@/lib/fonteMapping'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  STAGE_ORDER, buildScopeFilter, cohortKeys, countSales, countStage,
+  STAGE_ORDER, buildScopeFilter, etapasDaMarca, cohortKeys, countSales, countStage,
   mqlWord, stageLabel,
   countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
@@ -341,6 +341,11 @@ export function FunilVendas() {
     [brandKeys],
   )
   const todasSelecionadas = marcasSelecionadas.length === BRAND_LIST.length
+  // Com 1 marca só, some a etapa que não existe no funil dela (ex.: Odonto Legacy).
+  const etapasFunil = useMemo(
+    () => etapasDaMarca(MACRO_STAGES, marcasSelecionadas.map(b => b.marca)),
+    [marcasSelecionadas],
+  )
   const { accent, dark } = marcasSelecionadas.length === 1 ? marcasSelecionadas[0] : BRAND_OVERVIEW
   const scopeLabel = todasSelecionadas
     ? 'Consolidado'
@@ -492,7 +497,7 @@ export function FunilVendas() {
     const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
     const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
-    return MACRO_STAGES.map(s => ({
+    return etapasFunil.map(s => ({
       key: s,
       label: MACRO_STAGE_LABEL[s] ?? stageLabel(s, origem),
       // Fechamento não é etapa no histórico — venda é um tipo de evento à parte.
@@ -505,11 +510,11 @@ export function FunilVendas() {
             extra: e => idsEscopo.has(String(e.id_deal)),
           }),
     }))
-  }, [modo, scoped, eventos, win, viewModes, origem])
+  }, [modo, scoped, eventos, win, viewModes, origem, etapasFunil])
 
   // Etapas na mesma sequência do funil Performance — só as que têm negócio parado.
   function ordenarPorMacroStages(porStageKey: Map<StageKey, EtapaLeadtimeAgg>): EtapaLeadtimeRow[] {
-    return MACRO_STAGES
+    return etapasFunil
       .map(s => {
         const a = porStageKey.get(s)
         if (!a || a.deals === 0) return null
@@ -522,14 +527,14 @@ export function FunilVendas() {
   // seguem em aberto, e a etapa em que estão HOJE.
   const aging = useMemo(
     () => (modo === 'aging' ? ordenarPorMacroStages(computeEtapaAtual(scoped, win)) : []),
-    [modo, scoped, win, origem],
+    [modo, scoped, win, origem, etapasFunil],
   )
 
   // Atual: a mesma leitura do Aging, sem recorte de período — todo negócio em
   // aberto e onde ele está hoje, não importa quando entrou no funil.
   const atualLeadtime = useMemo(
     () => (modo === 'atual' ? ordenarPorMacroStages(computeEtapaAtual(scoped, null)) : []),
-    [modo, scoped, origem],
+    [modo, scoped, origem, etapasFunil],
   )
 
   // Deals por trás da etapa clicada no funil — mesma regra usada pra contar,

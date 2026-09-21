@@ -12,6 +12,7 @@ import {
   dealKey,
   dealsInStage,
   eventsInStage,
+  etapasDaMarca,
   groupRepeatedDeals,
   isInWindow,
   mqlWord,
@@ -820,5 +821,18 @@ describe('stageLabel', () => {
   it('"Reunião Agendada SQL" aparece só como "SQL"', () => {
     expect(STAGE_LABEL['Reunião Agendada SQL']).toBe('SQL')
     expect(stageLabel('Reunião Agendada SQL', 'Inbound')).toBe('SQL')
+  })
+})
+
+describe('etapasDaMarca', () => {
+  const todas = ['MQL', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL'] as const
+  it('só Odonto Legacy: esconde Interesse Reunião e Conexão', () => {
+    expect(etapasDaMarca(todas, ['Odonto Scale'])).toEqual(['MQL', 'Reunião Agendada SQL'])
+    expect(etapasDaMarca(todas, ['Odonto Legacy'])).toEqual(['MQL', 'Reunião Agendada SQL'])
+  })
+  it('outra marca ou 2+ marcas: mantém tudo', () => {
+    expect(etapasDaMarca(todas, ['Inpot'])).toEqual([...todas])
+    expect(etapasDaMarca(todas, ['Odonto Scale', 'Inpot'])).toEqual([...todas])
+    expect(etapasDaMarca(todas, [])).toEqual([...todas])
   })
 })

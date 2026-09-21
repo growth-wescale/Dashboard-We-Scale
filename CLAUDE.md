@@ -534,6 +534,19 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-21 (5) — Odonto Legacy sozinha esconde Interesse Reunião e Conexão
+
+O funil Odonto Legacy no RD não tem essas duas etapas (Novos Leads →
+Tentando Contato → Contato Efetivo → Reunião Agendada → Diagnóstico →
+Negociação SAL → Documentação), então elas apareciam sempre zeradas. Novo
+`etapasDaMarca(stages, marcas)` em `metrics.ts` (mapa
+`ETAPAS_AUSENTES_POR_MARCA`): com **exatamente 1 marca** selecionada, tira
+as etapas que não existem no funil dela. Com 2+ marcas nada muda (as outras
+têm a etapa). Aplicado na Visão Macro (Performance, Aging, Atual) e no funil
+SDR da aba Performance. Oportunidade COF e Comitê também não existem no
+funil Legacy, mas ficaram de fora — o pedido foi só Conexão/Interesse
+Reunião.
+
 ### 2026-09-21 (4) — Odonto Legacy: Funil Atual bate com o RD e SQL conta no próprio funil
 
 Junior comparou o Funil Atual do Odonto Legacy com o RD (Em andamento): RD

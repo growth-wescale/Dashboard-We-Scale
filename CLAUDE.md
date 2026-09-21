@@ -534,6 +534,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-21 (6) — Odonto Legacy sozinha também esconde Comitê
+
+Mesmo mecanismo da entrada (5): `ETAPAS_AUSENTES_POR_MARCA['Odonto Scale']`
+ganhou `'Comitê'` (não existe no funil Legacy do RD). Oportunidade COF segue
+aparecendo — não foi pedido.
+
 ### 2026-09-21 (5) — Odonto Legacy sozinha esconde Interesse Reunião e Conexão
 
 O funil Odonto Legacy no RD não tem essas duas etapas (Novos Leads →

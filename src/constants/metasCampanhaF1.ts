@@ -122,3 +122,17 @@ export function pctDecorridoJanela(ciclo: 'semanal' | 'mensal', voltas: readonly
   }
   return total > 0 ? (decorrido / total) * 100 : 0
 }
+
+/** Dia da campanha (0 = antes do mês, 30 = depois do fim) para a data `hoje`. */
+export function diaDaCampanha(hoje: Date = new Date()): number {
+  const inicio = new Date(2026, 8, 1)
+  const fim = new Date(2026, 8, 30)
+  if (hoje < inicio) return 0
+  if (hoje > fim) return 30
+  return hoje.getDate()
+}
+
+/** Volta (1–4) em que cai o dia da campanha. Dia 0 conta como volta 1. */
+export function voltaDoDia(dia: number): number {
+  return VOLTAS_F1.find(v => dia <= v.diaFim)?.num ?? VOLTAS_F1.length
+}

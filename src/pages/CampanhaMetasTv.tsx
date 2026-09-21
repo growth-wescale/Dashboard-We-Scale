@@ -21,7 +21,9 @@ import { money, pct, nfCeil } from '@/lib/format'
  * Tela única 16:9, sem menu e sem rolagem, só com o essencial da corrida:
  * meta do time no mês, closers e SDRs na volta atual e a pontuação da
  * Corrida de Performance. Tudo em `vh` pra escalar em qualquer TV. Não tem
- * filtro: a volta é sempre a atual (vira sozinha na troca de semana).
+ * filtro: a tela alterna sozinha a cada 30s entre a VOLTA atual (dados e metas
+ * só da volta, que vira sozinha na troca de semana) e o MÊS (tudo acumulado).
+ * Os dois recortes ficam carregados ao mesmo tempo, então a troca é instantânea.
  *
  * Os hooks já recarregam os dados a cada 5 min; a página inteira recarrega de
  * hora em hora pra pegar deploy novo sem ninguém mexer na TV.
@@ -31,6 +33,10 @@ const MES_ATIVO = '2026-09-01'
 const MES_LABEL = 'Setembro 2026'
 const DIAS_MES = 30
 const RECARREGA_PAGINA_MS = 60 * 60 * 1000
+/** Tempo em cada modo (volta ↔ mês). 30s dá pra ler a tela inteira sem cansar. */
+const TROCA_MODO_MS = 30_000
+
+type Modo = 'volta' | 'mes'
 
 const BG = '#0B0B10'
 const PAINEL = 'rgba(255,255,255,0.045)'
@@ -79,13 +85,47 @@ export function CampanhaMetasTv() {
     return () => clearTimeout(t)
   }, [])
 
-  // Mês inteiro → meta do time. Volta atual → closers e SDRs.
+  // Alterna volta ↔ mês. `rodada` reinicia o cronômetro quando alguém clica num botão.
+  const [modo, setModo] = useState<Modo>('volta')
+  const [rodada, setRodada] = useState(0)
+  useEffect(() => {
+    const t = setTimeout(() => setModo(m => (m === 'volta' ? 'mes' : 'volta')), TROCA_MODO_MS)
+    return () => clearTimeout(t)
+  }, [modo, rodada])
+  const escolherModo = (m: Modo) => { setModo(m); setRodada(r => r + 1) }
+  const ehMes = modo === 'mes'
+
+  // Os dois recortes carregados juntos: a troca não espera consulta.
   const { closers: closersMes, loading: loadingMes } = useMetasClosers(MES_ATIVO)
   const { closers: closersVoltaRaw, loading: loadingVolta } = useMetasClosers(MES_ATIVO, janelas)
   const { sdrs, loading: loadingSdrs } = useMetasSDRs(MES_ATIVO)
-  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(MES_ATIVO, janelas)
+  const corridaVolta = useCorridaPerformance(MES_ATIVO, janelas)
+  const corridaMes = useCorridaPerformance(MES_ATIVO)
 
-  const time = useMemo(() => closersMes.reduce(
+  // Na volta, a meta mensal é escalada pra volta (mesma regra da página da campanha).
+  const closersVolta = useMemo(() =>
+    closersVoltaRaw.map(c => {
+      const f = fatorMetaCloser(c.nome, voltasSel)
+      const metaFinanceira = c.metaFinanceira * f
+      return {
+        ...c,
+        metaFinanceira,
+        metaQtdVendas: c.metaQtdVendas * f,
+        pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
+      }
+    }),
+  [closersVoltaRaw, voltasSel])
+
+  const closers = ehMes ? closersMes : closersVolta
+  const loadingClosers = ehMes ? loadingMes : loadingVolta
+  const corrida = ehMes ? corridaMes : corridaVolta
+
+  const ranking = useMemo(
+    () => [...closers].sort((a, b) => b.pctAtingimento - a.pctAtingimento || b.realizado - a.realizado),
+    [closers],
+  )
+
+  const time = useMemo(() => closers.reduce(
     (acc, c) => ({
       metaFin: acc.metaFin + c.metaFinanceira,
       metaQtd: acc.metaQtd + c.metaQtdVendas,
@@ -93,73 +133,79 @@ export function CampanhaMetasTv() {
       realQtd: acc.realQtd + c.realizadoQtd,
     }),
     { metaFin: 0, metaQtd: 0, realFin: 0, realQtd: 0 },
-  ), [closersMes])
+  ), [closers])
 
-  // Meta mensal escalada pra volta (mesma regra da página da campanha).
-  const rankingVolta = useMemo(() =>
-    closersVoltaRaw
-      .map(c => {
-        const f = fatorMetaCloser(c.nome, voltasSel)
-        const metaFinanceira = c.metaFinanceira * f
-        return {
-          ...c,
-          metaFinanceira,
-          metaQtdVendas: c.metaQtdVendas * f,
-          pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
-        }
-      })
-      .sort((a, b) => b.pctAtingimento - a.pctAtingimento || b.realizado - a.realizado),
-  [closersVoltaRaw, voltasSel])
-
-  const fatorSdr = fatorMetaSdr(voltasSel)
+  const fatorSdr = ehMes ? 1 : fatorMetaSdr(voltasSel)
+  const rotuloPeriodo = ehMes ? 'Mês de Setembro' : (voltaDef?.label ?? '')
+  const deQue = ehMes ? 'do mês' : 'da volta'
 
   return (
     <div style={{
       position: 'fixed', inset: 0, overflow: 'hidden', background: BG, color: '#fff',
       backgroundImage: 'radial-gradient(ellipse at 15% 0%, rgba(225,6,0,0.16), transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(0,210,190,0.08), transparent 50%)',
       fontFamily: 'var(--font-body)',
-      display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr) auto', gap: vh(2),
+      display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: vh(2),
       padding: `${vh(2.6)} ${vh(3.6)}`,
     }}>
-      <Cabecalho volta={volta} voltaLabel={voltaDef?.label ?? ''} dia={dia} agora={agora} />
+      <style>{`
+        @keyframes tvEntra { from { opacity: 0; transform: translateY(0.8vh) } to { opacity: 1; transform: none } }
+        @keyframes tvProgresso { from { width: 0 } to { width: 100% } }
+      `}</style>
 
-      <MetaTime
-        loading={loadingMes}
-        {...time}
-        pctEsperado={pctDecorridoJanela('mensal', [], dia)}
+      <Cabecalho
+        volta={volta}
+        voltaLabel={voltaDef?.label ?? ''}
+        dia={dia}
+        agora={agora}
+        modo={modo}
+        rodada={rodada}
+        onModo={escolherModo}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: vh(2), minHeight: 0 }}>
-        <Painel titulo="Closers" sub={`${voltaDef?.label ?? ''} · % da meta da volta`}>
-          <ClosersPodio ranking={rankingVolta} loading={loadingVolta} />
-        </Painel>
-        <Painel titulo="SDRs" sub={`${voltaDef?.label ?? ''} · realizado / meta da volta`}>
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: vh(1) }}>
-            {SDRS_ATIVOS.map(s => {
-              const meta = sdrs.find(m => m.nome === s.nome)
-              const real = sdrRealizado.get(s.nome)
-              return (
-                <SdrLinha
-                  key={s.nome}
-                  nome={s.nome}
-                  foto={s.foto}
-                  iniciais={s.iniciais}
-                  cor={s.cor}
-                  sql={real?.sql ?? 0}
-                  metaSql={(meta?.metaSql ?? 0) * fatorSdr}
-                  rr={real?.rr ?? 0}
-                  metaRr={(meta?.metaReuniao ?? 0) * fatorSdr}
-                  loading={loadingSdrs || loadingCorrida}
-                />
-              )
-            })}
-          </div>
-        </Painel>
-      </div>
+      <div key={modo} style={{
+        display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: vh(2), minHeight: 0,
+        animation: 'tvEntra 500ms ease-out',
+      }}>
+        <MetaTime
+          loading={loadingClosers}
+          {...time}
+          titulo={rotuloPeriodo}
+          fimLabel={ehMes ? 'bandeirada · 30 set' : `fim da volta · ${voltaDef?.diaFim ?? ''} set`}
+          pctEsperado={ehMes ? pctDecorridoJanela('mensal', [], dia) : pctDecorridoJanela('semanal', voltasSel, dia)}
+        />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vh(2) }}>
-        <Placar titulo="Corrida de Performance · Trilha SDR" unidade="RR" linhas={sdrTrilha} visual={SDRS_ATIVOS} loading={loadingCorrida} />
-        <Placar titulo="Corrida de Performance · Trilha Closer" unidade="vendas" linhas={closerTrilha} visual={CLOSERS_ATIVOS} loading={loadingCorrida} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: vh(2), minHeight: 0 }}>
+          <Painel titulo="Closers" sub={`${rotuloPeriodo} · % da meta ${deQue}`}>
+            <ClosersPodio ranking={ranking} loading={loadingClosers} />
+          </Painel>
+          <Painel titulo="SDRs" sub={`${rotuloPeriodo} · realizado / meta ${deQue}`}>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: vh(1) }}>
+              {SDRS_ATIVOS.map(s => {
+                const meta = sdrs.find(m => m.nome === s.nome)
+                const real = corrida.sdrRealizado.get(s.nome)
+                return (
+                  <SdrLinha
+                    key={s.nome}
+                    nome={s.nome}
+                    foto={s.foto}
+                    iniciais={s.iniciais}
+                    cor={s.cor}
+                    sql={real?.sql ?? 0}
+                    metaSql={(meta?.metaSql ?? 0) * fatorSdr}
+                    rr={real?.rr ?? 0}
+                    metaRr={(meta?.metaReuniao ?? 0) * fatorSdr}
+                    loading={loadingSdrs || corrida.loading}
+                  />
+                )
+              })}
+            </div>
+          </Painel>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vh(2) }}>
+          <Placar titulo="Corrida de Performance · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={SDRS_ATIVOS} loading={corrida.loading} />
+          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="vendas" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
+        </div>
       </div>
     </div>
   )
@@ -167,7 +213,10 @@ export function CampanhaMetasTv() {
 
 /* ── Cabeçalho ──────────────────────────────────────────────────────────── */
 
-function Cabecalho({ volta, voltaLabel, dia, agora }: { volta: number; voltaLabel: string; dia: number; agora: Date }) {
+function Cabecalho({ volta, voltaLabel, dia, agora, modo, rodada, onModo }: {
+  volta: number; voltaLabel: string; dia: number; agora: Date
+  modo: Modo; rodada: number; onModo: (m: Modo) => void
+}) {
   const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   const restantes = Math.max(0, DIAS_MES - dia)
   return (
@@ -185,7 +234,12 @@ function Cabecalho({ volta, voltaLabel, dia, agora }: { volta: number; voltaLabe
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: vh(1.2) }}>
-        <Chip destaque>Volta {volta} de 4 · {voltaLabel.split('·')[1]?.trim()}</Chip>
+        <ModoBotao ativo={modo === 'volta'} rodada={rodada} onClick={() => onModo('volta')}>
+          Volta {volta} de 4 · {voltaLabel.split('·')[1]?.trim()}
+        </ModoBotao>
+        <ModoBotao ativo={modo === 'mes'} rodada={rodada} onClick={() => onModo('mes')}>
+          Mês de Setembro
+        </ModoBotao>
         <Chip>{restantes === 0 ? 'Bandeirada!' : `${restantes} ${restantes === 1 ? 'dia' : 'dias'} para a bandeirada`}</Chip>
         <div style={{ marginLeft: vh(1.5), textAlign: 'right' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: vh(4), fontWeight: 500, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{hora}</div>
@@ -196,23 +250,49 @@ function Cabecalho({ volta, voltaLabel, dia, agora }: { volta: number; voltaLabe
   )
 }
 
-function Chip({ children, destaque }: { children: React.ReactNode; destaque?: boolean }) {
+/** Botão de modo: o ativo fica vermelho, com uma barrinha que enche até a próxima troca. */
+function ModoBotao({ ativo, rodada, onClick, children }: {
+  ativo: boolean; rodada: number; onClick: () => void; children: React.ReactNode
+}) {
+  return (
+    <button onClick={onClick} style={{
+      position: 'relative', overflow: 'hidden', cursor: 'pointer', whiteSpace: 'nowrap',
+      padding: `${vh(1)} ${vh(2)}`, borderRadius: 999, fontSize: vh(1.9), fontWeight: 500,
+      fontFamily: 'inherit', color: ativo ? '#fff' : TEXTO_2,
+      background: ativo ? VERMELHO : 'rgba(255,255,255,0.07)',
+      border: `1px solid ${ativo ? VERMELHO : BORDA}`,
+      transition: 'background 300ms ease, color 300ms ease',
+    }}>
+      {children}
+      {ativo && (
+        <span key={rodada + String(ativo)} style={{
+          position: 'absolute', left: 0, bottom: 0, height: vh(0.45),
+          background: 'rgba(255,255,255,0.75)',
+          animation: `tvProgresso ${TROCA_MODO_MS}ms linear forwards`,
+        }} />
+      )}
+    </button>
+  )
+}
+
+function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: vh(1), whiteSpace: 'nowrap',
       padding: `${vh(1)} ${vh(2)}`, borderRadius: 999, fontSize: vh(1.9), fontWeight: 500,
-      background: destaque ? VERMELHO : 'rgba(255,255,255,0.07)',
-      border: `1px solid ${destaque ? VERMELHO : BORDA}`,
+      background: 'rgba(255,255,255,0.07)',
+      border: `1px solid ${BORDA}`,
     }}>
       {children}
     </span>
   )
 }
 
-/* ── Meta do time (mês) ─────────────────────────────────────────────────── */
+/* ── Meta do time (volta ou mês) ─────────────────────────────────────────────────── */
 
-function MetaTime({ loading, realFin, metaFin, realQtd, metaQtd, pctEsperado }: {
+function MetaTime({ loading, realFin, metaFin, realQtd, metaQtd, pctEsperado, titulo, fimLabel }: {
   loading: boolean; realFin: number; metaFin: number; realQtd: number; metaQtd: number; pctEsperado: number
+  titulo: string; fimLabel: string
 }) {
   const pctReal = metaFin > 0 ? (realFin / metaFin) * 100 : 0
   const status = pctReal < pctEsperado - 5 ? 'abaixo' : pctReal > pctEsperado + 5 ? 'acima' : 'no'
@@ -225,7 +305,7 @@ function MetaTime({ loading, realFin, metaFin, realQtd, metaQtd, pctEsperado }: 
       display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: vh(3.5),
     }}>
       <div>
-        <Rotulo>Meta do time · {MES_LABEL}</Rotulo>
+        <Rotulo>Meta do time · {titulo}</Rotulo>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: vh(1.4), marginTop: vh(0.6) }}>
           <span style={{ fontFamily: 'var(--font-display)', fontSize: vh(5.4), fontWeight: 500, lineHeight: 1, color: VERMELHO }}>
             {loading ? '—' : money(realFin)}
@@ -249,7 +329,7 @@ function MetaTime({ loading, realFin, metaFin, realQtd, metaQtd, pctEsperado }: 
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: vh(1), fontSize: vh(1.5), color: TEXTO_3 }}>
           <span>ritmo esperado hoje · {pct(pctEsperado, 0)}</span>
-          <span>bandeirada · 30 set</span>
+          <span>{fimLabel}</span>
         </div>
       </div>
 
@@ -399,8 +479,9 @@ function MiniBarra({ rotulo, valor, meta, cor, loading }: { rotulo: string; valo
 
 /* ── Placar da Corrida de Performance ───────────────────────────────────── */
 
-function Placar({ titulo, unidade, linhas, visual, loading }: {
+function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
   titulo: string
+  periodo: string
   unidade: 'RR' | 'vendas'
   linhas: LinhaTrilha[]
   visual: ReadonlyArray<{ nome: string; iniciais: string; cor: string; foto?: string }>
@@ -412,8 +493,8 @@ function Placar({ titulo, unidade, linhas, visual, loading }: {
   const max = Math.max(1, ...linhas.map(l => l.pontos))
   return (
     <section style={{ background: PAINEL, border: `1px solid ${BORDA}`, borderRadius: vh(1.6), padding: `${vh(1.5)} ${vh(2.4)}` }}>
-      <Rotulo>{titulo} · pontos da volta</Rotulo>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: vh(2.4), marginTop: vh(1.2) }}>
+      <Rotulo>{titulo} · pontos {periodo}</Rotulo>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: vh(1.6), marginTop: vh(1.2) }}>
         {ordenado.map((p, i) => {
           const l = porNome.get(p.nome)
           const pontos = l?.pontos ?? 0
@@ -434,7 +515,7 @@ function Placar({ titulo, unidade, linhas, visual, loading }: {
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: vh(3), fontWeight: 500, lineHeight: 1 }}>{loading ? '—' : pontosFmt(pontos)}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: vh(2.7), fontWeight: 500, lineHeight: 1 }}>{loading ? '—' : pontosFmt(pontos)}</div>
                 <div style={{ fontSize: vh(1.2), color: TEXTO_3, marginTop: vh(0.3) }}>pts</div>
               </div>
             </div>

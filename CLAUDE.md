@@ -555,6 +555,26 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-21 (3) — Modo TV alterna sozinho entre Volta e Mês
+
+Ideia do chefe do Junior. Ao lado do botão "Volta 3 de 4 · 15–21 set" entrou
+**"Mês de Setembro"**, e a tela inteira alterna entre os dois a cada **30s**
+(`TROCA_MODO_MS`). O botão ativo fica vermelho, com uma barrinha que enche até
+a próxima troca. Clicar num botão troca na hora e reinicia o cronômetro.
+
+- **Volta:** meta do time, closers, SDRs e pontos da Corrida só da volta
+  atual. Metas escaladas (`fatorMetaCloser`/`fatorMetaSdr`) e ritmo esperado
+  da volta (`pctDecorridoJanela('semanal', …)`, rodapé "fim da volta · 21 set")
+- **Mês:** tudo acumulado no mês, com metas cheias e ritmo do mês
+
+Os dois recortes ficam carregados ao mesmo tempo (`useMetasClosers` e
+`useCorridaPerformance` chamados com e sem `janelas`), então a troca não espera
+consulta. O conteúdo entra com um fade curto (`key={modo}`). Antes, a "Meta do
+time" era sempre do mês. Agora ela segue o modo.
+
+Verificado: build + testes em worktree, e visto renderizado com dado real em
+1920×1080, incluindo a troca automática depois de 30s e o clique manual.
+
 ### 2026-09-21 (2) — Campanha de Metas ganha Modo TV (`/gp-setembro/tv`)
 
 Junior quer a campanha na TV do time, mas a página normal é longa e feita pra

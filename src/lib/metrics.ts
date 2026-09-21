@@ -24,6 +24,7 @@
  * docs/superpowers/specs/2026-08-14-funil-vendas-supabase-design.md
  */
 
+import { normalizeMarcaRaw } from '@/constants/brands'
 import { toLocalDate, toLocalYearMonth } from '@/lib/dateUtils'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
@@ -398,6 +399,13 @@ export interface FunnelEventRow {
   nome_funil?: string | null
   ciclo?: number | null
   /**
+   * Marca do DEAL (deal_snapshot, com fallback do funil Odonto Legacy) — não a
+   * marca do evento, que não é confiável. Só serve para a regra de funil
+   * obrigatório de "Reunião Agendada SQL"; o recorte por marca continua vindo
+   * de `vw_funil_vendas` (idsEscopo).
+   */
+  marca_deal?: string | null
+  /**
    * Primeira passagem do deal pela etapa no mês, segundo o banco.
    *
    * NÃO usar para deduplicar: a partição é (deal, etapa_canonica, mês), sem
@@ -415,19 +423,32 @@ export interface FunnelEventRow {
  * agenda, o negócio migra para o Closer e a MESMA reunião gera dois eventos —
  * o que inflava o SQL de 71 para 144. Regra do negócio: vale a etapa do Closer;
  * duas reuniões só quando o deal reentra nela.
+ *
+ * Exceção (Junior, 21/09/2026): **Odonto Legacy** agenda no próprio funil
+ * (68b84341646c55001ed64e4f, que já se chamou "Odonto Scale"). Para deal
+ * dessa marca, conta a "Reunião Agendada" de lá — e a do Closer NÃO conta
+ * (no histórico, as passagens de deal Legacy pelo Closer são ida-e-volta
+ * de minutos, não uma segunda reunião).
  */
-const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, readonly string[]>> = {
-  'Reunião Agendada SQL': [
-    '69b1badfe1def700137f1b89', // Closer
-    // Scale Partner (ex-"Eventos"): o SDR agenda e o deal fica nesse funil,
-    // sem handoff pro Closer — então não há evento duplicado a descartar.
-    '6a99b99218a2bb002df8ec61',
-  ],
+const ETAPA_SQL_CLOSER = '69b1badfe1def700137f1b89'
+// Scale Partner (ex-"Eventos"): o SDR agenda e o deal fica nesse funil, sem
+// handoff pro Closer — então não há evento duplicado a descartar.
+const ETAPA_SQL_SCALE_PARTNER = '6a99b99218a2bb002df8ec61'
+const ETAPA_SQL_ODONTO_LEGACY = '68b84341646c55001ed64e53'
+
+function isOdontoLegacy(marca: string | null | undefined): boolean {
+  return normalizeMarcaRaw(marca) === 'Odonto Scale'
 }
 
-/** A etapa não tem trava de funil, ou o id é um dos permitidos. */
-function etapaPermitida(stage: StageKey, idEtapa: string | null | undefined): boolean {
-  const ids = STAGE_ID_OBRIGATORIO[stage]
+/** Ids de etapa aceitos para contar `stage`, dada a marca do deal. `undefined` = sem trava. */
+function idsEtapaObrigatoria(stage: StageKey | null, marca: string | null | undefined): readonly string[] | undefined {
+  if (stage !== 'Reunião Agendada SQL') return undefined
+  return isOdontoLegacy(marca) ? [ETAPA_SQL_ODONTO_LEGACY] : [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER]
+}
+
+/** A etapa não tem trava de funil, ou o id é um dos permitidos para a marca. */
+function etapaPermitida(stage: StageKey | null, idEtapa: string | null | undefined, marca: string | null | undefined): boolean {
+  const ids = idsEtapaObrigatoria(stage, marca)
   return !ids || (!!idEtapa && ids.includes(idEtapa))
 }
 
@@ -435,19 +456,18 @@ function etapaPermitida(stage: StageKey, idEtapa: string | null | undefined): bo
  * Etapa canônica CORRENTE de um deal, para o modo "Funil Atual".
  *
  * Vai além de `resolveStage(etapa_funil)`: quando a etapa tem regra de funil
- * obrigatório (hoje só "Reunião Agendada SQL", que vale no funil do Closer e no Scale
- * Partner — a mesma etapa existe no SDR e o handoff duplicaria a contagem),
- * o deal só conta nela se `id_etapa_atual` (etapa corrente no RD) for uma
- * das permitidas. Um deal parado na "Reunião Agendada SQL" do SDR resolve para
- * `null` e não entra nessa etapa do funil macro — mesma regra que
- * `eventsInStage` aplica no histórico de eventos.
+ * obrigatório ("Reunião Agendada SQL" — Closer ou Scale Partner; no Odonto
+ * Legacy, o próprio funil), o deal só conta nela se `id_etapa_atual` (etapa
+ * corrente no RD) for uma das permitidas para a marca dele. Um deal parado na
+ * "Reunião Agendada SQL" do SDR resolve para `null` e não entra nessa etapa
+ * do funil macro — mesma regra que `eventsInStage` aplica no histórico.
  */
 export function currentStage(
-  row: Pick<FunnelRow, 'etapa_funil' | 'id_etapa_atual'>,
+  row: Pick<FunnelRow, 'etapa_funil' | 'id_etapa_atual'> & Partial<Pick<FunnelRow, 'marca'>>,
 ): StageKey | null {
   const stage = resolveStage(row.etapa_funil)
   if (!stage) return null
-  return etapaPermitida(stage, row.id_etapa_atual) ? stage : null
+  return etapaPermitida(stage, row.id_etapa_atual, row.marca) ? stage : null
 }
 
 export interface EventCountOptions {
@@ -487,7 +507,7 @@ export function eventsInStage(
 
   const elegiveis = events.filter(e => {
     if (resolveStage(e.etapa_canonica) !== alvo) return false
-    if (alvo && !etapaPermitida(alvo, e.id_etapa)) return false
+    if (!etapaPermitida(alvo, e.id_etapa, e.marca_deal)) return false
     if (cohort) {
       if (!cohort.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))) return false
     } else if (!isInWindow(e.dia, win)) return false

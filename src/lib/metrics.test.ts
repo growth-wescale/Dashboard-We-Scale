@@ -11,6 +11,7 @@ import {
   currentStage,
   dealKey,
   dealsInStage,
+  eventsInStage,
   groupRepeatedDeals,
   isInWindow,
   mqlWord,
@@ -182,10 +183,17 @@ describe('currentStage', () => {
     expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89' })).toBe('Reunião Agendada SQL')
     // funil do SDR — mesmo nome de etapa, id diferente
     expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69380917e00ed10014daaa68' })).toBeNull()
-    // alias "Reunião Agendada" (Odonto Scale) também não conta
-    expect(currentStage({ etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53' })).toBeNull()
+    // alias "Reunião Agendada" do funil Odonto Legacy não conta para outras marcas
+    expect(currentStage({ etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53', marca: 'Inpot' })).toBeNull()
     // sem id da etapa corrente não dá pra afirmar que é o Closer
     expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: null })).toBeNull()
+  })
+
+  it('Odonto Legacy: SQL é a "Reunião Agendada" do próprio funil, nunca a do Closer', () => {
+    for (const marca of ['Odonto Legacy', 'Odonto Scale']) {
+      expect(currentStage({ etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53', marca })).toBe('Reunião Agendada SQL')
+      expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89', marca })).toBeNull()
+    }
   })
 
   it('"Reunião Agendada SQL" também resolve no funil Scale Partner (não há handoff pro Closer)', () => {
@@ -402,6 +410,20 @@ describe('Reunião Agendada SQL — só a etapa do Closer', () => {
     expect(countStageEvents(rnDoSdr, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'unique' }))).toBe(1)
   })
 
+  // Exceção do Junior (21/09): Odonto Legacy agenda no próprio funil. Conta a
+  // "Reunião Agendada" dele e ignora a do Closer (deal que passou por engano).
+  it('Odonto Legacy conta a etapa do próprio funil, não a do Closer', () => {
+    const ETAPA_LEGACY = '68b84341646c55001ed64e53'
+    const legacy = [
+      evSql('Odonto Legacy', ETAPA_LEGACY, { id_deal: 'L1', marca_deal: 'Odonto Legacy' }),
+      evSql('Closer', ETAPA_CLOSER, { id_deal: 'L1', marca_deal: 'Odonto Legacy' }),      // não conta
+      evSql('Odonto Scale', ETAPA_LEGACY, { id_deal: 'L2', marca_deal: 'Odonto Scale' }), // nome antigo do funil
+      evSql('Odonto Legacy', ETAPA_LEGACY, { id_deal: 'X', marca_deal: 'Lisô Laser' }),  // outra marca: não conta
+    ]
+    const out = eventsInStage(legacy, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'passages' }))
+    expect(out.map(e => `${e.id_deal}:${e.id_etapa}`)).toEqual([`L1:${ETAPA_LEGACY}`, `L2:${ETAPA_LEGACY}`])
+  })
+
   it('conta a etapa do funil Scale Partner, que não passa pelo Closer', () => {
     const sp = [...handoff, evSql('Scale Partner', '6a99b99218a2bb002df8ec61', { id_deal: 'd2' })]
     expect(countStageEvents(sp, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'passages' }))).toBe(2)
@@ -592,10 +614,11 @@ describe('dealsInStage', () => {
     const scoped = [
       row({ id_lead: 'closer', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89' }),
       row({ id_lead: 'sdr', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69380917e00ed10014daaa68' }),
-      row({ id_lead: 'odonto', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53' }),
+      row({ id_lead: 'odonto', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53', marca: 'Inpot' }),
+      row({ id_lead: 'legacy', eh_ciclo_atual: true, status_atual: 'Em andamento', etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53', marca: 'Odonto Scale' }),
     ]
     const out = dealsInStage(scoped, [], 'Reunião Agendada SQL', AGOSTO, modes(), 'atual')
-    expect(out.map(d => d.row.id_lead)).toEqual(['closer'])
+    expect(out.map(d => d.row.id_lead)).toEqual(['closer', 'legacy'])
   })
 
   it('modo Performance cruza o evento de volta com a linha completa do deal', () => {

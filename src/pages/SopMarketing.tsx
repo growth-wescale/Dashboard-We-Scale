@@ -1179,8 +1179,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
   interface KpiCard {
     label: string; value: string
-    semAnt: { txt: string; col: string }
-    mtdAnt: { txt: string; col: string }
+    semAnt?: { txt: string; col: string }
+    mtdAnt?: { txt: string; col: string }
     /** Métrica secundária opcional (ex.: Custo/membro no card CP-MQL do Odonto Legacy). */
     extra?: { label: string; value: string; subtext?: string }
   }
@@ -1286,32 +1286,24 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     : isWeScale
       ? [
           {
-            label: 'SP · INVEST.',
-            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.invest),
-            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
-            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
+            label: 'SP · RECEITA',
+            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.vendas.receita),
           },
           {
             label: 'SP · LEADS',
             value: String(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.leads),
-            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
-            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
             extra: {
-              label: 'CUSTO/LEAD',
-              value: fmtBRL(Math.round(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.invest / WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.leads)),
+              label: 'VENDAS FECHADAS',
+              value: String(WE_SCALE_SOP_ATUAL.mtd.vendas.fechadas),
             },
           },
           {
             label: 'BC · INVEST.',
             value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest),
-            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
-            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
           },
           {
             label: 'BC · LEADS',
             value: String(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads),
-            semAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
-            mtdAnt: { txt: '—', col: 'var(--ws-text-secondary)' },
             extra: {
               label: 'CUSTO/LEAD',
               value: fmtBRL(Math.round(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest / WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads)),
@@ -1486,14 +1478,20 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1, marginBottom: 6 }}>
                 {card.value}
               </div>
+              {(card.semAnt || card.mtdAnt) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {card.semAnt && (
                 <div style={{ fontSize: 12, color: card.semAnt.col, lineHeight: 1.3 }}>
                   {card.semAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>sem ant</span>
                 </div>
+                )}
+                {card.mtdAnt && (
                 <div style={{ fontSize: 12, color: card.mtdAnt.col, lineHeight: 1.3 }}>
                   {card.mtdAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>vs {compareRange.label}</span>
                 </div>
+                )}
               </div>
+              )}
               {card.extra && (
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 3 }}>
@@ -1543,7 +1541,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
              tabela do funil abaixo. Card fica scrollável se os dois não couberem
              de uma vez, e o chart tem piso de altura pra não achatar. */}
         {!dates.isClosed && (
-        <div style={isOdontoLegacy ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
+        <div style={(isOdontoLegacy || isWeScale) ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
           <div style={{ marginBottom: 6 }}>
             <div style={colTitle(acc)}>
               {isOdontoLegacy ? 'Comparativo MTD · cumulativo' : 'MQL Semanal'}
@@ -1596,6 +1594,45 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               </div>
             </div>
           )}
+          {isWeScale && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span>Funil Scale Partner — set MTD</span>
+                <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
+                  snapshot {WE_SCALE_SOP_ATUAL.ate}
+                </span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase' }}>
+                    <th style={{ textAlign: 'left', padding: '0 0 4px', borderBottom: '1px solid var(--ws-border)' }}>Etapa</th>
+                    <th style={{ textAlign: 'right', padding: '0 0 4px', borderBottom: '1px solid var(--ws-border)' }}>Ativos</th>
+                    <th style={{ textAlign: 'right', padding: '0 0 4px 8px', borderBottom: '1px solid var(--ws-border)' }}>Perdidos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    { label: 'Novo MQL',             ativos: 0,  perdidos: 12 },
+                    { label: 'Tentando Contato',     ativos: 22, perdidos: 9  },
+                    { label: 'Contato Efetivo',      ativos: 3,  perdidos: 1  },
+                    { label: 'Interesse Reunião',    ativos: 2,  perdidos: 0  },
+                    { label: 'Reunião Agendada SQL', ativos: 3,  perdidos: 0  },
+                  ] as const).map(row => (
+                    <tr key={row.label} style={{ borderTop: '1px solid var(--ws-border)' }}>
+                      <td style={{ padding: '5px 0', color: 'var(--ws-text-primary)' }}>{row.label}</td>
+                      <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: acc }}>{row.ativos > 0 ? row.ativos : '—'}</td>
+                      <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>{row.perdidos > 0 ? `-${row.perdidos}` : '—'}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid var(--ws-border)' }}>
+                    <td style={{ padding: '5px 0', fontWeight: 700, color: 'var(--ws-text-primary)' }}>Total</td>
+                    <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: acc }}>30</td>
+                    <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--ws-text-secondary)' }}>-22</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
           {isOdontoLegacy && (
             // Snapshot manual do funil (número de deals em cada etapa direto do RD).
             // Complementa o chart de MQL/Membros acima — junta captação com o que
@@ -1637,23 +1674,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </div>
         )}
 
-        {/* Col 2: para We Scale mostra Vendas Scale Partner; para outras marcas mostra MTD comparativo */}
-        {isWeScale ? (
-          <div style={cardStyle}>
-            <div style={colTitle(acc)}>Vendas Scale Partner — {dates.mtdLabel} MTD</div>
-            <div style={{ display: 'flex', gap: 28, marginTop: 14 }}>
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Fechadas</div>
-                <div style={{ fontSize: 44, fontWeight: 800, color: acc, lineHeight: 1 }}>{WE_SCALE_SOP_ATUAL.mtd.vendas.fechadas}</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>Mapeadas</div>
-                <div style={{ fontSize: 44, fontWeight: 800, color: 'var(--ws-text-secondary)', lineHeight: 1 }}>{WE_SCALE_SOP_ATUAL.mtd.vendas.mapeadas}</div>
-                <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 3 }}>aguardando resposta</div>
-              </div>
-            </div>
-          </div>
-        ) : (
+        {/* Col 2: MTD comparativo — oculto para We Scale (usa layout 2 colunas) */}
+        {!isWeScale && (
         <div style={{ ...cardStyle, overflowY: 'auto' }}>
           <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={colTitle(acc)}>{compareRange.label} MTD vs {dates.mtdLabel} MTD</div>
@@ -1827,8 +1849,6 @@ const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
   { label: 'Scale Partner Odonto', adsetIncludes: ['ODONTOLOGIA'] },
   // LLK é o adset "genérico" do Scale Partner (não vinculado a nicho).
   { label: 'Scale Partner (geral)', adsetIncludes: ['LLK'] },
-  // Lisô Laser tem evento próprio — adset ainda não criado; fica em 0 até existir.
-  { label: 'Lisô Laser',           adsetIncludes: ['LISO_LASER_EVT', 'LISOLASER_EVT'] },
 ]
 
 function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads }: { leads: Lead[]; accent: string; monthLabel: string; beautyConnectionLeads: number }) {
@@ -1906,7 +1926,7 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
         ))}
       </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Beauty Connection = evento físico Lisô Laser (leads fora do banco We Scale).
+        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Beauty Connection = evento físico (leads fora do banco We Scale).
       </div>
     </div>
   )

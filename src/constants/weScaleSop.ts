@@ -15,7 +15,7 @@ export interface WeScaleSop {
     cpMql: number
     scaleParceiro: { invest: number; leads: number }
     beautyConnection: { invest: number; leads: number }
-    vendas: { fechadas: number; mapeadas: number }
+    vendas: { fechadas: number; mapeadas: number; receita: number }
   }
   /** Semanas de setembro já encerradas, em ordem cronológica. */
   semanas: WeScaleSopSemana[]
@@ -31,7 +31,7 @@ export const WE_SCALE_SOP_ATUAL: WeScaleSop = {
     cpMql: 272,
     scaleParceiro: { invest: 7357, leads: 27 },
     beautyConnection: { invest: 1776, leads: 10 },
-    vendas: { fechadas: 3, mapeadas: 2 },
+    vendas: { fechadas: 3, mapeadas: 2, receita: 8494 },
   },
   semanas: [
     { label: 'S1 Set (01-07)', mql: 12 },

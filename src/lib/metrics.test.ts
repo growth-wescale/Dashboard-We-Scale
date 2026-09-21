@@ -188,6 +188,10 @@ describe('currentStage', () => {
     expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: null })).toBeNull()
   })
 
+  it('"Reunião Agendada SQL" também resolve no funil Scale Partner (não há handoff pro Closer)', () => {
+    expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '6a99b99218a2bb002df8ec61' })).toBe('Reunião Agendada SQL')
+  })
+
   it('devolve null para etapa desconhecida', () => {
     expect(currentStage({ etapa_funil: 'Etapa Que Não Existe', id_etapa_atual: 'x' })).toBeNull()
     expect(currentStage({ etapa_funil: null, id_etapa_atual: 'x' })).toBeNull()
@@ -396,6 +400,11 @@ describe('Reunião Agendada SQL — só a etapa do Closer', () => {
       evSql('Closer', ETAPA_CLOSER, { rn_deal_etapa_mes: 2 }),
     ]
     expect(countStageEvents(rnDoSdr, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'unique' }))).toBe(1)
+  })
+
+  it('conta a etapa do funil Scale Partner, que não passa pelo Closer', () => {
+    const sp = [...handoff, evSql('Scale Partner', '6a99b99218a2bb002df8ec61', { id_deal: 'd2' })]
+    expect(countStageEvents(sp, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'passages' }))).toBe(2)
   })
 })
 

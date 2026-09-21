@@ -416,18 +416,29 @@ export interface FunnelEventRow {
  * o que inflava o SQL de 71 para 144. Regra do negócio: vale a etapa do Closer;
  * duas reuniões só quando o deal reentra nela.
  */
-const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, string>> = {
-  'Reunião Agendada SQL': '69b1badfe1def700137f1b89', // Closer
+const STAGE_ID_OBRIGATORIO: Partial<Record<StageKey, readonly string[]>> = {
+  'Reunião Agendada SQL': [
+    '69b1badfe1def700137f1b89', // Closer
+    // Scale Partner (ex-"Eventos"): o SDR agenda e o deal fica nesse funil,
+    // sem handoff pro Closer — então não há evento duplicado a descartar.
+    '6a99b99218a2bb002df8ec61',
+  ],
+}
+
+/** A etapa não tem trava de funil, ou o id é um dos permitidos. */
+function etapaPermitida(stage: StageKey, idEtapa: string | null | undefined): boolean {
+  const ids = STAGE_ID_OBRIGATORIO[stage]
+  return !ids || (!!idEtapa && ids.includes(idEtapa))
 }
 
 /**
  * Etapa canônica CORRENTE de um deal, para o modo "Funil Atual".
  *
  * Vai além de `resolveStage(etapa_funil)`: quando a etapa tem regra de funil
- * obrigatório (hoje só "Reunião Agendada SQL", que vale apenas no funil do
- * Closer — a mesma etapa existe no SDR e o handoff duplicaria a contagem),
- * o deal só conta nela se `id_etapa_atual` (etapa corrente no RD) for a do
- * Closer. Um deal parado na "Reunião Agendada SQL" do SDR resolve para
+ * obrigatório (hoje só "Reunião Agendada SQL", que vale no funil do Closer e no Scale
+ * Partner — a mesma etapa existe no SDR e o handoff duplicaria a contagem),
+ * o deal só conta nela se `id_etapa_atual` (etapa corrente no RD) for uma
+ * das permitidas. Um deal parado na "Reunião Agendada SQL" do SDR resolve para
  * `null` e não entra nessa etapa do funil macro — mesma regra que
  * `eventsInStage` aplica no histórico de eventos.
  */
@@ -436,9 +447,7 @@ export function currentStage(
 ): StageKey | null {
   const stage = resolveStage(row.etapa_funil)
   if (!stage) return null
-  const idObrigatorio = STAGE_ID_OBRIGATORIO[stage]
-  if (idObrigatorio && row.id_etapa_atual !== idObrigatorio) return null
-  return stage
+  return etapaPermitida(stage, row.id_etapa_atual) ? stage : null
 }
 
 export interface EventCountOptions {
@@ -475,11 +484,10 @@ export function eventsInStage(
     typeof optsOrExtra === 'function' ? { extra: optsOrExtra } : (optsOrExtra ?? {})
   const cohort = modes.funnelView === 'cohort' ? (opts.cohortIds ?? null) : null
   const alvo = resolveStage(stageLabel)
-  const idObrigatorio = alvo ? STAGE_ID_OBRIGATORIO[alvo] : undefined
 
   const elegiveis = events.filter(e => {
     if (resolveStage(e.etapa_canonica) !== alvo) return false
-    if (idObrigatorio && e.id_etapa !== idObrigatorio) return false
+    if (alvo && !etapaPermitida(alvo, e.id_etapa)) return false
     if (cohort) {
       if (!cohort.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))) return false
     } else if (!isInWindow(e.dia, win)) return false

@@ -42,6 +42,13 @@ describe('normalizeMarcaRaw', () => {
     expect(normalizeMarcaRaw(undefined)).toBe(undefined)
   })
 
+  it("'Scale Partner' (valor do RD desde 09/2026) normaliza para 'We Scale' e aparece como 'Scale Partner'", () => {
+    expect(normalizeMarcaRaw('Scale Partner')).toBe('We Scale')
+    expect(findBrandByMarca('Scale Partner')?.key).toBe('we-scale')
+    expect(marcaLabel('Scale Partner')).toBe('Scale Partner')
+    expect(marcaLabel('We Scale')).toBe('Scale Partner')
+  })
+
   it("findBrandByMarca reconhece 'Odonto Legacy' como o mesmo BrandDef de 'Odonto Scale'", () => {
     expect(findBrandByMarca('Odonto Legacy')).toBe(findBrandByMarca('Odonto Scale'))
     expect(findBrandByMarca('Odonto Legacy')?.key).toBe('odonto-scale')

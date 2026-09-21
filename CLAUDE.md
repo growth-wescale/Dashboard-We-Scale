@@ -167,7 +167,7 @@ nome. Deal parado na "Reunião Agendada SQL" do SDR some do balde no Atual.
 de marca Odonto Legacy, o SQL é a "Reunião Agendada" do funil Odonto Legacy
 (`68b84341646c55001ed64e53`, funil `68b84341646c55001ed64e4f`, que já se
 chamou "Odonto Scale") — e a do Closer **não** conta para ele. A regra é por
-marca do DEAL: `idEtapaObrigatoria(stage, marca)` em `metrics.ts`; nos
+marca do DEAL: `idsEtapaObrigatoria(stage, marca)` em `metrics.ts`; nos
 eventos usa `vw_funil_etapas_v2.marca_deal` (de `deal_snapshot`), no Atual
 usa `FunnelRow.marca`. Nunca `vw_funil_etapas_v2.marca` (retrato do evento).
 
@@ -209,6 +209,14 @@ que acumula os dois papéis) não é bloqueado de propósito — só o `'SDR'` p
 (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil) onde pode
 ser fato histórico real (o Closer atual trabalhou como SDR antes da reforma de
 funis), não bug — decisão de mexer aí fica pro Junior, ver pendência.
+
+**SDR e Closer podem ser a mesma pessoa, se o cargo dela for SDR puro.** A
+fonte `posse` de `nome_sdr` (dono no fim da fase SDR) tinha uma trava: se o
+nome coincidisse com o `nome_closer` eleito, era descartado. Desde 21/09 essa
+trava não vale quando o dono tem `nome_cargo_foto.cargo = 'SDR'` — é SDR de
+fato, mesmo que também apareça como Closer. Caso de origem: marca sem Closer
+(Instituto do Autismo), onde a SDR agenda e move o deal pro funil Closer sem
+trocar o responsável.
 
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
@@ -498,6 +506,17 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 - [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
 
 - [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
+- [ ] **Views de Expansão comparam funil por NOME, não por ID** — renomear
+  SDR, Closer ou Prospecção Ativa no RD quebra Visão Macro/Performance/Perda
+  e a classificação Inbound × Prospecção Ativa (allowlist de `vw_funil_vendas`,
+  `vw_deal_origem_comercial`, camada SDR/Closer em `vw_deal_ciclo`). Trocar os
+  literais por `id_funil` (ver entrada de 21/09)
+- [ ] **`rd_funis_etapas` desatualizada = eventos sem nome** — `registrar_stage_history`
+  resolve nome de etapa/funil por essa tabela; etapa ausente vira evento com
+  `nome_etapa`/`id_funil` nulos, invisível pra todas as views. Ainda sem nome:
+  `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
+  (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
+  etapas nessa tabela
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
@@ -515,7 +534,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-09-21 (2) — Odonto Legacy: Funil Atual bate com o RD e SQL conta no próprio funil
+### 2026-09-21 (4) — Odonto Legacy: Funil Atual bate com o RD e SQL conta no próprio funil
 
 Junior comparou o Funil Atual do Odonto Legacy com o RD (Em andamento): RD
 21 Novos Leads / 243 Tentando Contato / 9 Contato Efetivo / 4 Reunião
@@ -534,8 +553,8 @@ marca.
 (e só pra ela) o agendamento conta na "Reunião Agendada" do próprio funil,
 não na "Reunião Agendada SQL" do Closer. A etapa já era canonizada como
 "Reunião Agendada SQL" (60 deals no histórico), mas a trava
-`STAGE_ID_OBRIGATORIO` só aceitava o id do Closer. Virou
-`idEtapaObrigatoria(stage, marca)`: marca Odonto Legacy → etapa do funil
+`STAGE_ID_OBRIGATORIO` não aceitava o id dela. Virou
+`idsEtapaObrigatoria(stage, marca)`: marca Odonto Legacy → etapa do funil
 Legacy; demais → Closer. A do Closer passa a NÃO contar pra deal Legacy — os
 6 deals Legacy que passaram por ela foram ida-e-volta de minutos, mesmo
 dia. Como os eventos chegam ao front recortados pela janela, a marca do deal
@@ -546,11 +565,92 @@ Performance set/26 SQL Odonto Legacy 0 → **5**.
 
 **Não é bug do dash (dado do RD):** Tentando Contato 242 × 243 — o deal
 `6aa020f3f24eaa0001d227ce` está no funil Odonto Legacy com Marca = **Lisô
-Laser** no RD, então aparece na Lisô. **Achado, não alterado:** Scale Partner
-tem 5 agendamentos (set/26) na "Reunião Agendada SQL" do próprio funil
-(`6a99b99218a2bb002df8ec61`) que não contam em lugar nenhum; Prospecção
-Ativa idem (7 desde jun) — mesma situação do Legacy, decisão pendente do
-Junior.
+Laser** no RD, então aparece na Lisô. Combinado com a regra do Scale
+Partner (entrada (2)): Odonto Legacy → só a etapa do próprio funil; demais →
+Closer ou Scale Partner (`idsEtapaObrigatoria`). **Achado, não alterado:**
+Prospecção Ativa tem 7 "Reunião Agendada SQL" no próprio funil desde jun que
+não contam — mesma situação, decisão pendente do Junior.
+
+### 2026-09-21 (3) — SDR some quando a mesma pessoa também é Closer (Instituto do Autismo)
+
+Junior reportou: no IDA a Sarah agendou 2 reuniões (André Luz, José Batista
+de Almeida), mas o popup de SQL mostrava SDR "Sem informação" e Closer =
+Sarah. O IDA não tem Closer ainda — a Sarah move o deal para "Reunião
+Agendada SQL" do funil Closer sem trocar o responsável, e o fundador da marca
+conduz a reunião.
+
+**Causa.** Em `vw_deal_ciclo`, as 4 fontes de `nome_sdr` falhavam em
+sequência: `evento` (a atribuição dos eventos é `backfill_dono_atual`, fora
+do filtro `evento`/`legado_sdr`); `posse` achava a Sarah, mas era
+**descartada** pela trava `sdr_po IS DISTINCT FROM closer_ciclo`, porque o
+Closer eleito (`campo_rd`, "Closer responsável" do RD) também é a Sarah;
+`campo_rd` do SDR vazio.
+
+**Fix** (`CREATE OR REPLACE VIEW vw_deal_ciclo` + `REFRESH` da matview):
+`sdr_posse` passou a trazer o cargo do dono (`nome_cargo_foto`), e a trava só
+descarta o nome se o cargo **não** for `'SDR'` puro. É o espelho da trava por
+cargo de 04/09 no lado do Closer. Simulado na base inteira antes de aplicar:
+9.888 ciclos, **só 2 mudam** (exatamente os 2 do IDA, nulo → Sarah Padilha),
+0 SDRs preenchidos trocados, 0 Closers alterados. `vw_funil_vendas` pós-fix:
+7.500 linhas, 54 ganhos, R$ 2.503.179,98.
+
+### 2026-09-21 (2) — Marca Scale Partner nas abas de Vendas
+
+Junior pediu a marca Scale Partner (eventos) no filtro de Marca das abas de
+Vendas. Ela não aparecia por três motivos, todos corrigidos:
+
+**1. Eventos sem nome.** `registrar_stage_history` resolve nome de
+etapa/funil em `rd_funis_etapas`, que nunca recebeu as etapas do funil
+`6a99b60d62f84e00234789da`. 142 eventos desse funil (origens `api_sync` e
+`api_espelho_edge`) tinham só `id_etapa` — sem `nome_etapa`, sem
+`etapa_canonica`, e o deal sumia de `vw_deal_ciclo` inteira. Cadastradas as
+7 etapas em `rd_funis_etapas` (Novo MQL → No Show, `pipeline_nome` =
+'Scale Partner' — aparece também no painel de cadência) e preenchidos os
+eventos pelo ID. Junto: a etapa `…89dd` (hoje "Tentando Contato") se chamava
+"Contato efetivo"; os eventos e o snapshot com o nome antigo foram trocados
+pelo nome atual (decisão do Junior). Backup de tudo em
+`_backup_scale_partner_20260921` (203 eventos + 10 snapshots).
+
+**2. Funil fora do allowlist.** `vw_funil_vendas` ganhou
+`OR d.id_funil = '6a99b60d62f84e00234789da'` — **por ID**, não por nome.
+Checksum: as 7.440 linhas anteriores idênticas, 54 ganhos e
+R$ 2.503.179,98 inalterados; +60 linhas do funil, todas Inbound.
+
+**3. Marca com outro nome.** O RD grava `'Scale Partner'`; o dashboard
+conhecia `'We Scale'` (valor dos dados do Marketing). `MARCA_ALIASES`
+ganhou `'Scale Partner' → 'We Scale'` e o rótulo virou "Scale Partner" em
+todo o dashboard (`BRAND_LIST`, menu lateral, SOP). Chave `we-scale` e
+marca canônica mantidas.
+
+**SQL no funil Scale Partner conta.** Lá o SDR agenda e o deal fica no
+funil, sem handoff pro Closer (confirmado pelo Junior) — então
+`STAGE_ID_OBRIGATORIO` virou lista: Closer + `6a99b99218a2bb002df8ec61`.
+Vale pros modos de evento e pro Atual/Aging (`currentStage`).
+
+**Pendente, com o Junior:** 15 deals do funil com Marca ≠ Scale Partner no
+RD (Lisô 9, Oral Unic 2, Eletrovias, Inpot, Odonto Legacy, We Scale) —
+decisão: passam a Scale Partner. Troca no RD via
+`docs/scripts/marca_scale_partner_20260921.py` (pede o token, não grava);
+o espelho traz em ~15 min. Até lá eles contam nas marcas antigas.
+
+Verificado: `npm run build` + `npx vitest run` (460 testes, 3 novos) em
+worktree fora do OneDrive.
+
+### 2026-09-21 — Funil "Eventos" renomeado para "Scale Partner" no RD
+
+Funil `6a99b60d62f84e00234789da`. Levantamento de efeitos colaterais antes da
+troca: **nada quebra**. Cadências (condições, `cadencia_etapas`, roteador de
+webhook) e a detecção de `mudanca_funil` em `processar_deal_evento` usam
+**ID**; o único workflow do TI que compara nome exige `'SDR'`. O RD já emitia
+"Scale Partner" desde 21/09 14:09 BRT.
+
+Aplicado no Supabase de Expansão (backup em `_backup_rename_eventos_20260921`):
+nomes das cadências 8 e 12, rótulos de 3 condições (25, 26, 33) e 3 etapas
+(20–22), os 8 assuntos de tarefa da cadência 12 (`cadencia_passos` 124–131,
+"Eventos - Ligacao N" → "Scale Partner - Ligacao N" — seguro: a reconciliação
+casa tarefa só por "ligacao/whatsapp N" via `extractKey`) e `nome_funil` dos
+48 deals ainda com o nome antigo em `deal_snapshot`. `deal_eventos` mantém
+"Eventos" no histórico — agrupar por `id_funil`, nunca por `nome_funil`.
 
 ### 2026-09-17 (2) — Aging vira a safra do período; Atual continua o estoque
 

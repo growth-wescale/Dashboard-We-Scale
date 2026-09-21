@@ -40,8 +40,10 @@ export const BRAND_LIST: BrandDef[] = [
   { key: 'liso-laser',   label: 'Lisô Laser',   marca: 'Lisô Laser',   accent: '#FF6643', dark: '#6E1D61' },
   { key: 'b2case',       label: 'B2Case',       marca: 'B2Case',       accent: '#0169F2', dark: '#040492' },
   { key: 'viva',         label: 'Viva',         marca: 'Viva',         accent: '#FF0069', dark: '#141414' },
-  // Antes 'Scale Partners' (renomeado 08/09/2026). Foco: eventos presenciais · funil "Eventos" no CRM.
-  { key: 'we-scale',     label: 'We Scale',     marca: 'We Scale',     accent: '#7E0E70', dark: '#540247' },
+  // Rótulo de UI é "Scale Partner" (21/09/2026); a marca canônica segue 'We Scale' porque é o valor
+  // gravado nos dados do Marketing. No RD a marca é 'Scale Partner' — ver MARCA_ALIASES.
+  // Funil "Scale Partner" (ex-"Eventos") no CRM, id 6a99b60d62f84e00234789da.
+  { key: 'we-scale',     label: 'Scale Partner', marca: 'We Scale',    accent: '#7E0E70', dark: '#540247' },
   // Marca nova (1os deals em 09/09/2026, funil SDR). Só Vendas: em 15/09/2026 o
   // Supabase de Marketing não tinha nenhum lead nem mídia dela — ver `vendasOnly`.
   { key: 'instituto-autismo', label: 'Instituto do Autismo', marca: 'Instituto do Autismo', accent: '#E0A82E', dark: '#8A5E00', vendasOnly: true },
@@ -71,6 +73,9 @@ export function findBrand(key: string | undefined): BrandDef | undefined {
  */
 const MARCA_ALIASES: Record<string, string> = {
   'Odonto Legacy': 'Odonto Scale',
+  // 'Scale Partner': valor atual do campo "Marca" no RD para a marca que o
+  // dashboard conhece como 'We Scale' (rótulo "Scale Partner" desde 21/09/2026).
+  'Scale Partner': 'We Scale',
 }
 
 /** Normaliza um valor cru de `marca` (do banco) para a forma canônica usada em `BRAND_LIST`. */

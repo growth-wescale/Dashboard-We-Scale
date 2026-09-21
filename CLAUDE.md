@@ -202,6 +202,14 @@ que acumula os dois papéis) não é bloqueado de propósito — só o `'SDR'` p
 ser fato histórico real (o Closer atual trabalhou como SDR antes da reforma de
 funis), não bug — decisão de mexer aí fica pro Junior, ver pendência.
 
+**SDR e Closer podem ser a mesma pessoa, se o cargo dela for SDR puro.** A
+fonte `posse` de `nome_sdr` (dono no fim da fase SDR) tinha uma trava: se o
+nome coincidisse com o `nome_closer` eleito, era descartado. Desde 21/09 essa
+trava não vale quando o dono tem `nome_cargo_foto.cargo = 'SDR'` — é SDR de
+fato, mesmo que também apareça como Closer. Caso de origem: marca sem Closer
+(Instituto do Autismo), onde a SDR agenda e move o deal pro funil Closer sem
+trocar o responsável.
+
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
 Não usar `rn_deal_etapa_mes` do banco: a partição ignora funil.
@@ -514,6 +522,29 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-21 (3) — SDR some quando a mesma pessoa também é Closer (Instituto do Autismo)
+
+Junior reportou: no IDA a Sarah agendou 2 reuniões (André Luz, José Batista
+de Almeida), mas o popup de SQL mostrava SDR "Sem informação" e Closer =
+Sarah. O IDA não tem Closer ainda — a Sarah move o deal para "Reunião
+Agendada SQL" do funil Closer sem trocar o responsável, e o fundador da marca
+conduz a reunião.
+
+**Causa.** Em `vw_deal_ciclo`, as 4 fontes de `nome_sdr` falhavam em
+sequência: `evento` (a atribuição dos eventos é `backfill_dono_atual`, fora
+do filtro `evento`/`legado_sdr`); `posse` achava a Sarah, mas era
+**descartada** pela trava `sdr_po IS DISTINCT FROM closer_ciclo`, porque o
+Closer eleito (`campo_rd`, "Closer responsável" do RD) também é a Sarah;
+`campo_rd` do SDR vazio.
+
+**Fix** (`CREATE OR REPLACE VIEW vw_deal_ciclo` + `REFRESH` da matview):
+`sdr_posse` passou a trazer o cargo do dono (`nome_cargo_foto`), e a trava só
+descarta o nome se o cargo **não** for `'SDR'` puro. É o espelho da trava por
+cargo de 04/09 no lado do Closer. Simulado na base inteira antes de aplicar:
+9.888 ciclos, **só 2 mudam** (exatamente os 2 do IDA, nulo → Sarah Padilha),
+0 SDRs preenchidos trocados, 0 Closers alterados. `vw_funil_vendas` pós-fix:
+7.500 linhas, 54 ganhos, R$ 2.503.179,98.
 
 ### 2026-09-21 (2) — Marca Scale Partner nas abas de Vendas
 

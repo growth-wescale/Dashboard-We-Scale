@@ -555,6 +555,77 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-22 (2) — Motivos de perda do RD: 463 cadastros viram 36
+
+Junior deu prazo de hoje pro Brunno limpar os motivos de perda. O plano
+dele: trocar o motivo dos deals fora do padrão e apagar os motivos
+errados, porque "a galera vai colocar o motivo de perda num deal e tem
+centenas de motivos".
+
+**Achado que mudou o plano: o inchaço é automação, não o time.** O RD
+tinha **463 motivos cadastrados para só 79 nomes distintos** — 383 eram
+duplicatas exatas. Uma rotina que roda **todo dia ~06h** manda o motivo
+**por nome** em vez do `deal_lost_reason_id`, e o RD cria um registro
+novo a cada perda (proporção ~1:1 entre cadastros e deals). Rodou em
+22/09 às 06:10–06:17 criando 10 motivos. Três rotinas fazem isso: fim de
+cadência SDR (211 cadastros), fim de cadência prospecção (48) e no-show
+(43). **A correção já existe na casa:** `[NOVO] Atingiu o fim da
+cadência` tem **1 cadastro servindo 1.336 deals** — essa grava o ID.
+Sem corrigir as outras três, voltam ~70 duplicatas/mês. **Pendência do
+Brunno, fora deste repositório.**
+
+**A API do RD não exclui motivo de perda.** Testado: `POST` (criar) e
+`PUT` (renomear) funcionam; `DELETE /deal_lost_reasons/:id` devolve
+**404** em toda variação (inclusive `_method=DELETE` e token no corpo), e
+`PUT` com `active:false`/`deleted_at` devolve 200 mas ignora o campo.
+Exclusão só pela interface. Por isso a limpeza foi feita em duas metades:
+os **dados** por API, e o **dropdown** deixando os órfãos marcados com o
+prefixo **`zzAPAGAR`** pro Junior filtrar e apagar em lote na tela.
+
+**Renomear o canônico evita mexer no deal.** Como o vínculo deal↔motivo é
+por ID, renomear um motivo atualiza todos os deals dele de graça. Por isso
+o canônico de cada destino é o registro que **já tinha mais deals**: 19
+foram renomeados e só **1.282 deals** precisaram de `PUT`, em vez de ~4,5
+mil.
+
+**Resultado:** 463 → **36 motivos**, agrupados em Descarte · Sem fit ·
+Contato/processo · Capital e sociedade · Timing · Decisão e marca. 1.149
+deals migrados, 404 registros marcados `zzAPAGAR`. Fusões maiores: fim de
+cadência juntou 8 nomes (2.113 deals), `Sem perfil (fora do ICP)` juntou 6
+(414), `Timing - sem previsão` juntou 8 (143). Saíram a variante
+`(prospecção ativa)` do fim de cadência (origem já é dimensão separada no
+dashboard) e os três `BOT - ` (origem do registro não é motivo de perda).
+
+**Três buracos preenchidos**, todos em uso real fora do catálogo do
+Notion: `Erro na lista de prospecção` (era `[NJ]`, 38 usos em 90 dias),
+`Escolheu outra franqueadora` (a We Scale não conseguia medir perda para
+concorrência) e `Não aceitou condições comerciais` (objeção de taxa ou
+royalties, que vinha caindo em "sem budget").
+
+**133 deals não migraram** e é dado do RD, não bug: o campo **Fonte Macro**
+virou obrigatório em 24/08 e está vazio neles, então o RD recusa qualquer
+`PUT` com 422 `deal_required_custom_fields` (1 deles também sem "Closer
+responsável"). 40 são deal de teste. Os 23 motivos que ainda seguram esses
+deals **não foram marcados** `zzAPAGAR` de propósito — apagá-los deixaria
+deal perdido sem motivo, que é exatamente o que o Junior queria evitar.
+
+**No dashboard** (PR #181): `classificarMotivo`
+(`src/constants/motivosPerda.ts`) conhecia 18 nomes e jogaria todos os
+renomeados em "não catalogado", sumindo do cálculo de perda evitável da
+Análise de Perda. Os 3 Sets passaram a cobrir os 36 nomes novos, com os
+antigos mantidos como rede de segurança até o espelho sincronizar. Sem
+mudança de comportamento da função.
+
+**Decisões do Junior nesta sessão:** manter as **4 faixas de budget**
+(50k/100k/200k/300k) em vez de consolidar em 2; marcar os órfãos com tag
+em vez de apagar um a um; prefixo `[NOVO]` mantido por ora (some quando os
+`zzAPAGAR` saírem). Notion (`Catálogo dos Motivos de Perda`) atualizado
+com a lista final e a regra de não criar motivo pela tela.
+
+Backup completo do estado anterior (463 motivos + 6.346 deals perdidos com
+seus motivos) e log de cada chamada no scratchpad da sessão — base do
+rollback.
+
 ### 2026-09-22 — Popups de deal: "Outros" removido dos gráficos Por Marca/SDR/Closer
 
 Junior filtrou 21/09 na Visão Macro, abriu o popup de MQL e viu "Outros: 1"

@@ -538,6 +538,11 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
   (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
   etapas nessa tabela
+- [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
+  máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
+  pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
+  Hoje quem cobre é o `espelho_rd_edge` (15 min). Corrigir no n8n: ler
+  `deals_sync_state.watermark` em vez de `now() − 60 min` (ver 22/09)
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
@@ -683,6 +688,39 @@ Verificado: `npm run build` (tsc -b) + `npx vitest run` (16 testes em
 valor; bucket "Sem informação" ficando não-clicável de propósito) +
 `oxlint` limpo nos arquivos tocados, via `~/ws-dashboard-build`. App exige
 login — não visto renderizado.
+### 2026-09-22 (2) — `espelho_rd_edge` varre o RD por funil (fim do teto de 10 mil)
+
+A listagem do RD recusa página além de 10.000 resultados (`400 Result window is
+too large, must be less than or equal to 10000`, confirmado em `page=51`). O
+espelho listava o RD sem filtro, em 50 páginas × 200 — com a base em 9.846
+deals, faltavam ~150 para ele começar a perder parte do RD sem avisar (o
+`paginas_com_erro: [51..54]` que aparecia desde 16/09 era ele batendo no teto).
+
+`supabase/functions/espelhar-rd/index.ts` (agora versionado — só existia
+publicado): uma listagem por funil (`deal_pipeline_id`), maior hoje é o SDR
+com 4.567. Funil acima de 9.000 é quebrado por etapa (`deal_stage_id`). Um
+request sem filtro traz o total geral e o log ganha `checkpoint.cobertura`
+(`total_rd`, `soma_fatias`, `deals_lidos`) — deal fora de funil conhecido
+aparece como diferença, não some calado. `paginas_com_erro` volta a significar
+erro de verdade (e marca a execução como `partial`).
+
+Testado numa cópia só-leitura (`espelhar-rd-teste`, modo `?fase=`): 9.847 /
+9.847 / 9.847, 0 erros, varredura em 63s. Forçando a quebra por etapa (SDR e
+Prospecção Ativa) também 9.847 / 9.847. Soma dos 15 funis conferida contra o
+total do RD via `pg_net`.
+
+### 2026-09-22 — Supabase de Expansão pausado por falta de pagamento: auditoria de perda de dados
+
+Projeto fora das **06:58 às 09:20 BRT**. **Nenhum dado perdido.** Tudo
+gravado até a pausa sobreviveu. O risco era o que mudou no RD durante a
+queda, porque o `wf_5` usa janela fixa de `agora − 60 min` em vez do watermark
+gravado — na volta ele olhou só a partir de 08:20 BRT. Conferência contra o RD
+via `pg_net` (token não sai do Vault): 409 deals com `updated_at` ≥ 06:00 BRT,
+`deal_stage_histories` de cada um. 16 entradas de etapa durante a queda, todas
+no banco; 13 perdas, todas com evento; 4 deals criados na queda, absorvidos pelo
+`espelho_rd_edge` na volta. Nenhuma escrita corretiva necessária. Dados da
+conferência em `_recuperacao_pausa_20260922` (RLS ligado). Supabase de
+Marketing é outra conta e não foi afetado.
 
 ### 2026-09-21 (3) — Modo TV alterna sozinho entre Volta e Mês
 

@@ -121,8 +121,10 @@ que não seja prospecção de verdade. Achado em 27/08: `from_rdsm_integration`
 (criação automática de deal via RD Marketing) às vezes cria o deal direto
 numa etapa de Prospecção Ativa e o move pro funil certo segundos depois — sem
 nenhuma ação humana. Não dá para apagar essa entrada no RD (a API não expõe
-edição/exclusão de `deal_stage_histories`, só teve confirmado por
-`404` em `GET /deals/:id/deal_stage_histories`), então `atribuicao_manual`
+edição/exclusão de `deal_stage_histories`, confirmado por `404` em
+`GET /deals/:id/deal_stage_histories` — **o 404 é só do sub-recurso: LER o
+histórico é possível, `GET /deals/:id` traz `deal_stage_histories` no corpo**,
+ver [[rd-stage-histories-no-get-do-deal]]), então `atribuicao_manual`
 ganhou a coluna `origem_override`, com prioridade sobre a regra em
 `vw_deal_origem_comercial` — mesmo padrão de `sdr_override`/`closer_override`.
 Usar só para casos confirmados como artefato, nunca para "esconder" um deal
@@ -352,7 +354,29 @@ sem conversão de fuso.
 
 ## 8. Pendências conhecidas
 
-- [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
+- [x] ~~**Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`**~~
+  — **FECHADA em 17/09/2026, sem alteração de código.** Investigado a fundo:
+  dos 388 ciclos com `nome_sdr` = pessoa de cargo Closer, (a) a concentração em
+  funis legados (Odonto Scale: Rômulo 126, Giullia 63; Odonto Legacy: Giullia
+  30, jan–jul/2026) é **fato histórico confirmado pelo Junior** — eles atuaram
+  como SDR nesses funis antes da reforma; (b) nos 14 casos recentes (ago–set/26,
+  funis SDR/Closer), `deal_snapshot.responsavel` é **o próprio nome** em 12 —
+  Bruna, Douglas, Jéssica e Aurélio estão mesmo com esses deals no funil SDR;
+  (c) as 2 exceções são deals Perdidos com dono congelado, que é o comportamento
+  deliberado da regra `posse_atual` (03/09). Não há fonte alternativa: o campo
+  "SDR Responsável" do RD está vazio em 385 dos 388. Aplicar a trava por cargo
+  destruiria informação correta.
+- [ ] **Views de Expansão comparam funil por NOME, não por ID** — renomear
+  SDR, Closer ou Prospecção Ativa no RD quebra Visão Macro/Performance/Perda
+  e a classificação Inbound × Prospecção Ativa. Trocar os literais por
+  `id_funil` (ver entrada de 21/09)
+- [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
+  máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
+  pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
+  Hoje quem cobre é o `espelho_rd_edge` (15 min). Corrigir no n8n: ler
+  `deals_sync_state.watermark` em vez de `now() − 60 min` (ver 22/09)
+- [ ] **`espelho_rd_edge` só enxerga 10 mil deals** — corrigido no PR #179
+  (varredura por funil, testada); falta publicar a Edge Function em produção
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
@@ -366,6 +390,333 @@ sem conversão de fuso.
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-22 (2) — Popup de MQL: "Outros" no gráfico Por Marca virava beco sem saída
+
+Junior filtrou 21/09 na Visão Macro, abriu o popup de MQL e viu "Outros: 1"
+no gráfico "Por Marca" — mas o filtro de Marca do próprio popup não tinha
+nenhuma opção "Outros" pra selecionar. Pediu correção geral (qualquer
+filtro, qualquer dia), não só pra esse caso.
+
+**Não é dado sem classificação.** Conferido direto no banco: o deal é um MQL
+real e legítimo da **Oral Unic**, 7º lugar em volume naquele recorte (só 1
+deal, contra 20 da Odonto Legacy). `topBreakdown()` (`dealDrawerShared.tsx`,
+compartilhada pelos gráficos "Por Marca"/"Por SDR"/"Por Closer" do
+`StageDealsDrawer`) corta em `topN=6` por padrão e empilha o resto num
+"Outros" sem nenhum valor associado — mero efeito colateral do corte, não
+uma categoria de negócio. O filtro de Marca do popup (`options.marca`)
+sempre listou a Oral Unic certinha, porque deriva direto dos deals reais,
+sem o corte do gráfico — só que o gráfico não dava nenhuma pista de que
+"Outros" era ela.
+
+**Fix em duas partes:**
+1. **Marca é um conjunto pequeno e fechado** (8 marcas em `BRAND_LIST`) —
+   não tem por que nunca cortar. `porMarca` passou de `topN=6` pro default
+   pra `topN=20`, folga generosa acima do total real: "Outros" não aparece
+   mais pra marca em nenhum recorte.
+2. **Quando "Outros" ainda assim aparecer** (Por SDR/Closer, campo aberto,
+   sem teto natural de valores) — `topBreakdown` agora carrega os valores
+   crus que compõem cada barra, inclusive "Outros" (`BarRow.values`), e
+   `BarList` ganhou `onSelect` opcional: clicar em qualquer barra (a
+   agregada ou o "Outros") aplica o filtro correspondente do popup na hora,
+   revelando exatamente quais deals estão ali — sem precisar adivinhar.
+   Tooltip no hover lista os nomes agregados. Bônus: clicar em qualquer
+   barra normal (não só "Outros") também filtra por ela — atalho que não
+   existia antes.
+
+**Cuidado com alias preservado.** `topBreakdown` passou a agrupar por
+`labelOf(raw)` (ex.: `marcaLabel`, que funde `'Odonto Scale'`/`'Odonto
+Legacy'` numa barra só — ver seção 3) mas guarda TODOS os valores crus que
+caíram ali em `values`, não só o primeiro — clicar numa barra que mistura os
+dois nomes antigos filtra pelos dois de uma vez, sem esconder metade dos
+deals.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (321 testes, 4 novos
+em `dealDrawerShared.test.ts` — reproduz o caso real de 21/09 sem gerar
+"Outros", `topN` pequeno preservando os valores crus do resto, fusão de
+alias sem perder valor, e o bucket "Sem informação" ficando não-clicável de
+propósito) + `oxlint` limpo nos arquivos tocados, via `~/ws-dashboard-build`.
+Caso real conferido por SQL contra `vw_funil_vendas` (21/09, Inbound): Oral
+Unic = 1 MQL, exatamente o "Outros" do print. App exige login — não visto
+renderizado.
+
+### 2026-09-22 — Supabase de Expansão pausado por falta de pagamento: auditoria de perda de dados
+
+Projeto `cygxmduuwlwfbodfrlkr` ficou fora das **06:58 às 09:20 BRT**
+(último cron 09:58 UTC; `pg_postmaster_start_time` 12:20:35 UTC). Dashboard
+de Vendas deu "Failed to fetch" nesse intervalo. Supabase de Marketing é
+outra conta e **não** foi afetado (`media_daily_raw` gravou às 09:05 BRT).
+
+**Resultado: nenhum dado perdido.** Tudo gravado até a pausa sobreviveu
+(último evento 09:46 UTC, último cron 09:58 UTC). O risco real era o que
+mudou no RD durante a queda, porque o `wf_5` **não** lê o watermark gravado:
+usa janela fixa de `agora − 60 min` (ver `watermark_anterior` em
+`sync_execucao`) — ao voltar às 12:22 UTC ele olhou só a partir de 11:20 UTC.
+
+Conferência feita contra o RD, via `pg_net` de dentro do banco (token não sai
+do Vault): listados os **409 deals** com `updated_at` ≥ 06:00 BRT e buscado o
+`deal_stage_histories` de cada um (`GET /deals/:id`). Guardado em
+`_recuperacao_pausa_20260922` (RLS ligado, sem acesso anon). Achados:
+16 entradas de etapa durante a queda (6 deals), **todas já no banco**; 13
+perdas das 06:10–06:17, todas com evento `perda`; 4 deals criados durante a
+queda, absorvidos pelo `espelho_rd_edge` das 09:30 BRT; etapa/responsável/
+status batendo em 409/409. As únicas diferenças eram 2 deals movidos **depois**
+da volta (09:31 e 09:40 BRT), absorvidos pelo espelho das 09:45 com as datas
+reais do RD. Nenhuma escrita corretiva foi necessária. Cron temporário e
+função auxiliar usados na coleta foram removidos.
+
+Também conferidos: MeetRox (retoma do próprio watermark, 09:39 UTC), tarefas
+SDR (watermark por lote), relatório diário (gerado 09:30 UTC, antes da pausa),
+cadências (rodaram 09:17 UTC).
+
+**Nota:** `paginas_com_erro: [51..54]` no log do `espelho_rd_edge` (desde
+16/09) é inofensivo hoje — o RD tem 9.846 deals e a API só pagina até 10.000
+(50 × 200), então 51+ não existem. **Vira ponto cego real quando o RD passar
+de 10 mil deals** — ver seção 8.
+
+### 2026-09-21 — Funil "Eventos" renomeado para "Scale Partner" no RD
+
+Funil `6a99b60d62f84e00234789da`. Antes da troca, levantamento de efeitos
+colaterais: **nada quebra**. Cadências (condições, `cadencia_etapas`, roteador
+de webhook) e a detecção de `mudanca_funil` em `processar_deal_evento` usam
+**ID**; o funil não está no allowlist de `vw_funil_vendas`; o único workflow do
+TI que compara nome exige `'SDR'`. O RD já emitia "Scale Partner" desde
+21/09 14:09 BRT.
+
+Aplicado no Supabase de Expansão (backup em `_backup_rename_eventos_20260921`):
+nomes das cadências 8 e 12, rótulos de 3 condições (25, 26, 33) e 3 etapas
+(20–22), os 8 assuntos de tarefa da cadência 12 (`cadencia_passos` 124–131,
+"Eventos - Ligacao N" → "Scale Partner - Ligacao N" — seguro: a reconciliação
+casa tarefa só por "ligacao/whatsapp N" via `extractKey`) e `nome_funil` dos
+48 deals ainda com o nome antigo em `deal_snapshot` (agora 67/67 "Scale
+Partner"). `deal_eventos` **não** foi tocado: o histórico mantém "Eventos"
+(140 eventos) — agrupar por `id_funil`, nunca por `nome_funil`.
+
+**Dívida técnica exposta:** a camada analítica compara funil por **nome**
+(allowlist de `vw_funil_vendas`, `vw_deal_origem_comercial` =
+'Prospecção Ativa', camada SDR/Closer em `vw_deal_ciclo`/`vw_funil_compat`/
+`mv_deal_ciclo_enriquecido`, `relatorio_expansao_metricas`). Renomear SDR,
+Closer ou Prospecção Ativa no RD quebra as abas de Vendas. Ver seção 8.
+
+### 2026-09-17 — Varredura completa: ciclos fantasma, datas de fechamento e deals apagados no RD
+
+Continuação da auditoria de 16/09. Junior: "se tinha dado errado de MQL em
+agosto, imagina outras etapas e outros meses" — pediu varredura completa e
+correção. Premissa corrigida antes de começar: o **volume** de MQL de agosto
+nunca esteve errado; o que estava errado era a *marca* de 16 deals.
+
+**O que já estava certo** (7.361 ciclos conferidos contra o RD): etapa atual,
+id de etapa, funil e status Ganho/Perdido — **0 divergências** em todos. Zero
+deals com dois ciclos "atuais", zero datas no futuro, zero Ganho+Perdido
+simultâneo, zero perda antes do MQL. A trava de Closer de 04/09 segue firme
+(149 → 1).
+
+**Erro 1 — ciclos fantasma (o maior).** `vw_deal_eventos_ciclo` define ciclo
+como `1 + nº de perdas anteriores ao evento`. Efeito não intencional:
+QUALQUER `mudanca_etapa` depois de uma perda abria um ciclo novo, mesmo com o
+RD nunca tendo reaberto o deal — e as duas linhas contavam, porque a dedup de
+"Deals únicos" é por `(deal, ciclo, mês)`. **270 de 351 ciclos de reciclagem
+(77%) eram falsos.**
+
+Corrigido com DUAS regras (a primeira sozinha não resolve — o evento de etapa
+existe de fato e continuaria contando):
+1. **Ciclo**: uma perda só fecha um ciclo se houve retrabalho depois dela —
+   deal aberto hoje, ou `_closed_at` posterior à perda. Deals com ciclo ≥ 2:
+   349 → **83**.
+2. **Passagem**: `mudanca_etapa` em deal `lost` posterior ao `_closed_at` é
+   descartada. Eram 638 eventos, e a maioria é **artefato da nossa própria
+   ingestão**: `api_espelho` 309 (o `espelhar_rd.py` gravava mudança de etapa
+   com a DATA DE EXECUÇÃO ao reconciliar snapshot × RD),
+   `api_backfill_stage_history` 147, `backfill` 51, `api_espelho_edge` 41,
+   `api_sync` 14 — mais 76 de `webhook` (humano arrastando card já perdido).
+   Os dois casos são filtrados: o critério é o estado do deal, não a origem.
+
+Impacto em ago/26 (Inbound, deals únicos): **Inpot · Tentando Contato 206 →
+106** (estava 48,5% inflado), Inpot · Contato Efetivo 57 → 49, Inpot · MQL
+116 → 114, Oral Unic · Conexão 13 → 8, B2Case · Tentando Contato 265 → 260,
+**B2Case · MQL 300 → 299**. Eletrovias (301) e Viva (50) não mudaram.
+
+**Erro 2 — fechamento sem evento = data nula.** `data_venda`/`data_perdido`
+saem do EVENTO de ganho/perda; deal fechado antes do event sourcing existir
+ficava com status certo e **data nula** — contava no total mas sumia de
+qualquer recorte por período. Eram **5 Ganhos** (todos na etapa
+"Documentação", zero eventos de ganho, um valendo **R$ 35.988**) e **167
+Perdidos** de ciclo 1. Fallback para `payload->>'_closed_at'`, **restrito a
+`eh_ciclo_atual AND ciclo = 1`**: medido que `_closed_at` congela na PRIMEIRA
+perda e não acompanha reciclagem — em ciclos > 1 ele é ANTERIOR à entrada do
+próprio ciclo, e usá-lo lá jogaria perdas de julho para fevereiro (era o que
+inflava fev/26 em +144 numa primeira simulação). Resultado: Ganho sem data
+5 → **0**; Perdido sem data 452 → **15** (os 15 são reciclagem real cuja 2ª
+perda não gerou evento — `_closed_at` não serve para eles).
+
+**Erro 3 — deals apagados no RD.** `deal_snapshot.deleted_at` existia mas
+**nenhuma view o respeitava**: deal apagado no RD ficava no dashboard para
+sempre. Achados **170**, todos confirmados um a um com `GET /deals/:id` na
+API (170/170 = `404`), todos sem `_created_at` no payload (ingestão antiga
+incompleta). Marcados com `deleted_at` e `vw_funil_vendas` ganhou
+`AND s.deleted_at IS NULL`. **Nada foi apagado do banco** — decisão do
+Junior: o registro fica, só some do dashboard.
+
+**Checksum.** Ganhos **53** e receita **R$ 2.418.279,98** idênticos antes e
+depois das 4 migrations — nenhuma venda se perdeu. Linhas 7.709 → 7.286,
+deals 7.361 → 7.205 (ciclos fantasma + deletados). Cobertura final: RD tem
+7.463 deals no allowlist com marca; o dash mostra 7.205, e a diferença são os
+filtros de teste (nome da negociação + contato) e os deletados.
+
+**Refino no mesmo dia (5ª migration).** Auditando o risco da própria regra do
+Erro 1, achei **falso positivo**: usar só `_closed_at` como marco do fechamento
+descartava passagem legítima, porque o RD NÃO atualiza esse campo quando o deal
+é retrabalhado e perdido de novo. Eram 6 eventos de 637 — 5 deals Oral Unic que
+voltaram para Diagnóstico/Oportunidade COF em jul/26 e foram perdidos no mesmo
+dia, com `_closed_at` preso em jan/fev. Marco correto:
+`GREATEST('_closed_at', última perda em deal_eventos)`. Descartados 637 → 631.
+Números de ago/26 inalterados (B2Case 299, Eletrovias 301, Viva 50).
+
+**6ª e 7ª migrations (mesmo dia), a pedido do Junior.**
+
+*Perdas sem data — zeradas.* As 15 que restavam eram ciclo > 1, fora do
+recorte `ciclo = 1` do fix anterior. Critério trocado por um melhor: aceitar
+`_closed_at` sempre que ele for **posterior à entrada do próprio ciclo**
+(`data_criacao_negociacao`) — aí só pode ser o fechamento deste ciclo.
+Validado contra o RD: nos 15, o `closed_at` é recente e coincide com o
+`end_date` da última etapa do histórico; 15/15 posteriores à entrada do ciclo.
+Resultado: Perdido sem data **15 → 0**, Ganho sem data 0, datas anteriores ao
+próprio ciclo 0. Ganhos (53) e receita (R$ 2.418.279,98) inalterados.
+
+*Datas de etapa — validadas contra o RD.* **Correção de uma afirmação errada
+minha:** eu havia registrado que não dava para auditar as datas de etapa
+porque a API não expõe o histórico. O que dá 404 é o sub-recurso
+`GET /deals/:id/deal_stage_histories`; o endpoint principal `GET /deals/:id`
+**traz `deal_stage_histories` no corpo**, com `deal_stage_id`, `start_date` e
+`end_date`. Junior apontou o erro. Auditoria feita com amostra de 52 deals
+(MQL ≥ 01/08/2026), comparando a primeira entrada de cada etapa no RD com as
+colunas `data_*` da view: **125 pares iguais, 3 divergentes** — e as 3
+divergem por 3, 53 e 55 minutos, **nenhuma muda o dia**. Para contagem por
+dia/mês, que é o que o dashboard faz, a amostra bate 100%. MQL 50/52,
+Tentando Contato 47/47, Contato Efetivo 21/21, SQL 4/5, Diagnóstico 3/3.
+
+**8ª migration + backfill (mesmo dia): "arrume tudo".**
+
+*MQL faltante — 6 eventos inseridos.* Dos 84 deals sem `data_novo_mql` em
+funil COM topo de funil, 51 haviam passado por "Novo MQL" segundo o
+`deal_stage_histories` do RD. Mas ao tentar inserir, **45 já tinham o evento**:
+eram deals de 2 ciclos, com o MQL corretamente registrado no ciclo 1 e o ciclo
+atual (2) sem MQL novo — comportamento certo, não erro. Só **6** faltavam de
+fato; inseridos em `deal_eventos` com `origem='api_backfill_topo_20260917'`
+(reversível por essa origem). Efeito: B2Case ago 299 → **300**, Eletrovias
+301 → **302**, Viva **50** inalterado. Os outros 61 sem MQL são Prospecção
+Ativa (nasce em etapa de prospecção) e 48 são do funil Closer (multifranqueado
+/ evento) — corretos por definição.
+
+*Datas de etapa fora de 2026 — validadas, com achado inverso.* Segunda amostra
+(40 deals, MQL < 01/06/2026): **88 pares iguais, 13 divergentes**. E a maioria
+das divergências é **o RD estando errado, não o banco**: para deals de
+jan–mai/2026 o RD devolve datas de **18–19/08/2026** (sempre os mesmos
+timestamps: 12:44 e 19:34), ou seja, houve reescrita em massa do histórico de
+etapas naquele dia. Confirma [[historico-rd-nao-e-imutavel]]: **para data
+antiga, o espelho é a fonte mais confiável, não o RD**. Somando as duas
+amostras: 213 pares iguais de 230.
+
+*Duplicatas de pessoa — medidas, não corrigidas.* Desde jun/2026 (4.703
+deals): **163 excedentes por telefone repetido** (3,5%), 143 por e-mail, 179
+por nome. Não é defeito do dashboard — é duplicata no CRM. Fundir deal é ação
+de negócio, no RD, não no banco.
+
+*SDR com cargo de Closer — pendência FECHADA, sem mexer em código.* Junior
+confirmou que Rômulo e Giullia atuaram como SDR em Odonto Scale/Odonto Legacy
+no período. E nos 14 casos recentes (ago–set/26, funis SDR/Closer),
+`deal_snapshot.responsavel` é **o próprio nome** em 12 — Bruna, Douglas,
+Jéssica e Aurélio estão mesmo com esses deals no funil SDR. As 2 exceções são
+deals Perdidos com dono congelado, comportamento deliberado da regra
+`posse_atual` (03/09). Ver seção 8.
+
+*3 vendas com `data_venda` anterior à criação do deal* — conferido no RD:
+`closed_at` < `created_at` **no próprio CRM**, sempre às `01:00:00`, padrão de
+data escolhida à mão sem hora. São vendas lançadas retroativamente pelo time.
+Não é erro do dashboard; mantido como está.
+
+**Estado final da varredura:** divergência com o RD (marca/etapa/funil) **0**;
+Ganho sem data **0**; Perdido sem data **0**; deals apagados no RD visíveis
+**0**; ciclos fantasma **0**. Ganhos **53** e receita **R$ 2.418.279,98**
+idênticos ao início, depois de 8 migrations e 1 backfill.
+
+**Fora do alcance do dashboard (ação no CRM):** desde jun/2026, **163 deals
+excedentes por telefone repetido** (3,5% de 4.703), 143 por e-mail, 179 por
+nome — duplicata de pessoa no RD. O dash conta negociações, e está certo ao
+fazê-lo; quem quiser "número de pessoas" precisa deduplicar antes.
+
+**Resquício antigo, não corrigido:** 388 linhas com `nome_sdr` = pessoa de
+cargo Closer — **sem fonte de verdade disponível**: o campo "SDR Responsável" do RD
+está vazio em 385 dos 388. Concentração em Odonto Scale (Rômulo 126, Giullia
+63) e Odonto Legacy (Giullia 30), jan–jun/2026, compatível com fato histórico
+(atuaram como SDR nesses funis antes da reforma). Aplicar a trava por cargo
+(espelho do fix de 04/09) transformaria 388 atribuições em "sem SDR" e
+destruiria informação possivelmente correta — decisão pendente do Junior.
+
+Cadeia tocada: `vw_deal_eventos_ciclo` (2×) e `vw_funil_vendas` (2×), todas
+`CREATE OR REPLACE`. `REFRESH MATERIALIZED VIEW mv_deal_ciclo_enriquecido`
+rodado após cada mudança na cadeia de eventos.
+
+Ver [[ciclos-fantasma-de-deal-perdido]], [[fechamento-sem-evento-data-nula]],
+[[filtro-de-teste-por-contato]] e [[marca-diverge-entre-rd-e-view]].
+
+### 2026-09-16 — Marca do deal passa a vir do RD, não do último evento
+
+Junior estranhou 3 números redondos no MQL de ago/2026 (Eletrovias 300,
+B2Case 300, Viva 50) e pediu auditoria contra dash, banco e RD. **Os
+números estavam certos** — reproduzidos em SQL puro e reconciliados 1:1
+com a API do RD. O "300 = 300" é coincidência: as curvas acumuladas só se
+encontram em 31/08 (em 30/08 eram 283 × 295), vindas de ritmos opostos, e
+as composições de fonte não têm nada em comum (B2Case 91% `utm_source=meta`;
+Eletrovias 59% meta + 59 de fonte `Evento` + 42 google). Eletrovias já fez
+390 em mai/26, então não existe teto.
+
+**Achado 1 — segundo filtro de teste, por CONTATO.** Reconciliando "criados
+em agosto no RD" × "MQL de agosto no dash", sobravam deals sem explicação.
+Além do `nome_negociacao NOT LIKE '%test%'` de `vw_funil_vendas`, existe um
+filtro na BASE da cadeia, em `vw_deal_eventos_ciclo`:
+`nome_contato !~~* '%teste%' AND email !~~* '%teste%' AND email !~~*
+'%@wescale.com.br'`. Como fica em `vw_deal_eventos_ciclo` (base de
+`vw_deal_ciclo` → `mv_deal_ciclo_enriquecido` → `vw_funil_vendas` e
+`vw_funil_etapas_v2`), o deal some do dashboard INTEIRO. Medido: **222
+deals** não-deletados, com marca e funil no allowlist, invisíveis por essa
+regra — 149 por "teste" no nome do contato, 63 por e-mail `@wescale.com.br`,
+10 por "teste" no e-mail, **0 por outro motivo**. Ex.: 2 deals `Marcinho
+B2Case` (contato `marcio.coninck@wescale.com.br`) e `Tony Montalvao`
+(`anthony.montavao@wescale.com.br`) — nomes de negociação sem "teste", por
+isso passavam despercebidos na conferência feita pela UI do RD. Regra
+mantida como está (é limpeza correta); o que faltava era documentá-la.
+
+**Achado 2 (corrigido) — marca vinha do evento, não do deal.**
+`vw_deal_ciclo` elege a marca do ciclo com
+`(array_agg(et.marca ORDER BY et.data_evento DESC))[1]` — ou seja,
+`deal_eventos.marca`, o retrato denormalizado que a seção 4 já declara não
+confiável. Resultado: **16 deals** apareciam numa marca diferente da do RD
+(confirmado deal a deal pela API: `Gustavo Gomes`,
+`6a832429a838ed000116a7e3`, é Eletrovias no RD e aparecia como Oral Unic).
+
+Fix: `vw_funil_vendas` passou a expor `COALESCE(s.marca, d.marca) AS marca`
+— `deal_snapshot` já estava no JOIN desde o `sub_fonte_crm` (31/08).
+`CREATE OR REPLACE VIEW`, **matview não tocada**. O `WHERE` segue filtrando
+por `d.marca` de propósito: o conjunto de linhas não muda, só o rótulo
+(medido: 0 deals com marca vazia na view e preenchida no RD). Checksum
+idêntico antes/depois: 7.709 linhas, 7.361 ciclo atual, 53 ganhos,
+R$ 2.418.279,98, 5.184 perdidos, 2.472 em andamento, 10 marcas. Divergência
+`vw_funil_vendas.marca` × `deal_snapshot.marca`: **16 → 0**.
+
+Efeito nos números (Junior autorizou aplicar na hora, ciente de que o time
+estava montando apresentação): Eletrovias ago **300 → 301**; Oral Unic ago
+94 → 90 e jul 63 → 56; Odonto Scale ago 62 → 65 e jul 53 → 60; Inpot abr
+−1; B2Case jul +1. Uma venda de **R$ 5.982 (15/07)** saiu do Oral Unic e foi
+pro Odonto Scale. B2Case e Viva de agosto **não mudaram** (300 e 50).
+
+Nota: o lado `vw_funil_etapas_v2.marca` continua vindo do evento — não é
+usado pelo dashboard (o recorte por marca sai de `idsEscopo`, ver entrada de
+21/08), mas quem escrever relatório novo deve ler a marca de
+`vw_funil_vendas` / `deal_snapshot`.
+
+Ver [[filtro-de-teste-por-contato]], [[marca-diverge-entre-rd-e-view]] e
+[[mql-redondos-agosto-2026-coincidencia]] na memória.
 
 ### 2026-09-11 (7) — Campanha de Metas: degraus de Velocidade em tabela legível
 

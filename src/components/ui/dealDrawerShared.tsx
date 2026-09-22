@@ -84,9 +84,12 @@ export function StatusBadge({ status }: { status: string | null }) {
 
 // ─── Mini bar list (Por Marca / Por Responsável / Por Etapa) ───────────────
 
-export interface BarRow { label: string; count: number; color: string }
+/** `values` = valores crus (os que o filtro correspondente espera) que compõem
+ *  a barra — 1 para uma categoria normal, vários para "Outros". Vazio quando
+ *  não há valor filtrável (ex.: "Sem informação"), o que desativa o clique. */
+export interface BarRow { label: string; count: number; color: string; values: string[]; title?: string }
 
-export function BarList({ title, rows }: { title: string; rows: BarRow[] }) {
+export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow[]; onSelect?: (values: string[]) => void }) {
   const max = Math.max(...rows.map(r => r.count), 1)
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -97,35 +100,74 @@ export function BarList({ title, rows }: { title: string; rows: BarRow[] }) {
         {rows.length === 0 && (
           <div style={{ fontSize: 12.5, color: 'var(--ws-text-secondary)' }}>Sem dados</div>
         )}
-        {rows.map(r => (
-          <div key={r.label}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3, gap: 8 }}>
-              <span style={{ color: 'var(--ws-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.label}>
-                {r.label}
-              </span>
-              <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{nf(r.count)}</span>
+        {rows.map(r => {
+          const clickable = !!onSelect && r.values.length > 0
+          return (
+            <div
+              key={r.label}
+              role={clickable ? 'button' : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onClick={clickable ? () => onSelect!(r.values) : undefined}
+              onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect!(r.values) } } : undefined}
+              title={r.title ?? r.label}
+              style={{ cursor: clickable ? 'pointer' : 'default' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3, gap: 8 }}>
+                <span style={{ color: 'var(--ws-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.label}
+                </span>
+                <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{nf(r.count)}</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
+                <div style={{ width: `${(r.count / max) * 100}%`, height: '100%', background: r.color, borderRadius: 4 }} />
+              </div>
             </div>
-            <div style={{ height: 6, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
-              <div style={{ width: `${(r.count / max) * 100}%`, height: '100%', background: r.color, borderRadius: 4 }} />
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
 }
 
-/** Top N por contagem + resto agrupado em "Outros". */
-export function topBreakdown<T>(items: T[], pick: (item: T) => string | null, colorOf: (label: string) => string, topN = 6): BarRow[] {
-  const cont = new Map<string, number>()
+/**
+ * Top N por contagem + resto agrupado em "Outros" — clicável quando o
+ * consumidor passa `onSelect` no `BarList` (filtra pelos valores crus da
+ * barra, inclusive os de "Outros", nunca preso atrás do rótulo agregado).
+ *
+ * Agrega por RÓTULO (`labelOf(raw)`, default = o próprio valor cru) pra
+ * fundir alias (ex.: 'Odonto Scale'/'Odonto Legacy' viram uma barra só),
+ * mas guarda todos os valores crus que caíram ali em `values` — clicar
+ * filtra por todos eles de uma vez, não só o primeiro.
+ */
+export function topBreakdown<T>(
+  items: T[],
+  pick: (item: T) => string | null,
+  colorOf: (label: string) => string,
+  topN = 6,
+  labelOf: (raw: string) => string = raw => raw,
+): BarRow[] {
+  const cont = new Map<string, { count: number; values: Set<string> }>()
   for (const item of items) {
-    const label = pick(item)?.trim() || 'Sem informação'
-    cont.set(label, (cont.get(label) ?? 0) + 1)
+    const raw = pick(item)?.trim() || ''
+    const label = raw ? labelOf(raw) : 'Sem informação'
+    const entry = cont.get(label) ?? { count: 0, values: new Set<string>() }
+    entry.count += 1
+    if (raw) entry.values.add(raw)
+    cont.set(label, entry)
   }
-  const sorted = [...cont.entries()].sort((a, b) => b[1] - a[1])
+  const sorted = [...cont.entries()].sort((a, b) => b[1].count - a[1].count)
   const top = sorted.slice(0, topN)
-  const restoCount = sorted.slice(topN).reduce((s, [, n]) => s + n, 0)
-  const rows: BarRow[] = top.map(([label, count]) => ({ label, count, color: colorOf(label) }))
-  if (restoCount > 0) rows.push({ label: 'Outros', count: restoCount, color: 'var(--ws-border-strong)' })
+  const resto = sorted.slice(topN)
+  const restoCount = resto.reduce((s, [, e]) => s + e.count, 0)
+  const rows: BarRow[] = top.map(([label, e]) => ({ label, count: e.count, color: colorOf(label), values: [...e.values] }))
+  if (restoCount > 0) {
+    rows.push({
+      label: 'Outros',
+      count: restoCount,
+      color: 'var(--ws-border-strong)',
+      values: resto.flatMap(([, e]) => [...e.values]),
+      title: resto.map(([label]) => label).join(', '),
+    })
+  }
   return rows
 }

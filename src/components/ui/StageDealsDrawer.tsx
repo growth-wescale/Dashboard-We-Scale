@@ -79,14 +79,21 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
     : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Leadtime', 'Data na etapa']
   const alignRight = new Set(['Unidades', 'Taxa de Franquia', 'Leadtime', 'Parado na etapa'])
 
+  // Marca é um conjunto pequeno e fechado (8 marcas em BRAND_LIST) — topN bem
+  // acima disso garante que "Outros" nunca apareça por marca de verdade sumir
+  // do gráfico (era o caso: Oral Unic com 1 MQL virava "Outros" incontável).
+  // Agrupa pelo RÓTULO (via labelOf=marcaLabel) pra fundir alias como
+  // 'Odonto Scale'/'Odonto Legacy' numa barra só, sem perder o valor cru
+  // usado pelo filtro de Marca logo abaixo.
   const porMarca = useMemo(
-    () => topBreakdown(deals, d => marcaLabel(d.row.marca), m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
+    () => topBreakdown(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)', 20, marcaLabel),
     [deals],
   )
   // Diagnóstico em diante é do Closer; antes disso, do SDR — nome_closer já vem
   // preenchido bem antes da etapa dele, e mostrar Closer numa etapa de SDR confunde.
   const ownerRole = stage ? stageOwnerRole(stage) : 'sdr'
   const ownerLabel = ownerRole === 'closer' ? 'Closer' : 'SDR'
+  const responsavelFilterKey = ownerRole === 'closer' ? 'closer' : 'sdr'
   const porResponsavel = useMemo(
     () => topBreakdown(deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent),
     [deals, accent, ownerRole],
@@ -134,8 +141,8 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
           padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
           display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
         }}>
-          <BarList title="Por Marca" rows={porMarca} />
-          <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} />
+          <BarList title="Por Marca" rows={porMarca} onSelect={v => setFilters(f => ({ ...f, marca: v }))} />
+          <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} onSelect={v => setFilters(f => ({ ...f, [responsavelFilterKey]: v }))} />
         </div>
 
         {/* filtros */}

@@ -1,19 +1,29 @@
 /**
- * Agregação dos modos Aging e Atual — quanto tempo os deals estão parados em
- * cada etapa, e há quanto tempo estão no funil desde que viraram MQL.
+ * Agregação dos modos Aging e Atual da Visão Macro: onde estão os negócios em
+ * aberto e há quanto tempo.
+ *
+ * Os dois modos fazem a MESMA leitura — a etapa CORRENTE de cada deal vivo — e
+ * diferem só no recorte:
+ *
+ *   • **Atual**: todo negócio em aberto, não importa quando entrou no funil.
+ *   • **Aging**: só os negócios criados (MQL) no período filtrado, e onde eles
+ *     estão HOJE. É a safra do período, não o histórico de passagens.
+ *
+ * Antes de 17/09/2026 o Aging lia `vw_deal_etapa_periodos` (tempo parado por
+ * etapa) sem nenhum recorte de período, o que devolvia praticamente a mesma
+ * lista do Atual — os dois modos mostravam o mesmo número.
  *
  * Módulo puro de propósito: não importa o cliente Supabase, para poder ser
  * testado sem variável de ambiente e sem rede.
  */
 
-import { resolveStage } from '@/lib/metrics'
-import type { StageDeal, StageKey } from '@/lib/metrics'
-import type { EtapaPeriodoRow, FunnelRow } from '@/lib/funnelTypes'
+import { STAGE_DATE_FIELD, currentStage, isInWindow } from '@/lib/metrics'
+import type { PeriodWindow, StageDeal, StageKey } from '@/lib/metrics'
+import type { FunnelRow } from '@/lib/funnelTypes'
 
-export interface AgingPorEtapa {
-  etapa: string
+export interface EtapaLeadtimeAgg {
   deals: number
-  /** Média de dias parados NESSA etapa. */
+  /** Média de dias parados NESSA etapa (desde a entrada nela). */
   mediaEtapa: number | null
   /** Média de dias desde que o deal virou MQL (idade total no funil). */
   mediaAndamento: number | null
@@ -25,94 +35,80 @@ const media = (xs: number[]): number | null =>
   xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null
 
 /**
- * Agrega o aging por etapa, contando APENAS deals vivos.
+ * Negócio em aberto no recorte.
  *
- * `dealsVivos` deve conter os `id_lead` em andamento no ciclo atual, já
- * filtrados por marca e fonte. O cruzamento não é opcional: a view
- * `vw_deal_etapa_periodos` não fecha o período quando o deal é perdido, então
- * sem ele "Tentando Contato" aparece com 1.959 deals parados há 95 dias em vez
- * dos 105 há 10 dias que são a realidade operacional.
- *
- * `mqlPorDeal` (id_lead -> data ISO do MQL) alimenta `mediaAndamento`; deal
- * sem MQL conhecido só não entra nessa média — ainda conta em `deals`.
- *
- * Agrupa pela etapa CANÔNICA (`resolveStage`), não pela string crua da view —
- * senão variantes do mesmo rótulo (ex.: "SQL" vs "Reunião Agendada") viram
- * grupos separados e a contagem por etapa fica errada.
+ * `win = null` (modo Atual) aceita qualquer negócio vivo. Com `win` (modo
+ * Aging) exige MQL dentro do período: é a mesma data que o toggle "Deals
+ * criados no período" já usa como safra. Deal sem MQL — caso típico da
+ * Prospecção Ativa, que nasce direto numa etapa de prospecção — fica de fora
+ * do Aging por não ter data de criação de lead para comparar.
  */
-export function computeAging(
-  periodos: EtapaPeriodoRow[],
-  dealsVivos: Set<string>,
-  mqlPorDeal: Map<string, string>,
-  agora = Date.now(),
-): AgingPorEtapa[] {
-  const porEtapa = new Map<string, { etapa: number[]; andamento: number[] }>()
+function vivoNoRecorte(r: FunnelRow, win: PeriodWindow | null): boolean {
+  if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') return false
+  if (win && !isInWindow(r.data_novo_mql, win)) return false
+  return true
+}
 
-  for (const p of periodos) {
-    if (!p.etapa || !p.data_entrada) continue
-    const dealId = String(p.deal_id)
-    if (!dealsVivos.has(dealId)) continue
-
-    const entrada = new Date(p.data_entrada).getTime()
-    if (Number.isNaN(entrada)) continue
-
-    const diasEtapa = (agora - entrada) / DIA_MS
-    if (diasEtapa < 0) continue // relógio torto ou data futura: não inventar aging
-
-    const chave = resolveStage(p.etapa) ?? p.etapa
-    const bucket = porEtapa.get(chave) ?? { etapa: [], andamento: [] }
-    bucket.etapa.push(diasEtapa)
-
-    const mqlIso = mqlPorDeal.get(dealId)
-    if (mqlIso) {
-      const mql = new Date(mqlIso).getTime()
-      const diasAndamento = (agora - mql) / DIA_MS
-      if (!Number.isNaN(mql) && diasAndamento >= 0) bucket.andamento.push(diasAndamento)
-    }
-
-    porEtapa.set(chave, bucket)
-  }
-
-  return [...porEtapa.entries()].map(([etapa, b]) => ({
-    etapa,
-    deals: b.etapa.length,
-    mediaEtapa: media(b.etapa),
-    mediaAndamento: media(b.andamento),
-  }))
+const diasDesde = (iso: string | null | undefined, agora: number): number | null => {
+  if (!iso) return null
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return null
+  const dias = (agora - t) / DIA_MS
+  // Data futura/relógio torto: não inventar aging.
+  return dias >= 0 ? dias : null
 }
 
 /**
- * Deals por trás do número de uma etapa no modo Aging — espelha exatamente o
- * mesmo filtro do loop de `computeAging` (deal vivo, `data_entrada` válida, sem
- * data futura, etapa canônica), só que preservando a `FunnelRow` para o popup.
+ * Agrega os negócios vivos do recorte pela etapa em que estão AGORA.
  *
- * `vivosRowById` (id_lead -> linha) faz o papel do `dealsVivos` do
- * `computeAging`: só entram deals em andamento no ciclo atual, já filtrados por
- * marca e fonte. `dataEtapa` carrega a entrada na etapa, base do "parado na
- * etapa" mostrado no popup.
+ * A etapa sai de `currentStage`, não de `resolveStage(etapa_funil)`, para
+ * "Reunião Agendada SQL" contar só no funil do Closer — o SDR tem uma etapa
+ * com o mesmo nome.
  */
-export function dealsInAging(
-  periodos: EtapaPeriodoRow[],
-  vivosRowById: Map<string, FunnelRow>,
-  stage: StageKey,
+export function computeEtapaAtual(
+  rows: FunnelRow[],
+  win: PeriodWindow | null,
   agora = Date.now(),
-): StageDeal[] {
-  const out: StageDeal[] = []
+): Map<StageKey, EtapaLeadtimeAgg> {
+  const buckets = new Map<StageKey, { etapa: number[]; andamento: number[]; deals: number }>()
 
-  for (const p of periodos) {
-    if (!p.etapa || !p.data_entrada) continue
+  for (const r of rows) {
+    if (!vivoNoRecorte(r, win)) continue
 
-    const row = vivosRowById.get(String(p.deal_id))
-    if (!row) continue
+    const etapa = currentStage(r)
+    if (!etapa) continue
 
-    const entrada = new Date(p.data_entrada).getTime()
-    if (Number.isNaN(entrada)) continue
-    if ((agora - entrada) / DIA_MS < 0) continue
+    const b = buckets.get(etapa) ?? { etapa: [], andamento: [], deals: 0 }
+    b.deals += 1
 
-    if ((resolveStage(p.etapa) ?? p.etapa) !== stage) continue
+    const naEtapa = diasDesde(r[STAGE_DATE_FIELD[etapa]], agora)
+    if (naEtapa !== null) b.etapa.push(naEtapa)
 
-    out.push({ row, dataEtapa: p.data_entrada })
+    const emAndamento = diasDesde(r.data_novo_mql, agora)
+    if (emAndamento !== null) b.andamento.push(emAndamento)
+
+    buckets.set(etapa, b)
   }
 
-  return out
+  return new Map(
+    [...buckets.entries()].map(([etapa, b]) => [
+      etapa,
+      { deals: b.deals, mediaEtapa: media(b.etapa), mediaAndamento: media(b.andamento) },
+    ]),
+  )
+}
+
+/**
+ * Deals por trás do número de uma etapa nos modos Aging e Atual — espelha
+ * exatamente o mesmo filtro de `computeEtapaAtual`, para o popup nunca mostrar
+ * uma lista diferente do número que a pessoa clicou.
+ */
+export function dealsInEtapaAtual(
+  rows: FunnelRow[],
+  stage: StageKey,
+  win: PeriodWindow | null,
+): StageDeal[] {
+  return rows
+    .filter(r => vivoNoRecorte(r, win) && currentStage(r) === stage)
+    .map(row => ({ row, dataEtapa: row[STAGE_DATE_FIELD[stage]] }))
 }

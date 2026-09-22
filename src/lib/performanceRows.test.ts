@@ -129,4 +129,25 @@ describe('buildCloserRows', () => {
     expect(result.every(x => x.pctAting === 0)).toBe(true)
     expect(result.map(x => x.nome)).toEqual(['Aurélio', 'Douglas'])
   })
+
+  it("salesMode 'units' soma quantidade_unidades (piso 1), mesma regra de countSales", () => {
+    const rows = [
+      r({ nome_closer: 'Douglas', data_reuniao_realizada: '2026-08-03', status_atual: 'Ganho', data_venda: '2026-08-15', valor_contrato: 60_000, quantidade_unidades: 3 }),
+      r({ nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-16', valor_contrato: 10_000, quantidade_unidades: 0 }), // sem produto → 1
+      r({ nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-07-15', valor_contrato: 999, quantidade_unidades: 5 }), // fora da janela
+    ]
+    const [deals] = buildCloserRows(rows, win, metasCloser, roster, 'deals')
+    expect(deals.ganhos).toBe(2)
+    expect(deals.winRate).toBeCloseTo(200, 5) // 2 ganhos / 1 rr
+
+    const [units] = buildCloserRows(rows, win, metasCloser, roster, 'units')
+    expect(units.ganhos).toBe(4) // 3 + 1
+    expect(units.faturamento).toBe(70_000) // receita não depende do toggle
+    expect(units.winRate).toBeCloseTo(400, 5) // segue o toggle, igual às conversões do strip
+  })
+
+  it('sem salesMode conta negócios (compatível com chamadas antigas)', () => {
+    const rows = [r({ nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-15', quantidade_unidades: 3 })]
+    expect(buildCloserRows(rows, win, [], roster)[0].ganhos).toBe(1)
+  })
 })

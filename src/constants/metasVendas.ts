@@ -92,3 +92,9 @@ export function getFunilTaxas(marca: Marca): FunilTaxas {
   const override = TAXAS_HISTORICAS_POR_MARCA[marca] ?? {}
   return { ...TAXAS_DEFAULT, ...override }
 }
+
+// Teto de no-show aceito pelo time (decisão do Junior, 16/09/2026): a partir daí
+// a conversão SQL → No-show conta como fora da meta. Fixo de propósito — não
+// existe meta de no-show em `DB_Metas_Performance` nem no Hub de metas, então
+// não há de onde derivar por pessoa/marca como as outras conversões.
+export const META_NO_SHOW_MAX = 10

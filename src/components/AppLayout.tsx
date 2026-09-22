@@ -1,14 +1,17 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play } from 'lucide-react'
-import { Sidebar } from '@/components/ui/Sidebar'
+import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play, Menu, Users } from 'lucide-react'
+import { Sidebar, type SidebarItem } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
+import { useAcesso } from '@/contexts/AcessoContext'
+import { PERM_GERENCIAR_USUARIOS, ROTA_ACESSOS, permissaoDaRota } from '@/lib/permissoes'
 import { GpIntro } from '@/components/gp/GpIntro'
 import { GpStrip } from '@/components/gp/GpStrip'
 import { SennaCard } from '@/components/gp/SennaCard'
+import { useMediaQuery, MQ_COMPACTO } from '@/hooks/useMediaQuery'
 
 // ── Context ────────────────────────────────────────────────────────────────
 interface MarcaContextType {
@@ -33,7 +36,7 @@ const BRANDS_SUB = [
   { key: 'liso-laser', label: 'Lisô Laser', dot: '#FF6643' },
   { key: 'b2case',     label: 'B2Case',     dot: '#0169F2' },
   { key: 'viva',       label: 'Viva',       dot: '#FF0069' },
-  { key: 'we-scale',   label: 'We Scale',   dot: '#7E0E70' },
+  { key: 'we-scale',   label: 'Scale Partner', dot: '#7E0E70' },
   { key: 'fred',       label: 'Frederico',  dot: '#2A6E3F' },
   { key: 'leo',        label: 'Leonardo',   dot: '#3B5998' },
 ]
@@ -42,6 +45,7 @@ const VENDAS_SUB = [
   { key: 'funil-vendas',        label: 'Visão Macro' },
   { key: 'performance-vendas',  label: 'Performance' },
   { key: 'analise-perda',       label: 'Análise de Perda' },
+  { key: 'linha-do-tempo',      label: 'Linha do Tempo' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
   { key: 'metas',               label: 'Metas' },
@@ -77,11 +81,20 @@ const NAV_ITEMS = [
   },
 ]
 
+// Rota de cada item do menu — a permissão exigida sai de permissaoDaRota() (lib/permissoes).
+const ROTA_MENU: Record<string, string> = { geral: '/', saude: '/marca', okrs: '/okrs', sop: '/sop-marketing' }
+
+function podeRota(pode: (chave: string) => boolean, rota: string | undefined): boolean {
+  const permissao = rota ? permissaoDaRota(rota) : null
+  return permissao !== null && pode(permissao)
+}
+
 function getActiveKey(pathname: string): string {
+  if (pathname.startsWith(ROTA_ACESSOS)) return 'acessos'
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/linha-do-tempo') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas')) return 'vendas'
   return 'geral'
 }
 
@@ -89,6 +102,7 @@ function getVendasActiveSub(pathname: string): string {
   if (pathname.startsWith('/gp-setembro'))        return 'gp-setembro'
   if (pathname.startsWith('/analise-objecoes'))   return 'analise-objecoes'
   if (pathname.startsWith('/analise-perda'))      return 'analise-perda'
+  if (pathname.startsWith('/linha-do-tempo'))     return 'linha-do-tempo'
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
   if (pathname.startsWith('/metas'))              return 'metas'
   return 'funil-vendas'
@@ -102,12 +116,62 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [activeBrand, setActiveBrand] = useState<string>('oral-unic')
+  const { marcas: marcasPermitidas, pode } = useAcesso()
+  const [activeBrand, setActiveBrandState] = useState<string>(marcasPermitidas?.[0] ?? 'oral-unic')
+
+  // Pessoa limitada a marcas: a marca ativa da Saúde da Marca só pode ser uma
+  // das dela — nem um bug de código local leva pro sub de outra marca.
+  const setActiveBrand = useCallback((b: string) => {
+    if (marcasPermitidas && !marcasPermitidas.includes(b)) return
+    setActiveBrandState(b)
+  }, [marcasPermitidas])
+
+  // Acesso carregou/mudou: garante que a marca ativa está entre as permitidas.
+  useEffect(() => {
+    if (marcasPermitidas && !marcasPermitidas.includes(activeBrand)) {
+      setActiveBrandState(marcasPermitidas[0])
+    }
+  }, [marcasPermitidas, activeBrand])
+
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('sidebarOpen') !== 'false' } catch { return true }
   })
+  // Celular/tablet: o menu vira gaveta por cima do conteúdo — começa fechada,
+  // fecha ao navegar e não mexe na preferência de menu aberto/fechado do desktop.
+  const compacto = useMediaQuery(MQ_COMPACTO)
+  const [gavetaAberta, setGavetaAberta] = useState(false)
+  const menuAberto = compacto ? gavetaAberta : sidebarOpen
+  useEffect(() => {
+    if (!compacto || !gavetaAberta) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setGavetaAberta(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [compacto, gavetaAberta])
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
+
+  // Menu segue o controle de acessos: some o que o papel não libera. Pessoa
+  // limitada a marcas vê só os sub-itens delas em Saúde da Marca.
+  const navItems = useMemo<SidebarItem[]>(() => {
+    const itens: SidebarItem[] = []
+    for (const item of NAV_ITEMS) {
+      if (item.key === 'vendas') {
+        const subs = VENDAS_SUB.filter(s => podeRota(pode, `/${s.key}`))
+        if (subs.length > 0) itens.push({ ...item, subItems: subs })
+        continue
+      }
+      if (!podeRota(pode, ROTA_MENU[item.key])) continue
+      if (item.key === 'saude' && marcasPermitidas) {
+        itens.push({ ...item, subItems: BRANDS_SUB.filter(b => marcasPermitidas.includes(b.key)) })
+        continue
+      }
+      itens.push(item)
+    }
+    if (pode(PERM_GERENCIAR_USUARIOS)) {
+      itens.push({ key: 'acessos', label: 'Usuários & Acessos', icon: <Users size={16} /> })
+    }
+    return itens
+  }, [pode, marcasPermitidas])
 
   const handleSync = useCallback(() => {
     if (syncing) return
@@ -117,6 +181,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [syncing])
 
   function toggleSidebar() {
+    if (compacto) { setGavetaAberta(v => !v); return }
     setSidebarOpen(v => {
       const next = !v
       try { localStorage.setItem('sidebarOpen', String(next)) } catch {}
@@ -129,17 +194,24 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isVendas = activeKey === 'vendas'
 
   function handleNav(key: string) {
+    setGavetaAberta(false)
     if (key === 'geral') navigate('/')
     else if (key === 'saude') navigate('/marca')
     else if (key === 'okrs') navigate('/okrs')
     else if (key === 'sop') navigate('/sop-marketing')
-    else if (key === 'vendas') navigate('/funil-vendas')
+    else if (key === 'vendas') {
+      const primeira = VENDAS_SUB.find(s => podeRota(pode, `/${s.key}`))
+      if (primeira) handleSubNav(primeira.key)
+    }
+    else if (key === 'acessos') navigate(ROTA_ACESSOS)
   }
 
   function handleSubNav(key: string) {
+    setGavetaAberta(false)
     if (key === 'funil-vendas') navigate('/funil-vendas')
     else if (key === 'performance-vendas') navigate('/performance-vendas')
     else if (key === 'analise-perda') navigate('/analise-perda')
+    else if (key === 'linha-do-tempo') navigate('/linha-do-tempo')
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
     else if (key === 'gp-setembro') navigate('/gp-setembro')
     else if (key === 'metas') navigate('/metas')
@@ -192,18 +264,25 @@ export function AppLayout({ children }: AppLayoutProps) {
       >
         <Sidebar
           variant="glass"
-          items={NAV_ITEMS}
+          items={navItems}
           active={activeKey}
           onSelect={handleNav}
           activeSub={isSaude ? activeBrand : isVendas ? getVendasActiveSub(location.pathname) : null}
           onSelectSub={handleSubNav}
           footer={footer}
-          open={sidebarOpen}
+          open={menuAberto}
+          style={compacto ? { zIndex: 950, height: 'calc(100dvh - 24px)' } : undefined}
         />
+
+        {compacto && gavetaAberta && (
+          <div onClick={() => setGavetaAberta(false)} aria-hidden="true" style={{
+            position: 'fixed', inset: 0, zIndex: 940, background: 'rgba(0,0,0,.35)', backdropFilter: 'blur(2px)',
+          }} />
+        )}
 
         {/* Content wrapper — 12px extra pra folga da sidebar flutuante glass */}
         <div style={{
-          marginLeft: sidebarOpen ? 'calc(var(--sidebar-w) + 12px)' : 0,
+          marginLeft: !compacto && sidebarOpen ? 'calc(var(--sidebar-w) + 12px)' : 0,
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
@@ -224,18 +303,19 @@ export function AppLayout({ children }: AppLayoutProps) {
             borderBottom: '1px solid var(--ws-border)',
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
-            padding: '0 24px',
+            gap: 'var(--topbar-gap)',
+            padding: '0 var(--topbar-pad-x)',
             position: 'sticky',
             top: 0,
             zIndex: 10,
           }}>
             <button
               onClick={toggleSidebar}
-              title={sidebarOpen ? 'Ocultar menu' : 'Mostrar menu'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8, flexShrink: 0 }}
+              title={menuAberto ? 'Ocultar menu' : 'Mostrar menu'}
+              aria-expanded={menuAberto}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: compacto ? 6 : 4, borderRadius: 8, flexShrink: 0 }}
             >
-              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+              {compacto ? <Menu size={20} /> : sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>
             <div style={{ flex: 1 }} />
             <button
@@ -275,7 +355,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </button>
             )}
             <ThemeToggle />
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
+            <button className="rs-hide-sm" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}>
               <Bell size={18} />
             </button>
             <div style={{
@@ -303,7 +383,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         {/* Assistente flutuante só nas abas de Marketing — fora das abas de Vendas (Junior) */}
-        {!isVendas && <AiChat />}
+        {!isVendas && pode('acao.assistente-ia') && <AiChat />}
         {gpAtivo && <GpIntro />}
       </div>
     </MarcaContext.Provider>

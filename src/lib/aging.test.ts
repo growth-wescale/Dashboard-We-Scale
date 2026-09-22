@@ -1,107 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { computeAging, dealsInAging } from '@/lib/aging'
-import type { EtapaPeriodoRow, FunnelRow } from '@/lib/funnelTypes'
+import { computeEtapaAtual, dealsInEtapaAtual } from '@/lib/aging'
+import type { PeriodWindow } from '@/lib/metrics'
+import type { FunnelRow } from '@/lib/funnelTypes'
 
 const AGORA = new Date('2026-08-14T12:00:00Z').getTime()
 const diasAtras = (n: number) => new Date(AGORA - n * 86_400_000).toISOString()
 
-const periodo = (over: Partial<EtapaPeriodoRow>): EtapaPeriodoRow => ({
-  deal_id: 'd1',
-  etapa: 'Contato Efetivo',
-  data_entrada: diasAtras(10),
-  data_saida: null,
-  e_ultima_passagem: true,
-  ...over,
-})
-
-const SEM_MQL = new Map<string, string>()
-
-describe('computeAging', () => {
-  it('conta apenas deals vivos, ignorando os mortos', () => {
-    // Este é o ponto central: vw_deal_etapa_periodos não fecha o período quando
-    // o deal é perdido. Sem o filtro, um deal morto há 300 dias entra na média.
-    const periodos = [
-      periodo({ deal_id: 'vivo', data_entrada: diasAtras(10) }),
-      periodo({ deal_id: 'morto', data_entrada: diasAtras(300) }),
-    ]
-    const [r] = computeAging(periodos, new Set(['vivo']), SEM_MQL, AGORA)
-
-    expect(r.deals).toBe(1)
-    expect(r.mediaEtapa).toBeCloseTo(10, 5)
-  })
-
-  it('devolve vazio quando nenhum deal está vivo', () => {
-    expect(computeAging([periodo({ deal_id: 'morto' })], new Set(), SEM_MQL, AGORA)).toEqual([])
-  })
-
-  it('agrupa por etapa canônica, resolvendo variantes de rótulo', () => {
-    const periodos = [
-      periodo({ deal_id: 'a', etapa: 'SAL' }),
-      periodo({ deal_id: 'b', etapa: 'Contato Efetivo' }),
-      // "SQL" e "Reunião Agendada SQL" resolvem pra mesma etapa canônica.
-      periodo({ deal_id: 'c', etapa: 'SQL' }),
-      periodo({ deal_id: 'd', etapa: 'Reunião Agendada SQL' }),
-    ]
-    const r = computeAging(periodos, new Set(['a', 'b', 'c', 'd']), SEM_MQL, AGORA)
-    const porEtapa = Object.fromEntries(r.map(x => [x.etapa, x.deals]))
-
-    expect(porEtapa['SAL']).toBe(1)
-    expect(porEtapa['Contato Efetivo']).toBe(1)
-    expect(porEtapa['Reunião Agendada SQL']).toBe(2)
-  })
-
-  it('calcula a média dos dias parados na etapa', () => {
-    const periodos = [2, 4, 6, 8].map((d, i) =>
-      periodo({ deal_id: `d${i}`, data_entrada: diasAtras(d) }),
-    )
-    const [r] = computeAging(periodos, new Set(['d0', 'd1', 'd2', 'd3']), SEM_MQL, AGORA)
-
-    expect(r.mediaEtapa).toBeCloseTo(5, 5) // (2+4+6+8)/4
-  })
-
-  it('calcula a média de dias em andamento (desde o MQL), separado da etapa', () => {
-    const periodos = [
-      periodo({ deal_id: 'a', data_entrada: diasAtras(3) }),
-      periodo({ deal_id: 'b', data_entrada: diasAtras(5) }),
-    ]
-    const mqlPorDeal = new Map([
-      ['a', diasAtras(20)],
-      ['b', diasAtras(40)],
-    ])
-    const [r] = computeAging(periodos, new Set(['a', 'b']), mqlPorDeal, AGORA)
-
-    expect(r.mediaEtapa).toBeCloseTo(4, 5) // (3+5)/2
-    expect(r.mediaAndamento).toBeCloseTo(30, 5) // (20+40)/2
-  })
-
-  it('deal sem MQL conhecido conta em deals mas não entra na média de andamento', () => {
-    const periodos = [
-      periodo({ deal_id: 'a', data_entrada: diasAtras(3) }),
-      periodo({ deal_id: 'b', data_entrada: diasAtras(5) }),
-    ]
-    const mqlPorDeal = new Map([['a', diasAtras(20)]]) // 'b' sem MQL
-    const [r] = computeAging(periodos, new Set(['a', 'b']), mqlPorDeal, AGORA)
-
-    expect(r.deals).toBe(2)
-    expect(r.mediaAndamento).toBeCloseTo(20, 5)
-  })
-
-  it('descarta linha sem etapa ou sem data de entrada', () => {
-    const periodos = [
-      periodo({ deal_id: 'a', etapa: null }),
-      periodo({ deal_id: 'a', data_entrada: null }),
-      periodo({ deal_id: 'a', data_entrada: 'não é data' }),
-    ]
-    expect(computeAging(periodos, new Set(['a']), SEM_MQL, AGORA)).toEqual([])
-  })
-
-  it('ignora entrada no futuro em vez de gerar dias negativos', () => {
-    const futuro = [periodo({ deal_id: 'a', data_entrada: diasAtras(-5) })]
-    expect(computeAging(futuro, new Set(['a']), SEM_MQL, AGORA)).toEqual([])
-  })
-})
-
-// ─── dealsInAging ─────────────────────────────────────────────────────────────
+/** Id da etapa "Reunião Agendada SQL" no funil do Closer — a única que conta. */
+const SQL_CLOSER = '69b1badfe1def700137f1b89'
 
 const fakeRow = (over: Partial<FunnelRow>): FunnelRow => ({
   id_lead: 'd1',
@@ -125,7 +31,7 @@ const fakeRow = (over: Partial<FunnelRow>): FunnelRow => ({
   motivo_perda: null,
   data_novo_mql: diasAtras(20),
   data_tentando_contato: null,
-  data_contato_efetivo: null,
+  data_contato_efetivo: diasAtras(10),
   data_interesse_reuniao: null,
   data_conexao: null,
   data_agendamento_reuniao_sql: null,
@@ -140,57 +46,132 @@ const fakeRow = (over: Partial<FunnelRow>): FunnelRow => ({
   ...over,
 })
 
-const vivos = (rows: FunnelRow[]) => new Map(rows.map(r => [String(r.id_lead), r]))
+/** Janela de período por range de datas (o caminho que a Visão Macro usa). */
+const janela = (from: string, to: string): PeriodWindow => ({
+  activePeriods: new Set(),
+  dateRange: { from, to },
+  ranges: null,
+})
 
-describe('dealsInAging', () => {
-  it('devolve exatamente as linhas que o computeAging conta na etapa', () => {
-    const periodos = [
-      periodo({ deal_id: 'a', etapa: 'SAL', data_entrada: diasAtras(3) }),
-      periodo({ deal_id: 'b', etapa: 'SAL', data_entrada: diasAtras(9) }),
-      periodo({ deal_id: 'c', etapa: 'Contato Efetivo', data_entrada: diasAtras(4) }),
+// AGORA = 14/08/2026; MQL de 20 dias atrás = 25/07/2026.
+const AGOSTO = janela('2026-08-01', '2026-08-31')
+const JULHO = janela('2026-07-01', '2026-07-31')
+
+describe('computeEtapaAtual — modo Atual (sem recorte de período)', () => {
+  it('agrupa os negócios vivos pela etapa em que estão agora', () => {
+    const rows = [
+      fakeRow({ id_lead: 'a', etapa_funil: 'Contato Efetivo' }),
+      fakeRow({ id_lead: 'b', etapa_funil: 'Contato Efetivo' }),
+      fakeRow({ id_lead: 'c', etapa_funil: 'SAL', data_sal: diasAtras(4) }),
     ]
-    const byId = vivos([fakeRow({ id_lead: 'a' }), fakeRow({ id_lead: 'b' }), fakeRow({ id_lead: 'c' })])
-
-    const res = dealsInAging(periodos, byId, 'SAL', AGORA)
-    const countAgg = computeAging(periodos, new Set(['a', 'b', 'c']), SEM_MQL, AGORA)
-      .find(x => x.etapa === 'SAL')!.deals
-
-    expect(res).toHaveLength(countAgg)
-    expect(res.map(d => d.row.id_lead).sort()).toEqual(['a', 'b'])
-    expect(res.map(d => d.dataEtapa).sort()).toEqual([diasAtras(9), diasAtras(3)].sort())
+    const r = computeEtapaAtual(rows, null, AGORA)
+    expect(r.get('Contato Efetivo')?.deals).toBe(2)
+    expect(r.get('SAL')?.deals).toBe(1)
   })
 
-  it('ignora deal fora do mapa de vivos (perdido/fora de escopo)', () => {
-    const periodos = [
-      periodo({ deal_id: 'vivo', data_entrada: diasAtras(10) }),
-      periodo({ deal_id: 'morto', data_entrada: diasAtras(300) }),
+  it('ignora Ganho, Perdido e ciclo antigo', () => {
+    const rows = [
+      fakeRow({ id_lead: 'vivo' }),
+      fakeRow({ id_lead: 'ganho', status_atual: 'Ganho' }),
+      fakeRow({ id_lead: 'perdido', status_atual: 'Perdido' }),
+      fakeRow({ id_lead: 'antigo', eh_ciclo_atual: false }),
     ]
-    const res = dealsInAging(periodos, vivos([fakeRow({ id_lead: 'vivo' })]), 'Contato Efetivo', AGORA)
-
-    expect(res).toHaveLength(1)
-    expect(res[0].row.id_lead).toBe('vivo')
+    expect(computeEtapaAtual(rows, null, AGORA).get('Contato Efetivo')?.deals).toBe(1)
   })
 
-  it('agrupa pela etapa canônica, resolvendo variantes de rótulo', () => {
-    const periodos = [
-      periodo({ deal_id: 'a', etapa: 'SQL' }),
-      periodo({ deal_id: 'b', etapa: 'Reunião Agendada SQL' }),
-      periodo({ deal_id: 'c', etapa: 'SAL' }),
-    ]
-    const byId = vivos([fakeRow({ id_lead: 'a' }), fakeRow({ id_lead: 'b' }), fakeRow({ id_lead: 'c' })])
-
-    expect(dealsInAging(periodos, byId, 'Reunião Agendada SQL', AGORA).map(d => d.row.id_lead).sort())
-      .toEqual(['a', 'b'])
+  it('inclui deal sem MQL — o modo Atual não recorta por safra', () => {
+    const rows = [fakeRow({ id_lead: 'sem-mql', data_novo_mql: null })]
+    const agg = computeEtapaAtual(rows, null, AGORA).get('Contato Efetivo')
+    expect(agg?.deals).toBe(1)
+    expect(agg?.mediaAndamento).toBeNull()
   })
 
-  it('descarta linha sem etapa, sem data, com data inválida ou no futuro', () => {
-    const byId = vivos([fakeRow({ id_lead: 'a' })])
-    const periodos = [
-      periodo({ deal_id: 'a', etapa: null }),
-      periodo({ deal_id: 'a', data_entrada: null }),
-      periodo({ deal_id: 'a', data_entrada: 'não é data' }),
-      periodo({ deal_id: 'a', data_entrada: diasAtras(-5) }),
+  it('média na etapa e média em andamento saem das datas da própria linha', () => {
+    const rows = [
+      fakeRow({ id_lead: 'a', data_contato_efetivo: diasAtras(10), data_novo_mql: diasAtras(20) }),
+      fakeRow({ id_lead: 'b', data_contato_efetivo: diasAtras(20), data_novo_mql: diasAtras(40) }),
     ]
-    expect(dealsInAging(periodos, byId, 'Contato Efetivo', AGORA)).toEqual([])
+    const agg = computeEtapaAtual(rows, null, AGORA).get('Contato Efetivo')
+    expect(agg?.mediaEtapa).toBeCloseTo(15, 5)
+    expect(agg?.mediaAndamento).toBeCloseTo(30, 5)
+  })
+
+  it('não inventa aging com data futura, mas o deal segue contando', () => {
+    const rows = [fakeRow({ data_contato_efetivo: new Date(AGORA + 86_400_000).toISOString() })]
+    const agg = computeEtapaAtual(rows, null, AGORA).get('Contato Efetivo')
+    expect(agg?.deals).toBe(1)
+    expect(agg?.mediaEtapa).toBeNull()
+  })
+
+  it('"Reunião Agendada SQL" só conta no funil do Closer', () => {
+    const rows = [
+      fakeRow({ id_lead: 'closer', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: SQL_CLOSER }),
+      fakeRow({ id_lead: 'sdr', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: 'etapa-do-sdr' }),
+    ]
+    expect(computeEtapaAtual(rows, null, AGORA).get('Reunião Agendada SQL')?.deals).toBe(1)
+  })
+})
+
+describe('computeEtapaAtual — modo Aging (safra do período)', () => {
+  it('conta só os negócios cujo MQL caiu na janela', () => {
+    const rows = [
+      fakeRow({ id_lead: 'jul', data_novo_mql: '2026-07-25T12:00:00Z' }),
+      fakeRow({ id_lead: 'ago', data_novo_mql: '2026-08-10T12:00:00Z' }),
+    ]
+    expect(computeEtapaAtual(rows, AGOSTO, AGORA).get('Contato Efetivo')?.deals).toBe(1)
+    expect(computeEtapaAtual(rows, JULHO, AGORA).get('Contato Efetivo')?.deals).toBe(1)
+    expect(computeEtapaAtual(rows, null, AGORA).get('Contato Efetivo')?.deals).toBe(2)
+  })
+
+  it('a etapa é a de HOJE, não a que o deal tinha no período', () => {
+    // MQL em agosto, hoje já está em SAL: conta em SAL, não em MQL.
+    const rows = [fakeRow({
+      etapa_funil: 'SAL',
+      data_novo_mql: '2026-08-02T12:00:00Z',
+      data_sal: '2026-08-12T12:00:00Z',
+    })]
+    const r = computeEtapaAtual(rows, AGOSTO, AGORA)
+    expect(r.get('SAL')?.deals).toBe(1)
+    expect(r.has('MQL')).toBe(false)
+  })
+
+  it('deal sem MQL fica fora da safra', () => {
+    const rows = [fakeRow({ data_novo_mql: null })]
+    expect(computeEtapaAtual(rows, AGOSTO, AGORA).size).toBe(0)
+  })
+
+  it('não conta negócio já fechado, mesmo com MQL na janela', () => {
+    const rows = [
+      fakeRow({ id_lead: 'vivo', data_novo_mql: '2026-08-05T12:00:00Z' }),
+      fakeRow({ id_lead: 'ganho', status_atual: 'Ganho', data_novo_mql: '2026-08-05T12:00:00Z' }),
+    ]
+    expect(computeEtapaAtual(rows, AGOSTO, AGORA).get('Contato Efetivo')?.deals).toBe(1)
+  })
+})
+
+describe('dealsInEtapaAtual', () => {
+  it('devolve exatamente as linhas que computeEtapaAtual conta', () => {
+    const rows = [
+      fakeRow({ id_lead: 'a', data_novo_mql: '2026-08-02T12:00:00Z' }),
+      fakeRow({ id_lead: 'b', data_novo_mql: '2026-08-03T12:00:00Z' }),
+      fakeRow({ id_lead: 'fora', data_novo_mql: '2026-07-03T12:00:00Z' }),
+      fakeRow({ id_lead: 'morto', status_atual: 'Perdido', data_novo_mql: '2026-08-04T12:00:00Z' }),
+    ]
+    const lista = dealsInEtapaAtual(rows, 'Contato Efetivo', AGOSTO)
+    expect(lista.map(d => d.row.id_lead)).toEqual(['a', 'b'])
+    expect(lista.length).toBe(computeEtapaAtual(rows, AGOSTO, AGORA).get('Contato Efetivo')?.deals)
+  })
+
+  it('carrega a data de entrada na etapa clicada', () => {
+    const rows = [fakeRow({ data_sal: diasAtras(3), etapa_funil: 'SAL' })]
+    expect(dealsInEtapaAtual(rows, 'SAL', null)[0].dataEtapa).toBe(diasAtras(3))
+  })
+
+  it('sem janela devolve todo negócio em aberto na etapa', () => {
+    const rows = [
+      fakeRow({ id_lead: 'a', data_novo_mql: '2026-07-03T12:00:00Z' }),
+      fakeRow({ id_lead: 'b', data_novo_mql: '2026-08-03T12:00:00Z' }),
+    ]
+    expect(dealsInEtapaAtual(rows, 'Contato Efetivo', null).map(d => d.row.id_lead)).toEqual(['a', 'b'])
   })
 })

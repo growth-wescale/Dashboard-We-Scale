@@ -24,6 +24,16 @@ export interface FunilFilterOptions {
 }
 
 /**
+ * "Deal na janela" = alguma etapa dele (as 12 de STAGE_ORDER) aconteceu dentro
+ * de `win`; no modo safra (`cohort`) só o MQL conta. É a regra que cruza as
+ * opções dos filtros E a lista da Linha do Tempo — uma função só.
+ */
+export function dealNaJanela(row: FunnelRow, win: PeriodWindow, cohort: boolean): boolean {
+  const campos = cohort ? (['data_novo_mql'] as const) : STAGE_ORDER.map(s => STAGE_DATE_FIELD[s])
+  return campos.some(c => isInWindow(row[c] as string | null, win))
+}
+
+/**
  * Opções "estilo Excel" dos filtros de Marca, Fonte, Sub-fonte, SDR e Closer:
  * cada lista reflete os DEMAIS filtros já ativos + a janela de período, menos
  * o próprio filtro. "Deal na janela" = tem alguma data de etapa dentro de
@@ -32,13 +42,10 @@ export interface FunilFilterOptions {
  */
 export function funilFilterOptions(input: FunilFilterOptionsInput): FunilFilterOptions {
   const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort } = input
-  const camposJanela = cohort
-    ? (['data_novo_mql'] as const)
-    : STAGE_ORDER.map(s => STAGE_DATE_FIELD[s])
 
   const subFonteDe = (r: FunnelRow) => normalizeSubFonte(r.utm_source, r.sub_fonte_crm)
   const fonteDe = (r: FunnelRow) => normalizeFonteMacro(r.fonte_macro)
-  const naJanela = rows.filter(r => camposJanela.some(c => isInWindow(r[c] as string | null, win)))
+  const naJanela = rows.filter(r => dealNaJanela(r, win, cohort))
   const okMarca = (r: FunnelRow) => !marcasParaEscopo.length || marcasParaEscopo.includes(r.marca ?? '')
   const okFonte = (r: FunnelRow) => !fontes.length || fontes.includes(fonteDe(r))
   const okSub = (r: FunnelRow) => !subFontes.length || subFontes.includes(subFonteDe(r))

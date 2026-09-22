@@ -10,7 +10,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
+import { LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -33,13 +33,13 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
         zIndex: 1000, backdropFilter: 'blur(2px)',
       }} />
 
-      <div style={{
+      <div className="rs-drawer" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(680px, 96vw)',
         background: 'var(--ws-surface)', borderLeft: '1px solid var(--ws-border)',
         boxShadow: '-8px 0 40px rgba(0,0,0,.18)', zIndex: 1001,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <div style={{
+        <div className="rs-drawer-head" style={{
           padding: '20px 24px', borderBottom: '1px solid var(--ws-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0,
         }}>
@@ -92,6 +92,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                       {cell(r.nome_negociacao)}
                       <ExternalLink size={11} />
                     </a>
+                    <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                   </td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                   <td style={{

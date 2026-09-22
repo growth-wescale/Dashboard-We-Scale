@@ -14,6 +14,7 @@ import { isoDate, todayLocal } from '@/lib/dateUtils'
 import { PISO_PERIODO } from '@/lib/periodo'
 import type { DateRange } from '@/lib/periodo'
 import { controlStyle, labelStyle } from './MultiSelect'
+import { useMediaQuery, MQ_CELULAR } from '@/hooks/useMediaQuery'
 
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const MESES_LONGO = [
@@ -76,6 +77,8 @@ export function DateRangePicker({ value, onChange }: { value: DateRange; onChang
   const [draftEnd, setDraftEnd] = useState<string | null>(value.end)
   const box = useRef<HTMLDivElement>(null)
   const hojeIso = todayLocal()
+  // Celular: atalhos viram linha de chips em cima do calendário (lado a lado são 450px).
+  const celular = useMediaQuery(MQ_CELULAR)
 
   useEffect(() => {
     if (!open) return
@@ -150,10 +153,15 @@ export function DateRangePicker({ value, onChange }: { value: DateRange; onChang
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1100,
           background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
           borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md, 0 8px 24px rgba(0,0,0,.12))',
-          display: 'flex', overflow: 'hidden',
+          display: 'flex', flexDirection: celular ? 'column' : 'row', overflow: 'hidden', maxWidth: 'calc(100vw - 24px)',
         }}>
-          <div style={{ width: 150, padding: 10, borderRight: '1px solid var(--ws-border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ ...labelStyle, padding: '4px 6px 6px' }}>Atalhos</div>
+          <div style={{
+            width: celular ? 'auto' : 150, padding: 10, display: 'flex', gap: 2,
+            ...(celular
+              ? { flexDirection: 'row', flexWrap: 'wrap', borderBottom: '1px solid var(--ws-border)' }
+              : { flexDirection: 'column', borderRight: '1px solid var(--ws-border)' }),
+          }}>
+            <div style={{ ...labelStyle, padding: '4px 6px 6px', flexBasis: celular ? '100%' : undefined }}>Atalhos</div>
             {ATALHOS.map(a => (
               <button
                 key={a.label}
@@ -172,7 +180,7 @@ export function DateRangePicker({ value, onChange }: { value: DateRange; onChang
             ))}
           </div>
 
-          <div style={{ padding: 14, width: 296 }}>
+          <div style={{ padding: 14, width: celular ? 'min(296px, calc(100vw - 24px))' : 296 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <button type="button" onClick={() => mudarMes(-1)} disabled={!podeVoltar}
                 style={{ border: 'none', background: 'none', cursor: podeVoltar ? 'pointer' : 'default', opacity: podeVoltar ? 1 : .3, padding: 4, display: 'flex' }}>
@@ -206,7 +214,7 @@ export function DateRangePicker({ value, onChange }: { value: DateRange; onChang
                     onClick={() => clicarDia(c.iso)}
                     style={{
                       border: 'none', borderRadius: isBorda ? 6 : noRange ? 0 : 6,
-                      height: 30, fontSize: 12.5, fontFamily: 'var(--font-body)',
+                      height: celular ? 36 : 30, fontSize: 12.5, fontFamily: 'var(--font-body)',
                       cursor: futuro ? 'default' : 'pointer',
                       background: isBorda ? 'var(--brand-accent, #2ABCB5)' : noRange ? 'color-mix(in srgb, var(--brand-accent, #2ABCB5) 16%, transparent)' : 'transparent',
                       color: futuro ? 'var(--ws-text-secondary)' : isBorda ? '#fff' : !c.noMes ? 'var(--ws-text-secondary)' : 'var(--ws-text-primary)',

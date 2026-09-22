@@ -2,6 +2,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap');
 @import url('./styles/v2/refined.css');
 @import url('./styles/gp-mode.css');
+@import url('./styles/responsive.css');
 
 :root {
   /* ---- Base We Scale ---- */
@@ -32,7 +33,6 @@
   --brand-accent-2: var(--ws-vinho-b);
   --brand-dark: var(--ws-vinho-a);
   --brand-accent-contrast: #FFFFFF;
-
   /* ---- Typography ---- */
   --font-display: 'Clash Display', 'Public Sans', system-ui, sans-serif;
   --font-body: 'Public Sans', system-ui, -apple-system, sans-serif;

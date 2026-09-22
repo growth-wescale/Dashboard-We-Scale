@@ -50,10 +50,10 @@ function DarkKpi({ label, value, sub, tone, onClick }: {
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
-      style={{ padding: '20px 26px', flex: 1, minWidth: 0, cursor: onClick ? 'pointer' : undefined }}
+      style={{ padding: '20px clamp(16px, 4vw, 26px)', minWidth: 0, background: DARK_ACCENT, cursor: onClick ? 'pointer' : undefined }}
     >
       <div style={{ fontSize: 11.5, letterSpacing: '.08em', textTransform: 'uppercase', color: '#E9C5E3' }}>{label}</div>
-      <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 40, color: '#fff', marginTop: 6, fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
+      <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 'clamp(30px, 8vw, 40px)', color: '#fff', marginTop: 6, fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
       {sub && (
         <div style={{ marginTop: 8, fontSize: 12.5, color: tone === 'amber' ? '#F3C979' : '#D0AEC9' }}>{sub}</div>
       )}
@@ -112,9 +112,9 @@ function Heatmap({ motivos, etapas, celulas, onCellClick, origem }: {
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 6, minWidth: 480 }}>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase' }}>MOTIVO</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>MOTIVO</div>
         {etapas.map(e => (
-          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em' }}>{stageLabel(e.etapa, origem)}</div>
+          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em', whiteSpace: 'nowrap' }}>{stageLabel(e.etapa, origem)}</div>
         ))}
         {motivos.map(m => (
           <>
@@ -225,7 +225,7 @@ export function AnalisePerda() {
 
   if (faltandoObrigatorio.length > 0) {
     return (
-      <div style={{ padding: '28px 32px 60px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 60px', maxWidth: 1400, margin: '0 auto' }}>
         <PageTop title="Análise de Perda" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
         <FilterBar
           marcasDisponiveis={marcasDisponiveis}
@@ -243,7 +243,7 @@ export function AnalisePerda() {
   }
 
   return (
-    <div style={{ padding: '28px 32px 60px', maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 60px', maxWidth: 1400, margin: '0 auto' }}>
       <PageTop
         title="Análise de Perda"
         titleAside={<OrigemToggle />}
@@ -278,17 +278,17 @@ export function AnalisePerda() {
       <QueryErrorBanner errors={[rowsError]} scope="Análise de Perda" />
 
       {/* Card dark 3 KPIs ── */}
-      <div style={{
-        display: 'flex', background: DARK_ACCENT, borderRadius: 18,
-        boxShadow: 'var(--shadow-md)', color: '#fff', overflow: 'hidden', flexWrap: 'wrap',
-      }}>
+      {/* Os separadores são o gap de 1px mostrando o fundo — valem lado a lado e empilhado. */}
+      <div className="rs-grid rs-cols-3" style={{
+        '--rs-gap': '1px', background: `color-mix(in srgb, #fff 16%, ${DARK_ACCENT})`, borderRadius: 18,
+        boxShadow: 'var(--shadow-md)', color: '#fff', overflow: 'hidden',
+      } as React.CSSProperties}>
         <DarkKpi
           label="Negociações Perdidas"
           value={nf(kpis.perdidasDeals)}
           sub={`Taxa de perda de ${pct(kpis.taxaPerda)} sobre os ${mqlWord(origem, true)} do período`}
           onClick={() => setDrawer({ title: 'Negociações Perdidas', subtitle: drawerSubtitle, deals: perdas })}
         />
-        <div style={{ width: 1, background: 'rgba(255,255,255,0.16)' }} />
         <DarkKpi
           label="Perda Evitável"
           value={evitavel.qtdProcesso + evitavel.qtdMercado > 0 ? pct(evitavel.pctEvitavel, 0) : '—'}
@@ -296,7 +296,6 @@ export function AnalisePerda() {
           tone="amber"
           onClick={() => setDrawer({ title: 'Perda Evitável', subtitle: drawerSubtitle, deals: perdas })}
         />
-        <div style={{ width: 1, background: 'rgba(255,255,255,0.16)' }} />
         <DarkKpi
           label="Receita Perdida"
           value={receitaPerdidaDeals.length > 0 ? money(kpis.receitaPerdida) : '—'}
@@ -306,7 +305,7 @@ export function AnalisePerda() {
       </div>
 
       {/* 4 KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginTop: 18 }}>
+      <div className="rs-grid rs-cols-4" style={{ '--rs-gap': '14px', marginTop: 18 } as React.CSSProperties}>
         <KTile label="Taxa de perda"            value={pct(kpis.taxaPerda)} />
         <KTile label="Em aberto (pipeline)"     value={nf(kpis.emAberto)} />
         <KTile label="Leadtime médio até perda" value={`${kpis.leadtimeDias.toFixed(1)}d`} />
@@ -317,9 +316,9 @@ export function AnalisePerda() {
       <div style={{ margin: '32px 0 16px' }}>
         <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 22, color: 'var(--ws-text-primary)' }}>Por que se perde</div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="rs-grid rs-cols-2" style={{ '--rs-gap': '14px' } as React.CSSProperties}>
         <SCard>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
             <div>
               <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>Motivos de perda</div>
               <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>PROCESSO = endereçável pelo time · MERCADO = perfil/momento</div>
@@ -392,9 +391,9 @@ export function AnalisePerda() {
           : <div style={{ padding: '20px 0', color: 'var(--ws-text-secondary)', fontSize: 13 }}>Dados insuficientes pra heatmap.</div>}
       </SCard>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
+      <div className="rs-grid rs-cols-2" style={{ '--rs-gap': '14px', marginTop: 14 } as React.CSSProperties}>
         <SCard>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
             <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>Perda por responsável</div>
             <div style={{ display: 'inline-flex', borderRadius: 999, background: 'var(--ws-border)', padding: 2 }}>
               {(['todos', 'SDR', 'Closer'] as const).map(t => (

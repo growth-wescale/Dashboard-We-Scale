@@ -134,9 +134,10 @@ export function MultiSelect({ label, options, selected, onChange, required = fal
   })
 
   return (
-    <div ref={box} style={{ position: 'relative' }}>
+    <div ref={box} className="ws-ms" style={{ position: 'relative' }}>
       <button
         type="button"
+        className="ws-ms-btn"
         onClick={() => setOpen(o => !o)}
         aria-invalid={invalido || undefined}
         style={{
@@ -153,11 +154,11 @@ export function MultiSelect({ label, options, selected, onChange, required = fal
       </button>
 
       {open && (
-        <div style={{
+        <div className="ws-ms-pop" style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 1100,
           background: 'var(--ws-surface)', border: '1px solid var(--ws-border)',
           borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-md, 0 8px 24px rgba(0,0,0,.12))',
-          padding: 6, minWidth: 190, maxHeight: 320, overflowY: 'auto',
+          padding: 6, minWidth: 190, maxWidth: 'calc(100vw - 24px)', maxHeight: 320, overflowY: 'auto',
         }}>
           <div style={{ ...labelStyle, padding: '4px 8px 6px' }}>{label}</div>
           {options.length === 0 && (

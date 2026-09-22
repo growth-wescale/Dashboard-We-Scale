@@ -15,17 +15,20 @@ import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
+import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
 import { useMetasTimeResumo } from '@/hooks/useMetasTimeResumo'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
 import type { SdrRow, CloserRow } from '@/lib/performanceRows'
-import { buildPersonMetaRows, buildPersonSimplesRows } from '@/lib/metaBreakdown'
+import { buildPersonMetaRows, buildPersonSimplesRows, buildPersonPeriodoRows, fracaoMetaMensal } from '@/lib/metaBreakdown'
+import type { PessoasBreakdown } from '@/components/ui/MetaBreakdownDrawer'
+import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
-  rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel,
+  rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel, etapasDaMarca,
 } from '@/lib/metrics'
-import type { StageKey } from '@/lib/metrics'
+import type { StageKey, StageDeal } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { businessMinutesBetween, formatBusinessDuration } from '@/lib/businessDuration'
 import { BRAND_LIST } from '@/constants/brands'
@@ -37,14 +40,48 @@ import { downloadCsv } from '@/lib/csv'
 
 /** nome -> valor de uma coluna numérica de SdrRow/CloserRow — base dos Maps
  *  período/hoje que os popups de desdobramento (MetaBreakdownDrawer) usam. */
-function mapaSdr(rows: SdrRow[], campo: 'sql' | 'rr' | 'sal'): Map<string, number> {
+type CampoSdr = 'mql' | 'sql' | 'rr' | 'sal'
+type CampoCloser = 'rr' | 'sal' | 'cof' | 'ganhos' | 'faturamento'
+
+function mapaSdr(rows: SdrRow[], campo: CampoSdr): Map<string, number> {
   return new Map(rows.map(r => [r.nome, r[campo]]))
 }
-function mapaCloser(rows: CloserRow[], campo: 'cof' | 'ganhos' | 'faturamento'): Map<string, number> {
+function mapaCloser(rows: CloserRow[], campo: CampoCloser): Map<string, number> {
   return new Map(rows.map(r => [r.nome, r[campo]]))
 }
 
-type MetaDrawerKey = 'sql' | 'rr' | 'sal' | 'cof' | 'fechamentos' | 'receita'
+// ─── Popup dos cards (clique em qualquer card, qualquer período) ──────────────
+// Toggle "Por pessoa" (meta × realizado) × "Deals" (negócios por trás do número).
+
+type CardKey =
+  | 'sdr-mql' | 'sdr-sql' | 'sdr-rr' | 'sdr-sal'
+  | 'closer-rr' | 'closer-sal' | 'closer-cof' | 'closer-fechamentos' | 'closer-receita'
+
+type CardDef = {
+  titulo: string
+  /** Etapa cujos deals o toggle "Deals" lista — mesma contagem do card. */
+  stage: StageKey
+  /** Meta mensal da pessoa pra essa métrica; ausente = etapa sem meta. */
+  metaDe?: (m: MetaAgregada) => number
+  /** 'monthly' = meta que não se divide por dia (Fechamentos, Receita). */
+  granularity: 'daily' | 'monthly'
+  dinheiro?: boolean
+} & ({ papel: 'SDR'; campo: CampoSdr } | { papel: 'Closer'; campo: CampoCloser })
+
+const CARD_DEF: Record<CardKey, CardDef> = {
+  'sdr-mql': { titulo: 'MQL', papel: 'SDR', campo: 'mql', stage: 'MQL', granularity: 'daily' },
+  'sdr-sql': { titulo: 'SQL', papel: 'SDR', campo: 'sql', stage: 'Reunião Agendada SQL', metaDe: m => m.metaSql, granularity: 'daily' },
+  'sdr-rr': { titulo: 'Diagnóstico', papel: 'SDR', campo: 'rr', stage: 'Diagnóstico', metaDe: m => m.metaReuniao, granularity: 'daily' },
+  'sdr-sal': { titulo: 'SAL', papel: 'SDR', campo: 'sal', stage: 'SAL', metaDe: m => m.metaSal, granularity: 'daily' },
+  'closer-rr': { titulo: 'Diagnóstico', papel: 'Closer', campo: 'rr', stage: 'Diagnóstico', granularity: 'daily' },
+  'closer-sal': { titulo: 'SAL', papel: 'Closer', campo: 'sal', stage: 'SAL', granularity: 'daily' },
+  'closer-cof': { titulo: 'Oportunidades (COF)', papel: 'Closer', campo: 'cof', stage: 'Oportunidade COF', metaDe: m => m.metaCof, granularity: 'daily' },
+  'closer-fechamentos': { titulo: 'Fechamentos', papel: 'Closer', campo: 'ganhos', stage: 'Fechamento', metaDe: m => m.metaQtdVendas, granularity: 'monthly' },
+  'closer-receita': { titulo: 'Receita gerada', papel: 'Closer', campo: 'faturamento', stage: 'Fechamento', metaDe: m => m.metaFinanceira, granularity: 'monthly', dinheiro: true },
+}
+
+/** '2026-09-11' -> '11/09/2026' */
+const dataBr = (iso: string) => iso.split('-').reverse().join('/')
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
@@ -167,7 +204,7 @@ function LeadtimeSection({ titulo, itens, accent }: { titulo: string; itens: Lea
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', marginBottom: 10 }}>
         {titulo}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(itens.length, 3)}, 1fr)`, gap: 14 }}>
+      <div className={`rs-grid rs-cols-${Math.min(itens.length, 3)}`} style={{ '--rs-gap': '14px' } as React.CSSProperties}>
         {itens.map(it => <LeadtimeCard key={it.label} {...it} accent={accent} />)}
       </div>
     </div>
@@ -183,8 +220,9 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
       <div style={{ background: SDR_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         PRÉ-VENDAS · EXECUTIVOS DE EXPANSÃO
       </div>
-      <div style={{ padding: '6px 8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+      <div className="rs-scroll-x">
+      <div style={{ padding: '6px 8px', minWidth: 720 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>{mqlLbl}</span>
           <span style={{ textAlign: 'right' }}>SQL</span>
@@ -213,24 +251,26 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
           </div>
         ))}
       </div>
+      </div>
     </SCard>
   )
 }
 
-function CloserTable({ rows }: { rows: CloserRow[] }) {
+function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean }) {
   const cols = '40px 1fr 70px 70px 70px 80px 120px 110px 70px 80px'
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
       <div style={{ background: CLOSER_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         VENDAS · CLOSERS
       </div>
-      <div style={{ padding: '6px 8px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500 }}>
+      <div className="rs-scroll-x">
+      <div style={{ padding: '6px 8px', minWidth: 860 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>DIAG</span>
           <span style={{ textAlign: 'right' }}>SAL</span>
           <span style={{ textAlign: 'right' }}>COF</span>
-          <span style={{ textAlign: 'right' }}>GANHOS</span>
+          <span style={{ textAlign: 'right' }}>{unidades ? 'UNIDADES' : 'GANHOS'}</span>
           <span style={{ textAlign: 'right' }}>FATURAMENTO</span>
           <span style={{ textAlign: 'right' }}>META FAT.</span>
           <span style={{ textAlign: 'right' }}>%</span>
@@ -256,26 +296,71 @@ function CloserTable({ rows }: { rows: CloserRow[] }) {
           </div>
         ))}
       </div>
+      </div>
     </SCard>
   )
 }
 
 // ─── Conversões (SCard reutilizável) ──────────────────────────────────────
 
-function ConversoesCard({ titulo, linhas }: { titulo: string; linhas: { label: string; val: number }[] }) {
+/**
+ * Uma linha do card de conversões. `meta` em % (null = sem meta cadastrada pro
+ * recorte); `polaridade` diz para que lado é bom errar — 'menor' inverte a cor,
+ * porque ficar ABAIXO do teto de no-show é o resultado desejado.
+ */
+export interface ConversaoLinha {
+  label: string
+  val: number
+  meta?: number | null
+  polaridade?: 'maior' | 'menor'
+}
+
+/** Distância até a meta em pontos percentuais, já com o sinal de leitura. */
+function MetaDelta({ val, meta, polaridade }: { val: number; meta: number; polaridade: 'maior' | 'menor' }) {
+  const delta = val - meta
+  const bom = polaridade === 'menor' ? delta <= 0 : delta >= 0
+  const cor = bom ? 'var(--status-positivo)' : 'var(--status-risco)'
+  const fundo = bom ? 'var(--status-positivo-bg)' : 'var(--status-risco-bg)'
+  const sinal = delta > 0 ? '+' : delta < 0 ? '−' : ''
+  return (
+    <span style={{
+      background: fundo, color: cor, borderRadius: 999, padding: '1px 7px',
+      fontSize: 10.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+    }}>
+      {sinal}{Math.abs(delta).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} p.p.
+    </span>
+  )
+}
+
+function ConversoesCard({ titulo, linhas, nota }: { titulo: string; linhas: ConversaoLinha[]; nota?: string }) {
   return (
     <SCard>
       <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 14 }}>{titulo}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, background: 'var(--ws-border)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+      {/* Divisórias por sombra na própria célula (não pelo gap mostrando o fundo):
+          com número ímpar de itens a célula vazia da última linha fica branca, não cinza. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', background: 'var(--ws-surface)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
         {linhas.map((c, i) => (
-          <div key={i} style={{ background: 'var(--ws-surface)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div key={i} style={{ boxShadow: '1px 0 0 var(--ws-border), 0 1px 0 var(--ws-border)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', lineHeight: 1.3 }}>{c.label}</span>
             <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 22, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {pct(c.val)}
             </span>
+            {c.meta != null ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                  {c.polaridade === 'menor' ? 'Teto' : 'Meta'} {pct(c.meta)}
+                </span>
+                <MetaDelta val={c.val} meta={c.meta} polaridade={c.polaridade ?? 'maior'} />
+              </div>
+            ) : (
+              <span style={{ fontSize: 11, color: 'var(--ws-text-muted, var(--ws-text-secondary))', opacity: .65 }}>sem meta</span>
+            )}
           </div>
         ))}
       </div>
+      {nota && (
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 8, lineHeight: 1.4 }}>{nota}</div>
+      )}
     </SCard>
   )
 }
@@ -381,9 +466,21 @@ export function PerformanceVendas() {
   }, [marcasSelecionadas, metaTime])
 
   // Metas por pessoa (para a coluna % das tabelas).
-  const { data: metasPessoa, error: metasError } = useMetasPerformance({
+  const { data: metasPessoa, rows: metasRows, error: metasError } = useMetasPerformance({
     mesKey: mesUnico ?? range.start.slice(0, 7),
   })
+
+  // Meta de conversão do recorte (marca × pessoa), derivada das metas de volume
+  // do mês. Fora de um mês único ela não existe — mesma regra dos cards de meta
+  // acima: uma meta mensal contra uma janela de trimestre/ano não diz nada.
+  const metasConv = useMemo<MetasConversao | null>(() => {
+    if (!mesUnico) return null
+    return metasConversao(metasRows, {
+      marcas: marcasSelecionadas.flatMap(b => (b.marca ? [b.marca as string] : [])),
+      sdrs,
+      closers,
+    })
+  }, [mesUnico, metasRows, marcasSelecionadas, sdrs, closers])
   // Fora de um único mês (Trimestre/Ano/multi-mês) a meta mensal não faz sentido
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
   // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".
@@ -392,51 +489,87 @@ export function PerformanceVendas() {
     [scoped, win, mesUnico, metasPessoa, roster],
   )
   const closerRows: CloserRow[] = useMemo(
-    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster),
-    [scoped, win, mesUnico, metasPessoa, roster],
+    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode),
+    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode],
   )
+  // Sufixo dos rótulos de venda quando o toggle está em Unidades — mesmo padrão da Visão Macro.
+  const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
 
   const [tab, setTab] = useState<PerfTab>('sdr')
 
-  // ── Popup de desdobramento por pessoa (clique num card com meta) ───────────
-  const [metaDrawer, setMetaDrawer] = useState<MetaDrawerKey | null>(null)
+  // ── Popup dos cards: por pessoa (meta × realizado) ou deals ────────────────
+  // Abre em qualquer período. Meta por pessoa:
+  //  - 1 mês selecionado → ritmo do mês (daily) ou meta do mês (monthly), igual antes;
+  //  - modo Dia dentro de um mesmo mês → meta mensal proporcional aos dias úteis
+  //    do recorte (1 dia = meta do dia). Só pras metas diárias;
+  //  - resto (trimestre, ano, vários meses) → só realizado.
+  const [cardAberto, setCardAberto] = useState<CardKey | null>(null)
   const winHoje = useMemo(() => toWindow(null, null, [{ from: todayLocal(), to: todayLocal() }]), [])
   const sdrRowsHoje = useMemo(() => buildSdrRows(scoped, winHoje, [], roster), [scoped, winHoje, roster])
-  const closerRowsHoje = useMemo(() => buildCloserRows(scoped, winHoje, [], roster), [scoped, winHoje, roster])
+  const closerRowsHoje = useMemo(
+    () => buildCloserRows(scoped, winHoje, [], roster, viewModes.salesMode),
+    [scoped, winHoje, roster, viewModes.salesMode],
+  )
 
-  const sqlBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
-    periodo: mapaSdr(sdrRows, 'sql'), hoje: mapaSdr(sdrRowsHoje, 'sql'),
-    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'SDR')?.metaSql ?? 0,
-    mesKey: mesUnico, fimJanela,
-  }), [mesUnico, sdrRows, sdrRowsHoje, metasPessoa, fimJanela])
+  const detalhe = useMemo(() => {
+    if (!cardAberto) return null
+    const def = CARD_DEF[cardAberto]
+    const periodo = def.papel === 'SDR' ? mapaSdr(sdrRows, def.campo) : mapaCloser(closerRows, def.campo)
+    const metaMensalPorNome = def.metaDe
+      ? (nome: string) => { const m = findMeta(metasPessoa, nome, def.papel); return m ? def.metaDe!(m) : 0 }
+      : null
 
-  const rrBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
-    periodo: mapaSdr(sdrRows, 'rr'), hoje: mapaSdr(sdrRowsHoje, 'rr'),
-    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'SDR')?.metaReuniao ?? 0,
-    mesKey: mesUnico, fimJanela,
-  }), [mesUnico, sdrRows, sdrRowsHoje, metasPessoa, fimJanela])
+    let pessoas: PessoasBreakdown | null = null
+    let notaMeta: string | undefined
+    if (mesUnico && metaMensalPorNome) {
+      if (def.granularity === 'daily') {
+        const hoje = def.papel === 'SDR' ? mapaSdr(sdrRowsHoje, def.campo) : mapaCloser(closerRowsHoje, def.campo)
+        const rows = buildPersonMetaRows({ periodo, hoje, metaMensalPorNome, mesKey: mesUnico, fimJanela })
+        if (rows.length > 0) pessoas = { variant: 'daily', rows }
+      } else {
+        const rows = buildPersonSimplesRows({ periodo, metaMensalPorNome })
+        if (rows.length > 0) pessoas = { variant: 'monthly', rows }
+      }
+    }
+    if (!pessoas) {
+      const fracao = metaMensalPorNome && def.granularity === 'daily' && periodMode === 'dia'
+        ? fracaoMetaMensal(ranges, range.start.slice(0, 7))
+        : null
+      pessoas = {
+        variant: 'periodo',
+        rows: buildPersonPeriodoRows({
+          periodo,
+          metaPorNome: fracao != null && metaMensalPorNome ? nome => metaMensalPorNome(nome) * fracao : undefined,
+        }),
+      }
+      if (fracao != null) {
+        notaMeta = 'Meta do período = meta mensal da pessoa × dias úteis do recorte (seg–sáb) ÷ dias úteis do mês. 1 dia = meta do dia.'
+      } else if (metaMensalPorNome) {
+        notaMeta = def.granularity === 'monthly'
+          ? `A meta de ${def.titulo} é mensal — aparece com 1 mês selecionado.`
+          : 'Meta por pessoa aparece com 1 mês selecionado, ou com dias dentro de um mesmo mês.'
+      }
+    }
 
-  const salBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
-    periodo: mapaSdr(sdrRows, 'sal'), hoje: mapaSdr(sdrRowsHoje, 'sal'),
-    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'SDR')?.metaSal ?? 0,
-    mesKey: mesUnico, fimJanela,
-  }), [mesUnico, sdrRows, sdrRowsHoje, metasPessoa, fimJanela])
+    // Mesma contagem do card: MQL por data na linha do deal (countStage);
+    // Fechamento pela trava de venda; demais etapas pelo histórico de eventos.
+    const deals: StageDeal[] = def.stage === 'MQL'
+      ? rowsInStage(scoped, 'MQL', win, viewModes).map(row => ({ row, dataEtapa: row.data_novo_mql }))
+      : dealsInStage(scoped, eventos, def.stage, win, viewModes, 'performance')
 
-  const cofBreakdown = useMemo(() => !mesUnico ? [] : buildPersonMetaRows({
-    periodo: mapaCloser(closerRows, 'cof'), hoje: mapaCloser(closerRowsHoje, 'cof'),
-    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaCof ?? 0,
-    mesKey: mesUnico, fimJanela,
-  }), [mesUnico, closerRows, closerRowsHoje, metasPessoa, fimJanela])
+    const nota = [
+      notaMeta,
+      `Por ${def.papel} soma pelo responsável atribuído ao negócio — negócios sem ${def.papel} não entram, então pode dar um pouco menos que o card.`,
+    ].filter(Boolean).join(' ')
 
-  const fechamentosBreakdown = useMemo(() => buildPersonSimplesRows({
-    periodo: mapaCloser(closerRows, 'ganhos'),
-    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaQtdVendas ?? 0,
-  }), [closerRows, metasPessoa])
-
-  const receitaBreakdown = useMemo(() => buildPersonSimplesRows({
-    periodo: mapaCloser(closerRows, 'faturamento'),
-    metaMensalPorNome: nome => findMeta(metasPessoa, nome, 'Closer')?.metaFinanceira ?? 0,
-  }), [closerRows, metasPessoa])
+    return {
+      def, pessoas, deals, nota,
+      titulo: def.stage === 'MQL' ? mqlLbl : cardAberto === 'closer-fechamentos' ? `${def.titulo}${unidadeSufixo}` : def.titulo,
+      formatter: def.dinheiro ? moneyK : nfCeil,
+      accent: def.papel === 'SDR' ? SDR_ACCENT : CLOSER_ACCENT,
+    }
+  }, [cardAberto, sdrRows, closerRows, sdrRowsHoje, closerRowsHoje, metasPessoa, mesUnico, fimJanela,
+    periodMode, ranges, range.start, scoped, eventos, win, viewModes, mqlLbl, unidadeSufixo])
 
   // ── Leadtime em horário comercial (aba SDR) ─────────────────────────────────
   // Reciclagem às vezes não gera novo evento de MQL no ciclo atual — usa a
@@ -514,12 +647,12 @@ export function PerformanceVendas() {
   // ── Funil SDR (MQL → SAL), clicável ─────────────────────────────────────────
   const [clickedSdrStage, setClickedSdrStage] = useState<StageKey | null>(null)
   const funilSdr: FunnelStage[] = useMemo(
-    () => SDR_STAGES.map(s => ({
+    () => etapasDaMarca(SDR_STAGES, marcasSelecionadas.map(b => b.marca)).map(s => ({
       key: s,
       label: stageLabel(s, origem),
       value: countStageEvents(eventos, s, win, viewModes, evOpts),
     })),
-    [eventos, win, viewModes, evOpts, origem],
+    [eventos, win, viewModes, evOpts, origem, marcasSelecionadas],
   )
   const dealsDoCliqueSdr = useMemo(
     () => (clickedSdrStage ? dealsInStage(scoped, eventos, clickedSdrStage, win, viewModes, 'performance') : []),
@@ -575,19 +708,27 @@ export function PerformanceVendas() {
     [clickedCloserStage, scoped, eventos, win, viewModes],
   )
 
-  const convTopo = useMemo(() => [
+  const convTopo: ConversaoLinha[] = useMemo(() => [
+    // MQL → SQL fica sem meta: não existe meta de MQL em nenhuma das tabelas de
+    // meta da Expansão (o funil cadastrado começa em Ligações → SQL).
     { label: `${mqlLbl} → SQL`, val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
-    { label: 'SQL → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0 },
-    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
-    { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0 },
-    { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0 },
-  ], [strip, mqlLbl])
-  const convFundo = useMemo(() => [
-    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0 },
-    { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0 },
-    { label: 'Oportunidade · COF → Fechamento', val: strip.cof > 0 ? (strip.fechamentos / strip.cof) * 100 : 0 },
-    { label: 'SAL → Fechamento', val: strip.sal > 0 ? (strip.fechamentos / strip.sal) * 100 : 0 },
-  ], [strip])
+    { label: 'SQL → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0, meta: metasConv?.sql_diag },
+    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0, meta: metasConv?.diag_sal },
+    { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0, meta: metasConv?.sql_sal },
+    { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0, meta: metasConv?.no_show, polaridade: 'menor' },
+  ], [strip, mqlLbl, metasConv])
+  const convFundo: ConversaoLinha[] = useMemo(() => [
+    { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0, meta: metasConv?.diag_sal },
+    { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0, meta: metasConv?.sal_cof },
+    { label: 'Oportunidade · COF → Fechamento', val: strip.cof > 0 ? (strip.fechamentos / strip.cof) * 100 : 0, meta: metasConv?.cof_fech },
+    { label: 'SAL → Fechamento', val: strip.sal > 0 ? (strip.fechamentos / strip.sal) * 100 : 0, meta: metasConv?.sal_fech },
+  ], [strip, metasConv])
+
+  const notaConversao = mesUnico
+    ? 'Meta derivada das metas de volume do mês, no recorte de marca e pessoa selecionado — muda conforme os filtros.'
+    : 'A meta de conversão aparece quando o período é um mês único.'
+  // Só o card do topo tem a linha de no-show, então só ele explica o teto.
+  const notaConversaoTopo = mesUnico ? `${notaConversao} O teto de no-show é fixo em 10%.` : notaConversao
 
   const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
     ? `${periodValues.length} períodos selecionados`
@@ -601,7 +742,7 @@ export function PerformanceVendas() {
 
   if (faltandoObrigatorio.length > 0) {
     return (
-      <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
+      <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
         <PageTop title="Performance" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
         <FilterBar
           marcasDisponiveis={marcasDisponiveis}
@@ -617,7 +758,7 @@ export function PerformanceVendas() {
   }
 
   return (
-    <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
       {...(marcasSelecionadas.length === 1 ? { 'data-brand': marcasSelecionadas[0].key } : {})}>
 
       <PageTop
@@ -653,21 +794,22 @@ export function PerformanceVendas() {
           <SectionHeader title="Executivos de Expansão (SDR)"
             sub={`Do ${mqlLbl} ao SQL — cadência, contato efetivo e agendamento`} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+          <div className="rs-grid rs-cols-4 rs-stack-sm" style={{ '--rs-gap': '14px', margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' } as React.CSSProperties}>
             <MetaRitmoCard label={`${mqlLbl} no período`} realizado={strip.mql} metaMensal={0}
-              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT} />
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={SDR_ACCENT}
+              onClick={() => setCardAberto('sdr-mql')} />
             <MetaRitmoCard label="SQL" realizado={strip.sql}
               metaMensal={mesUnico ? metaTimeSel.metaSql : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-              onClick={mesUnico && metaTimeSel.metaSql > 0 ? () => setMetaDrawer('sql') : undefined} />
+              onClick={() => setCardAberto('sdr-sql')} />
             <MetaRitmoCard label="Diagnóstico" realizado={strip.rr}
               metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-              onClick={mesUnico && metaTimeSel.metaReuniao > 0 ? () => setMetaDrawer('rr') : undefined} />
+              onClick={() => setCardAberto('sdr-rr')} />
             <MetaRitmoCard label="SAL" realizado={strip.sal}
               metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-              onClick={mesUnico && metaTimeSel.metaSal > 0 ? () => setMetaDrawer('sal') : undefined} />
+              onClick={() => setCardAberto('sdr-sal')} />
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
@@ -677,7 +819,7 @@ export function PerformanceVendas() {
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
 
           <div style={{ marginTop: 14 }}>
-            <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} />
+            <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} nota={notaConversaoTopo} />
           </div>
 
           <div style={{ marginTop: 32 }}>
@@ -700,7 +842,7 @@ export function PerformanceVendas() {
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
               Só as etapas do SDR — clique numa etapa pra ver os deals.
             </div>
-            <SCard style={{ padding: '18px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+            <SCard style={{ padding: '18px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
               <TrapFunnel stages={funilSdr} invest={0} accent={SDR_ACCENT} dark={SDR_ACCENT_DARK}
                 onStageClick={key => setClickedSdrStage(key as StageKey)} />
             </SCard>
@@ -713,35 +855,37 @@ export function PerformanceVendas() {
           <SectionHeader title="Closer"
             sub="Do diagnóstico ao fechamento — SAL, oportunidade e receita" />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+          <div className="rs-grid rs-cols-5 rs-stack-sm" style={{ '--rs-gap': '14px', margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' } as React.CSSProperties}>
             <MetaRitmoCard label="Diagnóstico" realizado={strip.rr} metaMensal={0}
-              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
+              onClick={() => setCardAberto('closer-rr')} />
             <MetaRitmoCard label="SAL" realizado={strip.sal} metaMensal={0}
-              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT} />
+              mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
+              onClick={() => setCardAberto('closer-sal')} />
             <MetaRitmoCard label="Oportunidades (COF)" realizado={strip.cof}
               metaMensal={mesUnico ? metaTimeSel.metaCof : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
-              onClick={mesUnico && metaTimeSel.metaCof > 0 ? () => setMetaDrawer('cof') : undefined} />
-            <MetaRitmoCard label="Fechamentos" realizado={strip.fechamentos}
+              onClick={() => setCardAberto('closer-cof')} />
+            <MetaRitmoCard label={`Fechamentos${unidadeSufixo}`} realizado={strip.fechamentos}
               metaMensal={mesUnico ? metaTimeSel.metaQtdVendas : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={CLOSER_ACCENT}
               granularity="monthly"
-              onClick={mesUnico && metaTimeSel.metaQtdVendas > 0 ? () => setMetaDrawer('fechamentos') : undefined} />
+              onClick={() => setCardAberto('closer-fechamentos')} />
             <MetaRitmoCard label="Receita gerada" realizado={strip.receita}
               metaMensal={mesUnico ? metaTimeSel.metaFinanceira : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT}
               granularity="monthly"
-              onClick={mesUnico && metaTimeSel.metaFinanceira > 0 ? () => setMetaDrawer('receita') : undefined} />
+              onClick={() => setCardAberto('closer-receita')} />
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
             Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído.
           </p>
 
-          <CloserTable rows={closerRows} />
+          <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />
 
           <div style={{ marginTop: 14 }}>
-            <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} />
+            <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} nota={notaConversao} />
           </div>
 
           <div style={{ marginTop: 32 }}>
@@ -764,7 +908,7 @@ export function PerformanceVendas() {
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 14 }}>
               Só as etapas do Closer — clique numa etapa pra ver os deals.
             </div>
-            <SCard style={{ padding: '18px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+            <SCard style={{ padding: '18px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
               <TrapFunnel stages={funilCloser} invest={0} accent={CLOSER_ACCENT} dark={CLOSER_ACCENT_DARK}
                 onStageClick={key => setClickedCloserStage(key as StageKey)} />
             </SCard>
@@ -796,36 +940,20 @@ export function PerformanceVendas() {
         accent={CLOSER_ACCENT}
       />
 
-      <MetaBreakdownDrawer
-        open={metaDrawer === 'sql'} onClose={() => setMetaDrawer(null)}
-        title="Meta SQL × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={SDR_ACCENT} formatter={nfCeil} variant="daily" rows={sqlBreakdown}
-      />
-      <MetaBreakdownDrawer
-        open={metaDrawer === 'rr'} onClose={() => setMetaDrawer(null)}
-        title="Meta RR × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={SDR_ACCENT} formatter={nfCeil} variant="daily" rows={rrBreakdown}
-      />
-      <MetaBreakdownDrawer
-        open={metaDrawer === 'sal'} onClose={() => setMetaDrawer(null)}
-        title="Meta SAL × Realizado — por dia — por SDR" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={SDR_ACCENT} formatter={nfCeil} variant="daily" rows={salBreakdown}
-      />
-      <MetaBreakdownDrawer
-        open={metaDrawer === 'cof'} onClose={() => setMetaDrawer(null)}
-        title="Meta COF × Realizado — por dia — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={CLOSER_ACCENT} formatter={nfCeil} variant="daily" rows={cofBreakdown}
-      />
-      <MetaBreakdownDrawer
-        open={metaDrawer === 'fechamentos'} onClose={() => setMetaDrawer(null)}
-        title="Meta Fechamentos × Realizado — por mês — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={CLOSER_ACCENT} formatter={nfCeil} variant="monthly" rows={fechamentosBreakdown}
-      />
-      <MetaBreakdownDrawer
-        open={metaDrawer === 'receita'} onClose={() => setMetaDrawer(null)}
-        title="Meta Receita × Realizado — por mês — por Closer" subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        accent={CLOSER_ACCENT} formatter={moneyK} variant="monthly" rows={receitaBreakdown}
-      />
+      {detalhe && (
+        // key: cada card abre do zero (toggle em "Por pessoa", filtros limpos).
+        <MetaBreakdownDrawer
+          key={cardAberto}
+          open onClose={() => setCardAberto(null)}
+          title={detalhe.titulo}
+          subtitle={`${scopeLabel} · ${periodMode === 'dia'
+            ? (range.start === range.end ? dataBr(range.start) : `${dataBr(range.start)} – ${dataBr(range.end)}`)
+            : subtitlePeriodo}`}
+          accent={detalhe.accent} formatter={detalhe.formatter}
+          papel={detalhe.def.papel} pessoas={detalhe.pessoas} nota={detalhe.nota}
+          deals={detalhe.deals} stage={detalhe.def.stage}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { SOP_CLOSED_MONTH_KEY, SOP_CLOSED_MONTH_LABEL } from '@/constants/sopConfig'
+
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucide-react'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
@@ -9,13 +9,15 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
 import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
-import { InverseFunnel } from '@/components/ui/InverseFunnel'
-import { getMetaVendas, getVendasRealizadasOverride, getUnidadesVendidasOverride, getFunilTaxas } from '@/constants/metasVendas'
+import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { WE_SCALE_SOP_ATUAL } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
+import { BRAND_LIST } from '@/constants/brands'
+import { useAcesso } from '@/contexts/AcessoContext'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -113,6 +115,57 @@ function shortMonth(year: number, month: number) {
     .replace(/^\w/, c => c.toUpperCase())
 }
 
+// Month options for the S&OP date selector, generated once at module load.
+// Most recent first: current month (MTD), past months back to Jan 2026, then a custom option.
+const SOP_MONTH_OPTIONS: Array<{ value: string; label: string }> = (() => {
+  const today = new Date()
+  const y = today.getFullYear(), m = today.getMonth()
+  const opts: Array<{ value: string; label: string }> = [
+    { value: 'current', label: `${shortMonth(y, m)} (MTD)` },
+  ]
+  let cy = y, cm = m
+  while (true) {
+    cm--
+    if (cm < 0) { cm = 11; cy-- }
+    if (cy < 2026) break
+    opts.push({ value: `${cy}-${String(cm + 1).padStart(2, '0')}`, label: shortMonth(cy, cm) })
+  }
+  opts.push({ value: 'custom', label: 'Personalizado…' })
+  return opts
+})()
+
+// Builds DateRanges for an arbitrary date window instead of a calendar month.
+// Previous period = same endpoints shifted back one month.
+function computeCustomRanges(start: string, end: string): DateRanges {
+  const anchorDate = localDate(end)
+  const dow = anchorDate.getDay()
+  const lastSun = new Date(anchorDate)
+  lastSun.setDate(anchorDate.getDate() - dow)
+  const weeks: WeekRange[] = []
+  for (let i = 4; i >= 0; i--) {
+    const wEnd = new Date(lastSun); wEnd.setDate(lastSun.getDate() - i * 7)
+    const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6)
+    const s = isoDate(wStart), e = isoDate(wEnd)
+    weeks.push({ start: s, end: e, label: weekLabel(s, e) })
+  }
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const prevSm = sm === 1 ? 12 : sm - 1; const prevSy = sm === 1 ? sy - 1 : sy
+  const prevEm = em === 1 ? 12 : em - 1; const prevEy = em === 1 ? ey - 1 : ey
+  const prevStart = `${prevSy}-${String(prevSm).padStart(2,'0')}-${String(Math.min(sd, new Date(prevSy,prevSm,0).getDate())).padStart(2,'0')}`
+  const prevEnd   = `${prevEy}-${String(prevEm).padStart(2,'0')}-${String(Math.min(ed, new Date(prevEy,prevEm,0).getDate())).padStart(2,'0')}`
+  return {
+    weeks, fiveWeeksStart: weeks[0].start,
+    mtdCurStart: start, mtdCurEnd: end,
+    mtdPrevStart: prevStart, mtdPrevEnd: prevEnd,
+    monthStart: `${sy}-${String(sm).padStart(2,'0')}-01`,
+    recentWeekLabel: weeks[4].label,
+    mtdLabel: weekLabel(start, end),
+    mtdPrevLabel: weekLabel(prevStart, prevEnd),
+    isClosed: true, monthSuffix: '(personalizado)', antShort: 'período ant',
+  }
+}
+
 function computeRanges(closedMonth?: string): DateRanges {
   const isClosed = !!closedMonth
   const anchor = isClosed
@@ -161,7 +214,8 @@ function computeRanges(closedMonth?: string): DateRanges {
 // ── CRM helpers ────────────────────────────────────────────────────────────────
 
 interface Funnel {
-  mql: number; sql: number; diag: number; sal: number; fech: number
+  mql: number; tentando_contato: number; contato_efetivo: number
+  sql: number; diag: number; sal: number; oportunidade: number; fech: number
   perdido: { mql: number; sql: number; diagnostico: number; sal: number }
 }
 
@@ -173,10 +227,13 @@ function unidadesVendidas(r: VwMarketingFunil): number {
 function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
-    mql:  d.filter(r => inPeriod(r.data_mql, di, df)).length,
-    sql:  d.filter(r => inPeriod(r.data_sql, di, df)).length,
-    diag: d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
-    sal:  d.filter(r => inPeriod(r.data_sal, di, df)).length,
+    mql:              d.filter(r => inPeriod(r.data_mql, di, df)).length,
+    tentando_contato: d.filter(r => inPeriod(r.data_tentando_contato, di, df)).length,
+    contato_efetivo:  d.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length,
+    sql:              d.filter(r => inPeriod(r.data_sql, di, df)).length,
+    diag:             d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
+    sal:              d.filter(r => inPeriod(r.data_sal, di, df)).length,
+    oportunidade:     d.filter(r => inPeriod(r.data_oportunidade, di, df)).length,
     fech: d
       .filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
       .reduce((sum, r) => sum + unidadesVendidas(r), 0),
@@ -236,7 +293,7 @@ const SLIDES: SlideConfig[] = [
   { id: 'viva',          label: 'Viva',         marca: 'Viva',         accent: '#FF0069' },
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
   { id: 'odonto-scale',  label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#7f0c72' },
-  { id: 'we-scale',      label: 'We Scale',     subLabel: 'Eventos',   marca: 'We Scale',     accent: '#7E0E70' },
+  { id: 'we-scale',      label: 'Scale Partner', subLabel: 'Eventos',   marca: 'We Scale',     accent: '#7E0E70' },
 ]
 
 // ── SVG Charts ─────────────────────────────────────────────────────────────────
@@ -685,17 +742,16 @@ interface SopSlideProps {
   onPrev: () => void; onNext: () => void
   isFullscreen: boolean; onToggleFullscreen: () => void
   exportHeight?: number
-  monthMode: 'current' | 'closed'
-  onMonthModeChange: (mode: 'current' | 'closed') => void
-  closedMonthLabel: string
+  monthMode: string
+  onMonthModeChange: (mode: string) => void
+  customStart: string; onCustomStartChange: (v: string) => void
+  customEnd: string;   onCustomEndChange:   (v: string) => void
   onReady?: () => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
 }
 
-function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, closedMonthLabel, onReady }: SopSlideProps) {
+function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
   const acc = slide.accent
   const [filterFonte, setFilterFonte] = useState('__all__')
-  const [funilPeriod, setFunilPeriod] = useState<'semana' | 'mes'>('mes')
-  const [funilUnit, setFunilUnit] = useState<'one' | 'target'>('target')
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
 
   // Compare range dinâmico (dropdown de mês). Default = mês anterior.
@@ -738,25 +794,17 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
   const isWeScale = slide.marca === 'We Scale'
 
-  // Odonto Legacy usa janela dos últimos 7 dias corridos em vez de MTD do mês
-  // (Junior 03/09: MTD Set com só 3 dias distorce leitura). Comparativo passa a
-  // ser os 7 dias anteriores (21-27/08 vs 28/08-03/09). Outras marcas seguem MTD.
-  const mtdCurEnd = dates.mtdCurEnd
-  const mtdCurStart = useMemo(() => {
-    if (!isOdontoLegacy) return dates.mtdCurStart
-    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
-    return isoDate(new Date(end.getTime() - 6 * 86400000))
-  }, [isOdontoLegacy, dates.mtdCurStart, dates.mtdCurEnd])
+  // Odonto Legacy usa MTD completo (Junior 15/09: "pode puxar sempre MTD").
+  // Comparativo = Agosto fechado (mês inteiro). Outras marcas seguem MTD-vs-MTD.
+  const mtdCurEnd   = dates.mtdCurEnd
+  const mtdCurStart = dates.mtdCurStart
   const mtdPrevEnd = useMemo(() => {
     if (!isOdontoLegacy) return dates.mtdPrevEnd
-    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
-    return isoDate(new Date(end.getTime() - 7 * 86400000))
-  }, [isOdontoLegacy, dates.mtdPrevEnd, dates.mtdCurEnd])
-  const mtdPrevStart = useMemo(() => {
-    if (!isOdontoLegacy) return dates.mtdPrevStart
-    const end = new Date(dates.mtdCurEnd + 'T00:00:00')
-    return isoDate(new Date(end.getTime() - 13 * 86400000))
-  }, [isOdontoLegacy, dates.mtdPrevStart, dates.mtdCurEnd])
+    // Ago fechado: último dia do mês anterior
+    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
+    return isoDate(new Date(y, m - 1, 0))
+  }, [isOdontoLegacy, dates.mtdPrevEnd, dates.monthStart])
+  const mtdPrevStart = dates.mtdPrevStart
 
   // Range de comparação: pra Odonto Legacy, usa mtdPrevStart/End (7d anteriores).
   // Pra outras marcas, respeita o dropdown de mês (compareRange).
@@ -774,9 +822,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
   const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
 
-  // Semanal do slide Odonto Legacy: mesma janela do MTD (7 dias corridos)
-  // pra ficar consistente. Junior 03/09: KPI weekly de semana fechada (dom-sáb)
-  // pegava 24-30/08, agora acompanha os últimos 7 dias como o MTD.
+  // Odonto Legacy: "semana atual" = MTD completo (Set 01 → hoje), "semana ant" = Ago fechado.
   const weekCurStart   = isOdontoLegacy ? mtdCurStart   : dates.weeks[4].start
   const weekCurEnd     = isOdontoLegacy ? mtdCurEnd     : dates.weeks[4].end
   const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : dates.weeks[3].start
@@ -868,7 +914,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // mqlLeads kept for potential downstream use
 
   // ── Weekly computations ──────────────────────────────────────────────────────
-  // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser últimos 7d e 7d anteriores.
+  // Pra Odonto Legacy, weeks[4] e weeks[3] passam a ser MTD Set e Ago fechado.
   // Pra We Scale, esconde semanas de agosto (a marca só passou a receber dados em set/26):
   // preserva o comprimento de 5 posições (kpiCards leem [4]/[3]) zerando as anteriores.
   const effectiveWeeks = useMemo(() => {
@@ -1133,8 +1179,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
   interface KpiCard {
     label: string; value: string
-    semAnt: { txt: string; col: string }
-    mtdAnt: { txt: string; col: string }
+    semAnt?: { txt: string; col: string }
+    mtdAnt?: { txt: string; col: string }
     /** Métrica secundária opcional (ex.: Custo/membro no card CP-MQL do Odonto Legacy). */
     extra?: { label: string; value: string; subtext?: string }
   }
@@ -1234,9 +1280,36 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         },
       ]
-    // We Scale: sem SQL/SAL/CP-SQL — funil de Eventos ainda sem deals, foco em captação MTD.
+    // We Scale: valores MTD hardcoded de WE_SCALE_SOP_ATUAL — Meta Instant Forms não chegam ao
+  // Supabase, então o Supabase só tem ≈ metade dos leads reais. "—" nas comparações porque a
+  // marca só começou a receber dados em set/26, sem histórico anterior.
     : isWeScale
-      ? kpiCardsAll.filter(c => ['INVEST.', 'LEADS', 'MQL', 'CP-MQL'].includes(c.label))
+      ? [
+          {
+            label: 'SP · RECEITA',
+            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.vendas.receita),
+          },
+          {
+            label: 'SP · LEADS',
+            value: String(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.leads),
+            extra: {
+              label: 'VENDAS FECHADAS',
+              value: String(WE_SCALE_SOP_ATUAL.mtd.vendas.fechadas),
+            },
+          },
+          {
+            label: 'BC · INVEST.',
+            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest),
+          },
+          {
+            label: 'BC · LEADS',
+            value: String(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads),
+            extra: {
+              label: 'CUSTO/LEAD',
+              value: fmtBRL(Math.round(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest / WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads)),
+            },
+          },
+        ] satisfies KpiCard[]
       : kpiCardsAll
 
   // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
@@ -1335,31 +1408,35 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
-        <div style={{
-          display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 12,
-          overflow: 'hidden', background: '#fff',
-        }}>
-          {([
-            { key: 'current' as const, label: 'MTD' },
-            { key: 'closed'  as const, label: closedMonthLabel },
-          ]).map(opt => {
-            const on = monthMode === opt.key
-            return (
-              <button
-                key={opt.key}
-                onClick={() => onMonthModeChange(opt.key)}
-                style={{
-                  padding: '4px 10px', border: 'none', cursor: 'pointer',
-                  fontSize: 11, fontWeight: 700, outline: 'none',
-                  background: on ? acc : 'transparent',
-                  color: on ? '#fff' : 'var(--ws-text-secondary)',
-                }}
-              >
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
+        <select
+          value={monthMode}
+          onChange={e => onMonthModeChange(e.target.value)}
+          style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
+        >
+          {SOP_MONTH_OPTIONS.map(opt => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        {monthMode === 'custom' && (
+          <>
+            <input
+              type="date"
+              value={customStart}
+              max={customEnd || isoDate(new Date())}
+              onChange={e => onCustomStartChange(e.target.value)}
+              style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>–</span>
+            <input
+              type="date"
+              value={customEnd}
+              min={customStart}
+              max={isoDate(new Date())}
+              onChange={e => onCustomEndChange(e.target.value)}
+              style={{ padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
+            />
+          </>
+        )}
         <select
           value={filterFonte}
           onChange={e => setFilterFonte(e.target.value)}
@@ -1385,7 +1462,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            Semana · {effectiveWeeks[4].label}
+            {isWeScale ? `MTD · ${WE_SCALE_SOP_ATUAL.mtd.periodo}` : `Semana · ${effectiveWeeks[4].label}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -1401,14 +1478,20 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1, marginBottom: 6 }}>
                 {card.value}
               </div>
+              {(card.semAnt || card.mtdAnt) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {card.semAnt && (
                 <div style={{ fontSize: 12, color: card.semAnt.col, lineHeight: 1.3 }}>
                   {card.semAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>sem ant</span>
                 </div>
+                )}
+                {card.mtdAnt && (
                 <div style={{ fontSize: 12, color: card.mtdAnt.col, lineHeight: 1.3 }}>
                   {card.mtdAnt.txt} <span style={{ color: 'var(--ws-text-secondary)' }}>vs {compareRange.label}</span>
                 </div>
+                )}
               </div>
+              )}
               {card.extra && (
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 3 }}>
@@ -1454,14 +1537,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         }}>
 
         {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado)
-             Odonto Legacy: chart cumulativo 7d com seletor MQL/Membros/Custo/membro +
+             Odonto Legacy: chart cumulativo MTD com seletor MQL/Membros/Custo/membro +
              tabela do funil abaixo. Card fica scrollável se os dois não couberem
              de uma vez, e o chart tem piso de altura pra não achatar. */}
         {!dates.isClosed && (
-        <div style={isOdontoLegacy ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
+        <div style={(isOdontoLegacy || isWeScale) ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
           <div style={{ marginBottom: 6 }}>
             <div style={colTitle(acc)}>
-              {isOdontoLegacy ? 'Comparativo 7d · cumulativo' : 'MQL Semanal'}
+              {isOdontoLegacy ? 'Comparativo MTD · cumulativo' : 'MQL Semanal'}
             </div>
           </div>
           <div style={isOdontoLegacy ? { minHeight: 260, flexShrink: 0 } : { height: 180 }}>
@@ -1495,13 +1578,13 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               )
             })() : (
               <WeeklyBarChart
-                values={weeklyData.map(w => w.mql)}
-                labels={effectiveWeeks.map(w => w.label)}
+                values={isWeScale ? WE_SCALE_SOP_ATUAL.semanas.map(s => s.mql) : weeklyData.map(w => w.mql)}
+                labels={isWeScale ? WE_SCALE_SOP_ATUAL.semanas.map(s => s.label) : effectiveWeeks.map(w => w.label)}
                 accent={acc}
               />
             )}
           </div>
-          {!isOdontoLegacy && (
+          {!isOdontoLegacy && !isWeScale && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
                 CP-MQL
@@ -1509,6 +1592,45 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ height: 110 }}>
                 <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
               </div>
+            </div>
+          )}
+          {isWeScale && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span>Funil Scale Partner — set MTD</span>
+                <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
+                  snapshot {WE_SCALE_SOP_ATUAL.ate}
+                </span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase' }}>
+                    <th style={{ textAlign: 'left', padding: '0 0 4px', borderBottom: '1px solid var(--ws-border)' }}>Etapa</th>
+                    <th style={{ textAlign: 'right', padding: '0 0 4px', borderBottom: '1px solid var(--ws-border)' }}>Ativos</th>
+                    <th style={{ textAlign: 'right', padding: '0 0 4px 8px', borderBottom: '1px solid var(--ws-border)' }}>Perdidos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    { label: 'Novo MQL',             ativos: 0,  perdidos: 12 },
+                    { label: 'Tentando Contato',     ativos: 22, perdidos: 9  },
+                    { label: 'Contato Efetivo',      ativos: 3,  perdidos: 1  },
+                    { label: 'Interesse Reunião',    ativos: 2,  perdidos: 0  },
+                    { label: 'Reunião Agendada SQL', ativos: 3,  perdidos: 0  },
+                  ] as const).map(row => (
+                    <tr key={row.label} style={{ borderTop: '1px solid var(--ws-border)' }}>
+                      <td style={{ padding: '5px 0', color: 'var(--ws-text-primary)' }}>{row.label}</td>
+                      <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: acc }}>{row.ativos > 0 ? row.ativos : '—'}</td>
+                      <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>{row.perdidos > 0 ? `-${row.perdidos}` : '—'}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: '2px solid var(--ws-border)' }}>
+                    <td style={{ padding: '5px 0', fontWeight: 700, color: 'var(--ws-text-primary)' }}>Total</td>
+                    <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: acc }}>30</td>
+                    <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--ws-text-secondary)' }}>-22</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           )}
           {isOdontoLegacy && (
@@ -1552,8 +1674,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </div>
         )}
 
-        {/* Col 2: MTD comparativo — oculto pra We Scale (marca só passou a receber dados em set/26,
-             comparativo com agosto seria contra 0 e enganoso) */}
+        {/* Col 2: MTD comparativo — oculto para We Scale (usa layout 2 colunas) */}
         {!isWeScale && (
         <div style={{ ...cardStyle, overflowY: 'auto' }}>
           <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -1663,93 +1784,22 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </div>
         )}
 
-        {/* Col 3: Funil inverso — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
+        {/* Col 3: Taxas de conversão — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
-          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} />
-        ) : (() => {
-          const mesKey = dates.monthStart.slice(0, 7)
-          const metaMes = getMetaVendas(slide.marca, mesKey)
-          const [yStr, mStr] = mesKey.split('-')
-          const diasNoMes = new Date(Number(yStr), Number(mStr), 0).getDate()
-          const dayNum = Number(dates.mtdCurEnd.slice(-2))
-          const pctMes = dates.isClosed ? 1 : Math.max(0.01, dayNum / diasNoMes)
-
-          // Ajustes por período (semana = weeks[4], meta / 4, pct = 1 pois é semana completa)
-          const isSemana = funilPeriod === 'semana'
-          const actualData = isSemana ? rawCrmWeek : rawCrmCur
-          const metaPeriodo = metaMes == null
-            ? null
-            : isSemana ? metaMes / 4 : metaMes
-          const pctPeriod = isSemana ? 1 : pctMes
-          const periodLabel = isSemana ? 'semana' : 'mês'
-          // Override manual de vendas (só em período mês):
-          // - Mês fechado → getVendasRealizadasOverride (números confirmados manualmente)
-          // - Mês corrente → getUnidadesVendidasOverride (RD Marketing não popula quantidade_unidades)
-          const vendasOverride = isSemana
-            ? null
-            : dates.isClosed
-              ? getVendasRealizadasOverride(slide.marca, mesKey)
-              : getUnidadesVendidasOverride(slide.marca, mesKey)
-
-          return (
-            <div style={dates.isClosed
-              ? { ...cardStyle, overflow: 'hidden' }
-              : { ...cardStyle, overflowY: 'auto' }}>
-              <div style={{
-                marginBottom: 6, flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap',
-              }}>
-                <div style={colTitle(acc)}>Funil inverso</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <ToggleGroup
-                    accent={acc}
-                    value={funilPeriod}
-                    onChange={v => setFunilPeriod(v as 'semana' | 'mes')}
-                    options={[
-                      { key: 'semana', label: 'Semana' },
-                      { key: 'mes',    label: 'Mês' },
-                    ]}
-                  />
-                  {!(dates.isClosed && !isSemana) && (
-                    <ToggleGroup
-                      accent={acc}
-                      value={funilUnit}
-                      onChange={v => setFunilUnit(v as 'one' | 'target')}
-                      options={[
-                        { key: 'one',    label: '1 venda' },
-                        { key: 'target', label: 'Meta' },
-                      ]}
-                    />
-                  )}
-                </div>
-              </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: dates.isClosed ? 'hidden' : 'visible', flexShrink: 0 }}>
-                {dates.isClosed && !isSemana ? (
-                  <ClosedInverseFunnel
-                    marca={slide.marca}
-                    meta={metaMes}
-                    vendas={vendasOverride}
-                    accent={acc}
-                    monthLabel={closedMonthLabel}
-                  />
-                ) : (
-                  <InverseFunnel
-                    histData={rawCrmAll}
-                    actualData={actualData}
-                    meta={metaPeriodo}
-                    pctPeriod={pctPeriod}
-                    unit={funilUnit}
-                    periodLabel={periodLabel}
-                    accent={acc}
-                    vendasOverride={vendasOverride}
-                  />
-                )}
-              </div>
-            </div>
-          )
-        })()}
+          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads} />
+        ) : (
+          <div style={cardStyle}>
+            <ConversaoFunilTable
+              cur={{ ...funnelMtd, mql: mtdMql }}
+              prev={{ ...funnelMtdP, mql: mtdPrevMql }}
+              curLabel={dates.mtdLabel}
+              prevLabel={compareRange.label}
+              accent={acc}
+            />
+          </div>
+        )}
       </div>
 
         {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (receita) e We Scale (Eventos sem deals ainda) ── */}
@@ -1791,39 +1841,6 @@ function colTitle(accent: string): React.CSSProperties {
   return { fontSize: 14, fontWeight: 700, color: accent, marginBottom: 2, letterSpacing: '-0.01em' }
 }
 
-interface ToggleGroupProps {
-  value: string
-  onChange: (v: string) => void
-  options: { key: string; label: string }[]
-  accent: string
-}
-function ToggleGroup({ value, onChange, options, accent }: ToggleGroupProps) {
-  return (
-    <div style={{
-      display: 'inline-flex', border: '1px solid #e2e8f0', borderRadius: 8,
-      overflow: 'hidden', background: '#fff',
-    }}>
-      {options.map(opt => {
-        const on = value === opt.key
-        return (
-          <button
-            key={opt.key}
-            onClick={() => onChange(opt.key)}
-            style={{
-              padding: '3px 9px', border: 'none', cursor: 'pointer',
-              fontSize: 10, fontWeight: 700, outline: 'none',
-              background: on ? accent : 'transparent',
-              color: on ? '#fff' : 'var(--ws-text-secondary)',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {opt.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 // ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
 // Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
@@ -1832,18 +1849,21 @@ const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
   { label: 'Scale Partner Odonto', adsetIncludes: ['ODONTOLOGIA'] },
   // LLK é o adset "genérico" do Scale Partner (não vinculado a nicho).
   { label: 'Scale Partner (geral)', adsetIncludes: ['LLK'] },
-  // Lisô Laser tem evento próprio — adset ainda não criado; fica em 0 até existir.
-  { label: 'Lisô Laser',           adsetIncludes: ['LISO_LASER_EVT', 'LISOLASER_EVT'] },
 ]
 
-function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; accent: string; monthLabel: string }) {
-  const contagem = WE_SCALE_EVENTOS.map(evento => {
+function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads }: { leads: Lead[]; accent: string; monthLabel: string; beautyConnectionLeads: number }) {
+  const contagemDigital = WE_SCALE_EVENTOS.map(evento => {
     const rows = leads.filter(l => {
       const adset = String(l.dados_extras?.adset ?? '').toUpperCase()
       return evento.adsetIncludes.some(needle => adset.includes(needle))
     })
-    return { ...evento, n: rows.length, rows }
+    return { label: evento.label, n: rows.length, rows }
   })
+  // Beauty Connection: leads de evento físico — não estão no banco We Scale
+  const contagem: Array<{ label: string; n: number; rows: Lead[] }> = [
+    { label: 'Beauty Connection (evento)', n: beautyConnectionLeads, rows: [] },
+    ...contagemDigital,
+  ]
   const total = contagem.reduce((s, e) => s + e.n, 0)
   const max = Math.max(...contagem.map(e => e.n), 1)
   const fmtDia = (dia: string) => {
@@ -1906,154 +1926,110 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel }: { leads: Lead[]; acc
         ))}
       </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Lisô Laser aguarda adset dedicado.
+        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Beauty Connection = evento físico (leads fora do banco We Scale).
       </div>
     </div>
   )
 }
 
-// ── ClosedInverseFunnel — funil inverso simplificado pra mês fechado ────────────────
-// Projeta volumes necessários por etapa a partir da meta + taxas históricas hardcoded.
-// Zero fetch — cálculo puro. Usado só quando o toggle "Julho" está ativo + período Mês.
-interface ClosedInverseFunnelProps {
-  marca: Marca
-  meta: number | null
-  vendas: number | null   // realizado em unidades
+// ── ConversaoFunilTable — taxas de conversão entre etapas (MTD atual vs mês anterior) ─
+interface ConversaoFunilTableProps {
+  cur:  { mql: number; tentando_contato: number; contato_efetivo: number; sql: number; diag: number; sal: number; oportunidade: number; fech: number }
+  prev: { mql: number; tentando_contato: number; contato_efetivo: number; sql: number; diag: number; sal: number; oportunidade: number; fech: number }
+  curLabel:  string
+  prevLabel: string
   accent: string
-  monthLabel: string
 }
-function ClosedInverseFunnel({ marca, meta, vendas, accent, monthLabel }: ClosedInverseFunnelProps) {
-  if (meta == null) {
-    return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
-        Sem meta cadastrada para {monthLabel}
-      </div>
-    )
-  }
-  const taxas = getFunilTaxas(marca)
-  // Volumes necessários (topo → base) para bater a META.
-  // Cada etapa = próxima ÷ taxa. Ex: Opp = Vendas / taxa_venda_por_opp.
-  const oppNeeded  = meta / taxas.venda_por_opp
-  const salNeeded  = oppNeeded / taxas.opp_por_sal
-  const diagNeeded = salNeeded / taxas.sal_por_diag
-  const sqlNeeded  = diagNeeded / taxas.diag_por_sql
-  const mqlNeeded  = sqlNeeded / taxas.sql_por_mql
+function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: ConversaoFunilTableProps) {
+  const pct = (n: number, d: number): number | null => d > 0 ? Math.round((n / d) * 100) : null
+  const abbr = (s: string) => s.slice(0, 3).toUpperCase()
 
-  const stages = [
-    { key: 'venda',   label: 'Vendas',      needed: meta,       rate: taxas.venda_por_opp, rateLabel: 'Vendas/Opp', isTop: true },
-    { key: 'opp',     label: 'Oportunidades', needed: oppNeeded, rate: taxas.opp_por_sal,   rateLabel: 'Opp/SAL' },
-    { key: 'sal',     label: 'SAL',         needed: salNeeded,  rate: taxas.sal_por_diag,  rateLabel: 'SAL/R1' },
-    { key: 'diag',    label: 'R1 (Diag.)',  needed: diagNeeded, rate: taxas.diag_por_sql,  rateLabel: 'R1/SQL' },
-    { key: 'sql',     label: 'SQL',         needed: sqlNeeded,  rate: taxas.sql_por_mql,   rateLabel: 'SQL/MQL' },
-    { key: 'mql',     label: 'MQL',         needed: mqlNeeded,  rate: null,                rateLabel: '' },
+  const rows: { label: string; curVol: number; prevVol: number; rate: number | null; prevRate: number | null }[] = [
+    { label: 'MQL',           curVol: cur.mql,              prevVol: prev.mql,              rate: null,                                            prevRate: null },
+    { label: 'Tent. Contato', curVol: cur.tentando_contato, prevVol: prev.tentando_contato, rate: pct(cur.tentando_contato, cur.mql),              prevRate: pct(prev.tentando_contato, prev.mql) },
+    { label: 'Cont. Efetivo', curVol: cur.contato_efetivo,  prevVol: prev.contato_efetivo,  rate: pct(cur.contato_efetivo, cur.tentando_contato),  prevRate: pct(prev.contato_efetivo, prev.tentando_contato) },
+    { label: 'SQL',           curVol: cur.sql,              prevVol: prev.sql,              rate: pct(cur.sql,  cur.contato_efetivo),              prevRate: pct(prev.sql,  prev.contato_efetivo) },
+    { label: 'Diagnóstico',   curVol: cur.diag,             prevVol: prev.diag,             rate: pct(cur.diag, cur.sql),                          prevRate: pct(prev.diag, prev.sql) },
+    { label: 'SAL',           curVol: cur.sal,              prevVol: prev.sal,              rate: pct(cur.sal,  cur.diag),                         prevRate: pct(prev.sal,  prev.diag) },
+    { label: 'Oportunidade',  curVol: cur.oportunidade,     prevVol: prev.oportunidade,     rate: pct(cur.oportunidade, cur.sal),                  prevRate: pct(prev.oportunidade, prev.sal) },
+    { label: 'Venda',         curVol: cur.fech,             prevVol: prev.fech,             rate: pct(cur.fech, cur.oportunidade),                 prevRate: pct(prev.fech, prev.oportunidade) },
   ]
 
-  const v = vendas ?? 0
-  const pctVendas = meta > 0 ? (v / meta) * 100 : 0
-  const colorVendas = pctVendas >= 100 ? '#16a34a' : pctVendas >= 70 ? '#eab308' : '#dc2626'
+  const COLS = '1fr 56px 56px 38px'
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12, color: '#334155' }}>
-      {/* Header com meta */}
-      <div style={{ padding: '8px 10px', background: accent, color: '#fff', borderRadius: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.9 }}>
-            Meta de vendas · {monthLabel}
-          </span>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}>
-            {meta}
-          </span>
-        </div>
-        <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
-          Volumes abaixo = <strong>necessário pra bater {meta} venda{meta === 1 ? '' : 's'}</strong> · ~{formatNum(mqlNeeded / meta)} MQL por venda
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+      <div style={{ ...colTitle(accent), marginBottom: 8 }}>Taxas de conversão</div>
+
+      {/* Cabeçalho */}
+      <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 4, paddingBottom: 5, borderBottom: '1px solid #e2e8f0', marginBottom: 2 }}>
+        {(['Etapa', abbr(curLabel), abbr(prevLabel), 'Δ pp'] as const).map((h, i) => (
+          <span key={h} style={{
+            fontSize: 10, fontWeight: 600, textAlign: i === 0 ? 'left' : 'right',
+            color: i === 1 ? accent : 'var(--ws-text-secondary)',
+            textTransform: 'uppercase', letterSpacing: '0.03em',
+          }}>{h}</span>
+        ))}
       </div>
 
-      {/* Linhas do funil */}
-      {stages.map((s) => {
-        const isVenda = s.key === 'venda'
-        const displayNeeded = Math.ceil(s.needed)
-        const showActual = isVenda   // só na linha vendas mostramos o realizado
-        const progressPct = isVenda ? Math.min(200, pctVendas) : 100
-        const color = isVenda ? colorVendas : '#64748b'
-
-        return (
-          <div key={s.key} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <div style={{
-              display: 'grid', gridTemplateColumns: '78px 1fr 60px',
-              gap: 8, alignItems: 'center', padding: '5px 8px',
-              background: s.isTop ? '#fef3c7' : '#f8fafc',
-              border: `1px solid ${s.isTop ? '#fbbf24' : '#e2e8f0'}`,
-              borderRadius: 6,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#0f172a' }}>
-                {s.label}
-              </span>
-              <div style={{ position: 'relative', height: 14, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0,
-                  width: `${Math.min(100, progressPct)}%`, background: color,
-                }} />
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700, color: progressPct > 50 ? '#fff' : '#0f172a',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {showActual ? `${v} de ${displayNeeded}` : `precisa ${displayNeeded}`}
-                </div>
-              </div>
-              <span style={{
-                textAlign: 'right', fontSize: 10, fontWeight: 700,
-                color: isVenda ? color : '#94a3b8', fontVariantNumeric: 'tabular-nums',
-              }}>
-                {isVenda ? `${Math.round(pctVendas)}%` : '—'}
-              </span>
-            </div>
-
-            {/* Taxa até a próxima etapa */}
-            {s.rate !== null && (
+      {/* Linhas */}
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+        {rows.map((row, i) => {
+          const delta = row.rate != null && row.prevRate != null ? row.rate - row.prevRate : null
+          const deltaColor = delta == null ? 'var(--ws-text-secondary)'
+            : delta > 0 ? 'var(--status-positivo)'
+            : delta < 0 ? 'var(--status-critico)'
+            : 'var(--ws-text-secondary)'
+          const isFirst = i === 0
+          const isLast  = i === rows.length - 1
+          return (
+            <div key={row.label}>
+              {i > 0 && <div style={{ color: '#cbd5e1', fontSize: 10, paddingLeft: 8, lineHeight: 1.2 }}>↓</div>}
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                paddingLeft: 78 + 8, paddingRight: 8,
-                fontSize: 9.5, color: '#64748b',
+                display: 'grid', gridTemplateColumns: COLS, gap: 4,
+                alignItems: 'center', padding: '5px 8px', borderRadius: 6,
+                background: isFirst ? '#f8fafc' : isLast ? `${accent}14` : '#fff',
               }}>
-                <div style={{ flex: 0, color: '#cbd5e1', fontSize: 10, lineHeight: 1 }}>▲</div>
-                <div style={{
-                  flex: 0, padding: '1px 6px', borderRadius: 8,
-                  background: '#eef2f7', border: '1px solid #e2e8f0',
-                  fontSize: 9.5, fontWeight: 700, color: '#334155',
-                  fontVariantNumeric: 'tabular-nums',
-                }}>
-                  {(s.rate * 100).toFixed(0)}%
+                <span style={{ fontSize: 12, fontWeight: isFirst || isLast ? 600 : 400, color: isLast ? accent : '#334155' }}>
+                  {row.label}
+                </span>
+                {/* coluna mês atual: volume + taxa */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isLast ? accent : '#334155' }}>{row.curVol}</span>
+                  {row.rate != null && <span style={{ fontSize: 10, color: '#64748b' }}>{row.rate}%</span>}
                 </div>
-                <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-                <div style={{ fontSize: 9, color: '#94a3b8', fontStyle: 'italic' }}>
-                  taxa {s.rateLabel}
+                {/* coluna mês anterior: volume + taxa */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>{row.prevVol}</span>
+                  {row.prevRate != null && <span style={{ fontSize: 10, color: '#94a3b8' }}>{row.prevRate}%</span>}
                 </div>
+                <span style={{ fontSize: 11, fontWeight: 600, textAlign: 'right', color: deltaColor }}>
+                  {delta == null ? '—' : delta === 0 ? '=' : `${delta > 0 ? '+' : ''}${delta}`}
+                </span>
               </div>
-            )}
-          </div>
-        )
-      })}
+            </div>
+          )
+        })}
+      </div>
 
-      {/* Legenda */}
-      <div style={{ marginTop: 4, padding: '5px 8px', background: '#f1f5f9', borderRadius: 6, fontSize: 9, color: '#64748b' }}>
-        Taxas históricas · vendas em unidades · projeção calculada, sem consulta ao CRM
+      <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 6, paddingTop: 5, borderTop: '1px solid #e2e8f0', fontStyle: 'italic' }}>
+        Vol. + % conversão da etapa anterior · {abbr(curLabel)} MTD vs {abbr(prevLabel)} MTD · Δ em pp
       </div>
     </div>
   )
-}
-
-function formatNum(n: number): string {
-  if (n < 10) return n.toFixed(1)
-  if (n < 1000) return Math.round(n).toString()
-  return `${(n / 1000).toFixed(1)}k`
 }
 
 // ── SopMarketing ───────────────────────────────────────────────────────────────
 
 export function SopMarketing() {
   const [activeSlide, setActiveSlide] = useState(0)
+  // Pessoa limitada a marcas no controle de acessos vê só os slides das marcas dela.
+  const { marcas: marcasPermitidas } = useAcesso()
+  const slides = useMemo(() => {
+    if (!marcasPermitidas) return SLIDES
+    const nomes = new Set<string>(BRAND_LIST.filter(b => marcasPermitidas.includes(b.key)).flatMap(b => (b.marca ? [String(b.marca)] : [])))
+    return SLIDES.filter(s => nomes.has(s.marca))
+  }, [marcasPermitidas])
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPdfExporting, setIsPdfExporting] = useState(false)
   const [pdfProgress, setPdfProgress] = useState('')
@@ -2061,26 +2037,30 @@ export function SopMarketing() {
   // pra garantir que as queries do useVendasFunil daquele slide terminem)
   const [exportingIdx, setExportingIdx] = useState<number | null>(null)
   const exportSlideRef = useRef<HTMLDivElement | null>(null)
-  const [monthMode, setMonthMode] = useState<'current' | 'closed'>('current')
-  // Mês fechado atual — atualizar quando fechar novo mês.
-  // TODO: mover pra src/constants/sopConfig.ts junto com outras configs do S&OP
-  const CLOSED_MONTH_KEY = SOP_CLOSED_MONTH_KEY
-  const CLOSED_MONTH_LABEL = SOP_CLOSED_MONTH_LABEL
+  const [monthMode, setMonthMode] = useState<string>('current')
+  const [customStart, setCustomStart] = useState<string>(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  })
+  const [customEnd, setCustomEnd] = useState<string>(() => isoDate(new Date()))
   const containerRef = useRef<HTMLDivElement>(null)
-  const dates = useMemo(
-    () => computeRanges(monthMode === 'closed' ? CLOSED_MONTH_KEY : undefined),
-    [monthMode],
-  )
+  const dates = useMemo(() => {
+    if (monthMode === 'custom' && customStart && customEnd && customStart <= customEnd)
+      return computeCustomRanges(customStart, customEnd)
+    if (monthMode !== 'current' && monthMode !== 'custom')
+      return computeRanges(monthMode)
+    return computeRanges(undefined)
+  }, [monthMode, customStart, customEnd])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setActiveSlide(s => (s + 1) % SLIDES.length) }
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setActiveSlide(s => (s - 1 + SLIDES.length) % SLIDES.length) }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setActiveSlide(s => (s + 1) % slides.length) }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setActiveSlide(s => (s - 1 + slides.length) % slides.length) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [slides.length])
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(!!document.fullscreenElement)
@@ -2121,8 +2101,8 @@ export function SopMarketing() {
         compress: true,
       })
 
-      for (let i = 0; i < SLIDES.length; i++) {
-        setPdfProgress(`Carregando slide ${i + 1}/${SLIDES.length}...`)
+      for (let i = 0; i < slides.length; i++) {
+        setPdfProgress(`Carregando slide ${i + 1}/${slides.length}...`)
 
         // Aguarda o SopSlide sinalizar que todos os fetches terminaram (via onReady).
         // Timeout de 30s por slide como fallback.
@@ -2144,7 +2124,7 @@ export function SopMarketing() {
 
         const el = exportSlideRef.current
         if (!el) continue
-        setPdfProgress(`Renderizando slide ${i + 1}/${SLIDES.length}...`)
+        setPdfProgress(`Renderizando slide ${i + 1}/${slides.length}...`)
 
         const canvas = await html2canvas(el, {
           scale: 1,
@@ -2175,7 +2155,16 @@ export function SopMarketing() {
     }
   }
 
-  const slide = SLIDES[activeSlide]
+  if (slides.length === 0) {
+    return (
+      <div style={{ padding: 'var(--container-pad)', color: 'var(--ws-text-secondary)', fontSize: 14 }}>
+        Nenhuma das suas marcas tem slide no S&OP Marketing.
+      </div>
+    )
+  }
+
+  const idxAtivo = Math.min(activeSlide, slides.length - 1)
+  const slide = slides[idxAtivo]
 
   return (
     <div ref={containerRef} style={{ height: '100vh', background: 'var(--ws-bg)', overflow: 'hidden' }}>
@@ -2194,14 +2183,15 @@ export function SopMarketing() {
             style={{ width: 1920, height: 1080, overflow: 'hidden', background: '#F8F9FB' }}
           >
             <SopSlide
-              key={SLIDES[exportingIdx].id}
-              slide={SLIDES[exportingIdx]} dates={dates}
-              slideIndex={exportingIdx} total={SLIDES.length}
+              key={slides[exportingIdx].id}
+              slide={slides[exportingIdx]} dates={dates}
+              slideIndex={exportingIdx} total={slides.length}
               onPrev={() => {}} onNext={() => {}}
               isFullscreen={false} onToggleFullscreen={() => {}}
               exportHeight={1080}
               monthMode={monthMode} onMonthModeChange={setMonthMode}
-              closedMonthLabel={CLOSED_MONTH_LABEL}
+              customStart={customStart} onCustomStartChange={setCustomStart}
+              customEnd={customEnd} onCustomEndChange={setCustomEnd}
               onReady={handleSlideReady}
             />
           </div>
@@ -2223,12 +2213,13 @@ export function SopMarketing() {
 
       <SopSlide
         key={slide.id} slide={slide} dates={dates}
-        slideIndex={activeSlide} total={SLIDES.length}
-        onPrev={() => setActiveSlide(s => (s - 1 + SLIDES.length) % SLIDES.length)}
-        onNext={() => setActiveSlide(s => (s + 1) % SLIDES.length)}
+        slideIndex={idxAtivo} total={slides.length}
+        onPrev={() => setActiveSlide(s => (s - 1 + slides.length) % slides.length)}
+        onNext={() => setActiveSlide(s => (s + 1) % slides.length)}
         isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
         monthMode={monthMode} onMonthModeChange={setMonthMode}
-        closedMonthLabel={CLOSED_MONTH_LABEL}
+        customStart={customStart} onCustomStartChange={setCustomStart}
+        customEnd={customEnd} onCustomEndChange={setCustomEnd}
       />
 
       <div style={{
@@ -2238,13 +2229,13 @@ export function SopMarketing() {
         padding: '5px 12px', borderRadius: 20,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
       }}>
-        {SLIDES.map((s, i) => (
+        {slides.map((s, i) => (
           <button key={s.id} onClick={() => setActiveSlide(i)}
             title={`${s.label}${s.subLabel ? ` — ${s.subLabel}` : ''}`}
             style={{
-              width: i === activeSlide ? 18 : 6, height: 6,
+              width: i === idxAtivo ? 18 : 6, height: 6,
               borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0, outline: 'none',
-              background: i === activeSlide ? s.accent : '#cbd5e1', transition: 'all 0.2s',
+              background: i === idxAtivo ? s.accent : '#cbd5e1', transition: 'all 0.2s',
             }} />
         ))}
       </div>

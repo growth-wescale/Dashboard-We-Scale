@@ -33,6 +33,8 @@ import type { EventSource, FunnelView, SalesMode, ViewModes } from '@/lib/metric
 import { periodoAtual, rangeForPeriod } from '@/lib/periodo'
 import type { DateRange, PeriodMode } from '@/lib/periodo'
 import { BRAND_LIST } from '@/constants/brands'
+import { useAcesso } from '@/contexts/AcessoContext'
+import { restringirMarcas } from '@/lib/permissoes'
 import { ORIGENS } from '@/lib/funnelTypes'
 import type { OrigemComercial } from '@/lib/funnelTypes'
 
@@ -147,7 +149,14 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   // desmarca tudo) — aí viram estado inválido: a `FilterBar` pinta a borda de
   // vermelho e a página esconde os dados. Por isso `isStringArray`, não
   // `isNonEmptyStringArray`: um `[]` salvo é um estado legítimo a restaurar.
-  const [brandKeys, setBrandKeys] = usePersisted('brandKeys', isStringArray, TODAS_MARCAS)
+  const [brandKeysSelecionadas, setBrandKeys] = usePersisted('brandKeys', isStringArray, TODAS_MARCAS)
+  // Pessoa limitada a marcas no controle de acessos: as abas de Vendas só
+  // enxergam as marcas dela, qualquer que seja a seleção salva.
+  const { marcas: marcasPermitidas } = useAcesso()
+  const brandKeys = useMemo(
+    () => restringirMarcas(brandKeysSelecionadas, marcasPermitidas),
+    [brandKeysSelecionadas, marcasPermitidas],
+  )
 
   const [periodMode, setPeriodModeRaw] = usePersisted<PeriodMode>(
     'periodMode', oneOf(['dia', 'mes', 'trimestre', 'ano'] as const), MODE_PADRAO,

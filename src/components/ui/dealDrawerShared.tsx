@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { History } from 'lucide-react'
 import { toLocalDate, fmtBR } from '@/lib/dateUtils'
 import { nf } from '@/lib/format'
 
@@ -92,7 +94,7 @@ export interface BarRow { label: string; count: number; color: string; values: s
 export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow[]; onSelect?: (values: string[]) => void }) {
   const max = Math.max(...rows.map(r => r.count), 1)
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ flex: '1 1 220px', minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600, marginBottom: 10 }}>
         {title}
       </div>
@@ -170,4 +172,27 @@ export function topBreakdown<T>(
     })
   }
   return rows
+}
+
+/**
+ * Atalho pra Linha do Tempo do deal, ao lado do link externo pro RD nos popups.
+ * O ícone sozinho passava despercebido (ninguém achava o atalho), então vai com
+ * rótulo escrito — em corpo menor e sem sublinhado, pra não competir com o nome
+ * da negociação, que é o link principal da célula.
+ */
+export function LinkLinhaDoTempo({ idDeal, cor }: { idDeal: string; cor: string }) {
+  return (
+    <Link
+      to={`/linha-do-tempo/${idDeal}`}
+      title="Linha do tempo do deal"
+      onClick={e => e.stopPropagation()}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 10, color: cor,
+        fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', textDecoration: 'none',
+      }}
+    >
+      <History size={13} />
+      linha do tempo
+    </Link>
+  )
 }

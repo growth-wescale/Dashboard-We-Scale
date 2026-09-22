@@ -17,21 +17,20 @@ import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
-import { useFunilAging } from '@/hooks/useFunilAging'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
-import { computeAging, dealsInAging } from '@/lib/aging'
+import { computeEtapaAtual, dealsInEtapaAtual } from '@/lib/aging'
+import type { EtapaLeadtimeAgg } from '@/lib/aging'
 import { fmtDias } from '@/components/ui/dealDrawerShared'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { normalizeFonteMacro } from '@/lib/fonteMapping'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  STAGE_DATE_FIELD, STAGE_ORDER, buildScopeFilter, cohortKeys, countSales, countStage,
+  STAGE_ORDER, buildScopeFilter, etapasDaMarca, cohortKeys, countSales, countStage,
   mqlWord, stageLabel,
-  countStageEvents, currentStage, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage, resolveStage,
+  countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
-import type { FunnelRow } from '@/lib/funnelTypes'
 import {
   mesesDoPeriodo, periodoAnterior, periodoEmCurso, rangeAnteriorComparavel, rangeAnteriorDia, rangeForPeriod,
 } from '@/lib/periodo'
@@ -83,21 +82,29 @@ interface EtapaLeadtimeRow {
 }
 
 /** Lista de etapas com 2 leadtimes — usada pelos modos Aging e Atual. */
-function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
+function EtapaLeadtimeList({ linhas, accent, onRowClick, vazioLabel }: {
   linhas: EtapaLeadtimeRow[]; accent: string
   /** Clique numa etapa abre o popup com os deals por trás do número. */
   onRowClick?: (etapa: StageKey) => void
+  /** Texto do estado vazio — o Aging precisa explicar que o recorte é a safra. */
+  vazioLabel?: string
 }) {
   if (linhas.length === 0) {
     return <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', padding: '24px 0' }}>
-      Nenhum negócio em aberto no recorte selecionado.
+      {vazioLabel ?? 'Nenhum negócio em aberto no recorte selecionado.'}
     </div>
   }
   const maxDeals = Math.max(...linhas.map(l => l.deals), 1)
 
+  // Colunas de média em px fixo (não var(--etapa-col)) porque "Média em
+  // andamento" não cabe sem quebrar mesmo no card mais largo — a lista inteira
+  // rola na horizontal (igual as tabelas de Performance/Campanha) em vez de
+  // vazar o cabeçalho por cima do valor, como acontecia antes desse fix.
+  const cols = 'minmax(150px, 1fr) 100px 150px'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700 }}>
+    <div className="rs-scroll-x">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 440 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--ws-text-secondary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
         <span>Etapa · negócios parados</span>
         <span style={{ textAlign: 'right' }}>Média na etapa</span>
         <span style={{ textAlign: 'right' }}>Média em andamento</span>
@@ -110,7 +117,7 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           tabIndex={onRowClick ? 0 : undefined}
           title={onRowClick ? `Ver deals em ${l.label}` : undefined}
           style={{
-            display: 'grid', gridTemplateColumns: '1fr 84px 84px', gap: 12, alignItems: 'center',
+            display: 'grid', gridTemplateColumns: cols, gap: 12, alignItems: 'center',
             cursor: onRowClick ? 'pointer' : undefined,
             borderRadius: 6, padding: onRowClick ? '5px 6px' : undefined, margin: onRowClick ? '0 -6px' : undefined,
             transition: 'background .12s',
@@ -119,9 +126,9 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           onMouseLeave={onRowClick ? e => { (e.currentTarget as HTMLDivElement).style.background = '' } : undefined}
         >
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3 }}>
-              <span style={{ color: 'var(--ws-text-primary)' }}>{l.label}</span>
-              <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{nf(l.deals)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12.5, marginBottom: 3 }}>
+              <span style={{ color: 'var(--ws-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={l.label}>{l.label}</span>
+              <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{nf(l.deals)}</span>
             </div>
             <div style={{ height: 7, borderRadius: 4, background: 'var(--ws-border)', overflow: 'hidden' }}>
               <div style={{ width: `${(l.deals / maxDeals) * 100}%`, height: '100%', background: accent, borderRadius: 4 }} />
@@ -135,6 +142,7 @@ function EtapaLeadtimeList({ linhas, accent, onRowClick }: {
           </span>
         </div>
       ))}
+    </div>
     </div>
   )
 }
@@ -275,8 +283,8 @@ function MetaProgresso({ label, realizado, meta, formatter, accent, porMarca }: 
 function ModeToggle({ value, onChange }: { value: FunnelMode; onChange: (m: FunnelMode) => void }) {
   const opts: { v: FunnelMode; label: string; hint: string }[] = [
     { v: 'performance', label: 'Performance', hint: 'Volume que passou por cada etapa no período' },
-    { v: 'aging', label: 'Aging', hint: 'Há quanto tempo os negócios em aberto estão parados' },
-    { v: 'atual', label: 'Atual', hint: 'Onde os negócios estão agora — ignora o período' },
+    { v: 'aging', label: 'Aging', hint: 'Negócios criados no período que seguem em aberto, e onde estão hoje' },
+    { v: 'atual', label: 'Atual', hint: 'Todos os negócios em aberto e onde estão agora — ignora o período' },
   ]
   return (
     <div style={{ display: 'inline-flex', background: 'var(--ws-bg)', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', padding: 2, gap: 2 }}>
@@ -333,6 +341,11 @@ export function FunilVendas() {
     [brandKeys],
   )
   const todasSelecionadas = marcasSelecionadas.length === BRAND_LIST.length
+  // Com 1 marca só, some a etapa que não existe no funil dela (ex.: Odonto Legacy).
+  const etapasFunil = useMemo(
+    () => etapasDaMarca(MACRO_STAGES, marcasSelecionadas.map(b => b.marca)),
+    [marcasSelecionadas],
+  )
   const { accent, dark } = marcasSelecionadas.length === 1 ? marcasSelecionadas[0] : BRAND_OVERVIEW
   const scopeLabel = todasSelecionadas
     ? 'Consolidado'
@@ -395,7 +408,6 @@ export function FunilVendas() {
     // No modo safra o evento pode ser posterior à janela do MQL.
     fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
   })
-  const { periodos } = useFunilAging(modo === 'aging')
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
   // Marca é sempre filtrada aqui no cliente (a busca traz o recorte inteiro
@@ -485,7 +497,7 @@ export function FunilVendas() {
     const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
     const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
-    return MACRO_STAGES.map(s => ({
+    return etapasFunil.map(s => ({
       key: s,
       label: MACRO_STAGE_LABEL[s] ?? stageLabel(s, origem),
       // Fechamento não é etapa no histórico — venda é um tipo de evento à parte.
@@ -498,30 +510,11 @@ export function FunilVendas() {
             extra: e => idsEscopo.has(String(e.id_deal)),
           }),
     }))
-  }, [modo, scoped, eventos, win, viewModes, origem])
-
-  // Deal vivo (em andamento no ciclo atual e com MQL conhecido) indexado por
-  // id_lead — base do cruzamento do Aging e do popup de deals por etapa.
-  const vivosRowById = useMemo(() => {
-    const map = new Map<string, FunnelRow>()
-    for (const r of scoped) {
-      if (r.eh_ciclo_atual && r.status_atual === 'Em andamento' && r.data_novo_mql) {
-        map.set(String(r.id_lead), r)
-      }
-    }
-    return map
-  }, [scoped])
-
-  // MQL de cada deal vivo — alimenta "média em andamento" nos modos Aging e Atual.
-  const mqlPorDealVivo = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const [id, r] of vivosRowById) map.set(id, r.data_novo_mql!)
-    return map
-  }, [vivosRowById])
+  }, [modo, scoped, eventos, win, viewModes, origem, etapasFunil])
 
   // Etapas na mesma sequência do funil Performance — só as que têm negócio parado.
-  function ordenarPorMacroStages(porStageKey: Map<StageKey, { deals: number; mediaEtapa: number | null; mediaAndamento: number | null }>): EtapaLeadtimeRow[] {
-    return MACRO_STAGES
+  function ordenarPorMacroStages(porStageKey: Map<StageKey, EtapaLeadtimeAgg>): EtapaLeadtimeRow[] {
+    return etapasFunil
       .map(s => {
         const a = porStageKey.get(s)
         if (!a || a.deals === 0) return null
@@ -530,63 +523,28 @@ export function FunilVendas() {
       .filter((x): x is EtapaLeadtimeRow => x !== null)
   }
 
-  const aging = useMemo(() => {
-    if (modo !== 'aging') return []
-    const vivos = new Set(mqlPorDealVivo.keys())
-    const porEtapaRaw = computeAging(periodos, vivos, mqlPorDealVivo)
-    const porStageKey = new Map(
-      porEtapaRaw
-        .map(a => [resolveStage(a.etapa), a] as const)
-        .filter((x): x is [StageKey, typeof porEtapaRaw[number]] => x[0] !== null),
-    )
-    return ordenarPorMacroStages(porStageKey)
-  }, [modo, periodos, mqlPorDealVivo, origem])
+  // Aging: a SAFRA do período — negócios criados (MQL) na janela filtrada, que
+  // seguem em aberto, e a etapa em que estão HOJE.
+  const aging = useMemo(
+    () => (modo === 'aging' ? ordenarPorMacroStages(computeEtapaAtual(scoped, win)) : []),
+    [modo, scoped, win, origem, etapasFunil],
+  )
 
-  // Atual: mesma lista/leadtimes do Aging, mas a partir da etapa corrente de
-  // cada deal vivo (ignora período de propósito) — sem depender da tabela de
-  // períodos de aging, que só carrega tempo parado numa etapa específica.
-  const atualLeadtime = useMemo(() => {
-    if (modo !== 'atual') return []
-    const agora = Date.now()
-    const DIA_MS = 86_400_000
-    const porStageKey = new Map<StageKey, { deals: number; etapaDias: number[]; andamentoDias: number[] }>()
-
-    for (const r of scoped) {
-      if (!r.eh_ciclo_atual || r.status_atual !== 'Em andamento') continue
-      // currentStage (não resolveStage) para "Reunião Agendada SQL" contar
-      // só no funil do Closer — o SDR tem a etapa de mesmo nome.
-      const etapa = currentStage(r)
-      if (!etapa) continue
-
-      const bucket = porStageKey.get(etapa) ?? { deals: 0, etapaDias: [], andamentoDias: [] }
-      bucket.deals += 1
-
-      const dataEtapa = r[STAGE_DATE_FIELD[etapa]]
-      if (dataEtapa) {
-        const dias = (agora - new Date(dataEtapa).getTime()) / DIA_MS
-        if (!Number.isNaN(dias) && dias >= 0) bucket.etapaDias.push(dias)
-      }
-      if (r.data_novo_mql) {
-        const dias = (agora - new Date(r.data_novo_mql).getTime()) / DIA_MS
-        if (!Number.isNaN(dias) && dias >= 0) bucket.andamentoDias.push(dias)
-      }
-      porStageKey.set(etapa, bucket)
-    }
-
-    const media = (xs: number[]) => xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null
-    const resumido = new Map(
-      [...porStageKey.entries()].map(([s, b]) => [s, { deals: b.deals, mediaEtapa: media(b.etapaDias), mediaAndamento: media(b.andamentoDias) }]),
-    )
-    return ordenarPorMacroStages(resumido)
-  }, [modo, scoped, origem])
+  // Atual: a mesma leitura do Aging, sem recorte de período — todo negócio em
+  // aberto e onde ele está hoje, não importa quando entrou no funil.
+  const atualLeadtime = useMemo(
+    () => (modo === 'atual' ? ordenarPorMacroStages(computeEtapaAtual(scoped, null)) : []),
+    [modo, scoped, origem, etapasFunil],
+  )
 
   // Deals por trás da etapa clicada no funil — mesma regra usada pra contar,
   // pra nunca mostrar uma lista diferente do número que a pessoa clicou.
   const dealsDoClique = useMemo(() => {
     if (!clickedStage) return []
-    if (modo === 'aging') return dealsInAging(periodos, vivosRowById, clickedStage)
-    return dealsInStage(scoped, eventos, clickedStage, win, viewModes, modo === 'atual' ? 'atual' : 'performance')
-  }, [clickedStage, modo, periodos, vivosRowById, scoped, eventos, win, viewModes])
+    if (modo === 'aging') return dealsInEtapaAtual(scoped, clickedStage, win)
+    if (modo === 'atual') return dealsInEtapaAtual(scoped, clickedStage, null)
+    return dealsInStage(scoped, eventos, clickedStage, win, viewModes, 'performance')
+  }, [clickedStage, modo, scoped, eventos, win, viewModes])
 
   // Deals ganhos no recorte — base dos pop-ups leves de Receita/Fechamentos/Vendas por fonte.
   const ganhosNoPeriodo = useMemo(
@@ -818,7 +776,7 @@ export function FunilVendas() {
 
   if (faltandoObrigatorio.length > 0) {
     return (
-      <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
+      <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}>
         <PageTop title="Visão Macro" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
         <FilterBar
           marcasDisponiveis={marcasDisponiveis}
@@ -834,7 +792,7 @@ export function FunilVendas() {
   }
 
   return (
-    <div style={{ padding: '32px 32px 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
+    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: 'var(--ws-bg)', minHeight: '100vh' }}
       {...(marcasSelecionadas.length === 1 ? { 'data-brand': marcasSelecionadas[0].key } : {})}>
 
       <PageTop
@@ -887,7 +845,7 @@ export function FunilVendas() {
       )}
 
       {/* ── KPIs ─────────────────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+      <div className="rs-grid rs-cols-6" style={{ marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
         <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={delta(kpis.deltas.receita)} deltaLabel={prevLabel} accent={false}
           onClick={() => setPopupKpi('receita')}
           description={deltasFull && <DeltaSecundario delta={deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
@@ -903,19 +861,19 @@ export function FunilVendas() {
       </div>
 
       {/* ── Funil + laterais ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
+      <div className="rs-split" style={{ '--rs-split': 'minmax(0, 1.5fr) minmax(0, 1fr)', marginBottom: 24 } as CSSProperties}>
 
         <SCard style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '18px 24px 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ padding: '18px clamp(14px, 4vw, 24px) 4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 21 }}>Funil de vendas</div>
               <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
                 {modo === 'performance' && `Volume por etapa, conversão de passagem e custo acumulado · ${scopeLabel}`}
-                {modo === 'aging' && `Negócios em aberto e há quanto tempo estão parados · ${scopeLabel}`}
-                {modo === 'atual' && `Onde os negócios estão agora, independente do período · ${scopeLabel}`}
+                {modo === 'aging' && `Criados no período e ainda em aberto — onde estão hoje · ${scopeLabel} · ${subtitlePeriodo}`}
+                {modo === 'atual' && `Todos os negócios em aberto e onde estão agora, independente do período · ${scopeLabel}`}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <ModeToggle value={modo} onChange={setModo} />
               {totalRepeated > 0 && (
                 <button type="button" onClick={() => setTotalRepeatsOpen(true)} title="Ver todos os repetidos" style={{
@@ -929,9 +887,10 @@ export function FunilVendas() {
               )}
             </div>
           </div>
-          <div style={{ padding: '14px 24px 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+          <div style={{ padding: '14px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
             {modo === 'aging'
-              ? <EtapaLeadtimeList linhas={aging} accent={accent} onRowClick={setClickedStage} />
+              ? <EtapaLeadtimeList linhas={aging} accent={accent} onRowClick={setClickedStage}
+                  vazioLabel={`Nenhum negócio criado no período segue em aberto (${subtitlePeriodo}).`} />
               : modo === 'atual'
                 ? <EtapaLeadtimeList linhas={atualLeadtime} accent={accent} onRowClick={setClickedStage} />
                 : <TrapFunnel stages={funnel} invest={invest} accent={accent} dark={dark}
@@ -978,7 +937,7 @@ export function FunilVendas() {
       </div>
 
       <SectionHead title="Tempo de ciclo" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+      <div className="rs-grid rs-cols-2">
         <LeadtimeCard label="Leadtime médio até a perda" value={leadtimes.perda.value}
           sub="Média das negociações perdidas no período" tone="risco" icon={<TrendingDown size={17} />} />
         <LeadtimeCard label="Leadtime médio de fechamento" value={leadtimes.fechamento.value}

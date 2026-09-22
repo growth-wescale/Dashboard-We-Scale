@@ -1,16 +1,26 @@
 /**
- * Popup de desdobramento de uma meta por pessoa — abre ao clicar num
- * MetaRitmoCard com meta cadastrada. Duas variantes:
- *  - 'daily': métricas com leitura diária (SQL, RR, SAL, COF) — barra de
- *    ritmo, "esperado até hoje" e um anel com o resultado de hoje.
- *  - 'monthly': métricas só com meta do mês (Receita, Fechamentos) —
- *    Realizado / Meta do mês / % apenas, sem ritmo nem "hoje".
+ * Popup dos cards da aba Performance (SQL, Diagnóstico, SAL, COF, Fechamentos,
+ * Receita…). Abre em QUALQUER período e tem um toggle no topo:
+ *
+ *  - **Por pessoa** — meta × realizado por SDR/Closer. Três variantes:
+ *    - 'daily': 1 mês selecionado, métricas com leitura diária (SQL, RR, SAL,
+ *      COF) — barra de ritmo, "esperado até hoje" e anel com o resultado de hoje.
+ *    - 'monthly': 1 mês selecionado, métricas só com meta do mês (Receita,
+ *      Fechamentos) — Realizado / Meta do mês / %.
+ *    - 'periodo': qualquer outro recorte (Dia, trimestre, vários meses) —
+ *      realizado por pessoa, com meta proporcional quando dá pra calcular.
+ *  - **Deals** — a lista de negócios por trás do número do card
+ *    (`StageDealsPanel`, a mesma tabela do clique no funil).
  */
 
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import { SCard } from '@/components/ui/v2'
 import { pct, nfCeil } from '@/lib/format'
-import type { PersonMetaRow, PersonSimplesRow } from '@/lib/metaBreakdown'
+import type { StageDeal, StageKey } from '@/lib/metrics'
+import type { PersonMetaRow, PersonSimplesRow, PersonPeriodoRow } from '@/lib/metaBreakdown'
+import { StageDealsPanel } from './StageDealsDrawer'
+import { useStageDealsFilters } from './useStageDealsFilters'
 
 const OK = '#2ABCB5'
 const RUIM = '#E4585B'
@@ -90,21 +100,65 @@ function LinhaSimples({ row, accent, formatter }: { row: PersonSimplesRow; accen
   )
 }
 
-type MetaBreakdownDrawerProps = {
+function LinhaPeriodo({ row, accent, formatter }: { row: PersonPeriodoRow; accent: string; formatter: (n: number) => string }) {
+  const temMeta = row.pct != null
+  const bateu = temMeta && row.pct! >= 100
+  return (
+    <SCard style={{ padding: 18 }}>
+      <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 10 }}>{row.nome}</div>
+      {temMeta && (
+        <div style={{ position: 'relative', height: 10, marginBottom: 12, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, width: `${Math.min(100, row.pct!)}%`, background: bateu ? OK : RUIM, borderRadius: 999 }} />
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+        <span>Realizado<br /><b style={{ color: 'var(--ws-text-primary)', fontSize: 15 }}>{formatter(row.realizado)}</b></span>
+        <span style={{ textAlign: 'center' }}>Meta do período<br /><b style={{ color: 'var(--ws-text-primary)', fontSize: 15 }}>{temMeta ? formatter(row.meta) : '—'}</b></span>
+        <span style={{ textAlign: 'right' }}>%<br /><b style={{ color: temMeta ? accent : 'var(--ws-text-secondary)', fontSize: 15 }}>{temMeta ? `${row.pct!.toFixed(1)}%` : '—'}</b></span>
+      </div>
+    </SCard>
+  )
+}
+
+export type PessoasBreakdown =
+  | { variant: 'daily'; rows: PersonMetaRow[] }
+  | { variant: 'monthly'; rows: PersonSimplesRow[] }
+  | { variant: 'periodo'; rows: PersonPeriodoRow[] }
+
+type Visao = 'pessoas' | 'deals'
+
+interface MetaBreakdownDrawerProps {
   open: boolean
   onClose: () => void
   title: string
   subtitle: string
   accent: string
   formatter: (n: number) => string
-} & (
-  | { variant: 'daily'; rows: PersonMetaRow[] }
-  | { variant: 'monthly'; rows: PersonSimplesRow[] }
-)
+  /** 'SDR' ou 'Closer' — rótulo do toggle e do gráfico de responsável. */
+  papel: 'SDR' | 'Closer'
+  pessoas: PessoasBreakdown
+  /** Rodapé explicando de onde vem (ou por que não há) a meta. */
+  nota?: string
+  deals: StageDeal[]
+  stage: StageKey
+}
 
-export function MetaBreakdownDrawer(props: MetaBreakdownDrawerProps) {
-  const { open, onClose, title, subtitle, accent, formatter } = props
+export function MetaBreakdownDrawer({
+  open, onClose, title, subtitle, accent, formatter, papel, pessoas, nota, deals, stage,
+}: MetaBreakdownDrawerProps) {
+  const [visao, setVisao] = useState<Visao>('pessoas')
+  const f = useStageDealsFilters(deals)
+
   if (!open) return null
+
+  const vazio = pessoas.variant === 'periodo'
+    ? `Nenhum ${papel} com atividade nesse recorte.`
+    : 'Ninguém com meta cadastrada nesse recorte.'
+
+  const tabs: { key: Visao; label: string }[] = [
+    { key: 'pessoas', label: `Por ${papel}` },
+    { key: 'deals', label: `Deals (${deals.length})` },
+  ]
 
   return (
     <>
@@ -113,39 +167,72 @@ export function MetaBreakdownDrawer(props: MetaBreakdownDrawerProps) {
         zIndex: 1000, backdropFilter: 'blur(2px)',
       }} />
 
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(520px, 96vw)',
+      <div className="rs-drawer" style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        // A tabela de deals precisa de largura; o desdobramento por pessoa não.
+        width: visao === 'deals' ? 'min(980px, 96vw)' : 'min(520px, 96vw)',
         background: 'var(--ws-surface)', borderLeft: '1px solid var(--ws-border)',
         boxShadow: '-8px 0 40px rgba(0,0,0,.18)', zIndex: 1001,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        transition: 'width .2s',
       }}>
-        <div style={{
+        <div className="rs-drawer-head" style={{
           padding: '20px 24px', borderBottom: '1px solid var(--ws-border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0,
+          display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0,
         }}>
-          <div>
-            <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18 }}>{title}</h2>
-            <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>{subtitle}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18 }}>{title}</h2>
+              <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
+                {visao === 'deals' && `${f.filtered.length} de ${deals.length} deal${deals.length !== 1 ? 's' : ''} · `}{subtitle}
+              </div>
+            </div>
+            <button onClick={onClose} aria-label="Fechar" style={{
+              border: 'none', background: 'transparent', cursor: 'pointer',
+              color: 'var(--ws-text-secondary)', padding: 6, borderRadius: 6,
+              display: 'flex', alignItems: 'center',
+            }}>
+              <X size={20} />
+            </button>
           </div>
-          <button onClick={onClose} style={{
-            border: 'none', background: 'transparent', cursor: 'pointer',
-            color: 'var(--ws-text-secondary)', padding: 6, borderRadius: 6,
-            display: 'flex', alignItems: 'center',
+
+          <div role="tablist" style={{
+            display: 'inline-flex', alignSelf: 'flex-start', padding: 3, gap: 2,
+            border: '1px solid var(--ws-border)', borderRadius: 10, background: 'var(--ws-bg)',
           }}>
-            <X size={20} />
-          </button>
+            {tabs.map(t => {
+              const ativo = t.key === visao
+              return (
+                <button key={t.key} role="tab" aria-selected={ativo} onClick={() => setVisao(t.key)} style={{
+                  border: 'none', borderRadius: 8, cursor: 'pointer', padding: '6px 14px',
+                  fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+                  background: ativo ? 'var(--ws-surface)' : 'transparent',
+                  color: ativo ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)',
+                  boxShadow: ativo ? 'var(--shadow-sm)' : 'none',
+                }}>{t.label}</button>
+              )
+            })}
+          </div>
         </div>
 
-        <div style={{ overflow: 'auto', flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {props.rows.length === 0 && (
-            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ws-text-secondary)', fontSize: 13 }}>
-              Ninguém com meta cadastrada nesse recorte.
-            </div>
-          )}
-          {props.variant === 'daily'
-            ? props.rows.map(r => <LinhaDiaria key={r.nome} row={r} accent={accent} formatter={formatter} />)
-            : props.rows.map(r => <LinhaSimples key={r.nome} row={r} accent={accent} formatter={formatter} />)}
-        </div>
+        {visao === 'deals' ? (
+          <StageDealsPanel deals={deals} stage={stage} accent={accent} f={f}
+            ownerRole={papel === 'Closer' ? 'closer' : 'sdr'} />
+        ) : (
+          <div style={{ overflow: 'auto', flex: 1, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {pessoas.rows.length === 0 && (
+              <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ws-text-secondary)', fontSize: 13 }}>
+                {vazio}
+              </div>
+            )}
+            {pessoas.variant === 'daily' && pessoas.rows.map(r => <LinhaDiaria key={r.nome} row={r} accent={accent} formatter={formatter} />)}
+            {pessoas.variant === 'monthly' && pessoas.rows.map(r => <LinhaSimples key={r.nome} row={r} accent={accent} formatter={formatter} />)}
+            {pessoas.variant === 'periodo' && pessoas.rows.map(r => <LinhaPeriodo key={r.nome} row={r} accent={accent} formatter={formatter} />)}
+            {nota && (
+              <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--ws-text-secondary)', lineHeight: 1.45 }}>{nota}</p>
+            )}
+          </div>
+        )}
       </div>
     </>
   )

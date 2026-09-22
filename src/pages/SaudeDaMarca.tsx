@@ -263,18 +263,24 @@ function buildAcqFunnel(b: BrandData, media: MediaDailyRaw[]) {
   const cpc = clicks > 0 ? b.invest / clicks : 0
   const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0
 
-  // Connect Rate = SUM(LPV) ÷ SUM(Outbound Clicks) apenas para campanhas
-  // com destino website/LP (identificadas por terem LPV > 0 no período).
-  // Campanhas de alcance, awareness, vídeo e engajamento têm lpv=0 e são excluídas.
-  const campLpvTotals = new Map<string, number>()
+  // Connect Rate = SUM(LPV) ÷ SUM(inline_link_clicks) para campanhas com destino LP.
+  // Threshold de 15%: exclui Instant Form (FORMSNATIVO) que têm LPV residual ~1-9%
+  // mas são formulários dentro do Facebook, sem LP real.
+  const campLpvTotals   = new Map<string, number>()
+  const campClickTotals = new Map<string, number>()
   for (const row of media) {
     const key = row.campanha ?? '(sem campanha)'
-    campLpvTotals.set(key, (campLpvTotals.get(key) ?? 0) + row.lpv)
+    campLpvTotals.set(key,   (campLpvTotals.get(key)   ?? 0) + row.lpv)
+    campClickTotals.set(key, (campClickTotals.get(key) ?? 0) + row.cliques_link)
   }
-  const eligible      = media.filter(r => (campLpvTotals.get(r.campanha ?? '(sem campanha)') ?? 0) > 0)
-  const eligibleLpv   = eligible.reduce((s, r) => s + r.lpv, 0)
+  const isLpCampaign = (key: string) => {
+    const clicks = campClickTotals.get(key) ?? 0
+    return clicks > 0 && (campLpvTotals.get(key) ?? 0) / clicks >= 0.15
+  }
+  const eligible       = media.filter(r => isLpCampaign(r.campanha ?? '(sem campanha)'))
+  const eligibleLpv    = eligible.reduce((s, r) => s + r.lpv, 0)
   const eligibleClicks = eligible.reduce((s, r) => s + r.cliques_link, 0)
-  const connectRate   = eligibleClicks > 0 ? (eligibleLpv / eligibleClicks) * 100 : null
+  const connectRate    = eligibleClicks > 0 ? (eligibleLpv / eligibleClicks) * 100 : null
 
   return {
     stages: [
@@ -855,7 +861,7 @@ function CampEfficiencyFunnel({ campaigns }: { campaigns: Campaign[] }) {
   const leads       = campaigns.reduce((s, c) => s + c.leads, 0)
   const mql         = campaigns.reduce((s, c) => s + c.mql, 0)
 
-  const eligible    = campaigns.filter(c => c.lpv > 0)
+  const eligible    = campaigns.filter(c => c.clicks > 0 && c.lpv / c.clicks >= 0.15)
   const eligLpv     = eligible.reduce((s, c) => s + c.lpv, 0)
   const eligClicks  = eligible.reduce((s, c) => s + c.clicks, 0)
   const connectRate = eligClicks > 0 ? eligLpv / eligClicks * 100 : null

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { funilFilterOptions } from '@/lib/funilFilterOptions'
+import { dealNaJanela, funilFilterOptions } from '@/lib/funilFilterOptions'
 import { toWindow } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 
@@ -88,5 +88,15 @@ describe('funilFilterOptions', () => {
     const out = funilFilterOptions({ rows, win, ...base, sdrs: ['Thiago'], cohort: false })
     expect(out.marcas).toEqual([])
     expect(out.closers).toEqual([])
+  })
+})
+
+describe('dealNaJanela', () => {
+  const win = toWindow(null, null, [{ from: '2026-08-01', to: '2026-08-31' }])
+  const row = { data_novo_mql: '2026-07-20T12:00:00Z', data_sal: '2026-08-10T12:00:00Z' } as unknown as FunnelRow
+  it('entra se alguma etapa aconteceu na janela', () => { expect(dealNaJanela(row, win, false)).toBe(true) })
+  it('no modo safra só o MQL conta', () => { expect(dealNaJanela(row, win, true)).toBe(false) })
+  it('fora da janela em tudo → fora', () => {
+    expect(dealNaJanela({ data_novo_mql: '2026-07-01T12:00:00Z' } as unknown as FunnelRow, win, false)).toBe(false)
   })
 })

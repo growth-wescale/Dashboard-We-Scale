@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import { normalizeMarcaRaw } from '@/constants/brands'
+import { buscarTodasPaginas } from '@/lib/paginacao'
+import { carregarComCache, lerCache } from '@/lib/cacheConsulta'
 import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
 
 /**
@@ -12,8 +14,9 @@ import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
  * do funil. Além disso o modo safra precisa de deals cujo MQL está na janela
  * mas cuja etapa aconteceu fora dela — impossível de expressar num filtro só.
  *
- * São ~4,6 mil linhas; a view já exclui deals de teste, status Excluído e
- * funis fora do escopo comercial.
+ * São ~7,7 mil linhas (set/26: 5,9 mil Inbound + 1,8 mil Prospecção Ativa);
+ * a view já exclui deals de teste, status Excluído e funis fora do escopo
+ * comercial.
  *
  * `origem` (Inbound / Prospecção Ativa) É filtrada no servidor — é sempre um
  * valor só. Marca NÃO é filtrada aqui: as páginas filtram no cliente (igual
@@ -45,71 +48,92 @@ export interface UseFunilVendasResult {
   reload: () => void
 }
 
-async function fetchAll(origem: OrigemComercial): Promise<{ rows: FunnelRow[]; error: string | null }> {
-  const out: FunnelRow[] = []
+/** Páginas simultâneas — ver `paginacao.ts`. */
+const CONCORRENCIA = 4
 
-  for (let page = 0; ; page++) {
-    const q = supabaseVendas
+/**
+ * Ao voltar para uma aba, mostra o cache na hora e só rebusca em segundo plano
+ * se ele tiver mais que isso. A matview por trás atualiza a cada 2 min, então
+ * menos que 1 min seria só carga repetida no banco.
+ */
+const IDADE_REVALIDAR_MS = 60_000
+
+async function fetchAll(origem: OrigemComercial): Promise<FunnelRow[]> {
+  const { rows, error } = await buscarTodasPaginas<FunnelRow>(async (de, ate, contar) => {
+    const { data, error: err, count } = await supabaseVendas
       .from('vw_funil_vendas')
-      .select(COLS)
-      .order('data_criacao_negociacao', { ascending: false })
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+      .select(COLS, contar ? { count: 'exact' } : undefined)
       .eq('origem_comercial', origem)
+      // Desempate por (id_lead, ciclo), a chave da view: sem ordem total o
+      // OFFSET pode repetir/pular linha entre páginas.
+      .order('data_criacao_negociacao', { ascending: false })
+      .order('id_lead', { ascending: true })
+      .order('ciclo', { ascending: true })
+      .range(de, ate)
+    return { rows: (data ?? []) as unknown as FunnelRow[], error: err?.message ?? null, total: count }
+  }, { tamanhoPagina: PAGE_SIZE, concorrencia: CONCORRENCIA })
 
-    const { data, error } = await q
-    if (error) return { rows: [], error: error.message }
-
-    const rows = (data ?? []) as unknown as FunnelRow[]
-    // Normaliza aliases de marca (ex.: 'Odonto Legacy' → 'Odonto Scale') antes
-    // de qualquer filtro/agrupamento por marca — ver MARCA_ALIASES em brands.ts.
-    for (const r of rows) r.marca = normalizeMarcaRaw(r.marca) ?? r.marca
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
-
-  return { rows: out, error: null }
+  if (error) throw new Error(error)
+  // Normaliza aliases de marca (ex.: 'Odonto Legacy' → 'Odonto Scale') antes
+  // de qualquer filtro/agrupamento por marca — ver MARCA_ALIASES em brands.ts.
+  for (const r of rows) r.marca = normalizeMarcaRaw(r.marca) ?? r.marca
+  return rows
 }
 
+/**
+ * Cache compartilhado por origem (`cacheConsulta.ts`): Visão Macro, Performance
+ * e Análise de Perda usam a mesma base, então trocar de aba não baixa de novo.
+ */
 export function useFunilVendas(origem: OrigemComercial): UseFunilVendasResult {
-  const [data, setData] = useState<FunnelRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const chave = `vw_funil_vendas:${origem}`
+  const [data, setData] = useState<FunnelRow[]>(() => lerCache<FunnelRow[]>(chave)?.valor ?? [])
+  const [loading, setLoading] = useState(() => !lerCache(chave))
   const [error, setError] = useState<string | null>(null)
-  // Dedup de fetches em vôo: são ~7 páginas de 1000 linhas cada; se a anterior
-  // ainda está rodando (view Vendas já teve timeout no anon), não faz sentido
-  // disparar outra em cima — fica só empilhando memória. O tick pula silencioso.
-  const inFlight = useRef(false)
+  // Chave ativa: resposta de uma origem antiga (usuário trocou o toggle no meio
+  // da carga) ou que chega depois de desmontar é descartada.
+  const chaveAtiva = useRef<string | null>(chave)
 
   const load = useCallback(async (showLoading: boolean) => {
-    if (inFlight.current) return
-    inFlight.current = true
     if (showLoading) setLoading(true)
     try {
-      const { rows, error: err } = await fetchAll(origem)
-      setError(err)
-      if (!err) setData(rows)
+      // Carga já em voo para a mesma origem (polling, refresh, outra aba) é
+      // reaproveitada em vez de disparar outra em cima.
+      const rows = await carregarComCache(chave, () => fetchAll(origem))
+      if (chaveAtiva.current !== chave) return
+      setData(rows)
+      setError(null)
+    } catch (e) {
+      if (chaveAtiva.current !== chave) return
+      // Mantém os últimos dados bons na tela, como antes.
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
-      inFlight.current = false
+      if (chaveAtiva.current === chave) setLoading(false)
     }
-  }, [origem])
+  }, [chave, origem])
 
   useEffect(() => {
-    let cancelled = false
-    const run = (showLoading: boolean) => { if (!cancelled) void load(showLoading) }
-
-    run(true)
+    chaveAtiva.current = chave
+    const emCache = lerCache<FunnelRow[]>(chave)
+    if (emCache) {
+      setData(emCache.valor)
+      setError(null)
+      setLoading(false)
+      if (Date.now() - emCache.atualizadoEm > IDADE_REVALIDAR_MS) void load(false)
+    } else {
+      void load(true)
+    }
 
     // Mesmo protocolo dos hooks existentes: botão de refresh global + polling.
-    const onRefresh = () => run(false)
+    const onRefresh = () => void load(false)
     window.addEventListener('dashboard:refresh', onRefresh)
-    const timer = setInterval(() => run(false), 300_000)
+    const timer = setInterval(() => void load(false), 300_000)
 
     return () => {
-      cancelled = true
+      chaveAtiva.current = null
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', onRefresh)
     }
-  }, [load])
+  }, [chave, load])
 
   return { data, loading, error, reload: () => void load(false) }
 }

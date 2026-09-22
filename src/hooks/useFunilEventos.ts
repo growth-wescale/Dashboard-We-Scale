@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { buscarTodasPaginas } from '@/lib/paginacao'
+import { carregarComCache, lerCache } from '@/lib/cacheConsulta'
 import type { FunnelEventRow } from '@/lib/metrics'
 import type { OrigemComercial } from '@/lib/funnelTypes'
 
@@ -34,7 +36,7 @@ const PAGE_SIZE = 1000
 // id_etapa é obrigatório: etapas homônimas em funis diferentes ("Reunião
 // Agendada SQL" no SDR e no Closer) só se distinguem por ele.
 const COLS = [
-  'id_deal', 'dia', 'etapa_canonica', 'id_etapa', 'nome_funil', 'ciclo', 'rn_deal_etapa_mes',
+  'id_deal', 'dia', 'etapa_canonica', 'id_etapa', 'nome_funil', 'ciclo', 'rn_deal_etapa_mes', 'marca_deal',
 ].join(',')
 
 interface Params {
@@ -51,56 +53,89 @@ export interface UseFunilEventosResult {
   error: string | null
 }
 
-async function fetchAll(p: Params): Promise<{ rows: FunnelEventRow[]; error: string | null }> {
-  const out: FunnelEventRow[] = []
+/** Páginas simultâneas — ver `paginacao.ts`. Cada página recalcula a view
+ *  inteira (~450 ms no banco), então o limite fica baixo de propósito. */
+const CONCORRENCIA = 3
 
-  for (let page = 0; ; page++) {
+/** Mesma regra de `useFunilVendas`: cache novo aparece sem rebuscar. */
+const IDADE_REVALIDAR_MS = 60_000
+
+async function fetchAll(p: Params): Promise<FunnelEventRow[]> {
+  const { rows, error } = await buscarTodasPaginas<FunnelEventRow>(async (de, ate, contar) => {
     let q = supabaseVendas
       .from('vw_funil_etapas_v2')
-      .select(COLS)
+      .select(COLS, contar ? { count: 'exact' } : undefined)
       .gte('dia', p.inicio)
-      .order('dia', { ascending: false })
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
-
       .eq('origem_comercial', p.origem)
 
     if (p.fim) q = q.lte('dia', p.fim)
 
-    const { data, error } = await q
-    if (error) return { rows: [], error: error.message }
+    // ORDEM TOTAL, desempatando por todas as colunas selecionadas. Só com
+    // `order=dia` o OFFSET repetia/pulava eventos entre páginas: set/26 Inbound
+    // vinha com 81 eventos duplicados e 81 faltando (Novo MQL em deals únicos
+    // 802 em vez de 818). A view tem linhas legítimas repetidas nas colunas de
+    // negócio, mas `rn_deal_etapa_mes` as distingue.
+    const { data, error: err, count } = await q
+      .order('dia', { ascending: false })
+      .order('id_deal', { ascending: true })
+      .order('id_etapa', { ascending: true })
+      .order('etapa_canonica', { ascending: true })
+      .order('nome_funil', { ascending: true })
+      .order('ciclo', { ascending: true })
+      .order('rn_deal_etapa_mes', { ascending: true })
+      .range(de, ate)
 
-    const rows = (data ?? []) as unknown as FunnelEventRow[]
-    out.push(...rows)
-    if (rows.length < PAGE_SIZE) break
-  }
+    return { rows: (data ?? []) as unknown as FunnelEventRow[], error: err?.message ?? null, total: count }
+  }, { tamanhoPagina: PAGE_SIZE, concorrencia: CONCORRENCIA })
 
-  return { rows: out, error: null }
+  if (error) throw new Error(error)
+  return rows
 }
 
 export function useFunilEventos(p: Params): UseFunilEventosResult {
-  const [data, setData] = useState<FunnelEventRow[]>([])
+  const { enabled, origem, inicio, fim } = p
+  const chave = `vw_funil_etapas_v2:${origem}:${inicio}:${fim ?? ''}`
+
+  const [data, setData] = useState<FunnelEventRow[]>(() => (enabled ? lerCache<FunnelEventRow[]>(chave)?.valor : undefined) ?? [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const inFlight = useRef(false)
+  // Descarta resposta de um recorte antigo (período/origem trocados no meio da
+  // carga) ou que chega depois de desmontar.
+  const chaveAtiva = useRef<string | null>(null)
 
-  const { enabled, origem, inicio, fim } = p
-
-  const load = useCallback(async () => {
-    if (!enabled) { setData([]); setError(null); setLoading(false); return }
-    if (inFlight.current) return
-    inFlight.current = true
-    setLoading(true)
+  const load = useCallback(async (showLoading: boolean) => {
+    if (showLoading) setLoading(true)
     try {
-      const { rows, error: err } = await fetchAll({ enabled, origem, inicio, fim })
-      setError(err)
-      if (!err) setData(rows)
+      const rows = await carregarComCache(chave, () => fetchAll({ enabled, origem, inicio, fim }))
+      if (chaveAtiva.current !== chave) return
+      setData(rows)
+      setError(null)
+    } catch (e) {
+      if (chaveAtiva.current !== chave) return
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
-      inFlight.current = false
+      if (chaveAtiva.current === chave) setLoading(false)
     }
-  }, [enabled, origem, inicio, fim])
+  }, [chave, enabled, origem, inicio, fim])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!enabled) {
+      chaveAtiva.current = null
+      setData([]); setError(null); setLoading(false)
+      return
+    }
+    chaveAtiva.current = chave
+    const emCache = lerCache<FunnelEventRow[]>(chave)
+    if (emCache) {
+      setData(emCache.valor)
+      setError(null)
+      setLoading(false)
+      if (Date.now() - emCache.atualizadoEm > IDADE_REVALIDAR_MS) void load(false)
+    } else {
+      void load(true)
+    }
+    return () => { chaveAtiva.current = null }
+  }, [chave, enabled, load])
 
   return { data, loading, error }
 }

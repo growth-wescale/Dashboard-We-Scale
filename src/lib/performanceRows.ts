@@ -1,6 +1,6 @@
 import type { FunnelRow } from '@/lib/funnelTypes'
-import type { PeriodWindow } from '@/lib/metrics'
-import { isInWindow } from '@/lib/metrics'
+import type { PeriodWindow, SalesMode } from '@/lib/metrics'
+import { isInWindow, saleUnits } from '@/lib/metrics'
 import type { MembroRoster } from '@/hooks/useRosterVendas'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 import { findMeta } from '@/hooks/useMetasPerformance'
@@ -16,6 +16,8 @@ export interface SdrRow {
 export interface CloserRow {
   nome: string
   rr: number; sal: number; cof: number
+  /** Vendas na janela — negócios, ou unidades quando `salesMode = 'units'`
+   *  (mesma regra de `countSales`: `saleUnits`, piso 1 por deal). */
   ganhos: number; faturamento: number
   metaFinanceira: number
   pctAting: number
@@ -63,6 +65,7 @@ export function buildSdrRows(
 
 export function buildCloserRows(
   rows: FunnelRow[], win: PeriodWindow, metas: MetaAgregada[], roster: MembroRoster[],
+  salesMode: SalesMode = 'deals',
 ): CloserRow[] {
   const valid = rosterSet(roster, ['Closer', 'SDR/Closer'])
   const bucket = new Map<string, { rr: number; sal: number; cof: number; ganhos: number; faturamento: number }>()
@@ -78,7 +81,9 @@ export function buildCloserRows(
     if (isInWindow(r.data_sal, win)) cur.sal++
     if (isInWindow(r.data_oportunidade, win)) cur.cof++
     if (r.status_atual === 'Ganho' && isInWindow(r.data_venda, win)) {
-      cur.ganhos++
+      // Toggle Negócios×Unidades da FilterBar — sem isso a coluna GANHOS da
+      // tabela divergia do card Fechamentos, que já usava countSales.
+      cur.ganhos += salesMode === 'units' ? saleUnits(r) : 1
       cur.faturamento += r.valor_contrato ?? 0
     }
     bucket.set(normalized, cur)

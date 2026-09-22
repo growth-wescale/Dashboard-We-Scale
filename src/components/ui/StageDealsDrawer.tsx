@@ -4,61 +4,44 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, money } from '@/lib/format'
-import { BarList, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
-import { MultiSelect, ordenarOpcoes } from './MultiSelect'
+import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { MultiSelect, labelStyle } from './MultiSelect'
+import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
+import type { StageDealsFilters } from './useStageDealsFilters'
 
-// ─── Filtros ────────────────────────────────────────────────────────────────
-// Mesmo componente e lógica da barra de filtros da Visão Macro (MultiSelect):
-// opções vêm sempre dos deals do próprio recorte (nunca lista fixa), e cada
-// campo aceita marcar vários valores ao mesmo tempo.
-
-interface FilterState {
-  marca: string[]
-  funil: string[]
-  fonte: string[]
-  sdr: string[]
-  closer: string[]
+/** Filtro com o nome em cima, igual à FilterBar — o botão do MultiSelect
+ *  sozinho mostra só o resumo ("Todas"), que não diz qual campo é. */
+function CampoFiltro({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <span style={labelStyle}>{label}</span>
+      {children}
+    </div>
+  )
 }
 
-const EMPTY_FILTERS: FilterState = { marca: [], funil: [], fonte: [], sdr: [], closer: [] }
+// ─── StageDealsPanel ────────────────────────────────────────────────────────
+// Corpo do popup (gráficos + filtros + tabela), sem overlay nem cabeçalho —
+// reaproveitado pelo MetaBreakdownDrawer (toggle "Deals" dos cards da Performance).
 
-// ─── StageDealsDrawer ───────────────────────────────────────────────────────
-
-interface StageDealsDrawerProps {
-  open: boolean
-  onClose: () => void
-  stage: StageKey | null
-  stageLabel: string
-  subtitle: string
+interface StageDealsPanelProps {
   deals: StageDeal[]
+  stage: StageKey | null
   accent: string
+  f: StageDealsFilters
   /** Modos Aging/Atual: troca a coluna "Data na etapa" por "Parado na etapa" e
    *  "Em andamento" (dias), e ordena os mais travados no topo. */
   leadtimeCols?: boolean
+  /** Força de quem é o gráfico "Por SDR/Closer". Padrão: dono da etapa
+   *  (`stageOwnerRole`) — mas o card Diagnóstico da aba SDR quer ver por SDR. */
+  ownerRole?: 'sdr' | 'closer'
 }
 
-export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, deals, accent, leadtimeCols = false }: StageDealsDrawerProps) {
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS)
+export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false, ownerRole: ownerRoleProp }: StageDealsPanelProps) {
+  const { filters, setFilters, options, filtered } = f
   // Congela o "agora" no primeiro render — as colunas de tempo e a ordenação
   // não precisam mudar a cada re-render enquanto o drawer está na tela.
   const [agora] = useState(() => Date.now())
-
-  const options = useMemo(() => ({
-    marca: ordenarOpcoes([...new Set(deals.map(d => d.row.marca?.trim()).filter((v): v is string => !!v))]),
-    funil: ordenarOpcoes([...new Set(deals.map(d => d.row.nome_funil?.trim()).filter((v): v is string => !!v))]),
-    fonte: ordenarOpcoes([...new Set(deals.map(d => d.row.fonte_macro?.trim()).filter((v): v is string => !!v))]),
-    sdr: ordenarOpcoes([...new Set(deals.map(d => d.row.nome_sdr?.trim()).filter((v): v is string => !!v))]),
-    closer: ordenarOpcoes([...new Set(deals.map(d => d.row.nome_closer?.trim()).filter((v): v is string => !!v))]),
-  }), [deals])
-
-  const filtered = useMemo(() => deals.filter(({ row: r }) => {
-    if (filters.marca.length && !filters.marca.includes(r.marca ?? '')) return false
-    if (filters.funil.length && !filters.funil.includes(r.nome_funil ?? '')) return false
-    if (filters.fonte.length && !filters.fonte.includes(r.fonte_macro ?? '')) return false
-    if (filters.sdr.length && !filters.sdr.includes(r.nome_sdr ?? '')) return false
-    if (filters.closer.length && !filters.closer.includes(r.nome_closer ?? '')) return false
-    return true
-  }), [deals, filters])
 
   const hasFilters = Object.values(filters).some(v => v.length > 0)
 
@@ -91,13 +74,151 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
   )
   // Diagnóstico em diante é do Closer; antes disso, do SDR — nome_closer já vem
   // preenchido bem antes da etapa dele, e mostrar Closer numa etapa de SDR confunde.
-  const ownerRole = stage ? stageOwnerRole(stage) : 'sdr'
+  const ownerRole = ownerRoleProp ?? (stage ? stageOwnerRole(stage) : 'sdr')
   const ownerLabel = ownerRole === 'closer' ? 'Closer' : 'SDR'
   const responsavelFilterKey = ownerRole === 'closer' ? 'closer' : 'sdr'
   const porResponsavel = useMemo(
     () => topBreakdown(deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent),
     [deals, accent, ownerRole],
   )
+
+  return (
+    // gráficos + filtros + tabela: no celular rolam juntos (ver .rs-drawer-body)
+    <div className="rs-drawer-body" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* mini gráficos */}
+      <div className="rs-drawer-sec" style={{
+        padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
+        display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
+      }}>
+        <BarList title="Por Marca" rows={porMarca} onSelect={v => setFilters(s => ({ ...s, marca: v }))} />
+        <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} onSelect={v => setFilters(s => ({ ...s, [responsavelFilterKey]: v }))} />
+      </div>
+
+      {/* filtros — cada um com o nome em cima (mesmo padrão da FilterBar do
+          dashboard): sem isso todos mostram só "Todas" e só dá pra saber do
+          que se trata abrindo um por um. */}
+      <div className="rs-drawer-sec" style={{
+        padding: '12px 24px', borderBottom: '1px solid var(--ws-border)',
+        display: 'flex', gap: 10, alignItems: 'flex-end', flexShrink: 0, flexWrap: 'wrap',
+      }}>
+        <CampoFiltro label="Marca">
+          <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: marcaLabel(v) }))}
+            selected={filters.marca} onChange={v => setFilters(s => ({ ...s, marca: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="Funil">
+          <MultiSelect label="Funil" options={options.funil.map(v => ({ value: v, label: v }))}
+            selected={filters.funil} onChange={v => setFilters(s => ({ ...s, funil: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="Fonte">
+          <MultiSelect label="Fonte" options={options.fonte.map(v => ({ value: v, label: v }))}
+            selected={filters.fonte} onChange={v => setFilters(s => ({ ...s, fonte: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="SDR">
+          <MultiSelect label="SDR" options={options.sdr.map(v => ({ value: v, label: v }))}
+            selected={filters.sdr} onChange={v => setFilters(s => ({ ...s, sdr: v }))} />
+        </CampoFiltro>
+        <CampoFiltro label="Closer">
+          <MultiSelect label="Closer" options={options.closer.map(v => ({ value: v, label: v }))}
+            selected={filters.closer} onChange={v => setFilters(s => ({ ...s, closer: v }))} />
+        </CampoFiltro>
+        {hasFilters && (
+          <button
+            onClick={() => setFilters(EMPTY_STAGE_DEALS_FILTERS)}
+            style={{
+              border: '1px solid var(--ws-border)', borderRadius: 6, background: 'transparent',
+              cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--ws-text-secondary)',
+              padding: '6px 10px', whiteSpace: 'nowrap',
+            }}
+          >
+            Limpar
+          </button>
+        )}
+      </div>
+
+      {/* tabela */}
+      <div className="rs-drawer-table" style={{ overflow: 'auto', flex: 1 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
+          <thead>
+            <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
+              {headers.map(h => (
+                <th key={h} style={{
+                  padding: '10px 16px', textAlign: alignRight.has(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
+                  color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
+                  borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
+                }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {ordered.length === 0 ? (
+              <tr>
+                <td colSpan={headers.length} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  Nenhum deal encontrado para os filtros selecionados.
+                </td>
+              </tr>
+            ) : ordered.map(({ row: r, dataEtapa }, i) => (
+              <tr key={`${r.id_lead}::${r.ciclo}::${i}`} style={{
+                background: i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--ws-border) 20%, transparent)',
+                borderBottom: '1px solid var(--ws-border)',
+              }}>
+                <td style={{ padding: '10px 16px', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                  <a href={rdDealUrl(r.id_lead)} target="_blank" rel="noreferrer" style={{
+                    color: accent, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 5,
+                  }}>
+                    {cell(r.nome_negociacao)}
+                    <ExternalLink size={11} />
+                  </a>
+                  <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
+                </td>
+                <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_funil)}</td>
+                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
+                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status_atual} /></td>
+                <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_sdr)}</td>
+                <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_closer)}</td>
+                <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.fonte_macro)}</td>
+                <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {nf(r.quantidade_unidades ?? 0)}
+                </td>
+                <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {r.valor_produto != null ? money(r.valor_produto) : '—'}
+                </td>
+                {leadtimeCols ? (
+                  <>
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(diasDesde(dataEtapa, agora))}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDuracao(diasDesde(r.data_novo_mql, agora))}</td>
+                  </>
+                ) : (
+                  <>
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, dataEtapa, agora))}</td>
+                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── StageDealsDrawer ───────────────────────────────────────────────────────
+
+interface StageDealsDrawerProps {
+  open: boolean
+  onClose: () => void
+  stage: StageKey | null
+  stageLabel: string
+  subtitle: string
+  deals: StageDeal[]
+  accent: string
+  /** Modos Aging/Atual: troca a coluna "Data na etapa" por "Parado na etapa" e
+   *  "Em andamento" (dias), e ordena os mais travados no topo. */
+  leadtimeCols?: boolean
+}
+
+export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, deals, accent, leadtimeCols = false }: StageDealsDrawerProps) {
+  const f = useStageDealsFilters(deals)
 
   if (!open) return null
 
@@ -108,14 +229,14 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
         zIndex: 1000, backdropFilter: 'blur(2px)',
       }} />
 
-      <div style={{
+      <div className="rs-drawer" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(980px, 96vw)',
         background: 'var(--ws-surface)', borderLeft: '1px solid var(--ws-border)',
         boxShadow: '-8px 0 40px rgba(0,0,0,.18)', zIndex: 1001,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         {/* header */}
-        <div style={{
+        <div className="rs-drawer-head" style={{
           padding: '20px 24px', borderBottom: '1px solid var(--ws-border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexShrink: 0,
         }}>
@@ -124,7 +245,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
               {stageLabel}
             </h2>
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
-              {filtered.length} de {deals.length} deal{deals.length !== 1 ? 's' : ''} · {subtitle}
+              {f.filtered.length} de {deals.length} deal{deals.length !== 1 ? 's' : ''} · {subtitle}
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -136,107 +257,7 @@ export function StageDealsDrawer({ open, onClose, stage, stageLabel, subtitle, d
           </button>
         </div>
 
-        {/* mini gráficos */}
-        <div style={{
-          padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
-          display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
-        }}>
-          <BarList title="Por Marca" rows={porMarca} onSelect={v => setFilters(f => ({ ...f, marca: v }))} />
-          <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} onSelect={v => setFilters(f => ({ ...f, [responsavelFilterKey]: v }))} />
-        </div>
-
-        {/* filtros */}
-        <div style={{
-          padding: '12px 24px', borderBottom: '1px solid var(--ws-border)',
-          display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap',
-        }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>Filtrar por</span>
-          <MultiSelect label="Marca" options={options.marca.map(v => ({ value: v, label: marcaLabel(v) }))}
-            selected={filters.marca} onChange={v => setFilters(f => ({ ...f, marca: v }))} />
-          <MultiSelect label="Funil" options={options.funil.map(v => ({ value: v, label: v }))}
-            selected={filters.funil} onChange={v => setFilters(f => ({ ...f, funil: v }))} />
-          <MultiSelect label="Fonte" options={options.fonte.map(v => ({ value: v, label: v }))}
-            selected={filters.fonte} onChange={v => setFilters(f => ({ ...f, fonte: v }))} />
-          <MultiSelect label="SDR" options={options.sdr.map(v => ({ value: v, label: v }))}
-            selected={filters.sdr} onChange={v => setFilters(f => ({ ...f, sdr: v }))} />
-          <MultiSelect label="Closer" options={options.closer.map(v => ({ value: v, label: v }))}
-            selected={filters.closer} onChange={v => setFilters(f => ({ ...f, closer: v }))} />
-          {hasFilters && (
-            <button
-              onClick={() => setFilters(EMPTY_FILTERS)}
-              style={{
-                border: '1px solid var(--ws-border)', borderRadius: 6, background: 'transparent',
-                cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--ws-text-secondary)',
-                padding: '5px 10px', whiteSpace: 'nowrap',
-              }}
-            >
-              Limpar
-            </button>
-          )}
-        </div>
-
-        {/* tabela */}
-        <div style={{ overflow: 'auto', flex: 1 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
-            <thead>
-              <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {headers.map(h => (
-                  <th key={h} style={{
-                    padding: '10px 16px', textAlign: alignRight.has(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
-                    color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
-                    borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ordered.length === 0 ? (
-                <tr>
-                  <td colSpan={headers.length} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
-                    Nenhum deal encontrado para os filtros selecionados.
-                  </td>
-                </tr>
-              ) : ordered.map(({ row: r, dataEtapa }, i) => (
-                <tr key={`${r.id_lead}::${r.ciclo}::${i}`} style={{
-                  background: i % 2 === 0 ? 'transparent' : 'color-mix(in srgb, var(--ws-border) 20%, transparent)',
-                  borderBottom: '1px solid var(--ws-border)',
-                }}>
-                  <td style={{ padding: '10px 16px', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                    <a href={rdDealUrl(r.id_lead)} target="_blank" rel="noreferrer" style={{
-                      color: accent, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 5,
-                    }}>
-                      {cell(r.nome_negociacao)}
-                      <ExternalLink size={11} />
-                    </a>
-                  </td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_funil)}</td>
-                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
-                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status_atual} /></td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_sdr)}</td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_closer)}</td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.fonte_macro)}</td>
-                  <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {nf(r.quantidade_unidades ?? 0)}
-                  </td>
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {r.valor_produto != null ? money(r.valor_produto) : '—'}
-                  </td>
-                  {leadtimeCols ? (
-                    <>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(diasDesde(dataEtapa, agora))}</td>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDuracao(diasDesde(r.data_novo_mql, agora))}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, dataEtapa, agora))}</td>
-                      <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <StageDealsPanel deals={deals} stage={stage} accent={accent} f={f} leadtimeCols={leadtimeCols} />
       </div>
     </>
   )

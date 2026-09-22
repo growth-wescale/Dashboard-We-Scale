@@ -1,9 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { Suspense, lazy, type ComponentType } from 'react'
+import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
 import { Login } from '@/pages/Login'
 import { PrivateRoute } from '@/components/PrivateRoute'
 import { AppLayout } from '@/components/AppLayout'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { GuardaRota, PortaoDeAcesso } from '@/components/AcessoGuard'
+import { AcessoProvider } from '@/contexts/AcessoContext'
+import { DefinirSenha } from '@/pages/DefinirSenha'
+import { linkAuth } from '@/lib/supabase'
 import { SharedFiltersProvider } from '@/contexts/SharedFiltersContext'
 
 /**
@@ -43,9 +47,12 @@ const SopMarketing      = lazyWithRetry(() => import('@/pages/SopMarketing').the
 const FunilVendas       = lazyWithRetry(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
 const PerformanceVendas = lazyWithRetry(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
 const AnalisePerda      = lazyWithRetry(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
+const LinhaDoTempo      = lazyWithRetry(() => import('@/pages/LinhaDoTempo').then(m => ({ default: m.LinhaDoTempo })))
+const LinhaDoTempoDeal  = lazyWithRetry(() => import('@/pages/LinhaDoTempoDeal').then(m => ({ default: m.LinhaDoTempoDeal })))
 const AnaliseObjecoes   = lazyWithRetry(() => import('@/pages/AnaliseObjecoes').then(m => ({ default: m.AnaliseObjecoes })))
 const GpSetembro        = lazyWithRetry(() => import('@/pages/GpSetembro').then(m => ({ default: m.GpSetembro })))
 const HubMetas          = lazyWithRetry(() => import('@/pages/HubMetas').then(m => ({ default: m.HubMetas })))
+const CampanhaMetasTv   = lazyWithRetry(() => import('@/pages/CampanhaMetasTv').then(m => ({ default: m.CampanhaMetasTv })))
 
 // Fallback discreto durante carga do chunk (~100-300ms)
 function PageLoader() {
@@ -57,13 +64,17 @@ function PageLoader() {
   )
 }
 
+const Acessos = lazyWithRetry(() => import('@/pages/Acessos').then(m => ({ default: m.Acessos })))
+
 function RoutedContent() {
   // key={pathname} reseta o ErrorBoundary ao trocar de rota — erro numa página não persiste na próxima.
   const { pathname } = useLocation()
   return (
     <ErrorBoundary key={pathname} scope={pathname}>
       <Suspense fallback={<PageLoader />}>
+       <GuardaRota pathname={pathname}>
         <Routes>
+          <Route path="/acessos"       element={<Acessos />} />
           <Route path="/"              element={<VisaoGeral />} />
           <Route path="/marca"         element={<SaudeDaMarca />} />
           <Route path="/okrs"          element={<Okrs />} />
@@ -75,32 +86,78 @@ function RoutedContent() {
           <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
           <Route path="/gp-setembro"        element={<GpSetembro />} />
           <Route path="/analise-perda"      element={<AnalisePerda />} />
+          <Route path="/linha-do-tempo"         element={<LinhaDoTempo />} />
+          <Route path="/linha-do-tempo/:idDeal" element={<LinhaDoTempoDeal />} />
           <Route path="/esteira-oral-unic" element={<Navigate to="/marca" replace />} />
           <Route path="/cadencias"         element={<Navigate to="/" replace />} />
           <Route path="/analise-termos"    element={<Navigate to="/marca" replace />} />
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Routes>
+       </GuardaRota>
       </Suspense>
     </ErrorBoundary>
   )
 }
 
+/**
+ * Quem abriu a aba por um link de e-mail (convite, redefinir senha ou link
+ * expirado) vai pra tela de definir senha, uma vez só. O hash vai junto caso o
+ * Supabase ainda não tenha lido a sessão dele.
+ */
+function RedirecionaLinkDeEmail() {
+  const { pathname } = useLocation()
+  const [pendente, setPendente] = useState(
+    linkAuth.tipo === 'invite' || linkAuth.tipo === 'recovery' || linkAuth.erro !== null,
+  )
+  useEffect(() => {
+    if (pathname === '/definir-senha') setPendente(false)
+  }, [pathname])
+  if (!pendente || pathname === '/definir-senha') return null
+  return <Navigate to={{ pathname: '/definir-senha', hash: window.location.hash }} replace />
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <RedirecionaLinkDeEmail />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/definir-senha" element={<DefinirSenha />} />
+        {/* Modo TV da Campanha de Metas: tela cheia, sem menu. Mesmo login e a
+            mesma permissão da aba (permissaoDaRota casa pelo prefixo /gp-setembro). */}
+        <Route
+          path="/gp-setembro/tv"
+          element={
+            <PrivateRoute>
+              <AcessoProvider>
+                <PortaoDeAcesso>
+                  <GuardaRota pathname="/gp-setembro/tv">
+                    <ErrorBoundary scope="/gp-setembro/tv">
+                      <Suspense fallback={<PageLoader />}>
+                        <CampanhaMetasTv />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </GuardaRota>
+                </PortaoDeAcesso>
+              </AcessoProvider>
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/*"
           element={
             <PrivateRoute>
-              {/* Filtros das abas de Vendas vivem acima do router: trocar de aba
-                  não pode resetar o recorte que o usuário escolheu. */}
-              <SharedFiltersProvider>
-                <AppLayout>
-                  <RoutedContent />
-                </AppLayout>
-              </SharedFiltersProvider>
+              <AcessoProvider>
+                <PortaoDeAcesso>
+                  {/* Filtros das abas de Vendas vivem acima do router: trocar de aba
+                      não pode resetar o recorte que o usuário escolheu. */}
+                  <SharedFiltersProvider>
+                    <AppLayout>
+                      <RoutedContent />
+                    </AppLayout>
+                  </SharedFiltersProvider>
+                </PortaoDeAcesso>
+              </AcessoProvider>
             </PrivateRoute>
           }
         />

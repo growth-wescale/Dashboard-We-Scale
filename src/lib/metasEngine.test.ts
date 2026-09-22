@@ -262,6 +262,7 @@ describe('gerarLinhasEspelho', () => {
     expect(sdr.meta_sql).toBeCloseTo(67.1)
     expect(sdr.meta_agendamento).toBeCloseTo(67.1)
     expect(sdr.meta_reuniao_realizada).toBeCloseTo(42.9)
+    expect(sdr.meta_volume_sal).toBe('26.4') // SAL entra no espelho — useMetasPerformance lê essa coluna
     expect(sdr.meta_financeira).toBeNull()
 
     const closer = linhas.find(l => l.nome_colaborador === 'Douglas')!

@@ -14,7 +14,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -64,8 +64,8 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_deal_ciclo_enriquecido` | 1 linha por **ciclo de vida** do deal. Chave composta `id_lead + ciclo` |
 | **`vw_funil_vendas`** | **base das abas de Vendas.** Projeção da anterior com allowlist de funis, sem deals de teste e sem Excluído |
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
-| `vw_deal_etapa_periodos` | entrada/saída por etapa — base do modo Aging |
-| `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca |
+| `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
+| `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
 `vw_marketing_funil` é a view **antiga**, sem nenhuma aba de Vendas
@@ -121,10 +121,8 @@ que não seja prospecção de verdade. Achado em 27/08: `from_rdsm_integration`
 (criação automática de deal via RD Marketing) às vezes cria o deal direto
 numa etapa de Prospecção Ativa e o move pro funil certo segundos depois — sem
 nenhuma ação humana. Não dá para apagar essa entrada no RD (a API não expõe
-edição/exclusão de `deal_stage_histories`, confirmado por `404` em
-`GET /deals/:id/deal_stage_histories` — **o 404 é só do sub-recurso: LER o
-histórico é possível, `GET /deals/:id` traz `deal_stage_histories` no corpo**,
-ver [[rd-stage-histories-no-get-do-deal]]), então `atribuicao_manual`
+edição/exclusão de `deal_stage_histories`, só teve confirmado por
+`404` em `GET /deals/:id/deal_stage_histories`), então `atribuicao_manual`
 ganhou a coluna `origem_override`, com prioridade sobre a regra em
 `vw_deal_origem_comercial` — mesmo padrão de `sdr_override`/`closer_override`.
 Usar só para casos confirmados como artefato, nunca para "esconder" um deal
@@ -165,6 +163,14 @@ comparando `vw_funil_vendas.id_etapa_atual` (= `deal_snapshot.id_etapa`) —
 `resolveStage(etapa_funil)` sozinho não distingue SDR de Closer, só olha o
 nome. Deal parado na "Reunião Agendada SQL" do SDR some do balde no Atual.
 
+**Exceção: Odonto Legacy agenda no próprio funil** (desde 21/09). Para deal
+de marca Odonto Legacy, o SQL é a "Reunião Agendada" do funil Odonto Legacy
+(`68b84341646c55001ed64e53`, funil `68b84341646c55001ed64e4f`, que já se
+chamou "Odonto Scale") — e a do Closer **não** conta para ele. A regra é por
+marca do DEAL: `idsEtapaObrigatoria(stage, marca)` em `metrics.ts`; nos
+eventos usa `vw_funil_etapas_v2.marca_deal` (de `deal_snapshot`), no Atual
+usa `FunnelRow.marca`. Nunca `vw_funil_etapas_v2.marca` (retrato do evento).
+
 **SDR/Closer de deal vivo = dono ATUAL, não o dono da última mudança de etapa.**
 A eleição de `nome_sdr`/`nome_closer` em `vw_deal_ciclo` amostra `vw_deal_posse`
 no instante `ts_fim_sdr`/`ts_fim_closer` — o **último evento `mudanca_etapa`**
@@ -183,6 +189,27 @@ intocada. Deal Ganho/Perdido, ciclo antigo, ou numa etapa da outra camada
 **não** tem o lado dele tocado — o SDR histórico de quem trabalhou o deal
 continua congelado no handoff. `sdr_fonte`/`closer_fonte` = `'posse_atual'`
 marca as linhas corrigidas por essa regra.
+
+**SDR de deal que já passou pro Closer = último SDR dono ANTES da passagem.**
+Desde 21/09, fonte `handoff` (prioridade máxima, só abaixo de
+`atribuicao_manual.sdr_override`): se o ciclo tem evento de camada Closer
+(`ts_ini_closer`), o SDR é o último intervalo de `vw_deal_posse` com dono de
+cargo `SDR`/`SDR/Closer` iniciado antes dessa entrada. Vence a `posse_atual`:
+um deal em No Show que voltou pra outro SDR reagendar mantém o SDR que fez o
+agendamento original. A `posse_atual` segue valendo pra deal que nunca saiu
+do SDR. Duas travas: só vale para `ts_ini_closer >= 01/08/2026` (antes disso,
+funis legados como Odonto Scale tinham Closer atuando como SDR) e ignora dono
+"desde sempre" sem nenhuma troca registrada (`ini = -infinity AND fim IS NULL`).
+Motivo: a âncora antiga (`ts_fim_sdr` = último `mudanca_etapa` na camada SDR)
+não via `troca_responsavel`. Um deal parado em Contato Efetivo, redistribuído
+nas férias e agendado depois direto no funil do Closer ficava com o SDR
+antigo.
+
+**Perdido, reaberto e perdido de novo no mesmo dia não abre ciclo novo.**
+Em `vw_deal_eventos_ciclo` (CTE `perdas`), com o deal perdido, uma perda só
+fecha ciclo se `_closed_at` cair em **dia posterior** (Brasília) ao da perda.
+Senão, o índice `ux_deal_eventos_perda_por_dia` descarta a 2ª perda e o
+retrabalho de minutos virava um "ciclo 2", contando SAL/etapa duas vezes.
 
 **Closer eleito nunca pode ter cargo SDR puro.** As três fontes de `nome_closer`
 (`evento`, `posse`, `posse_atual`) leem `responsavel`/`dono` — um campo de
@@ -204,14 +231,27 @@ que acumula os dois papéis) não é bloqueado de propósito — só o `'SDR'` p
 ser fato histórico real (o Closer atual trabalhou como SDR antes da reforma de
 funis), não bug — decisão de mexer aí fica pro Junior, ver pendência.
 
+**SDR e Closer podem ser a mesma pessoa, se o cargo dela for SDR puro.** A
+fonte `posse` de `nome_sdr` (dono no fim da fase SDR) tinha uma trava: se o
+nome coincidisse com o `nome_closer` eleito, era descartado. Desde 21/09 essa
+trava não vale quando o dono tem `nome_cargo_foto.cargo = 'SDR'` — é SDR de
+fato, mesmo que também apareça como Closer. Caso de origem: marca sem Closer
+(Instituto do Autismo), onde a SDR agenda e move o deal pro funil Closer sem
+trocar o responsável.
+
 **Passagens ≥ Deals únicos, sempre.** Os dois modos leem o histórico de eventos;
 a deduplicação do modo único é por `(deal, ciclo, mês)` **depois** dos filtros.
 Não usar `rn_deal_etapa_mes` do banco: a partição ignora funil.
 
-**Aging exige deals vivos.** `vw_deal_etapa_periodos` não fecha o período quando
-o deal é perdido. Sem cruzar com `status_atual = 'Em andamento'` e
-`eh_ciclo_atual`, "Tentando Contato" mostra 1.959 deals parados há 95 dias em
-vez de 105 há 10 dias.
+**Aging é safra; Atual é estoque.** Os dois modos fazem a MESMA leitura — a
+etapa CORRENTE de cada deal vivo (`eh_ciclo_atual` + `status_atual = 'Em
+andamento'`, etapa por `currentStage`) — e diferem só no recorte: **Aging** só
+conta quem tem `data_novo_mql` dentro do período filtrado (a safra), **Atual**
+conta todo negócio em aberto e ignora o período. Antes de 17/09/2026 o Aging
+lia `vw_deal_etapa_periodos` sem nenhum recorte de período e devolvia
+praticamente a mesma lista do Atual. Deal sem MQL fica fora do Aging (não há
+data de criação de lead para comparar) — em Prospecção Ativa isso pode zerar
+o modo, e é o resultado correto: nada foi criado no período.
 
 **O funil não é monotônico.** Deals pulam etapas: em ago/26, Pré-Contrato (3) >
 Comitê (2). Taxa de passagem acima de 100% é normal, exibida com seta pra cima.
@@ -224,7 +264,10 @@ nulo em ~17% dos eventos de ago/26, e 0% preenchido na origem
 RPC do relatório diário já faz). Nunca filtrar evento por marca.
 
 **Deal sem marca é invisível.** As views exigem marca preenchida. Deals sem
-marca no RD não aparecem no dashboard, nem no Consolidado.
+marca no RD não aparecem no dashboard, nem no Consolidado. **Exceção:** deal
+no funil Odonto Legacy (`deal_snapshot.id_funil = 68b84341646c55001ed64e4f`)
+sem Marca vira `'Odonto Legacy'` em `vw_funil_vendas` e em
+`vw_funil_etapas_v2.marca_deal` — o funil é exclusivo da marca.
 
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
@@ -236,12 +279,14 @@ compete com meses fechados e todo indicador parece em queda.
 ```
 src/lib/metrics.ts            camada ÚNICA de contagem (12 etapas, toggles, trava de venda)
 src/lib/periodo.ts            granularidade, range de período e multi-seleção (puro, testado)
-src/lib/aging.ts              agregação do modo Aging (puro, testado)
+src/lib/aging.ts              agregação dos modos Aging e Atual — etapa corrente do deal vivo (puro, testado)
 src/lib/fonteMapping.ts       normaliza utm_source em grupos
 src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
+src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
+src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
@@ -257,7 +302,6 @@ src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + 
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
-src/hooks/useFunilAging.ts    lê vw_deal_etapa_periodos + vw_leadtime_stats
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
 src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 ```
@@ -275,15 +319,16 @@ src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
 
-Modos do card do funil: **Performance** (volume no período, `TrapFunnel`),
-**Aging** (há quanto tempo parados) e **Atual** (onde estão agora, ignora
-período) — os dois últimos renderizam `EtapaLeadtimeList`, não o funil visual:
-uma etapa por linha, na mesma sequência do Performance, com 2 médias —
-tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde o MQL).
-Aging lê de `vw_deal_etapa_periodos` (tempo por etapa) cruzado com
-`data_novo_mql` de `vw_funil_vendas` (tempo em andamento); Atual computa as
-duas datas direto da etapa corrente de cada deal, sem consultar a tabela de
-aging. Desde 11/09 a Visão Macro mostra as **12 etapas completas** do
+Modos do card do funil: **Performance** (volume que passou no período,
+`TrapFunnel`), **Aging** (negócios **criados no período** que seguem em aberto,
+e onde estão hoje) e **Atual** (**todos** os negócios em aberto e onde estão
+hoje, ignora o período) — os dois últimos renderizam `EtapaLeadtimeList`, não o
+funil visual: uma etapa por linha, na mesma sequência do Performance, com 2
+médias — tempo parado NESSA etapa e tempo em andamento no funil inteiro (desde
+o MQL). Aging e Atual saem da MESMA função (`computeEtapaAtual`, em
+`aging.ts`), lendo só `vw_funil_vendas`: a etapa corrente do deal e as datas da
+própria linha. A única diferença é o `PeriodWindow` — o Aging passa a janela
+(safra por `data_novo_mql`), o Atual passa `null`. Desde 11/09 a Visão Macro mostra as **12 etapas completas** do
 catálogo (`STAGE_ORDER` — MQL → Tentando Contato → Contato Efetivo →
 Interesse Reunião → Conexão → SQL · Reunião Agendada → Diagnóstico → SAL →
 Oportunidade → Comitê → Pré-Contrato → Fechamento) em todos os 3 modos —
@@ -298,6 +343,55 @@ curso); `range` continua existindo só como caixa delimitadora pra textos e
 consultas de servidor de intervalo único (ex.: mídia). Com 2+ períodos
 selecionados, a comparação "vs. período anterior" some da tela — não há
 "anterior" bem definido pra um conjunto não-contíguo.
+
+### Linha do Tempo do deal
+
+```
+src/lib/timeline/tipos.ts       tipos da timeline (Momento, Fase, Timeline, etc.) — nenhuma lógica
+src/lib/timeline/eventos.ts     deal_eventos → momentos brutos (etapa/no_show/perda/ganho/troca/mudança)
+src/lib/timeline/tarefas.ts     db_tarefas_sdr → momentos (instante = conclusão ou prazo)
+src/lib/timeline/reunioes.ts    DB_Reunioes_MeetRox → momentos (liga ao deal por id_deal ?? crm_deal_id)
+src/lib/timeline/montar.ts      momentos brutos das 3 fontes → Timeline pronta pra desenhar (ciclo, fusão de handoff, camada, desvio, desfecho)
+src/lib/timeline/layout.ts      posições/escala na pista (px por dia) a partir do Timeline + Viewport
+src/lib/timeline/zoom.ts        níveis de zoom (macro/etapas/micro) e histerese de transição
+src/lib/timeline/fasesDaLinha.ts  fases do deal (STAGE_ORDER + STAGE_DATE_FIELD) pro modo macro
+
+src/hooks/useDealTimeline.ts    busca as 4 fontes em paralelo (eventos/tarefas/reuniões/ciclos), tolera falha parcial
+src/hooks/useZoomPan.ts         estado de zoom/pan da pista (gesto do usuário, não de negócio)
+
+src/components/timeline/PistaCanvas.tsx    SVG da pista, desenha Fases/Momentos conforme o zoom
+src/components/timeline/DealCardMacro.tsx  card do deal no zoom macro
+src/components/timeline/DealHeader.tsx     cabeçalho (marca, funil, responsável, status)
+src/components/timeline/MomentoPopover.tsx popup de detalhe ao clicar num nó
+src/components/timeline/TimelineLegend.tsx legenda de cores/ícones
+src/components/timeline/ZoomControls.tsx   +/− e níveis de zoom
+src/components/timeline/iconesEtapa.tsx    ícone por StageKey
+
+Rotas: /linha-do-tempo (lista de deals) e /linha-do-tempo/:idDeal (pista de UM deal).
+```
+
+Quatro regras que já custaram tempo pra achar:
+
+- **Lê VIEW (`vw_deal_timeline_eventos`/`_tarefas`/`_reunioes`), nunca tabela
+  crua.** `supabaseVendas` nunca autentica (login vive no Marketing) — toda
+  consulta ao Supabase de Expansão roda como role `anon`. `deal_eventos` tem
+  RLS ligado e zero políticas; `db_tarefas_sdr`/`DB_Reunioes_MeetRox` têm 1
+  política cada, só pra `authenticated`. Ler a tabela direto volta vazio sem
+  erro nenhum — foi assim que a 1ª versão da tela renderizou em branco pra
+  todo mundo. As 3 views (`docs/sql/2026-09-16-linha-do-tempo-views.sql`)
+  rodam com os direitos do dono e contornam o RLS por baixo, mesmo padrão dos
+  outros 7 hooks de Vendas (nenhum lê tabela crua).
+- **Reunião liga ao deal por `coalesce(id_deal, crm_deal_id)`** —
+  `id_deal` só está preenchido em 8 de 1.550 linhas de `DB_Reunioes_MeetRox`;
+  o vínculo de verdade é `crm_deal_id`.
+- **Dois momentos consecutivos na mesma etapa só fundem se ficarem a menos de
+  5 minutos um do outro.** Medido em `deal_eventos`: 1.833 de 2.699 repetições
+  consecutivas de etapa acontecem em ≤1 minuto — é o handoff SDR→Closer
+  emitindo a mesma etapa 2x — enquanto 396 acontecem com mais de 1 dia de
+  diferença e são reentrada de verdade na etapa, que não pode ser fundida.
+- **Etapa que o catálogo não conhece vira nó cinza com o nome cru, nunca
+  some.** Assim a história do deal não fica com buraco quando `resolveStage`
+  não reconhece o rótulo (funil legado, digitação diferente no RD, etc.).
 
 ---
 
@@ -315,6 +409,56 @@ gh pr create --base main
 ```
 
 Convenções em `CONTRIBUTING.md`. Commits em pt-BR, Conventional Commits.
+
+### Papéis de acesso (RBAC frontend)
+
+Dois papéis, guardados em `auth.users.raw_app_meta_data` no Supabase de
+Marketing:
+
+- `admin` (default): time interno, vê tudo. É o que qualquer usuário sem
+  `role` explícito ganha — fail-safe.
+- `marca`: pessoa da marca cliente (ex.: franqueado Inpot). Vê SÓ Visão
+  Geral (fixada na própria marca) e Saúde da Marca > [minha marca].
+
+**Como cadastrar um novo usuário `marca` (ex.: Inpot):**
+
+**Opção A (recomendada) — Supabase Studio:**
+1. Studio (projeto Marketing) → Authentication → Users → **Add user**
+   → "Create new user" com email e senha (marca "Auto Confirm User").
+2. SQL Editor → rodar:
+   ```sql
+   UPDATE auth.users
+   SET raw_app_meta_data = raw_app_meta_data
+     || '{"role":"marca","marca":"inpot"}'::jsonb
+   WHERE email = 'pessoa@inpot.com.br';
+   ```
+   O `marca` é o **slug** de `BRAND_LIST` (`inpot`, `oral-unic`, `viva`, etc.).
+
+**Opção B (via SQL direto — cuidado com armadilha):** SE criar user via
+`INSERT INTO auth.users` direto no SQL, ATENÇÃO: o GoTrue quebra com
+"Database error querying schema" no login se os campos de token forem
+NULL — ele espera **string vazia**. Sempre setar `confirmation_token`,
+`recovery_token`, `email_change`, `email_change_token_new`,
+`email_change_token_current`, `reauthentication_token`, `phone_change`
+e `phone_change_token` como `''` (não deixar `NULL`), `is_super_admin`
+como `NULL` (não `false`), e `raw_user_meta_data` como
+`{"email_verified": true}`. Caiu na primeira tentativa de criar Elen +
+Camila (11/09/2026) — precisou UPDATE depois. Studio (Opção A) trata
+esses defaults sozinho.
+
+3. Login normal em https://dashboard.srv1816822.hstgr.cloud — a sidebar
+   já mostra só o que aquela marca pode ver.
+
+**Bugs a evitar:**
+- `raw_user_meta_data` é editável pelo próprio usuário via API. NÃO use
+  esse campo pra role — só `raw_app_meta_data` (Service Role only).
+- `role=marca` sem `marca` definida = estado inválido; `useAuth` faz
+  fallback pra admin nesse caso pra não travar o dashboard em limbo.
+
+**Limite conhecido (aceito):** MVP frontend-only. Um usuário `marca`
+determinado poderia abrir DevTools, forçar state e ver dados de outra
+marca. Aceitável pra franqueado legítimo. Fase 2 (RLS backend) trava
+isso no banco quando o time achar necessário.
 
 ---
 
@@ -343,6 +487,17 @@ header Authorization. Campos obrigatórios vazios (ex.: Marca) fazem qualquer
 `PUT` falhar com 422 — o erro vem em `deal_required_custom_fields`. `PUT` de
 custom fields faz **merge**, não substitui os demais.
 
+**Paginação por OFFSET exige ORDEM TOTAL.** O PostgREST limita 1000 linhas por
+request; se a ordenação tiver empate (ex.: só `order=dia`), páginas vizinhas se
+sobrepõem e linhas se repetem/somem — de forma **determinística**, então nunca
+parece flutuação. Em 15/09 isso escondia 81 eventos/mês. Desempate até a chave
+(ou todas as colunas selecionadas). Use `buscarTodasPaginas` (`paginacao.ts`).
+
+**Lentidão: medir antes de mexer no banco.** `response.origin_time` nos
+`edge_logs` (query_logs) mostra o tempo do servidor; comparar com o tempo no
+cliente. curl abre TLS por request e distorce — medir com Node `fetch`
+(keep-alive), que se comporta como o browser.
+
 **`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
 noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
 Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
@@ -350,48 +505,57 @@ Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
 (`dateUtils.ts`) já trata isso: string no formato `YYYY-MM-DD` passa direto,
 sem conversão de fuso.
 
+**Inline style não aceita media query.** O app inteiro é `style={{…}}`. Pra
+layout que muda por tamanho de tela (ver `src/styles/responsive.css`):
+1. valor que muda (padding da página, colunas estreitas) → token CSS lido via
+   `var(--page-pad-x)` no inline;
+2. grade que muda de colunas → classe `rs-grid rs-cols-N` / `rs-split`, **sem**
+   `gridTemplateColumns` inline (o inline ganha da classe e anula o corte);
+3. estrutura que muda (menu vira gaveta, filtros viram painel) →
+   `useMediaQuery(MQ_COMPACTO)` de `src/hooks/useMediaQuery.ts`.
+Grade `auto-fit` de cards: `minmax(min(240px, 100%), 1fr)` — sem o `min()` ela
+estoura em tela mais estreita que o mínimo. Tabela de colunas fixas: embrulhe
+em `rs-scroll-x` com `minWidth` no miolo (card com `overflow: hidden` corta sem
+avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023px.
+
 ---
 
 ## 8. Pendências conhecidas
 
-- [x] ~~**Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`**~~
-  — **FECHADA em 17/09/2026, sem alteração de código.** Investigado a fundo:
-  dos 388 ciclos com `nome_sdr` = pessoa de cargo Closer, (a) a concentração em
-  funis legados (Odonto Scale: Rômulo 126, Giullia 63; Odonto Legacy: Giullia
-  30, jan–jul/2026) é **fato histórico confirmado pelo Junior** — eles atuaram
-  como SDR nesses funis antes da reforma; (b) nos 14 casos recentes (ago–set/26,
-  funis SDR/Closer), `deal_snapshot.responsavel` é **o próprio nome** em 12 —
-  Bruna, Douglas, Jéssica e Aurélio estão mesmo com esses deals no funil SDR;
-  (c) as 2 exceções são deals Perdidos com dono congelado, que é o comportamento
-  deliberado da regra `posse_atual` (03/09). Não há fonte alternativa: o campo
-  "SDR Responsável" do RD está vazio em 385 dos 388. Aplicar a trava por cargo
-  destruiria informação correta.
+- [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
+- [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
+- [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
+
+- [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
 - [ ] **Views de Expansão comparam funil por NOME, não por ID** — renomear
   SDR, Closer ou Prospecção Ativa no RD quebra Visão Macro/Performance/Perda
-  e a classificação Inbound × Prospecção Ativa. Trocar os literais por
-  `id_funil` (ver entrada de 21/09)
-- [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
-  máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
-  pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
-  Hoje quem cobre é o `espelho_rd_edge` (15 min). Corrigir no n8n: ler
-  `deals_sync_state.watermark` em vez de `now() − 60 min` (ver 22/09)
-- [ ] **`espelho_rd_edge` só enxerga 10 mil deals** — corrigido no PR #179
-  (varredura por funil, testada); falta publicar a Edge Function em produção
+  e a classificação Inbound × Prospecção Ativa (allowlist de `vw_funil_vendas`,
+  `vw_deal_origem_comercial`, camada SDR/Closer em `vw_deal_ciclo`). Trocar os
+  literais por `id_funil` (ver entrada de 21/09)
+- [ ] **`rd_funis_etapas` desatualizada = eventos sem nome** — `registrar_stage_history`
+  resolve nome de etapa/funil por essa tabela; etapa ausente vira evento com
+  `nome_etapa`/`id_funil` nulos, invisível pra todas as views. Ainda sem nome:
+  `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
+  (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
+  etapas nessa tabela
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
 - [ ] **Anon key do Supabase de Marketing exposta** no histórico do git (repo é público) — rotacionar
 - [ ] **~50 deals sem marca** no CRM, invisíveis no dashboard
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
-- [ ] Dados de Expansão no Supabase ainda não usados: `db_tarefas_sdr` (38k linhas), `DB_Reunioes_MeetRox`, `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências
+- [x] ~~Linha do Tempo em branco até rodar o script das views~~ — RESOLVIDO em 16/09: views `vw_deal_timeline_eventos/_tarefas/_reunioes` aplicadas no Supabase de Expansão (migration `linha_do_tempo_views_bloco_a_e_b`). Junior optou por rodar os blocos A **e** B, então anotação de tarefa e resumo de reunião ficam legíveis por quem tiver a anon key — decisão consciente dele, registrada aqui porque amplia a pendência da anon key exposta
+- [ ] **Aba Linha do Tempo só aparece pro Administrador até rodar `docs/sql/2026-09-16-acesso-linha-do-tempo.sql`** no Supabase de Marketing — os demais papéis não têm a permissão `aba.linha-do-tempo`
+- [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09)
 - [ ] **`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia** — o insert de evento `'perda'` não tem `EXCEPTION WHEN unique_violation` pro índice `ux_deal_eventos_perda_por_dia` (só o `ON CONFLICT` do índice de timestamp exato). Se um deal for perdido, reaberto e perdido de novo no mesmo dia calendário, a segunda perda derruba a função inteira — visto 1x num backfill em 25/08. Raro, mas real
+- [ ] **Páginas de Marketing ainda não responsivas** — Visão Geral, Saúde da Marca, Meta & OKRs e S&OP herdaram o menu em gaveta e a barra do topo compacta (14/09), mas as grades internas seguem com colunas fixas e quebram no celular. São do Gabriel; aplicar o mesmo padrão `rs-*` da seção 7 quando ele quiser
 - [ ] **Chave `service_role` do Supabase de Expansão e token do RD circularam em texto plano** (JSONs de workflow do n8n, exportados pra debug em 25/08). `service_role` ignora RLS por completo — rotacionar as duas quando der
 
 ---
 
 ## 9. Histórico de mudanças
 
-### 2026-09-22 (2) — Popup de MQL: "Outros" no gráfico Por Marca virava beco sem saída
+### 2026-09-22 — Popup de MQL: "Outros" no gráfico Por Marca virava beco sem saída
 
 Junior filtrou 21/09 na Visão Macro, abriu o popup de MQL e viu "Outros: 1"
 no gráfico "Por Marca" — mas o filtro de Marca do próprio popup não tinha
@@ -402,12 +566,12 @@ filtro, qualquer dia), não só pra esse caso.
 real e legítimo da **Oral Unic**, 7º lugar em volume naquele recorte (só 1
 deal, contra 20 da Odonto Legacy). `topBreakdown()` (`dealDrawerShared.tsx`,
 compartilhada pelos gráficos "Por Marca"/"Por SDR"/"Por Closer" do
-`StageDealsDrawer`) corta em `topN=6` por padrão e empilha o resto num
-"Outros" sem nenhum valor associado — mero efeito colateral do corte, não
-uma categoria de negócio. O filtro de Marca do popup (`options.marca`)
-sempre listou a Oral Unic certinha, porque deriva direto dos deals reais,
-sem o corte do gráfico — só que o gráfico não dava nenhuma pista de que
-"Outros" era ela.
+`StageDealsDrawer`/`StageDealsPanel`) corta em `topN=6` por padrão e empilha
+o resto num "Outros" sem nenhum valor associado — mero efeito colateral do
+corte, não uma categoria de negócio. O filtro de Marca do popup
+(`options.marca`) sempre listou a Oral Unic certinha, porque deriva direto
+dos deals reais, sem o corte do gráfico — só que o gráfico não dava nenhuma
+pista de que "Outros" era ela.
 
 **Fix em duas partes:**
 1. **Marca é um conjunto pequeno e fechado** (8 marcas em `BRAND_LIST`) —
@@ -431,8 +595,8 @@ caíram ali em `values`, não só o primeiro — clicar numa barra que mistura o
 dois nomes antigos filtra pelos dois de uma vez, sem esconder metade dos
 deals.
 
-Verificado: `npm run build` (tsc -b) + `npx vitest run` (321 testes, 4 novos
-em `dealDrawerShared.test.ts` — reproduz o caso real de 21/09 sem gerar
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (4 testes novos em
+`dealDrawerShared.test.ts` — reproduz o caso real de 21/09 sem gerar
 "Outros", `topN` pequeno preservando os valores crus do resto, fusão de
 alias sem perder valor, e o bucket "Sem informação" ficando não-clicável de
 propósito) + `oxlint` limpo nos arquivos tocados, via `~/ws-dashboard-build`.
@@ -440,283 +604,1191 @@ Caso real conferido por SQL contra `vw_funil_vendas` (21/09, Inbound): Oral
 Unic = 1 MQL, exatamente o "Outros" do print. App exige login — não visto
 renderizado.
 
-### 2026-09-22 — Supabase de Expansão pausado por falta de pagamento: auditoria de perda de dados
+### 2026-09-21 (3) — Modo TV alterna sozinho entre Volta e Mês
 
-Projeto `cygxmduuwlwfbodfrlkr` ficou fora das **06:58 às 09:20 BRT**
-(último cron 09:58 UTC; `pg_postmaster_start_time` 12:20:35 UTC). Dashboard
-de Vendas deu "Failed to fetch" nesse intervalo. Supabase de Marketing é
-outra conta e **não** foi afetado (`media_daily_raw` gravou às 09:05 BRT).
+Ideia do chefe do Junior. Ao lado do botão "Volta 3 de 4 · 15–21 set" entrou
+**"Mês de Setembro"**, e a tela inteira alterna entre os dois a cada **30s**
+(`TROCA_MODO_MS`). O botão ativo fica vermelho, com uma barrinha que enche até
+a próxima troca. Clicar num botão troca na hora e reinicia o cronômetro.
 
-**Resultado: nenhum dado perdido.** Tudo gravado até a pausa sobreviveu
-(último evento 09:46 UTC, último cron 09:58 UTC). O risco real era o que
-mudou no RD durante a queda, porque o `wf_5` **não** lê o watermark gravado:
-usa janela fixa de `agora − 60 min` (ver `watermark_anterior` em
-`sync_execucao`) — ao voltar às 12:22 UTC ele olhou só a partir de 11:20 UTC.
+- **Volta:** meta do time, closers, SDRs e pontos da Corrida só da volta
+  atual. Metas escaladas (`fatorMetaCloser`/`fatorMetaSdr`) e ritmo esperado
+  da volta (`pctDecorridoJanela('semanal', …)`, rodapé "fim da volta · 21 set")
+- **Mês:** tudo acumulado no mês, com metas cheias e ritmo do mês
 
-Conferência feita contra o RD, via `pg_net` de dentro do banco (token não sai
-do Vault): listados os **409 deals** com `updated_at` ≥ 06:00 BRT e buscado o
-`deal_stage_histories` de cada um (`GET /deals/:id`). Guardado em
-`_recuperacao_pausa_20260922` (RLS ligado, sem acesso anon). Achados:
-16 entradas de etapa durante a queda (6 deals), **todas já no banco**; 13
-perdas das 06:10–06:17, todas com evento `perda`; 4 deals criados durante a
-queda, absorvidos pelo `espelho_rd_edge` das 09:30 BRT; etapa/responsável/
-status batendo em 409/409. As únicas diferenças eram 2 deals movidos **depois**
-da volta (09:31 e 09:40 BRT), absorvidos pelo espelho das 09:45 com as datas
-reais do RD. Nenhuma escrita corretiva foi necessária. Cron temporário e
-função auxiliar usados na coleta foram removidos.
+Os dois recortes ficam carregados ao mesmo tempo (`useMetasClosers` e
+`useCorridaPerformance` chamados com e sem `janelas`), então a troca não espera
+consulta. O conteúdo entra com um fade curto (`key={modo}`). Antes, a "Meta do
+time" era sempre do mês. Agora ela segue o modo.
 
-Também conferidos: MeetRox (retoma do próprio watermark, 09:39 UTC), tarefas
-SDR (watermark por lote), relatório diário (gerado 09:30 UTC, antes da pausa),
-cadências (rodaram 09:17 UTC).
+Verificado: build + testes em worktree, e visto renderizado com dado real em
+1920×1080, incluindo a troca automática depois de 30s e o clique manual.
 
-**Nota:** `paginas_com_erro: [51..54]` no log do `espelho_rd_edge` (desde
-16/09) é inofensivo hoje — o RD tem 9.846 deals e a API só pagina até 10.000
-(50 × 200), então 51+ não existem. **Vira ponto cego real quando o RD passar
-de 10 mil deals** — ver seção 8.
+### 2026-09-21 (2) — Campanha de Metas ganha Modo TV (`/gp-setembro/tv`)
+
+Junior quer a campanha na TV do time, mas a página normal é longa e feita pra
+rolar. Nova rota **`/gp-setembro/tv`**: tela cheia, sem menu nem rolagem,
+escura (mesmo clima da tela "Sprint da COF" que já roda lá), tudo dimensionado
+em `vh` pra escalar em qualquer TV 16:9. Só o essencial:
+
+- Cabeçalho: volta atual, dias pra bandeirada, relógio
+- **Meta do time no mês** (R$ e unidades, barra com marcador do ritmo esperado)
+- **Closers na volta atual**: pódio com foto, % da meta da volta (meta mensal
+  × `fatorMetaCloser`, mesma regra da página), R$, vendas e barra vertical
+- **SDRs na volta atual**: SQL e Diagnóstico vs. meta rateada (`fatorMetaSdr`)
+- **Corrida de Performance**: pontos da volta nas trilhas SDR e Closer
+
+Sem filtros: a volta é sempre a atual e vira sozinha na troca de semana. Dados
+recarregam a cada 5 min (os hooks já faziam isso) e a página inteira recarrega
+de hora em hora pra pegar deploy novo sem ninguém mexer na TV.
+
+Rota fica **fora do `AppLayout`** (sem sidebar/GpStrip), mas atrás do mesmo
+`PrivateRoute` + `PortaoDeAcesso` + `GuardaRota` — `permissaoDaRota` casa pelo
+prefixo `/gp-setembro`, então vale a mesma permissão da aba. A TV precisa estar
+logada uma vez. Botão "📺 Modo TV" no título da Campanha de Metas abre a rota em
+nova aba. `diaDaCampanha`/`voltaDoDia` saíram da página pra
+`metasCampanhaF1.ts` (testados) e as duas telas usam os mesmos.
+
+Verificado: `npm run build` + `npx vitest run` (466 testes) em worktree fora do
+OneDrive, e **visto renderizado com dado real** em 1920×1080 numa rota
+temporária sem login (removida antes do commit).
+
+### 2026-09-21 (7) — SDR creditado = dono antes da passagem pro Closer (férias da Xay)
+
+Junior estranhou: a Xayane está de férias desde 09/09 (último dia 08/09) e
+ainda tinha 42 MQL / 15 SQL / 17 DIAG / 14 SAL em setembro. **A maior parte
+é legítima.** A tabela do SDR credita ao SDR que agendou todas as etapas
+seguintes do deal, e 9 dos DIAG/SAL de setembro vêm de agendas dela de 25 a
+31/08.
+
+**Erro achado:** Javier e Ricardo Marques de Andrade (Inpot, SQL 17/09) foram
+redistribuídos da Xay para a Sarah em 09/09 09:23 e agendados pelo Douglas
+em 17/09, mas apareciam como Xayane. `sdr_posse` amostra o dono em
+`ts_fim_sdr` (último `mudanca_etapa` na camada SDR, aqui o Contato Efetivo
+de 04 e 06/09) e não via a `troca_responsavel`. Mesma família do bug de
+03/09, que a `posse_atual` só corrigia para deal ainda na camada SDR.
+
+**Fix 1:** fonte `handoff` em `vw_deal_ciclo` (regra na seção 4).
+Simulado numa cópia paralela antes de aplicar. A 1ª versão mexia em 16 deals
+Inpot de set/2025 (dono "desde sempre" sem troca) e em 3 do Odonto Scale de
+jul/26 (2 ganhos, Aurélio → Sarah). Daí vieram as duas travas (corte em
+01/08/2026 e ignorar dono sem troca). Resultado: **27 ciclos** trocam de SDR,
+todos de ago–set/26: Thiago → Sarah 8 (6 em No Show devolvidos a ele em
+15/09 para reagendar), Xayane → Sarah 6, Closer → SDR 7
+(Douglas/Jéssica/Bruna na coluna SDR), vazio → SDR 3, outros 3. 0 Closers
+alterados.
+
+**Override respeitado:** Ricardo Lemos (SQL 04/09) tem `sdr_override` =
+Xayane, confirmado pelo Junior em 04/09. A regra nova diria Sarah, e o
+override vence.
+
+**Fix 2:** CTE `perdas` de `vw_deal_eventos_ciclo` (regra na seção 4). Achado
+no Edmir Domingues ("Tio da Xay"): perdido às 08:37, reaberto e perdido às
+08:54 de 18/09. O SAL contava 2x. 13 deals na base com esse padrão, e 11
+linhas saem de `vw_funil_vendas`.
+
+**Checksum** (`vw_funil_vendas`): ganhos 54 e receita R$ 2.503.179,98
+inalterados; linhas 7.520 → 7.510 (fix 2; +1 deal novo do sync no meio).
+Fix de 21/09 (3) (IDA, Sarah como SDR) conferido intacto. Backups em
+`_backup_viewdefs`: `vw_deal_ciclo_pre_handoff_20260921`,
+`vw_deal_ciclo_pos_handoff_20260921`,
+`vw_deal_eventos_ciclo_pre_mesmo_dia_20260921`. `REFRESH` da matview rodado
+após cada fix.
+
+**Xayane, set/26 (Inbound, 01–21/09):** 42/15/17/14 → **42/15/16/13**. SQL
+não muda no total: saem Javier e Ricardo Marques, voltam Bruno Kreusch e
+Rogério Correia (estavam com Douglas e Bruna como SDR). Hoje são 14 SQLs até
+08/09 e 1 depois (Edmir, 10/09, indicação dela, criado no nome dela). O único
+MQL pós-férias é "Gustavo Godoy treste": negócio de teste que escapa do
+filtro por erro de digitação, pedido para apagar no RD. Material para o time:
+https://claude.ai/artifact/5zQ3VhZXupZNBApyv8ASu9
+
+**Limitação conhecida:** a API do RD não diz quem moveu a etapa. Se um Closer
+agendar um deal ainda no nome do SDR, o crédito vai pro SDR. Corrigir caso a
+caso com `atribuicao_manual.sdr_override`.
+
+### 2026-09-21 (6) — Odonto Legacy sozinha também esconde Comitê
+
+Mesmo mecanismo da entrada (5): `ETAPAS_AUSENTES_POR_MARCA['Odonto Scale']`
+ganhou `'Comitê'` (não existe no funil Legacy do RD). Oportunidade COF segue
+aparecendo — não foi pedido.
+
+### 2026-09-21 (5) — Odonto Legacy sozinha esconde Interesse Reunião e Conexão
+
+O funil Odonto Legacy no RD não tem essas duas etapas (Novos Leads →
+Tentando Contato → Contato Efetivo → Reunião Agendada → Diagnóstico →
+Negociação SAL → Documentação), então elas apareciam sempre zeradas. Novo
+`etapasDaMarca(stages, marcas)` em `metrics.ts` (mapa
+`ETAPAS_AUSENTES_POR_MARCA`): com **exatamente 1 marca** selecionada, tira
+as etapas que não existem no funil dela. Com 2+ marcas nada muda (as outras
+têm a etapa). Aplicado na Visão Macro (Performance, Aging, Atual) e no funil
+SDR da aba Performance. Oportunidade COF e Comitê também não existem no
+funil Legacy, mas ficaram de fora — o pedido foi só Conexão/Interesse
+Reunião.
+
+### 2026-09-21 (4) — Odonto Legacy: Funil Atual bate com o RD e SQL conta no próprio funil
+
+Junior comparou o Funil Atual do Odonto Legacy com o RD (Em andamento): RD
+21 Novos Leads / 243 Tentando Contato / 9 Contato Efetivo / 4 Reunião
+Agendada; dash 1 / 242 / 9 / —.
+
+**Novos Leads 1 × 21 — marca vazia.** 20 leads importados em lote hoje
+(13:37–13:39) entraram no funil Odonto Legacy **sem o campo Marca no RD**
+(conferido 1 a 1 pela API, não é atraso do espelho) e caíam na regra "deal
+sem marca é invisível". `vw_funil_vendas` passou a usar
+`COALESCE(s.marca, d.marca, 'Odonto Legacy' se s.id_funil = funil Legacy)`,
+também no `WHERE`. Checksum: +20 linhas exatas (7.500 → 7.520, todas Em
+andamento), ganhos 54 e receita R$ 2.503.179,98 inalterados, 0 linhas sem
+marca.
+
+**Reunião Agendada sem contar — regra nova do Junior.** Para Odonto Legacy
+(e só pra ela) o agendamento conta na "Reunião Agendada" do próprio funil,
+não na "Reunião Agendada SQL" do Closer. A etapa já era canonizada como
+"Reunião Agendada SQL" (60 deals no histórico), mas a trava
+`STAGE_ID_OBRIGATORIO` não aceitava o id dela. Virou
+`idsEtapaObrigatoria(stage, marca)`: marca Odonto Legacy → etapa do funil
+Legacy; demais → Closer. A do Closer passa a NÃO contar pra deal Legacy — os
+6 deals Legacy que passaram por ela foram ida-e-volta de minutos, mesmo
+dia. Como os eventos chegam ao front recortados pela janela, a marca do deal
+tem que vir no evento: `vw_funil_etapas_v2` ganhou `marca_deal` (join por PK
+com `deal_snapshot`, mesmo fallback do funil; contagem de linhas idêntica,
+24.612; +~20 ms na página). Efeito: Atual Reunião Agendada 0 → **4**;
+Performance set/26 SQL Odonto Legacy 0 → **5**.
+
+**Não é bug do dash (dado do RD):** Tentando Contato 242 × 243 — o deal
+`6aa020f3f24eaa0001d227ce` está no funil Odonto Legacy com Marca = **Lisô
+Laser** no RD, então aparece na Lisô. Combinado com a regra do Scale
+Partner (entrada (2)): Odonto Legacy → só a etapa do próprio funil; demais →
+Closer ou Scale Partner (`idsEtapaObrigatoria`). **Achado, não alterado:**
+Prospecção Ativa tem 7 "Reunião Agendada SQL" no próprio funil desde jun que
+não contam — mesma situação, decisão pendente do Junior.
+
+### 2026-09-21 (3) — SDR some quando a mesma pessoa também é Closer (Instituto do Autismo)
+
+Junior reportou: no IDA a Sarah agendou 2 reuniões (André Luz, José Batista
+de Almeida), mas o popup de SQL mostrava SDR "Sem informação" e Closer =
+Sarah. O IDA não tem Closer ainda — a Sarah move o deal para "Reunião
+Agendada SQL" do funil Closer sem trocar o responsável, e o fundador da marca
+conduz a reunião.
+
+**Causa.** Em `vw_deal_ciclo`, as 4 fontes de `nome_sdr` falhavam em
+sequência: `evento` (a atribuição dos eventos é `backfill_dono_atual`, fora
+do filtro `evento`/`legado_sdr`); `posse` achava a Sarah, mas era
+**descartada** pela trava `sdr_po IS DISTINCT FROM closer_ciclo`, porque o
+Closer eleito (`campo_rd`, "Closer responsável" do RD) também é a Sarah;
+`campo_rd` do SDR vazio.
+
+**Fix** (`CREATE OR REPLACE VIEW vw_deal_ciclo` + `REFRESH` da matview):
+`sdr_posse` passou a trazer o cargo do dono (`nome_cargo_foto`), e a trava só
+descarta o nome se o cargo **não** for `'SDR'` puro. É o espelho da trava por
+cargo de 04/09 no lado do Closer. Simulado na base inteira antes de aplicar:
+9.888 ciclos, **só 2 mudam** (exatamente os 2 do IDA, nulo → Sarah Padilha),
+0 SDRs preenchidos trocados, 0 Closers alterados. `vw_funil_vendas` pós-fix:
+7.500 linhas, 54 ganhos, R$ 2.503.179,98.
+
+### 2026-09-21 (2) — Marca Scale Partner nas abas de Vendas
+
+Junior pediu a marca Scale Partner (eventos) no filtro de Marca das abas de
+Vendas. Ela não aparecia por três motivos, todos corrigidos:
+
+**1. Eventos sem nome.** `registrar_stage_history` resolve nome de
+etapa/funil em `rd_funis_etapas`, que nunca recebeu as etapas do funil
+`6a99b60d62f84e00234789da`. 142 eventos desse funil (origens `api_sync` e
+`api_espelho_edge`) tinham só `id_etapa` — sem `nome_etapa`, sem
+`etapa_canonica`, e o deal sumia de `vw_deal_ciclo` inteira. Cadastradas as
+7 etapas em `rd_funis_etapas` (Novo MQL → No Show, `pipeline_nome` =
+'Scale Partner' — aparece também no painel de cadência) e preenchidos os
+eventos pelo ID. Junto: a etapa `…89dd` (hoje "Tentando Contato") se chamava
+"Contato efetivo"; os eventos e o snapshot com o nome antigo foram trocados
+pelo nome atual (decisão do Junior). Backup de tudo em
+`_backup_scale_partner_20260921` (203 eventos + 10 snapshots).
+
+**2. Funil fora do allowlist.** `vw_funil_vendas` ganhou
+`OR d.id_funil = '6a99b60d62f84e00234789da'` — **por ID**, não por nome.
+Checksum: as 7.440 linhas anteriores idênticas, 54 ganhos e
+R$ 2.503.179,98 inalterados; +60 linhas do funil, todas Inbound.
+
+**3. Marca com outro nome.** O RD grava `'Scale Partner'`; o dashboard
+conhecia `'We Scale'` (valor dos dados do Marketing). `MARCA_ALIASES`
+ganhou `'Scale Partner' → 'We Scale'` e o rótulo virou "Scale Partner" em
+todo o dashboard (`BRAND_LIST`, menu lateral, SOP). Chave `we-scale` e
+marca canônica mantidas.
+
+**SQL no funil Scale Partner conta.** Lá o SDR agenda e o deal fica no
+funil, sem handoff pro Closer (confirmado pelo Junior) — então
+`STAGE_ID_OBRIGATORIO` virou lista: Closer + `6a99b99218a2bb002df8ec61`.
+Vale pros modos de evento e pro Atual/Aging (`currentStage`).
+
+**Pendente, com o Junior:** 15 deals do funil com Marca ≠ Scale Partner no
+RD (Lisô 9, Oral Unic 2, Eletrovias, Inpot, Odonto Legacy, We Scale) —
+decisão: passam a Scale Partner. Troca no RD via
+`docs/scripts/marca_scale_partner_20260921.py` (pede o token, não grava);
+o espelho traz em ~15 min. Até lá eles contam nas marcas antigas.
+
+Verificado: `npm run build` + `npx vitest run` (460 testes, 3 novos) em
+worktree fora do OneDrive.
 
 ### 2026-09-21 — Funil "Eventos" renomeado para "Scale Partner" no RD
 
-Funil `6a99b60d62f84e00234789da`. Antes da troca, levantamento de efeitos
-colaterais: **nada quebra**. Cadências (condições, `cadencia_etapas`, roteador
-de webhook) e a detecção de `mudanca_funil` em `processar_deal_evento` usam
-**ID**; o funil não está no allowlist de `vw_funil_vendas`; o único workflow do
-TI que compara nome exige `'SDR'`. O RD já emitia "Scale Partner" desde
-21/09 14:09 BRT.
+Funil `6a99b60d62f84e00234789da`. Levantamento de efeitos colaterais antes da
+troca: **nada quebra**. Cadências (condições, `cadencia_etapas`, roteador de
+webhook) e a detecção de `mudanca_funil` em `processar_deal_evento` usam
+**ID**; o único workflow do TI que compara nome exige `'SDR'`. O RD já emitia
+"Scale Partner" desde 21/09 14:09 BRT.
 
 Aplicado no Supabase de Expansão (backup em `_backup_rename_eventos_20260921`):
 nomes das cadências 8 e 12, rótulos de 3 condições (25, 26, 33) e 3 etapas
 (20–22), os 8 assuntos de tarefa da cadência 12 (`cadencia_passos` 124–131,
 "Eventos - Ligacao N" → "Scale Partner - Ligacao N" — seguro: a reconciliação
 casa tarefa só por "ligacao/whatsapp N" via `extractKey`) e `nome_funil` dos
-48 deals ainda com o nome antigo em `deal_snapshot` (agora 67/67 "Scale
-Partner"). `deal_eventos` **não** foi tocado: o histórico mantém "Eventos"
-(140 eventos) — agrupar por `id_funil`, nunca por `nome_funil`.
+48 deals ainda com o nome antigo em `deal_snapshot`. `deal_eventos` mantém
+"Eventos" no histórico — agrupar por `id_funil`, nunca por `nome_funil`.
 
-**Dívida técnica exposta:** a camada analítica compara funil por **nome**
-(allowlist de `vw_funil_vendas`, `vw_deal_origem_comercial` =
-'Prospecção Ativa', camada SDR/Closer em `vw_deal_ciclo`/`vw_funil_compat`/
-`mv_deal_ciclo_enriquecido`, `relatorio_expansao_metricas`). Renomear SDR,
-Closer ou Prospecção Ativa no RD quebra as abas de Vendas. Ver seção 8.
+### 2026-09-17 (2) — Aging vira a safra do período; Atual continua o estoque
 
-### 2026-09-17 — Varredura completa: ciclos fantasma, datas de fechamento e deals apagados no RD
+Junior reportou: "a lógica do funil Aging e do funil Atual estão iguais,
+mostram os mesmos dados" — e definiu a diferença que ele quer:
 
-Continuação da auditoria de 16/09. Junior: "se tinha dado errado de MQL em
-agosto, imagina outras etapas e outros meses" — pediu varredura completa e
-correção. Premissa corrigida antes de começar: o **volume** de MQL de agosto
-nunca esteve errado; o que estava errado era a *marca* de 16 deals.
+1. **Atual** — leads Em Andamento e em que etapa estão.
+2. **Aging** — leads **criados no período filtrado**, Em Andamento, e em que
+   etapa estão HOJE.
 
-**O que já estava certo** (7.361 ciclos conferidos contra o RD): etapa atual,
-id de etapa, funil e status Ganho/Perdido — **0 divergências** em todos. Zero
-deals com dois ciclos "atuais", zero datas no futuro, zero Ganho+Perdido
-simultâneo, zero perda antes do MQL. A trava de Closer de 04/09 segue firme
-(149 → 1).
+**Ele estava certo, e a causa era estrutural.** O Aging lia
+`vw_deal_etapa_periodos` só com `data_saida is null` (= a etapa em que o deal
+está agora) cruzado com os deals vivos, **sem nenhum recorte de período**. Ou
+seja: as duas listas respondiam a mesma pergunta por caminhos diferentes, e o
+período — a única coisa que deveria separá-las — não entrava em nenhuma das
+duas.
 
-**Erro 1 — ciclos fantasma (o maior).** `vw_deal_eventos_ciclo` define ciclo
-como `1 + nº de perdas anteriores ao evento`. Efeito não intencional:
-QUALQUER `mudanca_etapa` depois de uma perda abria um ciclo novo, mesmo com o
-RD nunca tendo reaberto o deal — e as duas linhas contavam, porque a dedup de
-"Deals únicos" é por `(deal, ciclo, mês)`. **270 de 351 ciclos de reciclagem
-(77%) eram falsos.**
+**Agora os dois modos saem da MESMA função** (`computeEtapaAtual`, em
+`src/lib/aging.ts`), lendo só `vw_funil_vendas`: deal vivo (`eh_ciclo_atual` +
+`status_atual = 'Em andamento'`), etapa por `currentStage` (mantém a trava de
+"Reunião Agendada SQL" só no Closer), tempo parado na etapa pela coluna
+`data_<etapa>` da própria linha e tempo em andamento desde o `data_novo_mql`.
+A ÚNICA diferença é o `PeriodWindow`: Aging passa a janela do filtro, Atual
+passa `null`. Mesma coisa no popup de deals da etapa (`dealsInEtapaAtual`), pra
+lista e número nunca divergirem.
 
-Corrigido com DUAS regras (a primeira sozinha não resolve — o evento de etapa
-existe de fato e continuaria contando):
-1. **Ciclo**: uma perda só fecha um ciclo se houve retrabalho depois dela —
-   deal aberto hoje, ou `_closed_at` posterior à perda. Deals com ciclo ≥ 2:
-   349 → **83**.
-2. **Passagem**: `mudanca_etapa` em deal `lost` posterior ao `_closed_at` é
-   descartada. Eram 638 eventos, e a maioria é **artefato da nossa própria
-   ingestão**: `api_espelho` 309 (o `espelhar_rd.py` gravava mudança de etapa
-   com a DATA DE EXECUÇÃO ao reconciliar snapshot × RD),
-   `api_backfill_stage_history` 147, `backfill` 51, `api_espelho_edge` 41,
-   `api_sync` 14 — mais 76 de `webhook` (humano arrastando card já perdido).
-   Os dois casos são filtrados: o critério é o estado do deal, não a origem.
+**"Criado no período" = `data_novo_mql`**, escolha confirmada pelo Junior —
+mesma convenção que o toggle "Deals criados no período" já usa como safra.
+Deal sem MQL fica fora do Aging (não há data de criação de lead pra comparar);
+medido, são **10 de 960** deals vivos no Inbound.
 
-Impacto em ago/26 (Inbound, deals únicos): **Inpot · Tentando Contato 206 →
-106** (estava 48,5% inflado), Inpot · Contato Efetivo 57 → 49, Inpot · MQL
-116 → 114, Oral Unic · Conexão 13 → 8, B2Case · Tentando Contato 265 → 260,
-**B2Case · MQL 300 → 299**. Eletrovias (301) e Viva (50) não mudaram.
+**Impacto medido** (17/09/2026, Inbound, Consolidado, período = set/2026):
 
-**Erro 2 — fechamento sem evento = data nula.** `data_venda`/`data_perdido`
-saem do EVENTO de ganho/perda; deal fechado antes do event sourcing existir
-ficava com status certo e **data nula** — contava no total mas sumia de
-qualquer recorte por período. Eram **5 Ganhos** (todos na etapa
-"Documentação", zero eventos de ganho, um valendo **R$ 35.988**) e **167
-Perdidos** de ciclo 1. Fallback para `payload->>'_closed_at'`, **restrito a
-`eh_ciclo_atual AND ciclo = 1`**: medido que `_closed_at` congela na PRIMEIRA
-perda e não acompanha reciclagem — em ciclos > 1 ele é ANTERIOR à entrada do
-próprio ciclo, e usá-lo lá jogaria perdas de julho para fevereiro (era o que
-inflava fev/26 em +144 numa primeira simulação). Resultado: Ganho sem data
-5 → **0**; Perdido sem data 452 → **15** (os 15 são reciclagem real cuja 2ª
-perda não gerou evento — `_closed_at` não serve para eles).
+| Etapa | Atual | Aging (set) |
+|---|---|---|
+| Tentando Contato | 428 | 319 |
+| Contato Efetivo | 227 | 142 |
+| Interesse Reunião | 148 | 68 |
+| Conexão | 83 | 40 |
+| SQL · Reunião Agendada | 17 | 14 |
+| Diagnóstico | 8 | 8 |
+| SAL | 16 | 8 |
+| Oportunidade | 4 | 0 |
+| Comitê | 3 | 2 |
+| Pré-Contrato | 1 | 0 |
 
-**Erro 3 — deals apagados no RD.** `deal_snapshot.deleted_at` existia mas
-**nenhuma view o respeitava**: deal apagado no RD ficava no dashboard para
-sempre. Achados **170**, todos confirmados um a um com `GET /deals/:id` na
-API (170/170 = `404`), todos sem `_created_at` no payload (ingestão antiga
-incompleta). Marcados com `deleted_at` e `vw_funil_vendas` ganhou
-`AND s.deleted_at IS NULL`. **Nada foi apagado do banco** — decisão do
-Junior: o registro fica, só some do dashboard.
+**Nota pra Prospecção Ativa:** os 1.347 deals vivos dessa origem têm 100% do
+MQL em ago/2026 (a importação de lista fria), então no toggle dela o Aging de
+setembro vem **vazio** — está certo, nada foi criado no período. O estado
+vazio do Aging agora diz isso com o período no texto, em vez do genérico
+"nenhum negócio em aberto".
 
-**Checksum.** Ganhos **53** e receita **R$ 2.418.279,98** idênticos antes e
-depois das 4 migrations — nenhuma venda se perdeu. Linhas 7.709 → 7.286,
-deals 7.361 → 7.205 (ciclos fantasma + deletados). Cobertura final: RD tem
-7.463 deals no allowlist com marca; o dash mostra 7.205, e a diferença são os
-filtros de teste (nome da negociação + contato) e os deletados.
+**Infra que saiu de cena.** `useFunilAging.ts` deletado (era o único
+consumidor de `vw_deal_etapa_periodos` e `vw_leadtime_stats`), junto com o
+tipo `EtapaPeriodoRow` e as funções `computeAging`/`dealsInAging`. Efeito
+colateral bom: o modo Aging deixou de disparar uma busca paginada de milhares
+de linhas — agora reaproveita os dados que a página já tem. As duas views
+ficam intactas no banco, sem consumidor.
 
-**Refino no mesmo dia (5ª migration).** Auditando o risco da própria regra do
-Erro 1, achei **falso positivo**: usar só `_closed_at` como marco do fechamento
-descartava passagem legítima, porque o RD NÃO atualiza esse campo quando o deal
-é retrabalhado e perdido de novo. Eram 6 eventos de 637 — 5 deals Oral Unic que
-voltaram para Diagnóstico/Oportunidade COF em jul/26 e foram perdidos no mesmo
-dia, com `_closed_at` preso em jan/fev. Marco correto:
-`GREATEST('_closed_at', última perda em deal_eventos)`. Descartados 637 → 631.
-Números de ago/26 inalterados (B2Case 299, Eletrovias 301, Viva 50).
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (457 testes, 16 novos
+em `aging.test.ts` cobrindo safra × estoque, trava do Closer, deal sem MQL,
+data futura e o espelho lista↔contagem) em worktree fora do OneDrive. Números
+das duas leituras conferidos por SQL contra a base real antes do deploy.
 
-**6ª e 7ª migrations (mesmo dia), a pedido do Junior.**
+### 2026-09-16 (2) — Linha do Tempo do deal (Pista com zoom Macro · Etapas · Micro)
 
-*Perdas sem data — zeradas.* As 15 que restavam eram ciclo > 1, fora do
-recorte `ciclo = 1` do fix anterior. Critério trocado por um melhor: aceitar
-`_closed_at` sempre que ele for **posterior à entrada do próprio ciclo**
-(`data_criacao_negociacao`) — aí só pode ser o fechamento deste ciclo.
-Validado contra o RD: nos 15, o `closed_at` é recente e coincide com o
-`end_date` da última etapa do histórico; 15/15 posteriores à entrada do ciclo.
-Resultado: Perdido sem data **15 → 0**, Ganho sem data 0, datas anteriores ao
-próprio ciclo 0. Ganhos (53) e receita (R$ 2.418.279,98) inalterados.
+Aba nova em Vendas: `/linha-do-tempo` (lista de deals) → `/linha-do-tempo/:idDeal`
+(pista visual da vida inteira do deal, com zoom Macro/Etapas/Micro). Junta as
+3 fontes que o dashboard ainda não usava de fato (`deal_eventos` já era lido
+por outras telas em agregado, mas nunca deal-a-deal; `db_tarefas_sdr` e
+`DB_Reunioes_MeetRox` estavam nas pendências da seção 8 desde 14/08 como
+"ainda não usados") — etapas, no-show, perda, ganho, reciclagem, troca de
+responsável, mudança de funil/campo, tarefas do SDR e reuniões do MeetRox —
+num único traçado por deal, respeitando ciclo (reciclagem vira novo trecho na
+pista) e camada (SDR/Closer/MQL).
 
-*Datas de etapa — validadas contra o RD.* **Correção de uma afirmação errada
-minha:** eu havia registrado que não dava para auditar as datas de etapa
-porque a API não expõe o histórico. O que dá 404 é o sub-recurso
-`GET /deals/:id/deal_stage_histories`; o endpoint principal `GET /deals/:id`
-**traz `deal_stage_histories` no corpo**, com `deal_stage_id`, `start_date` e
-`end_date`. Junior apontou o erro. Auditoria feita com amostra de 52 deals
-(MQL ≥ 01/08/2026), comparando a primeira entrada de cada etapa no RD com as
-colunas `data_*` da view: **125 pares iguais, 3 divergentes** — e as 3
-divergem por 3, 53 e 55 minutos, **nenhuma muda o dia**. Para contagem por
-dia/mês, que é o que o dashboard faz, a amostra bate 100%. MQL 50/52,
-Tentando Contato 47/47, Contato Efetivo 21/21, SQL 4/5, Diagnóstico 3/3.
+**Blocker achado testando com dado real, corrigido nesta sessão.** A 1ª versão
+lia `deal_eventos`/`db_tarefas_sdr`/`DB_Reunioes_MeetRox` direto — e a pista
+renderizava vazia pra todo mundo, só o cabeçalho (que vem de `vw_funil_vendas`)
+funcionava. Causa: `supabaseVendas.ts` nunca autentica (`persistSession:
+false`, o login vive no projeto de Marketing), então toda consulta ao Supabase
+de Expansão roda como role `anon`. Medido: `deal_eventos` tem RLS ligado e
+**zero** políticas; `db_tarefas_sdr` e `DB_Reunioes_MeetRox` têm 1 política
+cada, só pra `authenticated`. As 3 tabelas voltam vazias pro anon, sem erro —
+os outros 7 hooks de Vendas nunca bateram nisso porque nenhum lê tabela crua,
+só view (que roda com os direitos do dono e contorna o RLS por baixo). Fix:
+`useDealTimeline` passou a ler 3 views novas (`vw_deal_timeline_eventos`/
+`_tarefas`/`_reunioes`, mesmas colunas, mesmo filtro) em vez das tabelas —
+mesmo padrão do resto do dashboard, planejamento que devia ter previsto isso
+desde o início.
 
-**8ª migration + backfill (mesmo dia): "arrume tudo".**
+**A tela continua em branco em produção até o script
+`docs/sql/2026-09-16-linha-do-tempo-views.sql` ser rodado** — ele só cria as
+3 views, não foi aplicado nesta sessão de propósito (não crio view no banco de
+produção sem o Junior rodar). O script tem um bloco A (obrigatório, só
+metadado — etapa, tipo de tarefa, duração, nota de reunião) e um bloco B
+opcional, comentado: decide se anotação de tarefa e resumo de reunião (nome de
+cliente, objeção, valor discutido) ficam legíveis por quem tiver a anon key —
+que hoje é pública. Bloco A sozinho já faz a tela funcionar; o Junior decide
+se roda o B também.
 
-*MQL faltante — 6 eventos inseridos.* Dos 84 deals sem `data_novo_mql` em
-funil COM topo de funil, 51 haviam passado por "Novo MQL" segundo o
-`deal_stage_histories` do RD. Mas ao tentar inserir, **45 já tinham o evento**:
-eram deals de 2 ciclos, com o MQL corretamente registrado no ciclo 1 e o ciclo
-atual (2) sem MQL novo — comportamento certo, não erro. Só **6** faltavam de
-fato; inseridos em `deal_eventos` com `origem='api_backfill_topo_20260917'`
-(reversível por essa origem). Efeito: B2Case ago 299 → **300**, Eletrovias
-301 → **302**, Viva **50** inalterado. Os outros 61 sem MQL são Prospecção
-Ativa (nasce em etapa de prospecção) e 48 são do funil Closer (multifranqueado
-/ evento) — corretos por definição.
+**Decisões que dariam bug se não documentadas:**
+- Reunião liga ao deal por `coalesce(id_deal, crm_deal_id)` — `id_deal` só
+  está preenchido em 8 de 1.550 linhas de `DB_Reunioes_MeetRox`.
+- Handoff SDR→Closer emite a mesma etapa 2x em segundos; dois momentos
+  consecutivos na mesma etapa só fundem em um nó se a diferença for **menor
+  que 5 minutos** — medido em `deal_eventos`, 1.833 de 2.699 repetições
+  consecutivas de etapa acontecem em ≤1 minuto (o handoff) contra 396 com mais
+  de 1 dia de diferença (reentrada real, que a fusão não pode engolir).
+  Threshold folgado de propósito acima do que foi medido, pra não fundir uma
+  reentrada rápida de verdade por engano.
+- Etapa que `resolveStage` não reconhece vira nó cinza com o nome cru, nunca
+  some — histórico do deal sem buraco, mesmo em funil legado.
 
-*Datas de etapa fora de 2026 — validadas, com achado inverso.* Segunda amostra
-(40 deals, MQL < 01/06/2026): **88 pares iguais, 13 divergentes**. E a maioria
-das divergências é **o RD estando errado, não o banco**: para deals de
-jan–mai/2026 o RD devolve datas de **18–19/08/2026** (sempre os mesmos
-timestamps: 12:44 e 19:34), ou seja, houve reescrita em massa do histórico de
-etapas naquele dia. Confirma [[historico-rd-nao-e-imutavel]]: **para data
-antiga, o espelho é a fonte mais confiável, não o RD**. Somando as duas
-amostras: 213 pares iguais de 230.
+Ver seção 5 para o mapa completo de módulos (`src/lib/timeline/`, os hooks
+`useDealTimeline`/`useZoomPan`, `src/components/timeline/`).
 
-*Duplicatas de pessoa — medidas, não corrigidas.* Desde jun/2026 (4.703
-deals): **163 excedentes por telefone repetido** (3,5%), 143 por e-mail, 179
-por nome. Não é defeito do dashboard — é duplicata no CRM. Fundir deal é ação
-de negócio, no RD, não no banco.
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (434 testes,
+inalterados — a mudança no hook não tem teste próprio, é só o nome da tabela
+consultada) + `oxlint` limpo no arquivo tocado, em worktree fora do OneDrive
+(`~/ws-dashboard-worktree-timeline`). Coluna a coluna, o `select` do hook bate
+1:1 com a view (conferido antes de editar, não só assumido). Não visto
+renderizado — a tela depende das views, que ainda não existem no banco. PR #163.
 
-*SDR com cargo de Closer — pendência FECHADA, sem mexer em código.* Junior
-confirmou que Rômulo e Giullia atuaram como SDR em Odonto Scale/Odonto Legacy
-no período. E nos 14 casos recentes (ago–set/26, funis SDR/Closer),
-`deal_snapshot.responsavel` é **o próprio nome** em 12 — Bruna, Douglas,
-Jéssica e Aurélio estão mesmo com esses deals no funil SDR. As 2 exceções são
-deals Perdidos com dono congelado, comportamento deliberado da regra
-`posse_atual` (03/09). Ver seção 8.
+### 2026-09-16 — Meta de conversão nos cards de Performance, por marca e por pessoa
 
-*3 vendas com `data_venda` anterior à criação do deal* — conferido no RD:
-`closed_at` < `created_at` **no próprio CRM**, sempre às `01:00:00`, padrão de
-data escolhida à mão sem hora. São vendas lançadas retroativamente pelo time.
-Não é erro do dashboard; mantido como está.
+Junior: o time abre a Performance pra ver a performance individual, vê o
+funil e as conversões de cada etapa, mas não tem referência nenhuma de
+quanto seria o ideal — "eles querem saber o quão longe estão do ideal de
+cada conversão". Pedido: meta nos dois quadrantes (`Conversões — topo do
+funil`, do SDR, e `Conversões — fundo do funil`, do Closer), **volátil aos
+filtros de pessoa e marca** — o Douglas se seleciona e vê as metas dele;
+troca a marca e vê outras metas.
 
-**Estado final da varredura:** divergência com o RD (marca/etapa/funil) **0**;
-Ganho sem data **0**; Perdido sem data **0**; deals apagados no RD visíveis
-**0**; ciclos fantasma **0**. Ganhos **53** e receita **R$ 2.418.279,98**
-idênticos ao início, depois de 8 migrations e 1 backfill.
+**Fonte: `DB_Metas_Performance`**, a mesma tabela (pessoa × marca × mês)
+que já alimenta os cards de meta da página. A meta de conversão é a razão
+entre as metas de VOLUME das duas etapas:
 
-**Fora do alcance do dashboard (ação no CRM):** desde jun/2026, **163 deals
-excedentes por telefone repetido** (3,5% de 4.703), 143 por e-mail, 179 por
-nome — duplicata de pessoa no RD. O dash conta negociações, e está certo ao
-fazê-lo; quem quiser "número de pessoas" precisa deduplicar antes.
+```
+meta de conversão = Σ meta(etapa destino) ÷ Σ meta(etapa origem)
+```
 
-**Resquício antigo, não corrigido:** 388 linhas com `nome_sdr` = pessoa de
-cargo Closer — **sem fonte de verdade disponível**: o campo "SDR Responsável" do RD
-está vazio em 385 dos 388. Concentração em Odonto Scale (Rômulo 126, Giullia
-63) e Odonto Legacy (Giullia 30), jan–jun/2026, compatível com fato histórico
-(atuaram como SDR nesses funis antes da reforma). Aplicar a trava por cargo
-(espelho do fix de 04/09) transformaria 388 atribuições em "sem SDR" e
-destruiria informação possivelmente correta — decisão pendente do Junior.
+Como as metas de volume já são por pessoa e por marca, a conversão herda
+as duas dimensões de graça, e acompanha sozinha quando o Hub de metas
+publica um mês novo — sem tabela nova, sem cadastro paralelo.
 
-Cadeia tocada: `vw_deal_eventos_ciclo` (2×) e `vw_funil_vendas` (2×), todas
-`CREATE OR REPLACE`. `REFRESH MATERIALIZED VIEW mv_deal_ciclo_enriquecido`
-rodado após cada mudança na cadeia de eventos.
+**`DB_Metas_Conversao` NÃO é a fonte** (a tabela existe e o nome engana).
+Cadastrada em 02/07/2026 com valores **idênticos nas 7 marcas**, sem
+dimensão de pessoa, nunca consumida, RLS ligado com zero policies, e
+contradizendo as metas do mês: ela diz SQL→Diagnóstico 90%, as metas de
+set/26 dão 59%. Continua morta — não usar.
 
-Ver [[ciclos-fantasma-de-deal-perdido]], [[fechamento-sem-evento-data-nula]],
-[[filtro-de-teste-por-contato]] e [[marca-diverge-entre-rd-e-view]].
+**Regras** (`src/lib/metaConversao.ts`, puro e testado):
+- Etapas de SDR (SQL, Diagnóstico, SAL) saem das linhas de SDR; as de
+  Closer (COF, Fechamento) das linhas de Closer. Quando um Closer precisa
+  de SAL/Diagnóstico no denominador (`SAL → COF`, `SAL → Fechamento`), usa
+  a meta **da marca** — a linha do Closer na tabela só traz COF, vendas e
+  receita.
+- Filtrar uma pessoa **estreita o universo de marcas** às marcas dela: com
+  o Douglas selecionado, até o `Diagnóstico → SAL` vira o da Inpot, em vez
+  de mostrar o consolidado ao lado de números que já são só dele.
+- Uma marca só entra na razão com as **duas pontas > 0** — senão Odonto
+  Scale (5 vendas, zero COF em set/26) estouraria o COF→Fechamento somando
+  numerador sem denominador. Meta ausente e meta zerada são indistinguíveis
+  depois da soma, então as duas caem fora.
+- Meta só com período de **1 mês exato**, mesma regra dos cards de volume.
 
-### 2026-09-16 — Marca do deal passa a vir do RD, não do último evento
+**As duas linhas sem meta derivável.** `MQL → SQL` fica "sem meta" —
+**não existe meta de MQL em nenhuma tabela de meta da Expansão**
+(procurado: o funil cadastrado em `meta_marca_etapa` começa em `Ligações →
+Reunião Agendada SQL`; o único "MQL com meta" é o pacing da Visão Geral,
+lado Marketing, derivado de baseline histórico, não meta de pessoa).
+`SQL → No-show` ganhou teto fixo de 10% (`META_NO_SHOW_MAX` em
+`constants/metasVendas.ts`, decisão do Junior), com a **cor invertida** —
+ficar abaixo do teto é o bom resultado.
 
-Junior estranhou 3 números redondos no MQL de ago/2026 (Eletrovias 300,
-B2Case 300, Viva 50) e pediu auditoria contra dash, banco e RD. **Os
-números estavam certos** — reproduzidos em SQL puro e reconciliados 1:1
-com a API do RD. O "300 = 300" é coincidência: as curvas acumuladas só se
-encontram em 31/08 (em 30/08 eram 283 × 295), vindas de ritmos opostos, e
-as composições de fonte não têm nada em comum (B2Case 91% `utm_source=meta`;
-Eletrovias 59% meta + 59 de fonte `Evento` + 42 google). Eletrovias já fez
-390 em mai/26, então não existe teto.
+**Visual.** Abaixo do número grande: `Meta 59,2%` em cinza + chip com a
+distância em p.p. (verde acima da meta, vermelho abaixo). Sem barra e sem
+selo de Gargalo/Melhor — o card segue como ficou no PR #87, onde esses dois
+foram removidos justamente porque a polaridade não é universal.
 
-**Achado 1 — segundo filtro de teste, por CONTATO.** Reconciliando "criados
-em agosto no RD" × "MQL de agosto no dash", sobravam deals sem explicação.
-Além do `nome_negociacao NOT LIKE '%test%'` de `vw_funil_vendas`, existe um
-filtro na BASE da cadeia, em `vw_deal_eventos_ciclo`:
-`nome_contato !~~* '%teste%' AND email !~~* '%teste%' AND email !~~*
-'%@wescale.com.br'`. Como fica em `vw_deal_eventos_ciclo` (base de
-`vw_deal_ciclo` → `mv_deal_ciclo_enriquecido` → `vw_funil_vendas` e
-`vw_funil_etapas_v2`), o deal some do dashboard INTEIRO. Medido: **222
-deals** não-deletados, com marca e funil no allowlist, invisíveis por essa
-regra — 149 por "teste" no nome do contato, 63 por e-mail `@wescale.com.br`,
-10 por "teste" no e-mail, **0 por outro motivo**. Ex.: 2 deals `Marcinho
-B2Case` (contato `marcio.coninck@wescale.com.br`) e `Tony Montalvao`
-(`anthony.montavao@wescale.com.br`) — nomes de negociação sem "teste", por
-isso passavam despercebidos na conferência feita pela UI do RD. Regra
-mantida como está (é limpeza correta); o que faltava era documentá-la.
+`useMetasPerformance` passou a devolver também as linhas cruas (`rows`) —
+`aggregate()` colapsa a marca, e a meta de conversão precisa do cruzamento
+pessoa × marca.
 
-**Achado 2 (corrigido) — marca vinha do evento, não do deal.**
-`vw_deal_ciclo` elege a marca do ciclo com
-`(array_agg(et.marca ORDER BY et.data_evento DESC))[1]` — ou seja,
-`deal_eventos.marca`, o retrato denormalizado que a seção 4 já declara não
-confiável. Resultado: **16 deals** apareciam numa marca diferente da do RD
-(confirmado deal a deal pela API: `Gustavo Gomes`,
-`6a832429a838ed000116a7e3`, é Eletrovias no RD e aparecia como Oral Unic).
+Números conferidos por SQL contra a base real (set/2026): consolidado SDR
+59,2% / 63,4% / 37,5%; Oral Unic 57,1% / 62,5% / 35,7%; Douglas 65,3% /
+37,9% / 47,2% / 17,9%; Aurélio em Oral Unic 45,5% de COF→Fechamento e em
+Viva 38,5%.
 
-Fix: `vw_funil_vendas` passou a expor `COALESCE(s.marca, d.marca) AS marca`
-— `deal_snapshot` já estava no JOIN desde o `sub_fonte_crm` (31/08).
-`CREATE OR REPLACE VIEW`, **matview não tocada**. O `WHERE` segue filtrando
-por `d.marca` de propósito: o conjunto de linhas não muda, só o rótulo
-(medido: 0 deals com marca vazia na view e preenchida no RD). Checksum
-idêntico antes/depois: 7.709 linhas, 7.361 ciclo atual, 53 ganhos,
-R$ 2.418.279,98, 5.184 perdidos, 2.472 em andamento, 10 marcas. Divergência
-`vw_funil_vendas.marca` × `deal_snapshot.marca`: **16 → 0**.
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (399 testes, 10
+novos em `metaConversao.test.ts`) + `oxlint` limpo, em worktree fora do
+OneDrive. **Visto renderizado** numa rota temporária sem autenticação
+(removida antes do commit): metas batendo com o SQL, sensibilidade a marca
+e a pessoa confirmada na tela, polaridade do no-show conferida pelas cores
+computadas. Sem mudança de banco, sem migration, sem RLS. PR #161.
 
-Efeito nos números (Junior autorizou aplicar na hora, ciente de que o time
-estava montando apresentação): Eletrovias ago **300 → 301**; Oral Unic ago
-94 → 90 e jul 63 → 56; Odonto Scale ago 62 → 65 e jul 53 → 60; Inpot abr
-−1; B2Case jul +1. Uma venda de **R$ 5.982 (15/07)** saiu do Oral Unic e foi
-pro Odonto Scale. B2Case e Viva de agosto **não mudaram** (300 e 50).
+### 2026-09-15 (2) — "Último acesso" congelado na tela de acessos
 
-Nota: o lado `vw_funil_etapas_v2.marca` continua vindo do evento — não é
-usado pelo dashboard (o recorte por marca sai de `idsEscopo`, ver entrada de
-21/08), mas quem escrever relatório novo deve ler a marca de
-`vw_funil_vendas` / `deal_snapshot`.
+Junior aparecia "há 29 dias" usando o dashboard todo dia. `auth.users.last_sign_in_at`
+só muda em login com senha; quem continua logado só renova a sessão (medido:
+login 17/08, sessão renovada hoje). `acesso_listar_usuarios()` passou a devolver
+`greatest(last_sign_in_at, max(auth.sessions.updated_at/refreshed_at))` —
+`docs/sql/2026-09-15-acesso-ultimo-acesso.sql`, rodado pelo Junior no SQL Editor.
+Sem mudança no front. "Nunca entrou" continua olhando só `last_sign_in_at`.
 
-Ver [[filtro-de-teste-por-contato]], [[marca-diverge-entre-rd-e-view]] e
-[[mql-redondos-agosto-2026-coincidencia]] na memória.
+### 2026-09-15 — Controle de acessos: várias marcas por pessoa, restrição em todas as abas, filtros e ordenação
+
+Pedido do Junior depois de ver a tela no ar (PR #144):
+
+**Marcas viram lista.** `acesso_usuarios.marca text` → `marcas text[]`
+(`docs/sql/2026-09-15-acesso-multimarca.sql`, rodado por ele no SQL Editor —
+DDL no banco de Marketing é barrada pelo classificador do Claude Code).
+`minhas_permissoes()` devolve `marcas` (e `marca` = 1ª, só pra transição);
+`acesso_listar_usuarios()` recriada com `marcas`. `null` = todas as marcas.
+
+**Restrição de marca vale em todas as telas que têm filtro de marca**
+(`TELAS_COM_FILTRO_DE_MARCA` em `src/lib/permissoes.ts`): Visão Geral, Saúde
+da Marca, S&OP Marketing, Visão Macro, Performance, Análise de Perda. A pessoa
+escolhe entre as marcas dela; "nada selecionado" = soma das marcas dela, nunca
+o Consolidado. Pontos de aplicação: `restringirMarcas()` (puro, testado) em
+`SharedFiltersContext` (as 3 abas de Vendas herdam), `FilterBar` (opções e
+rótulo "Todas as suas marcas"), `VisaoGeral` (BrandSelect/StatusTable),
+`AppLayout` (sub-itens de Saúde da Marca e marca ativa) e `SopMarketing`
+(slides filtrados). Meta & OKRs, Campanha de Metas, Análise de Objeções, Metas
+e todas as ações seguem **bloqueadas** pra quem é limitado a marcas — mostram
+dado do time ou de todas as marcas juntas (decisão do Junior).
+
+**Aba Usuários:** filtros (busca, Situação, Tipo de acesso, Marca — inclusive
+"sem limite") e ordenação por coluna (Pessoa, Tipo, Marcas, Situação, Último
+acesso; "nunca entrou" sempre no fim). Lógica em `filtrarUsuarios`/
+`ordenarUsuarios`/`proximaOrdem` (`src/lib/acessosAdmin.ts`, testada). Marcas
+editadas num modal (todas × só algumas + checklist), também no convite.
+
+**Limite de sempre:** nas abas de Vendas os dados de todas as marcas ainda
+chegam ao navegador e são filtrados na tela — só a entrega 2 fecha isso.
+
+### 2026-09-14 — Controle de acessos: tela Usuários & Acessos (entrega 1 de 2)
+
+Junior pediu um "login forte": até aqui qualquer conta do Supabase Auth
+(Marketing) via e fazia tudo — `PrivateRoute` só checava sessão. A única
+restrição era um papel `marca` em `app_metadata` (2 franqueados Inpot),
+editável só pelo painel do Supabase. Gabriel (dono do banco de Marketing)
+autorizou a mudança.
+
+**Modelo (Supabase de Marketing, `docs/sql/2026-09-14-acesso-usuarios-papeis.sql`):**
+- `acesso_papeis` (tipos de acesso editáveis; `acesso_total` só no
+  Administrador; `sistema` = não apaga/renomeia), `acesso_papel_permissoes`
+  (papel × chave), `acesso_usuarios` (usuário → papel, `marca` opcional, `ativo`).
+- `minhas_permissoes()` (o app lê ao carregar e ao voltar pra aba),
+  `tem_permissao(chave)` (RLS e Edge Functions — é o que a entrega 2 vai usar
+  nas views), `acesso_listar_usuarios()` (junta `auth.users`, só pra quem gerencia).
+- Travas no banco: sempre sobra 1 administrador ativo; papéis padrão não
+  apagam; RLS com grants por coluna (cliente não consegue marcar `acesso_total`).
+- Carga inicial: Junior e Gabriel = Administrador; os 2 da Inpot = "Cliente da
+  marca" travado em `inpot`; os outros 28 = "Acesso total (legado)" (tudo menos
+  gerenciar usuários). Ninguém perdeu acesso no deploy.
+
+**Catálogo de permissões no código** (`src/lib/permissoes.ts`, testado): 10
+telas (`aba.*`) + 4 ações (`acao.metas-publicar`, `acao.okrs-editar`,
+`acao.assistente-ia`, `acao.usuarios-gerenciar`). Tela nova no dashboard =
+1 linha em `ABAS`; só o Administrador ganha acesso automático.
+**Usuário com marca definida só passa das telas que sabem travar marca**
+(Visão Geral, Saúde da Marca) e nenhuma ação — mesmo que o papel marque mais.
+
+**Front:** `AcessoProvider` + `PortaoDeAcesso` (sem acesso → tela "sua conta
+ainda não tem acesso"; desativado → desloga; erro → falha fechada) e
+`GuardaRota` (substitui `RoleGuard`, removido) no `App.tsx`. Menu, sub-abas
+de Vendas, assistente IA, botão "Atualizar valor" (OKRs), "Ativar" e
+"Publicar" (Hub de Metas) seguem a permissão. `useAuth` voltou a ser só
+sessão. Tela nova `/acessos` (só com `acao.usuarios-gerenciar`): aba Usuários
+(convidar por e-mail, trocar tipo/marca, desativar/reativar, último acesso) e
+aba Tipos de acesso (criar/editar/apagar com checklist). `/definir-senha`
+recebe o link do convite.
+
+**Edge Functions:** `gerenciar-usuarios` (nova, Marketing) — convidar
+(`inviteUserByEmail`; conta existente recebe link de redefinir senha),
+definir_acesso, desativar (ban + apaga `auth.sessions`), reativar.
+`gravar-meta` (Expansão) passou a exigir `acao.metas-publicar` via
+`tem_permissao` no Marketing — **checagem no servidor, não só no botão**.
+
+**Limite honesto:** o resto das permissões é aplicado no app, não no banco. As
+views de Vendas continuam legíveis pela chave anon sem login — é a entrega 2
+(pendência abaixo).
+
+### 2026-09-14 (3) — Hub de Metas: versões por mês + layout novo
+
+Junior perguntou se as metas lançadas ficavam salvas como lançamento, porque o
+chefe queria um forecast (meta menor) sem perder o original. **Não ficavam**:
+publicar de novo apagava e regravava o mês inteiro, e o `meta_log` só guardava
+"publicado", sem os números. Nenhum mês tinha sido publicado pelo Hub ainda,
+então deu pra mudar o modelo sem migrar dado.
+
+**Modelo novo (decisão do Junior):** cada publicação vira uma **versão imutável**
+do mês (V1 lançamento, V2+ forecast/revisões, com nome e motivo). Só **uma**
+fica ativa por mês e é ela que o dashboard inteiro usa. Dá pra ativar a V2 e
+depois voltar pra V1.
+
+- `meta_versao` (nova): número, rótulo, motivo, `ativa`, `linhas_espelho`
+  (jsonb com as linhas exatas de `DB_Metas_Performance`, congeladas na
+  publicação). Índice único parcial garante 1 ativa por mês.
+- `meta_semana` e `meta_marca` passaram a pertencer à versão (`meta_versao_id`);
+  `meta_mes` virou só o contêiner do mês (perdeu status/publicado_*).
+- Triggers `*_imutavel` bloqueiam UPDATE/DELETE no conteúdo de versão publicada
+  e em `meta_versao` (exceto `ativa`/`ativada_*`). Versão nunca é apagada.
+- `publicar_meta_versao(p jsonb, autor, ativar)` e `ativar_meta_versao(id, autor)`:
+  uma transação cada, execução só pra `service_role`. **Ativar regrava
+  `DB_Metas_Performance` do mês a partir de `linhas_espelho`**, então reativar a
+  V1 devolve os números da V1 mesmo que o motor mude depois.
+- Edge Function `gravar-meta` (v5, `verify_jwt: false`) só valida a sessão e
+  chama uma das duas funções.
+- Setembro/2026 importado como **V1 · Lançamento (ativa, origem `importado`)** a
+  partir das 17 linhas que já estavam no banco. Funil por marca reconstruído
+  com etapas fixas e pessoas com peso igual; distribuição semanal não importada
+  (`meta_closer_semana` é por pessoa somando marcas, não dá pra separar).
+
+**Achado junto:** o espelho do Hub não gravava `meta_volume_sal` (SAL), que
+`useMetasPerformance` lê. Publicar pelo Hub zeraria a meta de SAL no dash.
+
+**Layout:** stepper numerado; Passo 0 virou "Mês e versões" (lista com Ativar /
+Nova versão a partir desta); seletor de mês em 2 selects (o `<input type="month">`
+nativo parecia não responder ao clique); Passo 6 publica como V{n} comparando
+com a versão ativa. Estilos compartilhados em `src/components/metas/metasUi.ts`.
+Também: "Começar do zero" deixava as semanas vazias, e trocar de mês não limpava
+o rascunho.
+
+Verificado: build + 317 testes; SQL com rollback (publicar V1/V2, ativar V2 →
+espelho muda, reativar V1 → volta idêntico, UPDATE bloqueado); reativar a V1 de
+setembro gera md5 idêntico às 17 linhas atuais.
+
+**Pendente:** `gravar-meta` valida sessão mas não o papel (`admin`) — hoje só a
+UI restringe `/metas` via `RoleGuard`.
+
+### 2026-09-14 (2) — Cabeçalhos de tabela/lista quebrando linha no celular
+
+Junior testou o PR #141 no celular real e mandou print: na aba Campanha de
+Metas, "Metas por Marca", os cabeçalhos "META UN"/"REAL UN" quebravam em duas
+linhas ("META" / "UN"). Pedido: nenhuma palavra ou número pode quebrar linha,
+e aplicar sem passar por aprovação de novo.
+
+Causa: `thMarca`/`thHist`/`thTicket` (Campanha de Metas), os cabeçalhos das
+tabelas SDR/Closer (Performance) e do heatmap Motivo×Etapa (Análise de Perda)
+não tinham `whiteSpace: 'nowrap'` — com a coluna estreita no celular, o
+navegador quebra no espaço entre as duas palavras. Adicionado `nowrap` nos
+quatro pontos; as tabelas já tinham `rs-scroll-x` com `minWidth`, então forçar
+nowrap só faz o conteúdo crescer dentro do scroll, sem vazar.
+
+**Achado no processo, não no print do Junior:** a lista de etapas do modo
+Aging/Atual (Visão Macro) também tinha esse cabeçalho quebrando
+("Média em andamento" → "Média em" / "andamento"), mas não tinha rolagem
+horizontal — só `nowrap` ali teria feito o texto vazar por cima do valor ao
+lado (visto renderizado antes de decidir a correção: "MÉDIA EM AN" sobrepondo
+"10d"). Corrigido enrolando a lista inteira em `rs-scroll-x` com colunas em px
+fixo (150px pra "Média em andamento" caber), no mesmo padrão das outras
+tabelas — e removido o token `--etapa-col` que só servia pro layout antigo
+sem scroll.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + oxlint
+limpo, em worktree fora do OneDrive. Visto renderizado em 375×812 com bypass
+de login só em dev (removido antes do commit) — Metas por Marca, tabela SDR
+da Performance, heatmap da Análise de Perda e a lista de etapas em Aging/Atual
+(as duas colunas de média rolando lado a lado, sem sobrepor). PR aberto e
+mesclado sem aprovação prévia, por pedido explícito do Junior nesta sessão.
+
+### 2026-09-14 — Dashboard responsivo: celular, tablet e desktop
+
+Junior pediu layout bom em qualquer formato. Diagnóstico no celular (375px),
+antes: o menu lateral fixo ocupava 260px e sobravam ~110px de conteúdo; a
+barra de filtros empilhava os 10 controles e, grudada no topo, cobria a tela;
+grades fixas de 6/5/4 colunas; tabelas SDR/Closer em grid de colunas em px,
+cortadas pelo `overflow: hidden` do card; popups a 96vw com cabeçalho, gráficos
+e filtros fixos, deixando 1/3 da tela pra tabela; calendário do filtro de Dia
+com 450px de largura.
+
+**Escopo.** Esqueleto compartilhado (`AppLayout`, `Sidebar`, `PageTop`,
+`FilterBar`, `MultiSelect`, `DateRangePicker`, os 5 popups de Vendas,
+`TrapFunnel`, faixa e intro do Modo GP) + abas de Vendas (Visão Macro,
+Performance, Análise de Perda, Campanha de Metas, Metas). **Fora:** páginas de
+Marketing (do Gabriel — herdam menu e topo novos, grades internas seguem
+fixas; ver pendência na seção 8) e Análise de Objeções (iframe).
+
+**Como.** Três mecanismos, porque inline style não aceita media query (ver
+armadilha na seção 7): tokens + classes `rs-*` em `src/styles/responsive.css`;
+hook `useMediaQuery` (`MQ_CELULAR` ≤640px, `MQ_COMPACTO` ≤1023px) só pra mudança
+de estrutura; container query no funil (`.rs-trap`), que encolhe a coluna de
+custo pela largura do card e não da tela.
+
+**O que muda:**
+- **Compacto (≤1023px):** menu vira gaveta sobreposta — hambúrguer, fundo
+  escurecido, Esc e navegação fecham, e a preferência salva de menu
+  aberto/fechado do desktop não é tocada. A `FilterBar` vira uma linha
+  (botão Filtros + resumo "Consolidado · Setembro 2026" + contador de filtros
+  extras + reset), gruda logo abaixo da barra do topo (o hambúrguer continua
+  alcançável) e abre um painel inferior com os mesmos controles, aplicando na
+  hora. Filtro obrigatório vazio deixa botão e resumo em vermelho.
+- **Sidebar fechada some de verdade** (vale no desktop também): o glass tem
+  12px de margem e `translateX(-100%)` deixava uma lasca; agora desloca com a
+  margem e ganha `visibility: hidden`, então os itens saem do Tab.
+- **Grades:** KPIs 6 → 3 (≤1279) → 2 (≤640) → 1 (≤380); os cards de ritmo da
+  Performance vão pra 1 coluna no celular; funil + laterais (Visão Macro) e
+  Classificação + cards (Campanha) empilham abaixo de 1100px.
+- **Tabelas largas** (SDR/Closer da Performance, Histórico e Metas por Marca
+  da Campanha, funil por marca em Metas): rolagem horizontal com largura mínima.
+- **Popups:** 100vw no celular; no popup de etapa, gráficos + filtros + tabela
+  rolam juntos; listas "Por Marca/Por SDR" quebram em 1 coluna.
+- **Calendário do Dia:** atalhos viram chips em cima do calendário, dias com 36px.
+- **Análise de Perda:** separadores do card escuro viraram gap de 1px (valem
+  lado a lado e empilhado). **Performance:** divisórias do card Conversões por
+  sombra na célula — com número ímpar de itens a célula vazia ficava cinza.
+
+**Bug de brinde:** `var(--ws-brand)` (token inexistente, mesmo bug de
+09/09 (4)) em `HubMetas`, `PassoFunilMarca` e `PassoRevisarPublicar` →
+`--brand-accent`. O passo ativo do assistente de Metas e os botões "Copiar do
+mês anterior" / "Publicar mês" estavam transparentes.
+
+Desktop (≥1280px) sem mudança visual — conferido: 6 colunas de KPI, funil e
+laterais em 1,5:1, barra de filtros aberta.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + `oxlint`
+sem avisos novos, em worktree fora do OneDrive. **Visto renderizado** em
+375×812, 768×1024 e 1440×900 com bypass de login só em dev (removido antes do
+commit): Visão Macro (funil, painel de filtros, calendário do Dia, gaveta do
+menu, popup de etapa), Performance, Análise de Perda, Campanha de Metas e
+Metas — varredura por script sem nenhum elemento vazando da largura da tela.
+Nota pra quem for testar no painel de navegador: depois de rolar via script, a
+captura às vezes mostra uma faixa branca no topo — é artefato da captura
+(`header.getBoundingClientRect().top` = 0), não do layout.
+
+### 2026-09-15 (7) — Abas de Vendas carregam em paralelo, com cache entre abas; eventos paginavam errado
+
+Junior: a Visão Macro voltou a levar ~10 s pra carregar.
+
+**Não era o banco.** Logs da API (24 h): cada página de `vw_funil_vendas`
+volta com p50 ~230 ms / p95 ~350 ms, só 1 request acima de 3 s; refresh da
+matview estável em ~2,4 s há 10 dias; plano Pro, sem throttling. O gargalo era
+o **cliente**: `useFunilVendas` baixava a base inteira (5,9 mil linhas Inbound,
+~7 MB cru / ~650 KB gzip) em **6 páginas em série**, e `useFunilEventos` em
+mais 3–7 — qualquer oscilação de rede multiplicava por página. Medido do Mac do
+Junior, mesma sequência: 31,9 s / 26,2 s / 4,0 s. E cada troca entre Visão
+Macro, Performance e Análise de Perda baixava tudo de novo.
+
+**Fix, só front (nenhuma view/tabela tocada):**
+- `src/lib/paginacao.ts` (novo, testado) — `buscarTodasPaginas`: 1ª página
+  com `count=exact`, demais em paralelo com limite de concorrência (4 em
+  vendas, 3 em eventos — cada página de eventos recalcula a view inteira,
+  ~450 ms). Contagem em `vw_funil_vendas` custa 45 ms. Medido com conexão
+  reaproveitada (como o browser): vendas Inbound 2,4–14 s → **~1,0 s**;
+  eventos set/26 1,55 s → 0,8 s.
+- `src/lib/cacheConsulta.ts` (novo, testado) — cache em memória por chave,
+  dedup de carga em voo, erro não sobrescreve o último valor bom, máx. 16
+  chaves. Os dois hooks mostram o cache na hora ao montar e só revalidam em
+  segundo plano se ele tiver > 60 s. Troca de aba fica instantânea. Polling de
+  5 min e botão de refresh inalterados. Arrays compartilhados por referência —
+  **nenhum consumidor pode mutar as linhas** (conferido: nenhum muta hoje).
+
+**Bug de contagem achado no caminho.** `useFunilEventos` ordenava só por
+`dia` — milhares de empates — e OFFSET sobre ordem com empate devolve páginas
+sobrepostas. Determinístico (mesma resposta sempre), por isso nunca apareceu
+como flutuação: set/26 Inbound vinha com **81 eventos duplicados e 81
+faltando**. Agora a ordem desempata por todas as colunas selecionadas
+(`rn_deal_etapa_mes` distingue as repetições legítimas). **Números de etapa
+mudam** — set/26 Inbound, deals únicos: Novo MQL 802→818, Tentando Contato
+585→609, Contato Efetivo 277→282, Conexão 112→117, Interesse Reunião 134→140,
+SQL 59→61; ago/26 muda 0–8 por etapa; Prospecção Ativa (1 página) sem
+diferença. `vw_funil_vendas` não perdia linha (chave única conferida), mas
+ganhou desempate `id_lead, ciclo` por garantia.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (350 testes, 16 novos)
++ `oxlint` limpo, em worktree fora do OneDrive. Teste de integração temporário
+(removido antes do commit) com supabase-js contra a base real: vendas Inbound
+5.925 e Prospecção 1.758 linhas **idênticas** ao caminho antigo, `count` =
+linhas, 0 chave duplicada; eventos set/26 2.904 linhas, 0 duplicata, igual à
+leitura sequencial com ordem total. App exige login — não visto renderizado.
+
+**Fora do escopo, registrado:** subir "Max rows" da API do Supabase (1 request
+só) é config global do projeto — não aplicado. `remix-dashboard-expansao.lovable.app`
+faz ~4,6 mil requests/dia no mesmo banco (algumas RPCs com timeout). Visão
+Geral/Saúde da Marca seguem lendo `vw_marketing_funil` (~6,9 mil requests/dia,
+até 6 hooks por página) com paginação sequencial.
+
+### 2026-09-15 (6) — Filtros do pop-up de deals: nome à mostra e opções cruzadas
+
+Junior: nos pop-ups de deals, os 5 filtros mostravam todos o mesmo texto
+("Todas") e ele tinha que abrir um por um pra descobrir qual era qual.
+
+**Causa:** o botão do `MultiSelect` renderiza só o *resumo* da seleção — o
+`label` aparece dentro do popover, não no botão. Na `FilterBar` isso não
+incomoda porque cada controle já tem o nome em cima (`labelStyle`); no
+`StageDealsPanel` os controles estavam soltos numa linha depois de um
+"Filtrar por" genérico. Fix: helper `CampoFiltro` põe o nome em cima de cada
+um (MARCA · FUNIL · FONTE · SDR · CLOSER), mesmo padrão visual da barra do
+dashboard; o "Filtrar por" sai, virou redundante. `MultiSelect` não mudou.
+
+**Junto, as opções passaram a ser cruzadas entre si** (o Junior cobrou que a
+lista siga "certinho os dados que aparecem na tabela"). Antes cada filtro
+listava os valores de TODOS os deals do recorte: com Marca = Inpot, o filtro
+de SDR seguia oferecendo gente que não tem nenhum deal de Inpot — escolher
+zerava a tabela. Agora as opções de um campo saem das linhas que sobram
+depois dos OUTROS 4 filtros, mesma regra "estilo Excel" que a `FilterBar` já
+usava desde 31/08 (`funilFilterOptions`), inclusive o escape hatch: o valor
+já marcado continua na lista mesmo sem linha restante, senão não dava pra
+desmarcar. O próprio campo não se estreita — senão Marca colapsaria na marca
+escolhida e não daria pra trocar sem limpar.
+
+O recorte do dashboard (origem, marca, período, fonte, SDR/Closer da barra)
+já vinha aplicado antes, via `scoped`/`dealsInStage` — isso não mudou; o
+cruzamento novo é só entre os 5 filtros de dentro do pop-up.
+
+**Implementação.** A lógica saiu do `useMemo` do hook pra duas funções puras
+em `useStageDealsFilters.ts` — `filtrarStageDeals` e `opcoesCruzadas` —, as
+duas testadas. Vale de uma vez pros 3 lugares que usam o painel: Visão Macro,
+funil da Performance e os pop-ups dos cards da Performance (entrada (5)).
+`MqlDrawer` (abas de Marketing) ficou de fora de propósito: usa `<select>`
+nativo cujas opções já se identificam ("Todas as campanhas", "Todos os
+anúncios").
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (329 testes, 7 novos
+em `useStageDealsFilters.test.ts`) + `oxlint` limpo, em cópia fora do
+OneDrive. **Visto renderizado** contra a base real (cópia de teste com login/
+RoleGuard desligados, patch fora do commit): no pop-up do card MQL os 5
+rótulos aparecem sobre os controles e, marcando Marca = Inpot (58 de 768
+deals), o filtro de SDR passou de 7 opções pra 3 (Douglas, Sarah Padilha,
+Xayane) — sumiram Vanessa Daniel, Thiago e Bruna, que não têm MQL de Inpot.
+Console sem erros.
+
+### 2026-09-15 (5) — Performance: cards abrem em qualquer período e o popup mostra os deals
+
+Junior pediu 2 ajustes nos cards da aba **Performance** (exemplificou no SDR,
+mas vale igual no Closer).
+
+**1. O popup só abria com 1 mês selecionado.** No modo **Dia** (e em
+trimestre/ano/multi-mês) o card não era clicável: `onClick` era condicionado a
+`mesUnico && metaTimeSel.metaX > 0`, porque o desdobramento por pessoa era
+construído inteiro em cima da meta MENSAL (ritmo do mês, "esperado até hoje",
+meta do dia). Agora **todos os 9 cards** (SDR: MQL · SQL · Diagnóstico · SAL;
+Closer: Diagnóstico · SAL · COF · Fechamentos · Receita) abrem em qualquer
+recorte. A meta por pessoa passou a ter 3 leituras:
+
+- **1 mês selecionado** — inalterado: ritmo + anel "Hoje" (SQL/Diag/SAL/COF) ou
+  Realizado × Meta do mês (Fechamentos/Receita).
+- **Modo Dia dentro de um mesmo mês** — meta **proporcional**: meta mensal da
+  pessoa × dias úteis do recorte (seg–sáb, mesmo critério de
+  `businessDaysInMonth`) ÷ dias úteis do mês. 1 dia = a própria meta do dia.
+  Só pras metas diárias.
+- **Resto** (trimestre, ano, vários meses, ou recorte de dias cruzando meses) —
+  só realizado por pessoa, com nota explicando por que não há meta: a meta vem
+  de um mês só (`useMetasPerformance` busca 1 `mesKey`), e ratear entre meses
+  diferentes seria chute. Fechamentos/Receita também caem aqui — são metas
+  mensais de propósito (ver entrada de 04/09).
+
+Diferente do popup antigo, quem **não tem meta cadastrada continua na lista**
+(meta "—") — no modo Dia o que o Junior quer ver é quem produziu, não só quem
+tem meta.
+
+**2. Toggle "Por pessoa × Deals" dentro do popup.** Pedido dele: "quero
+conseguir ver quais são os deals também". O popup ganhou 2 abas no cabeçalho —
+`Por SDR`/`Por Closer` (meta × realizado, o que já existia) e `Deals (N)`, que
+é **a mesma tabela do clique numa etapa do funil** (`StageDealsPanel`): mini
+gráficos por marca/responsável, os 5 filtros MultiSelect, e as colunas
+Negociação/Funil/Marca/Status/SDR/Closer/Fonte/Unidades/Taxa de Franquia/
+Leadtime/Data. O drawer alarga de 520px pra 980px na aba de deals.
+
+**A lista nunca diverge do número do card** — usa as MESMAS funções de
+contagem: `dealsInStage(..., 'performance')` pras etapas por evento (herda a
+trava "Reunião Agendada SQL só no funil do Closer"), `rowsInStage` pro MQL
+(que o card conta por `countStage`, na linha do deal) e a trava de venda pro
+Fechamento (Fechamentos e Receita listam os mesmos ganhos).
+
+**Implementação.** `StageDealsDrawer.tsx` foi partido: o corpo virou
+`StageDealsPanel` (exportado) e o estado de filtro saiu pro hook novo
+`useStageDealsFilters.ts` — assim o cabeçalho de quem monta o drawer segue
+mostrando "X de Y deals" (e o oxlint não reclama de hook exportado junto com
+componente). `StageDealsDrawer` continua idêntico por fora; Visão Macro não
+mudou. `metaBreakdown.ts` ganhou `buildPersonPeriodoRows` e `fracaoMetaMensal`
+(puras, testadas). As 6 instâncias de `MetaBreakdownDrawer` na página viraram
+**uma só**, montada por um mapa `CARD_DEF` (título, etapa, meta, granularidade)
+— `key={cardAberto}` faz cada card abrir do zero, em "Por pessoa" e sem filtro
+herdado do card anterior. Subtítulo no modo Dia agora mostra a data
+(`11/09/2026` / `01/09/2026 – 15/09/2026`) em vez de "Setembro 2026".
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (322 testes, 8 novos em
+`metaBreakdown.test.ts`) + `oxlint` limpo nos arquivos tocados, em cópia fora do
+OneDrive. Desta vez **visto renderizado** contra a base real, numa cópia de
+teste com o login e o RoleGuard desligados (patch só nessa cópia, nunca no
+commit): modo Dia 01–15/09 abre o popup do SQL com meta proporcional por SDR
+(Thiago 12/50, Xayane 14/37, Sarah 25/37) e a aba Deals (55) lista os
+negócios; Fechamentos no Closer mostra realizado com meta "—"; e o modo Mês
+segue com o ritmo + anel "Hoje" de antes. Console sem erros.
+
+### 2026-09-17 (3) — S&OP: opção "Personalizado" no seletor de datas
+
+Ao selecionar **"Personalizado…"** no dropdown do header da S&OP, dois
+`<input type="date">` aparecem inline (início · – · fim). O `max` do fim é
+travado em hoje; o `min`/`max` cruzado impede range invertido.
+
+Nova função `computeCustomRanges(start, end)` constrói o `DateRanges` com:
+- 5 semanas rolantes ancoradas no `end`
+- Período anterior = mesmos endpoints deslocados um mês atrás (com clamping
+  para o último dia do mês quando necessário)
+- `mtdLabel` = rótulo compacto `"dd/mm–dd/mm"` via `weekLabel`
+- `isClosed: true`, `monthSuffix: '(personalizado)'`, `antShort: 'período ant'`
+
+Default ao abrir: 1º do mês corrente → hoje.
+Enquanto as datas estiverem inválidas ou invertidas, os slides caem de volta
+para o mês corrente.
+
+PR #154, deploy automático.
+
+### 2026-09-17 — S&OP: seletor de mês no header (Jan 2026 – mês atual)
+
+O toggle binário **MTD / Agosto** da aba S&OP foi substituído por um `<select>`
+com todos os meses disponíveis desde jan/2026. Mês atual aparece como
+**"Setembro (MTD)"**; meses passados são tratados como fechados — a mesma lógica
+de `computeRanges` já existente, sem nenhuma mudança na camada de dados.
+
+Antes era necessário atualizar manualmente `SOP_CLOSED_MONTH_KEY` e
+`SOP_CLOSED_MONTH_LABEL` em `src/constants/sopConfig.ts` a cada mês fechado.
+Agora o dropdown é gerado dinamicamente pela constante `SOP_MONTH_OPTIONS`
+(módulo `SopMarketing.tsx`) — nada para atualizar no código quando outubro fechar.
+
+`sopConfig.ts` perdeu as duas constantes e pode ser removido futuramente se
+nenhum outro arquivo o referenciar.
+
+PR #153, deploy automático.
+
+### 2026-09-15 (4) — We Scale SOP React: KPIs hardcoded (27 MQL, R$ 3.745)
+
+Meta Instant Forms do Meta não chegam ao Supabase, então `useLeads` só retornava
+~13 dos 27 leads reais de We Scale — e o KPI strip usava apenas a semana calendário
+07-13/09 (2 leads nessa janela), exibindo "2 MQL / 2 leads".
+
+Solução (mesmo padrão de `comunidadeLegacy.ts`):
+
+- **`src/constants/weScaleSop.ts`** (novo): struct `WE_SCALE_SOP_ATUAL` com
+  snapshot manual — MTD Set 01-15, R$ 3.745 invest, 27 leads, 27 MQL, R$ 139
+  CP-MQL, duas semanas (S1 01-07: 12, S2 08-14: 15). Atualizar semanalmente
+  junto com o `sop-weekly.html`.
+- **`SopMarketing.tsx`**: para `isWeScale`, `kpiCards` usa valores hardcoded
+  com comparações `"—"` (marca nova, sem histórico anterior); badge `Semana · X`
+  → `MTD · MTD Set (01-15)`; `WeeklyBarChart` mostra as 2 barras de setembro em
+  vez das 5 semanas do calendário; sparkline CP-MQL oculta (sem invest por semana).
+
+PR #152, deploy automático.
+
+### 2026-09-15 (3) — Odonto Legacy SOP React: MQL MTD corrigido (166 em vez de 32)
+
+A janela do MQL do slide Odonto Legacy no React (`/sop-marketing`) estava travada
+em 7 dias corridos (01-08/09 → 09-15/09 = 7d = ~32 MQL) em vez de MTD (01-15/09
+= ~166 MQL). O changelog do PR #149 documentava a mudança para MTD, mas o código
+nunca foi atualizado — o bloco `if (isOdontoLegacy)` que sobrescrevia `mtdCurStart`
+para os últimos 7 dias existia há semanas sem ser percebido.
+
+Fix: removido o override `if (isOdontoLegacy)` em `mtdCurStart` e `mtdPrevStart`
+— ambos passam a usar `dates.mtdCurStart` / `dates.mtdPrevStart` como todas as
+outras marcas. `mtdPrevEnd` para Odonto Legacy mantém override próprio: `último dia
+do mês anterior` (Ago fechado = 31/08), em vez do dia N do mês anterior (MTD-vs-MTD
+usual). Isso é intencional — "comparativo MTD ago" do slide usa o mês fechado.
+
+PR #151, deploy automático.
+
+### 2026-09-15 (2) — We Scale SOP: 27 MQL MTD, gráfico semanal e leads reais do CRM
+
+Atualização da marca We Scale no `sop-weekly.html` com dados de set/26:
+
+**KPIs MTD (01-15/09):** R$ 3.745 investidos · 27 MQL · 27 Leads · CP-MQL R$ 139.
+
+**Gráfico semanal:** comparativo semana 1 × semana 2 — 01-07/09: 12 MQL, 08-14/09:
+15 MQL (▲ +25%). Nota anterior era comparativo 7d × 7d vs semana anterior; trocado
+para duas semanas de setembro por ser marca nova sem histórico anterior.
+
+**Extras com leads reais do CRM** (export 15/09, funil Eventos):
+- **Scale Partner Odonto (14 leads):** 8 leads da semana 01-08/09 (Rodrigo/bc.consultoria,
+  Dr° Áureo/Reciface, Gabriel/@clinicasorrisosmart, Dra Gabriela/Igv Clinic,
+  José/Instituto José Araujo, Bruno/Redeorto, Wendell/Centter lab, Camila/Cliniplus) +
+  6 de 11/09 em lote (Irineu/Althoff, Ana Maria, Lucas Rocha/Curattio, Alex/Equipe
+  Marina Richter, Diogo/Odontonin, Wesley/NEXT EQUIPAMENTOS).
+- **Scale Partner geral (8 leads):** Lucas Arantes/Overview, Nando/WodFit,
+  Rodrigo/BPO Gerencie + 5 de 11/09 em lote (Cida Faroni/Instituto Cultural Ribanitá,
+  Michael/Energize20, Rhana/Zoomie, Octavio/VB., Emiliano/Sorria Brasil).
+
+Leads removidos: "thomas" (não consta no CRM) e Winicius Henrique (marcado
+[NJ] Dados Inválidos). Cabeçalho da tabela global atualizado: "MTD Set (01-08)"
+→ "MTD Set (01-15)".
+
+Deploy automático via PR #150.
+
+### 2026-09-15 — Odonto Legacy SOP: 190 membros por qualidade, 166 MQL, comparativo MTD
+
+Atualização manual dos dados estáticos da Odonto Legacy nas duas superfícies do
+SOP (`sop-weekly.html` + `src/constants/comunidadeLegacy.ts`):
+
+**Comunidade:** total subiu de 170 → **190** após aplicar filtro de qualidade
+(recebe link da comunidade quem tem `tem_clinica=sim OR is_dentista=sim`). Com o
+filtro, o quadrante "Não-dentista sem clínica" (antes 38% do total bruto) sai da
+contagem — a comunidade ativa passa a ter 3 tiers:
+- Dentista com clínica: **42%** (~80 pessoas · ICP alto)
+- Dentista sem clínica: **45%** (~85 · quer abrir/franquia)
+- Não-dentista com clínica: **13%** (~25 · investidor com dentista sócio)
+
+Origens atualizadas: Newsletter 3→6, Iscas 4→2, Legacy site 138→157.
+
+**MQL Consultoria MTD set/26:** 58 (01-08/09) → **166** (01-15/09, via CRM).
+
+**Comparativo do gráfico:** trocado de janela 7d para **MTD setembro vs Ago
+fechado** — "No Odonto Legacy pode puxar sempre MTD, não precisa ser na semana"
+(Junior, 15/09). Anterior = Ago fechado (47 MQL / 170 membros).
+
+PR #149, deploy automático.
+
+### 2026-09-14 (3) — Hub de Metas: versões por mês + layout novo
+
+Junior perguntou se as metas lançadas ficavam salvas como lançamento, porque o
+chefe queria um forecast (meta menor) sem perder o original. **Não ficavam**:
+publicar de novo apagava e regravava o mês inteiro, e o `meta_log` só guardava
+"publicado", sem os números. Nenhum mês tinha sido publicado pelo Hub ainda,
+então deu pra mudar o modelo sem migrar dado.
+
+**Modelo novo (decisão do Junior):** cada publicação vira uma **versão imutável**
+do mês (V1 lançamento, V2+ forecast/revisões, com nome e motivo). Só **uma**
+fica ativa por mês e é ela que o dashboard inteiro usa. Dá pra ativar a V2 e
+depois voltar pra V1.
+
+- `meta_versao` (nova): número, rótulo, motivo, `ativa`, `linhas_espelho`
+  (jsonb com as linhas exatas de `DB_Metas_Performance`, congeladas na
+  publicação). Índice único parcial garante 1 ativa por mês.
+- `meta_semana` e `meta_marca` passaram a pertencer à versão (`meta_versao_id`);
+  `meta_mes` virou só o contêiner do mês (perdeu status/publicado_*).
+- Triggers `*_imutavel` bloqueiam UPDATE/DELETE no conteúdo de versão publicada
+  e em `meta_versao` (exceto `ativa`/`ativada_*`). Versão nunca é apagada.
+- `publicar_meta_versao(p jsonb, autor, ativar)` e `ativar_meta_versao(id, autor)`:
+  uma transação cada, execução só pra `service_role`. **Ativar regrava
+  `DB_Metas_Performance` do mês a partir de `linhas_espelho`**, então reativar a
+  V1 devolve os números da V1 mesmo que o motor mude depois.
+- Edge Function `gravar-meta` (v5, `verify_jwt: false`) só valida a sessão e
+  chama uma das duas funções.
+- Setembro/2026 importado como **V1 · Lançamento (ativa, origem `importado`)** a
+  partir das 17 linhas que já estavam no banco. Funil por marca reconstruído
+  com etapas fixas e pessoas com peso igual; distribuição semanal não importada
+  (`meta_closer_semana` é por pessoa somando marcas, não dá pra separar).
+
+**Achado junto:** o espelho do Hub não gravava `meta_volume_sal` (SAL), que
+`useMetasPerformance` lê. Publicar pelo Hub zeraria a meta de SAL no dash.
+
+**Layout:** stepper numerado; Passo 0 virou "Mês e versões" (lista com Ativar /
+Nova versão a partir desta); seletor de mês em 2 selects (o `<input type="month">`
+nativo parecia não responder ao clique); Passo 6 publica como V{n} comparando
+com a versão ativa. Estilos compartilhados em `src/components/metas/metasUi.ts`.
+Também: "Começar do zero" deixava as semanas vazias, e trocar de mês não limpava
+o rascunho.
+
+Verificado: build + 317 testes; SQL com rollback (publicar V1/V2, ativar V2 →
+espelho muda, reativar V1 → volta idêntico, UPDATE bloqueado); reativar a V1 de
+setembro gera md5 idêntico às 17 linhas atuais.
+
+**Pendente:** `gravar-meta` valida sessão mas não o papel (`admin`) — hoje só a
+UI restringe `/metas` via `RoleGuard`.
+
+### 2026-09-14 (2) — Cabeçalhos de tabela/lista quebrando linha no celular
+
+Junior testou o PR #141 no celular real e mandou print: na aba Campanha de
+Metas, "Metas por Marca", os cabeçalhos "META UN"/"REAL UN" quebravam em duas
+linhas ("META" / "UN"). Pedido: nenhuma palavra ou número pode quebrar linha,
+e aplicar sem passar por aprovação de novo.
+
+Causa: `thMarca`/`thHist`/`thTicket` (Campanha de Metas), os cabeçalhos das
+tabelas SDR/Closer (Performance) e do heatmap Motivo×Etapa (Análise de Perda)
+não tinham `whiteSpace: 'nowrap'` — com a coluna estreita no celular, o
+navegador quebra no espaço entre as duas palavras. Adicionado `nowrap` nos
+quatro pontos; as tabelas já tinham `rs-scroll-x` com `minWidth`, então forçar
+nowrap só faz o conteúdo crescer dentro do scroll, sem vazar.
+
+**Achado no processo, não no print do Junior:** a lista de etapas do modo
+Aging/Atual (Visão Macro) também tinha esse cabeçalho quebrando
+("Média em andamento" → "Média em" / "andamento"), mas não tinha rolagem
+horizontal — só `nowrap` ali teria feito o texto vazar por cima do valor ao
+lado (visto renderizado antes de decidir a correção: "MÉDIA EM AN" sobrepondo
+"10d"). Corrigido enrolando a lista inteira em `rs-scroll-x` com colunas em px
+fixo (150px pra "Média em andamento" caber), no mesmo padrão das outras
+tabelas — e removido o token `--etapa-col` que só servia pro layout antigo
+sem scroll.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + oxlint
+limpo, em worktree fora do OneDrive. Visto renderizado em 375×812 com bypass
+de login só em dev (removido antes do commit) — Metas por Marca, tabela SDR
+da Performance, heatmap da Análise de Perda e a lista de etapas em Aging/Atual
+(as duas colunas de média rolando lado a lado, sem sobrepor). PR aberto e
+mesclado sem aprovação prévia, por pedido explícito do Junior nesta sessão.
+
+### 2026-09-14 — Dashboard responsivo: celular, tablet e desktop
+
+Junior pediu layout bom em qualquer formato. Diagnóstico no celular (375px),
+antes: o menu lateral fixo ocupava 260px e sobravam ~110px de conteúdo; a
+barra de filtros empilhava os 10 controles e, grudada no topo, cobria a tela;
+grades fixas de 6/5/4 colunas; tabelas SDR/Closer em grid de colunas em px,
+cortadas pelo `overflow: hidden` do card; popups a 96vw com cabeçalho, gráficos
+e filtros fixos, deixando 1/3 da tela pra tabela; calendário do filtro de Dia
+com 450px de largura.
+
+**Escopo.** Esqueleto compartilhado (`AppLayout`, `Sidebar`, `PageTop`,
+`FilterBar`, `MultiSelect`, `DateRangePicker`, os 5 popups de Vendas,
+`TrapFunnel`, faixa e intro do Modo GP) + abas de Vendas (Visão Macro,
+Performance, Análise de Perda, Campanha de Metas, Metas). **Fora:** páginas de
+Marketing (do Gabriel — herdam menu e topo novos, grades internas seguem
+fixas; ver pendência na seção 8) e Análise de Objeções (iframe).
+
+**Como.** Três mecanismos, porque inline style não aceita media query (ver
+armadilha na seção 7): tokens + classes `rs-*` em `src/styles/responsive.css`;
+hook `useMediaQuery` (`MQ_CELULAR` ≤640px, `MQ_COMPACTO` ≤1023px) só pra mudança
+de estrutura; container query no funil (`.rs-trap`), que encolhe a coluna de
+custo pela largura do card e não da tela.
+
+**O que muda:**
+- **Compacto (≤1023px):** menu vira gaveta sobreposta — hambúrguer, fundo
+  escurecido, Esc e navegação fecham, e a preferência salva de menu
+  aberto/fechado do desktop não é tocada. A `FilterBar` vira uma linha
+  (botão Filtros + resumo "Consolidado · Setembro 2026" + contador de filtros
+  extras + reset), gruda logo abaixo da barra do topo (o hambúrguer continua
+  alcançável) e abre um painel inferior com os mesmos controles, aplicando na
+  hora. Filtro obrigatório vazio deixa botão e resumo em vermelho.
+- **Sidebar fechada some de verdade** (vale no desktop também): o glass tem
+  12px de margem e `translateX(-100%)` deixava uma lasca; agora desloca com a
+  margem e ganha `visibility: hidden`, então os itens saem do Tab.
+- **Grades:** KPIs 6 → 3 (≤1279) → 2 (≤640) → 1 (≤380); os cards de ritmo da
+  Performance vão pra 1 coluna no celular; funil + laterais (Visão Macro) e
+  Classificação + cards (Campanha) empilham abaixo de 1100px.
+- **Tabelas largas** (SDR/Closer da Performance, Histórico e Metas por Marca
+  da Campanha, funil por marca em Metas): rolagem horizontal com largura mínima.
+- **Popups:** 100vw no celular; no popup de etapa, gráficos + filtros + tabela
+  rolam juntos; listas "Por Marca/Por SDR" quebram em 1 coluna.
+- **Calendário do Dia:** atalhos viram chips em cima do calendário, dias com 36px.
+- **Análise de Perda:** separadores do card escuro viraram gap de 1px (valem
+  lado a lado e empilhado). **Performance:** divisórias do card Conversões por
+  sombra na célula — com número ímpar de itens a célula vazia ficava cinza.
+
+**Bug de brinde:** `var(--ws-brand)` (token inexistente, mesmo bug de
+09/09 (4)) em `HubMetas`, `PassoFunilMarca` e `PassoRevisarPublicar` →
+`--brand-accent`. O passo ativo do assistente de Metas e os botões "Copiar do
+mês anterior" / "Publicar mês" estavam transparentes.
+
+Desktop (≥1280px) sem mudança visual — conferido: 6 colunas de KPI, funil e
+laterais em 1,5:1, barra de filtros aberta.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (317 testes) + `oxlint`
+sem avisos novos, em worktree fora do OneDrive. **Visto renderizado** em
+375×812, 768×1024 e 1440×900 com bypass de login só em dev (removido antes do
+commit): Visão Macro (funil, painel de filtros, calendário do Dia, gaveta do
+menu, popup de etapa), Performance, Análise de Perda, Campanha de Metas e
+Metas — varredura por script sem nenhum elemento vazando da largura da tela.
+Nota pra quem for testar no painel de navegador: depois de rolar via script, a
+captura às vezes mostra uma faixa branca no topo — é artefato da captura
+(`header.getBoundingClientRect().top` = 0), não do layout.
+
+### 2026-09-15 — Instituto do Autismo (IDA) invisível em todas as abas de Vendas
+
+Junior mandou o link de um deal no RD ("José Batista de Almeida",
+`6aa1f93ac4579e000158381f`, marca **Instituto do Autismo**) perguntando por que
+não aparecia no dash, e sugeriu backfill do histórico do RD.
+
+**Não era backfill — o dado já estava todo no banco.** `deal_snapshot`
+atualizado 14/09 20:42 UTC, 8 eventos em `deal_eventos` batendo etapa a etapa
+com o histórico do RD (Sarah Padilha movendo o deal em 14/09 17:42 BRT), e 1
+linha em `vw_funil_vendas` com as datas de MQL → Tentando Contato → Contato
+Efetivo → Interesse Reunião → Conexão preenchidas. `espelho_rd_edge` e
+`wf_5_sync_incremental` rodando com `status=success`.
+
+**Causa raiz: a marca não existia no front.** `BRAND_LIST` (`brands.ts`) tinha
+8 marcas e nenhuma era 'Instituto do Autismo'. Como `TODAS_MARCAS`
+(`SharedFiltersContext`) é derivado de `BRAND_LIST`, a seleção padrão nunca
+incluía IDA, e `buildScopeFilter` (`metrics.ts`, `if (marcas.length &&
+!marcas.includes(r.marca))`) descartava **100%** das 17 linhas da marca nas 3
+abas. Pior: como `opcoesMarcaDisponiveis` também filtra por `BRAND_LIST`, ela
+não aparecia nem como opção no filtro de Marca — não dava pra selecionar na
+mão. Mesmo padrão de falha do alias 'Odonto Legacy' (11/09): marca que o RD
+conhece e o front não vira marca fantasma.
+
+**Fix.** `Marca` (`types.ts`) ganhou `'Instituto do Autismo'`; a entrada entrou
+em `BRAND_LIST` (accent `#E0A82E`). Junto foram 3 entradas zeradas nos
+`Record<Marca, …>` **exaustivos** de `copab2b.ts` — sem elas o `tsc -b` do
+build de produção quebra (mesmo pedágio pago quando We Scale entrou).
+
+**`BrandDef.vendasOnly` (novo).** `BRAND_LIST` é compartilhado com a Visão
+Geral (Marketing, do Gabriel). Em 15/09 o Supabase de Marketing não tinha
+**nenhum** lead nem linha de `media_daily_raw` de IDA, então entrar lá criaria
+um card zerado **e** puxaria os 17 deals pro Consolidado dele sem investimento
+por trás. A flag mantém a marca só nas abas de Vendas
+(`BRAND_DEFS = BRAND_LIST.filter(b => !b.vendasOnly)`); tirar a flag é 1 linha
+quando o Marketing rodar mídia. Decisão do Junior nesta sessão.
+
+**Nota de leitura — o deal do print não conta como SQL.** Ele está em "Reunião
+Agendada SQL" no funil do **SDR** (`69380917e00ed10014daaa68`), não no do
+Closer, então a trava documentada mantém o degrau SQL em 0 e ele some do modo
+**Atual** — comportamento de propósito, não regressão.
+
+**Dois achados colaterais, NÃO corrigidos aqui:**
+- **216 deals com evento mas sem linha de ciclo** — deals perdidos e depois
+  movidos de etapa no mesmo ciclo somem de `vw_deal_ciclo_enriquecido` (logo, de
+  `vw_funil_vendas`). É transversal, não é de IDA: Inpot 54, Oral Unic 50,
+  B2Case 33, Viva 28, Lisô 19, Eletrovias 15, Odonto Scale 13, IDA 4.
+- **`Scale Partner` (44 deals) ≠ `We Scale`** — `BRAND_LIST` aponta pra
+  'We Scale' (1 deal); os outros 44 estão gravados como 'Scale Partner' e no
+  funil "Eventos", fora do allowlist de `vw_funil_vendas`. Invisíveis de dois
+  jeitos ao mesmo tempo.
+- **Funil de IDA mostra 8 MQL onde o banco tem 14 deals com evento de MQL na
+  janela** (Tentando Contato 4 × 14; Contato Efetivo/Interesse/Conexão batem
+  exato). Os 6 de fora são Elis Regina, José Rafael, Thais Nunes, Formação,
+  gabriel limas e Gabriel. Não é da marca nem deste fix — precisa de
+  investigação própria na contagem de etapa.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (21 arquivos, 322
+testes, 5 novos em `brands.test.ts`) em worktree fora do OneDrive, e **visto
+renderizado** numa rota temporária sem autenticação (removida antes do commit):
+a marca aparece no filtro, isola o recorte e o funil desenha em dourado.
+
+### 2026-09-15 — Performance/Closer: coluna GANHOS passa a respeitar o toggle Negócios×Unidades
+
+Junior reportou: na aba Performance, aba Closer, a coluna **GANHOS** da
+tabela "VENDAS · CLOSERS" ignorava o toggle **Vendas** (Negócios ×
+Unidades) da `FilterBar` — Jéssica seguia com 2 nos dois lados enquanto
+o card Fechamentos logo acima já mudava (3 → 4 em set/2026).
+
+Causa: `buildCloserRows` (`performanceRows.ts`) fazia `cur.ganhos++`
+cru, sem olhar `viewModes.salesMode`. Tudo o mais que conta venda na
+aba (card Fechamentos, funil Diagnóstico→Fechamento, conversões de fundo
+de funil) e na Visão Macro (KPIs, card de Meta por marca) já passava por
+`countSales`, que aplica `saleUnits()` no modo Unidades. Era o único
+ponto que ficou de fora — auditado: Análise de Perda esconde o toggle,
+Campanha de Metas/OKRs/GpStrip não leem a `FilterBar`.
+
+Fix: `buildCloserRows` ganhou 5º parâmetro opcional `salesMode`
+(default `'deals'`, chamadas antigas inalteradas) e soma
+`salesMode === 'units' ? saleUnits(r) : 1` — a mesma regra de
+`countSales`, inclusive o piso de 1 unidade pra deal ganho sem produto.
+`PerformanceVendas.tsx` passa `viewModes.salesMode` nas duas chamadas
+(período e "hoje", pro popup). Rótulos seguem o padrão da Visão Macro:
+cabeçalho da coluna vira **UNIDADES**, e o card + popup viram
+"Fechamentos (unidades)". Faturamento e % da meta não dependem do toggle;
+**Win rate passa a seguir o toggle** (unidades ÷ Diagnóstico), coerente
+com "SAL → Fechamento" e "COF → Fechamento" do card de conversões, que já
+seguiam. Popup "Fechamentos" herda de graça — lê `closerRows.ganhos`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (372 testes, 2
+novos em `performanceRows.test.ts`) + `oxlint` limpo, em worktree fora do
+OneDrive. **Visto renderizado** numa rota temporária sem autenticação (só
+na cópia local de build, nunca no worktree): set/2026 Consolidado —
+Negócios: Jéssica 2 · Douglas 1 (card 3); Unidades: Jéssica 3 · Douglas 1
+(card "Fechamentos (unidades)" 4, popup idem).
 
 ### 2026-09-11 (7) — Campanha de Metas: degraus de Velocidade em tabela legível
 

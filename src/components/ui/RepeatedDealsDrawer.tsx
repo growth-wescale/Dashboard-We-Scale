@@ -4,7 +4,7 @@ import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
 import { nf, money } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
 import { marcaLabel } from '@/constants/brands'
-import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
 
 interface RepeatedDealsDrawerProps {
   open: boolean
@@ -21,7 +21,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
   const ordenados = useMemo(() => [...groups].sort((a, b) => b.vezes - a.vezes), [groups])
 
   const porEtapa = useMemo(
-    () => multiStage ? topBreakdown(groups, g => STAGE_LABEL[g.stage], () => accent, 12) : [],
+    () => multiStage ? breakdownPorCategoria(groups, g => STAGE_LABEL[g.stage], () => accent) : [],
     [groups, multiStage, accent],
   )
 

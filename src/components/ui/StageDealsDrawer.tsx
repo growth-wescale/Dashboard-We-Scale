@@ -4,7 +4,7 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, money } from '@/lib/format'
-import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, topBreakdown } from './dealDrawerShared'
+import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
 import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
@@ -62,16 +62,22 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
     : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Leadtime', 'Data na etapa']
   const alignRight = new Set(['Unidades', 'Taxa de Franquia', 'Leadtime', 'Parado na etapa'])
 
+  // Sem corte por "Outros" (decisão do Junior, 22/09) — toda marca real do
+  // recorte aparece no gráfico, mesmo com 1 deal só. Agrupa pelo RÓTULO (via
+  // labelOf=marcaLabel) pra fundir alias como 'Odonto Scale'/'Odonto Legacy'
+  // numa barra só, sem perder o valor cru usado pelo filtro de Marca abaixo.
   const porMarca = useMemo(
-    () => topBreakdown(deals, d => marcaLabel(d.row.marca), m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)'),
+    () => breakdownPorCategoria(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)', marcaLabel),
     [deals],
   )
   // Diagnóstico em diante é do Closer; antes disso, do SDR — nome_closer já vem
   // preenchido bem antes da etapa dele, e mostrar Closer numa etapa de SDR confunde.
   const ownerRole = ownerRoleProp ?? (stage ? stageOwnerRole(stage) : 'sdr')
   const ownerLabel = ownerRole === 'closer' ? 'Closer' : 'SDR'
+  const responsavelFilterKey = ownerRole === 'closer' ? 'closer' : 'sdr'
+  // Mesma regra: sem corte por "Outros" — todo SDR/Closer real aparece.
   const porResponsavel = useMemo(
-    () => topBreakdown(deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent),
+    () => breakdownPorCategoria(deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent),
     [deals, accent, ownerRole],
   )
 
@@ -83,8 +89,8 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
         padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
         display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
       }}>
-        <BarList title="Por Marca" rows={porMarca} />
-        <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} />
+        <BarList title="Por Marca" rows={porMarca} onSelect={v => setFilters(s => ({ ...s, marca: v }))} />
+        <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} onSelect={v => setFilters(s => ({ ...s, [responsavelFilterKey]: v }))} />
       </div>
 
       {/* filtros — cada um com o nome em cima (mesmo padrão da FilterBar do

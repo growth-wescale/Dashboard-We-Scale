@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leadtimeDias, fmtDias, fmtDuracao } from './dealDrawerShared'
+import { leadtimeDias, fmtDias, fmtDuracao, breakdownPorCategoria } from './dealDrawerShared'
 
 const DIA = 86_400_000
 const AGORA = new Date('2026-09-08T12:00:00Z').getTime()
@@ -61,5 +61,49 @@ describe('fmtDuracao', () => {
     expect(fmtDuracao(NaN)).toBe('—')
     expect(fmtDuracao(0)).toBe('0min')
     expect(fmtDuracao(-1)).toBe('0min')
+  })
+})
+
+describe('breakdownPorCategoria', () => {
+  it('nunca gera "Outros", não importa quantas categorias — toda categoria real aparece', () => {
+    // Reproduz o caso real de 21/09: 7 marcas distintas, a menor com 1 deal só.
+    const items = [
+      ...Array(20).fill('Odonto Legacy'), ...Array(13).fill('B2Case'), ...Array(8).fill('Eletrovias'),
+      ...Array(5).fill('Lisô Laser'), ...Array(3).fill('Scale Partner'), ...Array(3).fill('Viva'),
+      'Oral Unic',
+    ]
+    const rows = breakdownPorCategoria(items, m => m, () => '#000')
+    expect(rows).toHaveLength(7)
+    expect(rows.find(r => r.label === 'Outros')).toBeUndefined()
+    const oralUnic = rows.find(r => r.label === 'Oral Unic')
+    expect(oralUnic?.count).toBe(1)
+    expect(oralUnic?.values).toEqual(['Oral Unic'])
+  })
+
+  it('mesmo com dezenas de categorias distintas (campo aberto tipo SDR/Closer), nenhuma vira "Outros"', () => {
+    const items = Array.from({ length: 20 }, (_, i) => `Pessoa ${i}`)
+    const rows = breakdownPorCategoria(items, m => m, () => '#000')
+    expect(rows).toHaveLength(20)
+    expect(rows.every(r => r.label !== 'Outros')).toBe(true)
+    expect(rows.every(r => r.count === 1)).toBe(true)
+  })
+
+  it('agrupa por RÓTULO (alias), mas mantém todos os valores crus em "values" pra filtrar por todos', () => {
+    // 'Odonto Scale' e 'Odonto Legacy' são o mesmo negócio (rename 11/09) — devem
+    // virar 1 barra só via labelOf, sem perder nenhum dos 2 valores crus do filtro.
+    const items = ['Odonto Scale', 'Odonto Scale', 'Odonto Legacy']
+    const labelOf = (raw: string) => (raw === 'Odonto Scale' ? 'Odonto Legacy' : raw)
+    const rows = breakdownPorCategoria(items, m => m, () => '#000', labelOf)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].label).toBe('Odonto Legacy')
+    expect(rows[0].count).toBe(3)
+    expect(rows[0].values.sort()).toEqual(['Odonto Legacy', 'Odonto Scale'])
+  })
+
+  it('valor vazio/nulo vira "Sem informação" e fica com values=[] (não filtrável)', () => {
+    const rows = breakdownPorCategoria([null, '', 'A'], m => m, () => '#000')
+    const semInfo = rows.find(r => r.label === 'Sem informação')
+    expect(semInfo?.count).toBe(2)
+    expect(semInfo?.values).toEqual([])
   })
 })

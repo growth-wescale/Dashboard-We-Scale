@@ -8,10 +8,6 @@ import type { OrigemComercial } from '@/lib/funnelTypes'
 /**
  * Eventos de passagem por etapa (view `vw_funil_etapas_v2`).
  *
- * Só é usado quando o toggle de contagem está em "Volume de passagens" — por
- * isso o hook aceita `enabled` e não busca nada quando desligado: são ~19 mil
- * eventos que não fazem falta no modo padrão.
- *
  * A view não expõe fonte_macro nem utm_source. O filtro de MARCA, fonte e
  * sub-fonte é aplicado depois, cruzando `id_deal` com o conjunto já filtrado
  * de `vw_funil_vendas`.
@@ -24,6 +20,13 @@ import type { OrigemComercial } from '@/lib/funnelTypes'
  * (que caem no filtro do cliente) mostravam o número certo. A marca confiável
  * é a do deal, em `vw_funil_vendas` — mesma escolha da RPC do relatório
  * diário, que lê `deal_snapshot.marca`.
+ *
+ * NÃO filtrar por data no servidor. Com filtro de data a chave de cache muda
+ * a cada troca de período, forçando re-fetch de ~19 mil eventos a cada seleção
+ * (cada página da view leva ~450ms). A troca de período já é filtrada no
+ * cliente via `isInWindow`/`win` — igual ao que `vw_funil_vendas` faz. A base
+ * inteira (~19k) chega em ~1s pelo parallel fetch; depois disso qualquer troca
+ * de período é instantânea.
  *
  * `origem_comercial` É segura no servidor, ao contrário da marca: ela não vem
  * de retrato denormalizado, e sim de um join por `id_deal` com COALESCE, então
@@ -42,9 +45,6 @@ const COLS = [
 interface Params {
   enabled: boolean
   origem: OrigemComercial
-  inicio: string
-  /** Omitido no modo safra: o evento pode ser posterior à janela do MQL. */
-  fim?: string
 }
 
 export interface UseFunilEventosResult {
@@ -62,20 +62,17 @@ const IDADE_REVALIDAR_MS = 60_000
 
 async function fetchAll(p: Params): Promise<FunnelEventRow[]> {
   const { rows, error } = await buscarTodasPaginas<FunnelEventRow>(async (de, ate, contar) => {
-    let q = supabaseVendas
+    // Sem filtro de data — a base inteira é carregada uma vez por origem e
+    // o recorte de período é feito no cliente. Ver comentário no topo do arquivo.
+    const { data, error: err, count } = await supabaseVendas
       .from('vw_funil_etapas_v2')
       .select(COLS, contar ? { count: 'exact' } : undefined)
-      .gte('dia', p.inicio)
       .eq('origem_comercial', p.origem)
-
-    if (p.fim) q = q.lte('dia', p.fim)
-
-    // ORDEM TOTAL, desempatando por todas as colunas selecionadas. Só com
-    // `order=dia` o OFFSET repetia/pulava eventos entre páginas: set/26 Inbound
-    // vinha com 81 eventos duplicados e 81 faltando (Novo MQL em deals únicos
-    // 802 em vez de 818). A view tem linhas legítimas repetidas nas colunas de
-    // negócio, mas `rn_deal_etapa_mes` as distingue.
-    const { data, error: err, count } = await q
+      // ORDEM TOTAL, desempatando por todas as colunas selecionadas. Só com
+      // `order=dia` o OFFSET repetia/pulava eventos entre páginas: set/26 Inbound
+      // vinha com 81 eventos duplicados e 81 faltando (Novo MQL em deals únicos
+      // 802 em vez de 818). A view tem linhas legítimas repetidas nas colunas de
+      // negócio, mas `rn_deal_etapa_mes` as distingue.
       .order('dia', { ascending: false })
       .order('id_deal', { ascending: true })
       .order('id_etapa', { ascending: true })
@@ -93,8 +90,8 @@ async function fetchAll(p: Params): Promise<FunnelEventRow[]> {
 }
 
 export function useFunilEventos(p: Params): UseFunilEventosResult {
-  const { enabled, origem, inicio, fim } = p
-  const chave = `vw_funil_etapas_v2:${origem}:${inicio}:${fim ?? ''}`
+  const { enabled, origem } = p
+  const chave = `vw_funil_etapas_v2:${origem}`
 
   const [data, setData] = useState<FunnelEventRow[]>(() => (enabled ? lerCache<FunnelEventRow[]>(chave)?.valor : undefined) ?? [])
   const [loading, setLoading] = useState(false)
@@ -106,7 +103,7 @@ export function useFunilEventos(p: Params): UseFunilEventosResult {
   const load = useCallback(async (showLoading: boolean) => {
     if (showLoading) setLoading(true)
     try {
-      const rows = await carregarComCache(chave, () => fetchAll({ enabled, origem, inicio, fim }))
+      const rows = await carregarComCache(chave, () => fetchAll({ enabled, origem }))
       if (chaveAtiva.current !== chave) return
       setData(rows)
       setError(null)
@@ -116,7 +113,7 @@ export function useFunilEventos(p: Params): UseFunilEventosResult {
     } finally {
       if (chaveAtiva.current === chave) setLoading(false)
     }
-  }, [chave, enabled, origem, inicio, fim])
+  }, [chave, enabled, origem])
 
   useEffect(() => {
     if (!enabled) {

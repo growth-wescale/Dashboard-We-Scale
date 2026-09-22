@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leadtimeDias, fmtDias, fmtDuracao, topBreakdown } from './dealDrawerShared'
+import { leadtimeDias, fmtDias, fmtDuracao, breakdownPorCategoria } from './dealDrawerShared'
 
 const DIA = 86_400_000
 const AGORA = new Date('2026-09-08T12:00:00Z').getTime()
@@ -64,28 +64,28 @@ describe('fmtDuracao', () => {
   })
 })
 
-describe('topBreakdown', () => {
-  it('com topN suficiente (caso de Marca), nunca gera "Outros" — cada categoria fica com seu valor cru filtrável', () => {
+describe('breakdownPorCategoria', () => {
+  it('nunca gera "Outros", não importa quantas categorias — toda categoria real aparece', () => {
     // Reproduz o caso real de 21/09: 7 marcas distintas, a menor com 1 deal só.
     const items = [
       ...Array(20).fill('Odonto Legacy'), ...Array(13).fill('B2Case'), ...Array(8).fill('Eletrovias'),
       ...Array(5).fill('Lisô Laser'), ...Array(3).fill('Scale Partner'), ...Array(3).fill('Viva'),
       'Oral Unic',
     ]
-    const rows = topBreakdown(items, m => m, () => '#000', 20)
+    const rows = breakdownPorCategoria(items, m => m, () => '#000')
+    expect(rows).toHaveLength(7)
     expect(rows.find(r => r.label === 'Outros')).toBeUndefined()
     const oralUnic = rows.find(r => r.label === 'Oral Unic')
     expect(oralUnic?.count).toBe(1)
     expect(oralUnic?.values).toEqual(['Oral Unic'])
   })
 
-  it('com topN pequeno, "Outros" carrega os valores crus das categorias que sobraram — dá pra filtrar por eles', () => {
-    const items = ['A', 'A', 'A', 'B', 'B', 'C', 'D', 'E']
-    const rows = topBreakdown(items, m => m, () => '#000', 2)
-    const outros = rows.find(r => r.label === 'Outros')
-    expect(outros?.count).toBe(3) // C(1) + D(1) + E(1)
-    expect(outros?.values.sort()).toEqual(['C', 'D', 'E'])
-    expect(outros?.title).toBe('C, D, E')
+  it('mesmo com dezenas de categorias distintas (campo aberto tipo SDR/Closer), nenhuma vira "Outros"', () => {
+    const items = Array.from({ length: 20 }, (_, i) => `Pessoa ${i}`)
+    const rows = breakdownPorCategoria(items, m => m, () => '#000')
+    expect(rows).toHaveLength(20)
+    expect(rows.every(r => r.label !== 'Outros')).toBe(true)
+    expect(rows.every(r => r.count === 1)).toBe(true)
   })
 
   it('agrupa por RÓTULO (alias), mas mantém todos os valores crus em "values" pra filtrar por todos', () => {
@@ -93,7 +93,7 @@ describe('topBreakdown', () => {
     // virar 1 barra só via labelOf, sem perder nenhum dos 2 valores crus do filtro.
     const items = ['Odonto Scale', 'Odonto Scale', 'Odonto Legacy']
     const labelOf = (raw: string) => (raw === 'Odonto Scale' ? 'Odonto Legacy' : raw)
-    const rows = topBreakdown(items, m => m, () => '#000', 20, labelOf)
+    const rows = breakdownPorCategoria(items, m => m, () => '#000', labelOf)
     expect(rows).toHaveLength(1)
     expect(rows[0].label).toBe('Odonto Legacy')
     expect(rows[0].count).toBe(3)
@@ -101,7 +101,7 @@ describe('topBreakdown', () => {
   })
 
   it('valor vazio/nulo vira "Sem informação" e fica com values=[] (não filtrável)', () => {
-    const rows = topBreakdown([null, '', 'A'], m => m, () => '#000', 20)
+    const rows = breakdownPorCategoria([null, '', 'A'], m => m, () => '#000')
     const semInfo = rows.find(r => r.label === 'Sem informação')
     expect(semInfo?.count).toBe(2)
     expect(semInfo?.values).toEqual([])

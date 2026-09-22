@@ -86,10 +86,11 @@ export function StatusBadge({ status }: { status: string | null }) {
 
 // ─── Mini bar list (Por Marca / Por Responsável / Por Etapa) ───────────────
 
-/** `values` = valores crus (os que o filtro correspondente espera) que compõem
- *  a barra — 1 para uma categoria normal, vários para "Outros". Vazio quando
- *  não há valor filtrável (ex.: "Sem informação"), o que desativa o clique. */
-export interface BarRow { label: string; count: number; color: string; values: string[]; title?: string }
+/** `values` = valores crus (os que o filtro correspondente espera) que
+ *  compõem a barra — normalmente 1, mais de 1 quando `labelOf` funde alias
+ *  na mesma barra. Vazio quando não há valor filtrável (ex.: "Sem
+ *  informação"), o que desativa o clique. */
+export interface BarRow { label: string; count: number; color: string; values: string[] }
 
 export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow[]; onSelect?: (values: string[]) => void }) {
   const max = Math.max(...rows.map(r => r.count), 1)
@@ -111,7 +112,7 @@ export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow
               tabIndex={clickable ? 0 : undefined}
               onClick={clickable ? () => onSelect!(r.values) : undefined}
               onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect!(r.values) } } : undefined}
-              title={r.title ?? r.label}
+              title={r.label}
               style={{ cursor: clickable ? 'pointer' : 'default' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3, gap: 8 }}>
@@ -132,20 +133,20 @@ export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow
 }
 
 /**
- * Top N por contagem + resto agrupado em "Outros" — clicável quando o
- * consumidor passa `onSelect` no `BarList` (filtra pelos valores crus da
- * barra, inclusive os de "Outros", nunca preso atrás do rótulo agregado).
+ * Quebra por categoria — SEM corte por "Outros" (decisão do Junior, 22/09:
+ * toda categoria real aparece no gráfico, por menor que seja a contagem,
+ * nunca escondida atrás de um balde sem valor filtrável). Clicável quando o
+ * consumidor passa `onSelect` no `BarList`.
  *
  * Agrega por RÓTULO (`labelOf(raw)`, default = o próprio valor cru) pra
  * fundir alias (ex.: 'Odonto Scale'/'Odonto Legacy' viram uma barra só),
  * mas guarda todos os valores crus que caíram ali em `values` — clicar
  * filtra por todos eles de uma vez, não só o primeiro.
  */
-export function topBreakdown<T>(
+export function breakdownPorCategoria<T>(
   items: T[],
   pick: (item: T) => string | null,
   colorOf: (label: string) => string,
-  topN = 6,
   labelOf: (raw: string) => string = raw => raw,
 ): BarRow[] {
   const cont = new Map<string, { count: number; values: Set<string> }>()
@@ -157,21 +158,9 @@ export function topBreakdown<T>(
     if (raw) entry.values.add(raw)
     cont.set(label, entry)
   }
-  const sorted = [...cont.entries()].sort((a, b) => b[1].count - a[1].count)
-  const top = sorted.slice(0, topN)
-  const resto = sorted.slice(topN)
-  const restoCount = resto.reduce((s, [, e]) => s + e.count, 0)
-  const rows: BarRow[] = top.map(([label, e]) => ({ label, count: e.count, color: colorOf(label), values: [...e.values] }))
-  if (restoCount > 0) {
-    rows.push({
-      label: 'Outros',
-      count: restoCount,
-      color: 'var(--ws-border-strong)',
-      values: resto.flatMap(([, e]) => [...e.values]),
-      title: resto.map(([label]) => label).join(', '),
-    })
-  }
-  return rows
+  return [...cont.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([label, e]) => ({ label, count: e.count, color: colorOf(label), values: [...e.values] }))
 }
 
 /**

@@ -555,54 +555,44 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-09-22 — Popup de MQL: "Outros" no gráfico Por Marca virava beco sem saída
+### 2026-09-22 — Popups de deal: "Outros" removido dos gráficos Por Marca/SDR/Closer
 
 Junior filtrou 21/09 na Visão Macro, abriu o popup de MQL e viu "Outros: 1"
 no gráfico "Por Marca" — mas o filtro de Marca do próprio popup não tinha
-nenhuma opção "Outros" pra selecionar. Pediu correção geral (qualquer
-filtro, qualquer dia), não só pra esse caso.
+nenhuma opção "Outros" pra selecionar. Investigado: não era dado sem
+classificação, era um MQL real da **Oral Unic**, 7º lugar em volume naquele
+recorte (só 1 deal, contra 20 da Odonto Legacy) — `topBreakdown()`
+(`dealDrawerShared.tsx`, compartilhada pelos gráficos "Por Marca"/"Por
+SDR"/"Por Closer" do `StageDealsDrawer`/`StageDealsPanel`) cortava em
+`topN=6` por padrão e empilhava o resto num "Outros" sem nenhum valor
+associado — mero efeito colateral do corte, não uma categoria de negócio.
 
-**Não é dado sem classificação.** Conferido direto no banco: o deal é um MQL
-real e legítimo da **Oral Unic**, 7º lugar em volume naquele recorte (só 1
-deal, contra 20 da Odonto Legacy). `topBreakdown()` (`dealDrawerShared.tsx`,
-compartilhada pelos gráficos "Por Marca"/"Por SDR"/"Por Closer" do
-`StageDealsDrawer`/`StageDealsPanel`) corta em `topN=6` por padrão e empilha
-o resto num "Outros" sem nenhum valor associado — mero efeito colateral do
-corte, não uma categoria de negócio. O filtro de Marca do popup
-(`options.marca`) sempre listou a Oral Unic certinha, porque deriva direto
-dos deals reais, sem o corte do gráfico — só que o gráfico não dava nenhuma
-pista de que "Outros" era ela.
+Primeira correção só aumentou o corte pra Marca (`topN=6` → `20`) e deixou
+"Outros" clicável pra Por SDR/Closer. **Junior recusou a régua inteira**:
+"Eu não quero essa regra de Outros para o gráfico de Marca nem para o
+gráfico de SDR! Em nenhum!" — pediu implementação e deploy direto, sem
+validar antes.
 
-**Fix em duas partes:**
-1. **Marca é um conjunto pequeno e fechado** (8 marcas em `BRAND_LIST`) —
-   não tem por que nunca cortar. `porMarca` passou de `topN=6` pro default
-   pra `topN=20`, folga generosa acima do total real: "Outros" não aparece
-   mais pra marca em nenhum recorte.
-2. **Quando "Outros" ainda assim aparecer** (Por SDR/Closer, campo aberto,
-   sem teto natural de valores) — `topBreakdown` agora carrega os valores
-   crus que compõem cada barra, inclusive "Outros" (`BarRow.values`), e
-   `BarList` ganhou `onSelect` opcional: clicar em qualquer barra (a
-   agregada ou o "Outros") aplica o filtro correspondente do popup na hora,
-   revelando exatamente quais deals estão ali — sem precisar adivinhar.
-   Tooltip no hover lista os nomes agregados. Bônus: clicar em qualquer
-   barra normal (não só "Outros") também filtra por ela — atalho que não
-   existia antes.
+**Fix final: a lógica de corte + "Outros" foi removida de `topBreakdown`
+(renomeada `breakdownPorCategoria`)** — não é mais "top N com resto
+agrupado", é toda categoria real do recorte, sempre, do maior ao menor
+volume, sem exceção. Vale pros três gráficos (Marca, SDR, Closer) e também
+pro "Por Etapa" do popup de Repetidos (`RepeatedDealsDrawer`, que já não
+sofria o bug na prática — 12 etapas caberiam no corte de 12 — mas a régua
+some de vez, sem exceção escondida em nenhum canto).
 
-**Cuidado com alias preservado.** `topBreakdown` passou a agrupar por
-`labelOf(raw)` (ex.: `marcaLabel`, que funde `'Odonto Scale'`/`'Odonto
-Legacy'` numa barra só — ver seção 3) mas guarda TODOS os valores crus que
-caíram ali em `values`, não só o primeiro — clicar numa barra que mistura os
-dois nomes antigos filtra pelos dois de uma vez, sem esconder metade dos
-deals.
+Cada barra continua clicável (`BarList.onSelect`) e filtra pelo(s) valor(es)
+cru(s) que a compõem — `breakdownPorCategoria` ainda agrupa por RÓTULO
+(`labelOf`, ex. `marcaLabel` funde `'Odonto Scale'`/`'Odonto Legacy'` numa
+barra só — seção 3) guardando todos os valores crus em `BarRow.values`, pra
+clicar numa barra de alias filtrar pelos dois nomes de uma vez.
 
-Verificado: `npm run build` (tsc -b) + `npx vitest run` (4 testes novos em
-`dealDrawerShared.test.ts` — reproduz o caso real de 21/09 sem gerar
-"Outros", `topN` pequeno preservando os valores crus do resto, fusão de
-alias sem perder valor, e o bucket "Sem informação" ficando não-clicável de
-propósito) + `oxlint` limpo nos arquivos tocados, via `~/ws-dashboard-build`.
-Caso real conferido por SQL contra `vw_funil_vendas` (21/09, Inbound): Oral
-Unic = 1 MQL, exatamente o "Outros" do print. App exige login — não visto
-renderizado.
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (16 testes em
+`dealDrawerShared.test.ts` — reproduz o caso real de 21/09 e um cenário de
+20 categorias distintas, nenhuma vira "Outros"; fusão de alias sem perder
+valor; bucket "Sem informação" ficando não-clicável de propósito) +
+`oxlint` limpo nos arquivos tocados, via `~/ws-dashboard-build`. App exige
+login — não visto renderizado.
 
 ### 2026-09-21 (3) — Modo TV alterna sozinho entre Volta e Mês
 

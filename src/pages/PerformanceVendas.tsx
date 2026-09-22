@@ -392,13 +392,7 @@ export function PerformanceVendas() {
   // Sempre carrega o recorte inteiro da origem — marca filtrada no cliente
   // (via `scope`), igual Fonte/SDR. Ver comentário em FunilVendas.
   const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
-  const { data: eventos } = useFunilEventos({
-    enabled: true,
-    origem,
-    inicio: range.start,
-    // No modo safra o evento pode ser posterior à janela do MQL.
-    fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
-  })
+  const { data: eventos } = useFunilEventos({ enabled: true, origem })
   const { data: roster } = useRosterVendas()
 
   const scope = useMemo(

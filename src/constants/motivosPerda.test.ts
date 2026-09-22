@@ -25,3 +25,31 @@ describe('classificarMotivo', () => {
     expect(classificarMotivo('')).toBeNull()
   })
 })
+
+describe('catálogo unificado de 22/09/2026', () => {
+  it('classifica os motivos renomeados no RD', () => {
+    expect(classificarMotivo('[NOVO] Nunca respondeu')).toBe('processo')
+    expect(classificarMotivo('[NOVO] No-show sem retorno')).toBe('processo')
+    expect(classificarMotivo('[NOVO] Erro na lista de prospecção')).toBe('processo')
+    expect(classificarMotivo('[NOVO] Sem contato com a persona principal')).toBe('processo')
+    expect(classificarMotivo('[NOVO] Timing - sem previsão')).toBe('mercado')
+    expect(classificarMotivo('[NOVO] Timing - até 6 meses')).toBe('mercado')
+    expect(classificarMotivo('[NOVO] Escolheu outra franqueadora')).toBe('mercado')
+    expect(classificarMotivo('[NOVO] Não aceitou condições comerciais')).toBe('mercado')
+    expect(classificarMotivo('[NOVO] Benchmark / apenas pesquisando')).toBe('mercado')
+    expect(classificarMotivo('[NOVO] Teste / registro interno')).toBe('ignorar')
+    expect(classificarMotivo('[NOVO] Registro legado (migração)')).toBe('ignorar')
+  })
+
+  it('mantém os nomes antigos reconhecidos enquanto o espelho não sincroniza', () => {
+    expect(classificarMotivo('Sem contato apos cadencia SDR')).toBe('processo')
+    expect(classificarMotivo('[NJ] Lead atingiu o fim da cadência')).toBe('processo')
+    expect(classificarMotivo('Momento atual até 6 meses')).toBe('mercado')
+  })
+
+  it('as 4 faixas de budget contam como mercado', () => {
+    for (const f of ['50k', '100k', '200k', '300k']) {
+      expect(classificarMotivo(`[NOVO] Sem Budget - Até ${f}`)).toBe('mercado')
+    }
+  })
+})

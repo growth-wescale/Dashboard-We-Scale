@@ -117,6 +117,20 @@ export function CampanhaMetas() {
   const diasRestantes = Math.max(0, DIAS_MES - dia)
   const volta = voltaDoDia(dia)
 
+  // SDR na frente: % da meta de SQL na janela (meta rateada como no Grid),
+  // desempate por SQL e depois por RR.
+  const metasSdr = useMetasSDRs(MES_ATIVO)
+  const poleSdr = useMemo<PoleSdr | null>(() => {
+    const linhas = metasSdr.sdrs.map(s => {
+      const real = sdrRealizado.get(s.nome) ?? { sql: 0, rr: 0 }
+      const meta = s.metaSql * metaFatorSdr
+      return { sdr: s, sql: real.sql, rr: real.rr, pct: meta > 0 ? (real.sql / meta) * 100 : 0 }
+    })
+    linhas.sort((a, b) => b.pct - a.pct || b.sql - a.sql || b.rr - a.rr)
+    const top = linhas[0]
+    return top && (top.sql > 0 || top.rr > 0) ? top : null
+  }, [metasSdr.sdrs, sdrRealizado, metaFatorSdr])
+
   return (
     <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
       <PageTop
@@ -147,7 +161,7 @@ export function CampanhaMetas() {
         </div>
       )}
 
-      <HeroBanner volta={volta} diasRestantes={diasRestantes} pole={pole} />
+      <HeroBanner volta={volta} diasRestantes={diasRestantes} pole={pole} poleSdr={poleSdr} />
 
       <CicloVoltas
         ciclo={ciclo}
@@ -181,6 +195,7 @@ export function CampanhaMetas() {
       <HistoricoTable historico={historico} loading={loadingHist} />
 
       <SdrsSection
+        metas={metasSdr}
         realizado={sdrRealizado}
         trilha={sdrTrilha}
         loadingCorrida={loadingCorrida}
@@ -201,7 +216,19 @@ const CHECKERED_BG =
   "<rect x='8' y='8' width='8' height='8' fill='%23ffffff' fill-opacity='0.05'/>" +
   "</svg>\")"
 
-function HeroBanner({ volta, diasRestantes, pole }: { volta: number; diasRestantes: number; pole: CloserMeta | null }) {
+interface PoleSdr {
+  sdr: SdrMeta
+  sql: number
+  rr: number
+  pct: number
+}
+
+function HeroBanner({ volta, diasRestantes, pole, poleSdr }: {
+  volta: number
+  diasRestantes: number
+  pole: CloserMeta | null
+  poleSdr: PoleSdr | null
+}) {
   return (
     <div style={{
       position: 'relative', background: '#141419', borderRadius: 16, overflow: 'hidden',
@@ -235,7 +262,28 @@ function HeroBanner({ volta, diasRestantes, pole }: { volta: number; diasRestant
         </div>
       </div>
 
-      <PolePositionCard pole={pole} />
+      {/* Os dois cards de liderança, afastados da borda direita. */}
+      <div style={{
+        position: 'relative', zIndex: 1, display: 'flex', flexWrap: 'wrap', gap: 12,
+        marginRight: 'clamp(0px, 4vw, 64px)',
+      }}>
+        <PolePositionCard
+          titulo="Pole position · Closer"
+          iniciais={pole?.iniciais}
+          cor={pole?.cor}
+          nome={pole?.nome}
+          detalhe={pole ? `${pct(pole.pctAtingimento, 0)} da meta · ${money(pole.realizado)}` : null}
+        />
+        <PolePositionCard
+          titulo="Pole position · SDR"
+          iniciais={poleSdr?.sdr.iniciais}
+          cor={poleSdr?.sdr.cor}
+          nome={poleSdr?.sdr.nome}
+          detalhe={poleSdr
+            ? `${poleSdr.sdr.metaSql > 0 ? `${pct(poleSdr.pct, 0)} da meta · ` : ''}${poleSdr.sql} SQL · ${poleSdr.rr} DIAG`
+            : null}
+        />
+      </div>
     </div>
   )
 }
@@ -253,29 +301,34 @@ function HeroChip({ children, dot }: { children: React.ReactNode; dot?: string }
   )
 }
 
-function PolePositionCard({ pole }: { pole: CloserMeta | null }) {
+function PolePositionCard({ titulo, iniciais, cor, nome, detalhe }: {
+  titulo: string
+  iniciais?: string
+  cor?: string
+  nome?: string
+  detalhe: string | null
+}) {
   return (
     <div style={{
-      position: 'relative', zIndex: 1,
       background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
       borderRadius: 12, padding: '14px 18px', minWidth: 220,
     }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-        Pole position · mês
+        {titulo}
       </div>
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{
           width: 40, height: 40, borderRadius: 999,
-          background: pole?.cor ?? 'rgba(255,255,255,0.15)',
+          background: cor ?? 'rgba(255,255,255,0.15)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
         }}>
-          {pole?.iniciais ?? '—'}
+          {iniciais ?? '—'}
         </div>
         <div>
-          <div style={{ color: '#fff', fontSize: 15, fontWeight: 500 }}>{pole?.nome ?? '—'}</div>
+          <div style={{ color: '#fff', fontSize: 15, fontWeight: 500 }}>{nome ?? '—'}</div>
           <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 2 }}>
-            {pole ? `${pct(pole.pctAtingimento, 0)} da meta · ${money(pole.realizado)}` : 'sem dados'}
+            {detalhe ?? 'sem dados'}
           </div>
         </div>
       </div>
@@ -1063,8 +1116,9 @@ function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
 // (SQL e RR) vem de `useCorridaPerformance` — mesma fonte da aba Performance.
 
 function SdrsSection({
-  realizado, trilha, loadingCorrida, metaFator, rotuloJanela,
+  metas, realizado, trilha, loadingCorrida, metaFator, rotuloJanela,
 }: {
+  metas: ReturnType<typeof useMetasSDRs>
   realizado: Map<string, SdrRealizado>
   trilha: LinhaTrilha[]
   loadingCorrida: boolean
@@ -1072,7 +1126,7 @@ function SdrsSection({
   metaFator: number
   rotuloJanela: string
 }) {
-  const { sdrs, loading: loadingMetas, metasCadastradas } = useMetasSDRs(MES_ATIVO)
+  const { sdrs, loading: loadingMetas, metasCadastradas } = metas
   const trilhaPorNome = useMemo(() => new Map(trilha.map(t => [t.nome, t])), [trilha])
 
   return (

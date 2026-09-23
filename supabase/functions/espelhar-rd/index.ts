@@ -8,52 +8,63 @@
 // MODO OBSERVE (em espelho_rd_config.modo): calcula a diferença entre RD e banco,
 // LOGA em sync_execucao, e para. Trocar para 'live' é 1 UPDATE, sem reimplantar.
 //
-// VARREDURA POR FUNIL (22/09/2026): a listagem do RD recusa qualquer página além
-// de 10.000 resultados. Cada funil é uma listagem própria (deal_pipeline_id) e, se
-// um funil sozinho chegar perto de 10 mil, ele é quebrado por etapa. A soma das
-// fatias é conferida contra o total geral do RD (`cobertura` no log).
+// COMO FUNCIONA — uma CORRENTE de chamadas desta mesma function, cada uma com a sua
+// CPU. Toda Edge Function tem só 2s de CPU por chamada, em qualquer plano (Free ou
+// Pro). Ler ~10 mil deals numa chamada só já gastava ~1,8s e estourou em 23/09
+// ("CPU Time exceeded", worker morto com a trava presa). Por isso nada pesado roda
+// numa chamada só:
 //
-// VAZÃO (23/09/2026): o Funil Atual ficava horas atrás do RD depois de operação em
-// massa (em 23/09, ~200 perdas + 40 exclusões às 9h e ~185 trocas de responsável às
-// 10h). Causas, todas corrigidas aqui:
-//   1. a varredura do RD (40-100s) comia quase todo o orçamento de 100s, e às vezes
-//      sobrava zero para corrigir. E cada chamada da Edge Function tem só 2s de CPU:
-//      varredura + correções na mesma chamada estoura ("CPU Time exceeded", visto em
-//      23/09 depois de ~80 correções) e a plataforma mata o worker com a trava presa.
-//      Agora são duas etapas. A VARREDURA só compara e monta a fila. As correções
-//      vão em LOTES de TAM_LOTE deals, cada lote numa chamada nova (CPU própria),
-//      que ao terminar dispara o próximo lote com o resto da fila no corpo do POST.
-//      Tudo em segundo plano (EdgeRuntime.waitUntil): o chamador recebe 202 na hora.
-//   2. as correções eram sequenciais (1 por vez). Agora CONCORRENCIA_ESCRITA em paralelo
-//      dentro do lote — cada deal é independente.
-//   3. a fila seguia a ordem da listagem do RD. Agora vai por prioridade: o que muda o
-//      funil (ausente, status, exclusão, etapa, funil) antes de responsável/payload.
-//   4. deal EXCLUÍDO no RD ficava no espelho como "Em andamento" pra sempre — nenhum
-//      job tratava exclusão (só backfill manual). Agora: com a varredura completa,
-//      todo deal do espelho que não voltou do RD é conferido com GET individual, e só
-//      um 404 marca deleted_at (registrar_deal_deletado). Deal que volta (restaurado)
-//      tem o deleted_at limpo.
-//   5. se o wf_5 estava com a trava, o ciclo inteiro era pulado. Agora tenta de novo
-//      algumas vezes antes de desistir (o wf_5 leva ~5s).
+//   1. COORDENADOR (corpo vazio, é o que o pg_cron chama): lê os funis do RD e o
+//      total de cada um, e divide o RD em FATIAS de no máximo FATIA_MAX deals — um
+//      funil por fatia, ou uma etapa por fatia se o funil for grande. Quebrar por
+//      funil/etapa também evita o teto de 10.000 resultados da listagem do RD.
+//   2. FATIA (uma chamada por fatia): lista a fatia no RD, carrega do espelho só as
+//      linhas daquela fatia, compara e acumula as divergências. Passa o acumulado
+//      pra próxima fatia no corpo do POST.
+//   3. FINAL: com a varredura completa (nenhuma página com erro e deals lidos ≥ total
+//      do RD), todo deal do espelho que não apareceu em nenhuma fatia vira candidato a
+//      exclusão. Ordena a fila por prioridade, loga e dispara o 1º lote.
+//   4. LOTE: corrige TAM_LOTE deals com GET individual (dado fresco do RD) e dispara o
+//      próximo lote com o resto da fila. Só os lotes escrevem, e só eles pegam a trava
+//      do wf_5.
+//
+// Tudo em segundo plano (EdgeRuntime.waitUntil): quem chama recebe 202 na hora. Se
+// um elo morrer, a corrente para ali e o próximo ciclo do cron recomeça do zero —
+// nada fica preso, porque a varredura não segura a trava.
+//
+// Outras regras (23/09/2026):
+//   - fila por prioridade: o que muda o funil (ausente, status, exclusão, etapa,
+//     funil) antes de responsável/payload.
+//   - deal EXCLUÍDO no RD só sai do espelho com 404 confirmado por GET individual
+//     (registrar_deal_deletado). Deal restaurado no RD tem o deleted_at limpo.
+//   - 429 do RD: respeita Retry-After, cada lote dura no mínimo DURACAO_MIN_LOTE_MS e
+//     deal que toma 429 volta pro fim da fila (até MAX_REPETICOES_429).
+//   - lote tenta a trava do wf_5 algumas vezes em vez de desistir.
+//
+// Log em sync_execucao: job 'espelho_rd_edge' (1 linha por varredura, escrita pela
+// etapa FINAL ou por quem falhar) e 'espelho_rd_edge_lote' (1 linha por lote).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const RD_API = "https://crm.rdstation.com/api/v1";
 const TAM_PAGINA = 200; // máximo aceito pela listagem do RD
 const LIMITE_JANELA_RD = 10_000; // RD recusa page*limit acima disto
-const LIMITE_FATIA = 9_000; // folga abaixo do teto — acima disto o funil é quebrado por etapa
-// Wall clock da Edge Function no plano Free é 150s: se passar disso a plataforma
-// mata o worker sem rodar o finally, e a trava fica presa 20 min. Os prazos abaixo
-// vencem antes, então o log e a liberação da trava sempre acontecem.
-const PRAZO_VARREDURA_MS = 125_000;
-const PRAZO_LOTE_MS = 100_000;
+// Deals por fatia. O SDR (maior funil, ~4.600 deals em set/26) é quebrado por etapa.
+// Medido: 10 mil deals ≈ 1,8s de CPU, então 3 mil ≈ 0,55s — folga larga.
+const FATIA_MAX = 3_000;
+// Wall clock: 150s no Free, 400s no Pro. Os prazos vencem antes de qualquer um dos
+// dois, pro log e a liberação da trava sempre rodarem.
+const PRAZO_ELO_MS = 100_000;
 const RD_TIMEOUT_MS = 15_000; // fetch() do Deno NÃO tem timeout por padrão
 const CONCORRENCIA_SCAN = 6; // ~6s por página da listagem a partir da Edge Function
 const CONCORRENCIA_ESCRITA = 4;
-// CPU é o limite (2s por chamada), não o tempo. A v8 fazia varredura + 53 correções
-// numa chamada só sem estourar; um lote sem varredura com 25 fica bem abaixo.
 const TAM_LOTE = 25;
 const MAX_LOTES = 60; // trava contra corrente infinita: 60 × 25 = 1.500 deals por ciclo
+// O RD devolve 429 quando apertamos demais (o token é dividido com o wf_5 e outras
+// automações do n8n). Cada lote dura no mínimo DURACAO_MIN_LOTE_MS: 25 GETs a cada
+// 20s = ~75 req/min.
+const DURACAO_MIN_LOTE_MS = 20_000;
+const MAX_REPETICOES_429 = 3; // deal que tomou 429 volta pro fim da fila até N vezes
 const TENTATIVAS_LOCK = 6;
 const ESPERA_LOCK_MS = 8_000;
 const IGNORAR_NO_DIFF = new Set(["_produtos"]);
@@ -71,6 +82,8 @@ const PRIORIDADE: Record<string, number> = {
   responsavel: 4,
   payload: 5,
 };
+
+const SNAP_COLS = "id_deal,marca,id_funil,id_etapa,status,responsavel_id,payload,deleted_at";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -99,7 +112,7 @@ function classeStatus(s: string | null | undefined): string {
 }
 
 // deno-lint-ignore no-explicit-any
-function achatar(doc: any, mapaEtapas: Map<string, [string, string]>) {
+function achatar(doc: any, funilPadrao?: { id: string; nome: string }) {
   const payload: Record<string, unknown> = {};
   for (const cf of doc.deal_custom_fields || []) {
     const label = cf.custom_field?.label;
@@ -127,14 +140,10 @@ function achatar(doc: any, mapaEtapas: Map<string, [string, string]>) {
     : null;
 
   const etapa = doc.deal_stage || {};
-  const idEtapa: string | null = etapa.id || etapa._id || null;
-  let idFunil: string | null = doc.deal_pipeline?.id ?? null;
-  let nomeFunil: string | null = doc.deal_pipeline?.name ?? null;
-  // A listagem do RD não traz deal_pipeline; o GET individual traz. Quando falta,
-  // resolve pelo mapa de /deal_pipelines (etapa -> funil), como o wf_5 já faz.
-  if (!idFunil && idEtapa && mapaEtapas.has(idEtapa)) {
-    [idFunil, nomeFunil] = mapaEtapas.get(idEtapa)!;
-  }
+  // A listagem do RD não traz deal_pipeline; o GET individual traz. Na listagem o
+  // funil é o da fatia (a listagem é filtrada por funil ou por etapa dele).
+  const idFunil: string | null = doc.deal_pipeline?.id ?? funilPadrao?.id ?? null;
+  const nomeFunil: string | null = doc.deal_pipeline?.name ?? funilPadrao?.nome ?? null;
 
   const win = doc.win;
   const status = doc.status || (win === true ? "won" : win === false ? "lost" : "open");
@@ -145,7 +154,7 @@ function achatar(doc: any, mapaEtapas: Map<string, [string, string]>) {
     marca: (payload["Marca"] as string) || null,
     id_funil: idFunil,
     nome_funil: nomeFunil,
-    id_etapa: idEtapa,
+    id_etapa: (etapa.id || etapa._id || null) as string | null,
     nome_etapa: etapa.name ?? null,
     status,
     responsavel: user.name ?? null,
@@ -185,7 +194,7 @@ async function rd(
   token: string,
   path: string,
   params: Record<string, string> = {},
-  tentativas = 4,
+  tentativas = 6,
   // deno-lint-ignore no-explicit-any
 ): Promise<any> {
   const qs = new URLSearchParams({ token, ...params }).toString();
@@ -194,8 +203,16 @@ async function rd(
     try {
       const resp = await fetch(`${RD_API}${path}?${qs}`, { signal: AbortSignal.timeout(RD_TIMEOUT_MS) });
       if (resp.ok) return await resp.json();
-      if (resp.status === 429) respostas429++;
-      if (resp.status !== 429 && resp.status < 500) {
+      if (resp.status === 429) {
+        respostas429++;
+        // Respeita o Retry-After do RD quando vem; senão, espera crescente (até ~30s).
+        const retry = Number(resp.headers.get("retry-after"));
+        await resp.body?.cancel();
+        ultimoErro = new ErroRD(429, "RD HTTP 429");
+        await sleep(retry > 0 ? retry * 1000 : Math.min(30_000, 2 ** i * 1000));
+        continue;
+      }
+      if (resp.status < 500) {
         // 4xx não se resolve tentando de novo (inclusive 404 = deal excluído)
         throw new ErroRD(resp.status, `RD HTTP ${resp.status}: ${(await resp.text()).slice(0, 120)}`);
       }
@@ -209,133 +226,275 @@ async function rd(
   throw ultimoErro;
 }
 
-type Etapa = { id: string; nome: string };
-type Funil = { id: string; nome: string; etapas: Etapa[] };
+// ---------------------------------------------------------------------------------
+// Tipos da corrente
 
-async function carregarFunis(token: string) {
-  const pipelines = await rd(token, "/deal_pipelines", { limit: "50" });
-  const mapa = new Map<string, [string, string]>();
-  const funis: Funil[] = [];
-  for (const p of pipelines) {
-    const etapas: Etapa[] = [];
-    for (const s of p.deal_stages || []) {
-      const sid = s.id || s._id;
-      if (!sid) continue;
-      mapa.set(sid, [p.id, p.name]);
-      etapas.push({ id: sid, nome: s.name });
-    }
-    funis.push({ id: p.id, nome: p.name, etapas });
-  }
-  return { mapa, funis };
-}
-
-type Fatia = { rotulo: string; filtro: Record<string, string>; etapas?: Etapa[] };
-type Pedido = { fatia: Fatia; pagina: number };
-
-async function varrerRD(token: string, funis: Funil[], mapaEtapas: Map<string, [string, string]>) {
-  const deals = new Map<string, Flat>();
-  const errosPagina: string[] = [];
-  let requests = 0;
-
-  // deno-lint-ignore no-explicit-any
-  async function buscar(pedidos: Pedido[], aoReceber: (p: Pedido, resp: any) => void) {
-    for (let i = 0; i < pedidos.length; i += CONCORRENCIA_SCAN) {
-      const lote = pedidos.slice(i, i + CONCORRENCIA_SCAN);
-      const resultados = await Promise.allSettled(
-        lote.map((p) =>
-          rd(token, "/deals", { ...p.fatia.filtro, limit: String(TAM_PAGINA), page: String(p.pagina) })
-        ),
-      );
-      requests += lote.length;
-      resultados.forEach((r, j) => {
-        const p = lote[j];
-        if (r.status === "rejected") {
-          errosPagina.push(`${p.fatia.rotulo} p${p.pagina}: ${String(r.reason).slice(0, 80)}`);
-          return;
-        }
-        for (const d of r.value.deals || []) deals.set(String(d.id), achatar(d, mapaEtapas));
-        aoReceber(p, r.value);
-      });
-    }
-  }
-
-  let totalRd: number | null = null;
-  const resGeral = await Promise.allSettled([rd(token, "/deals", { limit: "1", page: "1" })]);
-  requests++;
-  if (resGeral[0].status === "fulfilled") totalRd = Number(resGeral[0].value.total ?? NaN);
-  else errosPagina.push(`geral: ${String(resGeral[0].reason).slice(0, 80)}`);
-
-  const totais = new Map<string, number>();
-  const restantes: Pedido[] = [];
-  const quebrarPorEtapa: Fatia[] = [];
-
-  const agendarResto = (p: Pedido, total: number) => {
-    totais.set(p.fatia.rotulo, total);
-    const paginas = Math.ceil(total / TAM_PAGINA);
-    for (let pg = 2; pg <= paginas; pg++) restantes.push({ fatia: p.fatia, pagina: pg });
-  };
-
-  const fatiasFunil: Fatia[] = funis.map((f) => ({
-    rotulo: `funil:${f.nome}`,
-    filtro: { deal_pipeline_id: f.id },
-    etapas: f.etapas,
-  }));
-  await buscar(fatiasFunil.map((fatia) => ({ fatia, pagina: 1 })), (p, resp) => {
-    const total = Number(resp.total ?? 0);
-    if (total > LIMITE_FATIA) quebrarPorEtapa.push(p.fatia);
-    else agendarResto(p, total);
-  });
-
-  const fatiasEtapa: Fatia[] = quebrarPorEtapa.flatMap((f) =>
-    (f.etapas || []).map((e) => ({
-      rotulo: `${f.rotulo}/etapa:${e.nome}`,
-      filtro: { deal_stage_id: e.id },
-    }))
-  );
-  await buscar(fatiasEtapa.map((fatia) => ({ fatia, pagina: 1 })), (p, resp) => {
-    const total = Number(resp.total ?? 0);
-    if (total > LIMITE_JANELA_RD) errosPagina.push(`${p.fatia.rotulo}: ${total} deals, acima da janela do RD`);
-    agendarResto(p, Math.min(total, LIMITE_JANELA_RD));
-  });
-
-  await buscar(restantes, () => {});
-
-  const somaFatias = [...totais.values()].reduce((a, b) => a + b, 0);
-  return {
-    deals,
-    paginas: requests,
-    errosPagina,
-    cobertura: {
-      total_rd: totalRd,
-      soma_fatias: somaFatias,
-      deals_lidos: deals.size,
-      fatias_por_etapa: quebrarPorEtapa.map((f) => f.rotulo),
-    },
-  };
-}
+type Tarefa = { id: string; c: string[]; r?: number }; // c = categorias; r = repetições por 429
+type Fatia = {
+  rotulo: string;
+  filtro: Record<string, string>; // deal_pipeline_id ou deal_stage_id
+  funil: { id: string; nome: string };
+  snap: { coluna: "id_funil" | "id_etapa"; valor: string };
+};
+type Acum = {
+  tarefas: (Tarefa & { p: number })[];
+  vistos: string[];
+  lidos: number;
+  paginas: number;
+  erros: string[];
+  cats: Record<string, number>;
+};
+type Meta = { ciclo: string; t0: number; totalRd: number | null; modo: string; maxEscritas: number };
 
 // deno-lint-ignore no-explicit-any
-async function carregarSnapshot(supabase: any) {
+type Sb = any;
+
+function novoLogger(supabase: Sb, job: string, iniciadoEm: string) {
+  return async (extra: Record<string, unknown>) => {
+    try {
+      await supabase.from("sync_execucao").insert({
+        job,
+        iniciado_em: iniciadoEm,
+        terminado_em: new Date().toISOString(),
+        ...extra,
+      });
+    } catch (_) {
+      // logging nunca deve derrubar a execução
+    }
+  };
+}
+
+async function lerToken(supabase: Sb): Promise<string> {
+  const { data, error } = await supabase.rpc("get_secret", { secret_name: "rd_token" });
+  if (error || !data) throw new Error(`get_secret rd_token: ${error?.message || "vazio"}`);
+  return data as string;
+}
+
+// Chama o próximo elo da corrente: uma chamada nova desta function (CPU zerada).
+async function encadear(corpo: Record<string, unknown>) {
+  const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/espelhar-rd`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(corpo),
+    signal: AbortSignal.timeout(30_000),
+  });
+  await resp.body?.cancel();
+  if (resp.status !== 202) throw new Error(`encadear ${corpo.etapa ?? "lote"}: HTTP ${resp.status}`);
+}
+
+// ---------------------------------------------------------------------------------
+// 1. COORDENADOR — divide o RD em fatias
+
+async function executarCoordenador(supabase: Sb, t0: number) {
+  const ciclo = new Date(t0).toISOString();
+  const logar = novoLogger(supabase, "espelho_rd_edge", ciclo);
+  try {
+    const token = await lerToken(supabase);
+    const { data: configRows } = await supabase.from("espelho_rd_config").select("chave,valor");
+    // deno-lint-ignore no-explicit-any
+    const config = Object.fromEntries((configRows || []).map((r: any) => [r.chave, r.valor]));
+    const meta: Meta = {
+      ciclo,
+      t0,
+      totalRd: null,
+      modo: config.modo === "live" ? "live" : "observe",
+      maxEscritas: Number(config.max_escritas_por_execucao || 1000),
+    };
+
+    await comPrazo(
+      (async () => {
+        const geral = await rd(token, "/deals", { limit: "1", page: "1" });
+        meta.totalRd = Number(geral.total ?? NaN);
+
+        const pipelines = await rd(token, "/deal_pipelines", { limit: "50" });
+        const fatias: Fatia[] = [];
+        // Total de cada funil (limit=1 é barato) decide se ele vira uma fatia só ou
+        // uma fatia por etapa.
+        // deno-lint-ignore no-explicit-any
+        const totais = await Promise.all(pipelines.map((p: any) =>
+          rd(token, "/deals", { deal_pipeline_id: p.id, limit: "1", page: "1" }).then((r) => Number(r.total ?? 0))
+        ));
+        // deno-lint-ignore no-explicit-any
+        pipelines.forEach((p: any, i: number) => {
+          const funil = { id: p.id, nome: p.name };
+          if (totais[i] <= FATIA_MAX) {
+            fatias.push({ rotulo: `funil:${p.name}`, filtro: { deal_pipeline_id: p.id }, funil, snap: { coluna: "id_funil", valor: p.id } });
+            return;
+          }
+          for (const s of p.deal_stages || []) {
+            const sid = s.id || s._id;
+            if (!sid) continue;
+            fatias.push({
+              rotulo: `funil:${p.name}/etapa:${s.name}`,
+              filtro: { deal_stage_id: sid },
+              funil,
+              snap: { coluna: "id_etapa", valor: sid },
+            });
+          }
+        });
+
+        const acum: Acum = { tarefas: [], vistos: [], lidos: 0, paginas: 3 + pipelines.length, erros: [], cats: {} };
+        await encadear({ etapa: "fatia", fatias, i: 0, acum, meta });
+      })(),
+      PRAZO_ELO_MS,
+      "prazo do coordenador estourado",
+    );
+  } catch (e) {
+    await logar({ status: "failure", erro: `coordenador: ${String(e).slice(0, 480)}` });
+  }
+}
+
+// ---------------------------------------------------------------------------------
+// 2. FATIA — lista uma fatia no RD e compara com o espelho
+
+async function listarFatia(token: string, fatia: Fatia, acum: Acum) {
+  const deals = new Map<string, Flat>();
+  const pagina = async (pg: number) => {
+    const r = await rd(token, "/deals", { ...fatia.filtro, limit: String(TAM_PAGINA), page: String(pg) });
+    for (const d of r.deals || []) deals.set(String(d.id), achatar(d, fatia.funil));
+    return Number(r.total ?? 0);
+  };
+  const total = await pagina(1);
+  acum.paginas++;
+  if (total > LIMITE_JANELA_RD) acum.erros.push(`${fatia.rotulo}: ${total} deals, acima da janela do RD`);
+  const paginas = Math.ceil(Math.min(total, LIMITE_JANELA_RD) / TAM_PAGINA);
+  const resto = Array.from({ length: Math.max(0, paginas - 1) }, (_, k) => k + 2);
+  for (let i = 0; i < resto.length; i += CONCORRENCIA_SCAN) {
+    const lote = resto.slice(i, i + CONCORRENCIA_SCAN);
+    const res = await Promise.allSettled(lote.map(pagina));
+    acum.paginas += lote.length;
+    res.forEach((r, j) => {
+      if (r.status === "rejected") acum.erros.push(`${fatia.rotulo} p${lote[j]}: ${String(r.reason).slice(0, 80)}`);
+    });
+  }
+  return deals;
+}
+
+// Linhas do espelho da fatia + as dos deals que o RD pôs nela mas o espelho ainda
+// guarda em outro funil/etapa (mudaram de lugar).
+async function snapshotDaFatia(supabase: Sb, fatia: Fatia, idsRd: string[]) {
   // deno-lint-ignore no-explicit-any
   const linhas = new Map<string, any>();
-  let offset = 0;
-  while (true) {
-    const { data, error } = await supabase
-      .from("deal_snapshot")
-      .select("id_deal,marca,id_funil,id_etapa,status,responsavel_id,payload,deleted_at")
-      .order("id_deal")
-      .range(offset, offset + 999);
+  for (let offset = 0;; offset += 1000) {
+    const { data, error } = await supabase.from("deal_snapshot").select(SNAP_COLS)
+      .eq(fatia.snap.coluna, fatia.snap.valor).order("id_deal").range(offset, offset + 999);
     if (error) throw new Error(`select deal_snapshot: ${error.message}`);
-    if (!data || data.length === 0) break;
-    for (const r of data) linhas.set(String(r.id_deal), r);
-    offset += 1000;
-    if (data.length < 1000) break;
+    for (const r of data || []) linhas.set(String(r.id_deal), r);
+    if (!data || data.length < 1000) break;
+  }
+  const faltam = idsRd.filter((id) => !linhas.has(id));
+  for (let i = 0; i < faltam.length; i += 150) {
+    const { data, error } = await supabase.from("deal_snapshot").select(SNAP_COLS).in("id_deal", faltam.slice(i, i + 150));
+    if (error) throw new Error(`select deal_snapshot (in): ${error.message}`);
+    for (const r of data || []) linhas.set(String(r.id_deal), r);
   }
   return linhas;
 }
 
-// deno-lint-ignore no-explicit-any
-async function gravarEvento(supabase: any, flat: Flat, extra: { lostNote?: string | null; closedAt?: string | null }) {
+async function executarFatia(supabase: Sb, fatias: Fatia[], i: number, acum: Acum, meta: Meta) {
+  const logar = novoLogger(supabase, "espelho_rd_edge", meta.ciclo);
+  const fatia = fatias[i];
+  try {
+    await comPrazo(
+      (async () => {
+        const token = await lerToken(supabase);
+        const deals = await listarFatia(token, fatia, acum);
+        const snap = await snapshotDaFatia(supabase, fatia, [...deals.keys()]);
+        for (const [id, flat] of deals) {
+          acum.vistos.push(id);
+          const c = comparar(flat, snap.get(id));
+          if (!c.length) continue;
+          for (const k of c) acum.cats[k] = (acum.cats[k] || 0) + 1;
+          acum.tarefas.push({ id, c, p: Math.min(...c.map((k) => PRIORIDADE[k] ?? 9)) });
+        }
+        acum.lidos += deals.size;
+      })(),
+      PRAZO_ELO_MS,
+      `prazo da fatia ${fatia.rotulo} estourado`,
+    );
+  } catch (e) {
+    // Fatia com erro não derruba a corrente: vira erro de página, e com isso a
+    // varredura fica incompleta (a checagem de exclusão fica pro próximo ciclo).
+    acum.erros.push(`${fatia.rotulo}: ${String(e).slice(0, 120)}`);
+  }
+  try {
+    if (i + 1 < fatias.length) await encadear({ etapa: "fatia", fatias, i: i + 1, acum, meta });
+    else await encadear({ etapa: "final", acum, meta });
+  } catch (e) {
+    await logar({ status: "failure", erro: `fatia ${i + 1}/${fatias.length}: ${String(e).slice(0, 400)}` });
+  }
+}
+
+// ---------------------------------------------------------------------------------
+// 3. FINAL — exclusões, fila por prioridade, log da varredura, 1º lote
+
+async function executarFinal(supabase: Sb, acum: Acum, meta: Meta) {
+  const logar = novoLogger(supabase, "espelho_rd_edge", meta.ciclo);
+  try {
+    const varreduraCompleta = acum.erros.length === 0 && meta.totalRd != null &&
+      !Number.isNaN(meta.totalRd) && acum.lidos >= meta.totalRd;
+    let snapTotal = 0;
+    if (varreduraCompleta) {
+      const vistos = new Set(acum.vistos);
+      for (let offset = 0;; offset += 1000) {
+        const { data, error } = await supabase.from("deal_snapshot").select("id_deal")
+          .is("deleted_at", null).order("id_deal").range(offset, offset + 999);
+        if (error) throw new Error(`select deal_snapshot (ids): ${error.message}`);
+        for (const r of data || []) {
+          snapTotal++;
+          if (vistos.has(String(r.id_deal))) continue;
+          acum.cats.sumiu_do_rd = (acum.cats.sumiu_do_rd || 0) + 1;
+          acum.tarefas.push({ id: String(r.id_deal), c: ["sumiu_do_rd"], p: PRIORIDADE.sumiu_do_rd });
+        }
+        if (!data || data.length < 1000) break;
+      }
+    }
+    acum.tarefas.sort((a, b) => a.p - b.p);
+    const fila: Tarefa[] = acum.tarefas.slice(0, meta.maxEscritas).map(({ id, c }) => ({ id, c }));
+
+    let encadeado: string | null = null;
+    if (meta.modo === "live" && fila.length) {
+      try {
+        await encadear({ fila, lote: 1, ciclo: meta.ciclo });
+        encadeado = "ok";
+      } catch (e) {
+        encadeado = String(e).slice(0, 200);
+      }
+    }
+
+    await logar({
+      status: acum.erros.length > 0 || (encadeado && encadeado !== "ok") ? "partial" : "success",
+      paginas: acum.paginas,
+      requests: acum.paginas,
+      deals_processados: 0,
+      eventos_gerados: 0,
+      erro: encadeado && encadeado !== "ok" ? encadeado : null,
+      checkpoint: {
+        modo: meta.modo,
+        etapa: "varredura",
+        rd_total: acum.lidos,
+        snapshot_ativos: varreduraCompleta ? snapTotal : null,
+        cobertura: { total_rd: meta.totalRd, deals_lidos: acum.lidos },
+        varredura_completa: varreduraCompleta,
+        divergentes_no_total: acum.tarefas.length,
+        por_categoria: acum.cats,
+        enfileirados: meta.modo === "live" ? fila.length : 0,
+        paginas_com_erro: acum.erros.slice(0, 20),
+        dt_ms: Date.now() - meta.t0,
+      },
+    });
+  } catch (e) {
+    await logar({ status: "failure", erro: `final: ${String(e).slice(0, 480)}` });
+  }
+}
+
+// ---------------------------------------------------------------------------------
+// 4. LOTE — correções (única etapa que escreve no espelho)
+
+async function gravarEvento(supabase: Sb, flat: Flat, extra: { lostNote?: string | null; closedAt?: string | null }) {
   const { data: evData, error: evErr } = await supabase.rpc("processar_deal_evento", {
     p_id_deal: flat.id_deal,
     p_id_contact: null,
@@ -367,11 +526,10 @@ async function gravarEvento(supabase: any, flat: Flat, extra: { lostNote?: strin
   return ev?.eventos_gerados || 0;
 }
 
-// Caminho completo: GET individual (histórico de etapas + anotação de perda + contato).
-// deno-lint-ignore no-explicit-any
-async function aplicarCompleto(supabase: any, token: string, id: string, restaurado: boolean) {
+// GET individual: histórico de etapas + anotação de perda + contato.
+async function aplicarCompleto(supabase: Sb, token: string, id: string, restaurado: boolean) {
   const doc = await rd(token, `/deals/${id}`, {});
-  const flat = achatar(doc, new Map());
+  const flat = achatar(doc);
 
   const hist = doc.deal_stage_histories || [];
   let eventosEtapa = 0;
@@ -420,8 +578,7 @@ async function aplicarCompleto(supabase: any, token: string, id: string, restaur
 
 // Deal que estava no espelho e não voltou da varredura: só um 404 do RD prova exclusão.
 // Se o RD devolve o deal (criado depois da varredura, ou movido no meio dela), aplica.
-// deno-lint-ignore no-explicit-any
-async function verificarExclusao(supabase: any, token: string, id: string): Promise<"excluido" | "existe"> {
+async function verificarExclusao(supabase: Sb, token: string, id: string): Promise<"excluido" | "existe"> {
   try {
     await rd(token, `/deals/${id}`, {});
   } catch (e) {
@@ -439,27 +596,7 @@ async function verificarExclusao(supabase: any, token: string, id: string): Prom
   return "existe";
 }
 
-type Tarefa = { id: string; c: string[] }; // c = categorias da divergência
-
-// deno-lint-ignore no-explicit-any
-type Sb = any;
-
-function novoLogger(supabase: Sb, job: string, iniciadoEm: string) {
-  return async (extra: Record<string, unknown>) => {
-    try {
-      await supabase.from("sync_execucao").insert({
-        job,
-        iniciado_em: iniciadoEm,
-        terminado_em: new Date().toISOString(),
-        ...extra,
-      });
-    } catch (_) {
-      // logging nunca deve derrubar a execução
-    }
-  };
-}
-
-// O wf_5 segura a trava por ~5s. Em vez de pular o ciclo inteiro, espera um pouco.
+// O wf_5 segura a trava por ~5s. Em vez de desistir, espera um pouco.
 async function pegarTrava(supabase: Sb): Promise<boolean> {
   for (let i = 0; i < TENTATIVAS_LOCK; i++) {
     const { data } = await supabase.rpc("deals_sync_tentar_lock", { p_timeout_minutos: 20 });
@@ -469,143 +606,27 @@ async function pegarTrava(supabase: Sb): Promise<boolean> {
   return false;
 }
 
-async function soltarTrava(supabase: Sb, job: string) {
+async function soltarTrava(supabase: Sb) {
   await supabase.rpc("deals_sync_liberar_lock", {
     p_watermark: null, // preserva o watermark do wf_5 (COALESCE na função)
     p_status: "success",
     p_records: 0,
-    p_report: { job },
+    p_report: { job: "espelho_rd_edge_lote" },
   });
 }
 
-async function lerToken(supabase: Sb): Promise<string> {
-  const { data, error } = await supabase.rpc("get_secret", { secret_name: "rd_token" });
-  if (error || !data) throw new Error(`get_secret rd_token: ${error?.message || "vazio"}`);
-  return data as string;
-}
-
-// Dispara o próximo lote numa chamada nova da própria function (CPU zerada).
-async function encadear(fila: Tarefa[], lote: number, ciclo: string) {
-  const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/espelhar-rd`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ fila, lote, ciclo }),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (resp.status !== 202) throw new Error(`encadear lote ${lote}: HTTP ${resp.status}`);
-}
-
-// ETAPA 1 — varredura: compara RD × espelho, monta a fila por prioridade e passa
-// pro 1º lote. Não grava nada no espelho (a CPU da chamada vai toda na varredura).
-async function executarVarredura(supabase: Sb, t0: number) {
-  const iniciadoEm = new Date(t0).toISOString();
-  const logar = novoLogger(supabase, "espelho_rd_edge", iniciadoEm);
-  let travado = false;
-  try {
-    const rdToken = await lerToken(supabase);
-    const { data: configRows } = await supabase.from("espelho_rd_config").select("chave,valor");
-    // deno-lint-ignore no-explicit-any
-    const config = Object.fromEntries((configRows || []).map((r: any) => [r.chave, r.valor]));
-    const modo = config.modo === "live" ? "live" : "observe";
-    const maxEscritas = Number(config.max_escritas_por_execucao || 1000);
-
-    travado = await pegarTrava(supabase);
-    if (!travado) {
-      await logar({ status: "success", checkpoint: { pulado: "lock_ocupado_pelo_wf_5_ou_outra_execucao_do_espelho" } });
-      return;
-    }
-
-    const r = await comPrazo(
-      (async () => {
-        const { mapa: mapaEtapas, funis } = await carregarFunis(rdToken);
-        const { deals: rdDeals, paginas, errosPagina, cobertura } = await varrerRD(rdToken, funis, mapaEtapas);
-        const snap = await carregarSnapshot(supabase);
-
-        const porCategoria: Record<string, number> = {};
-        const tarefas: (Tarefa & { p: number })[] = [];
-        const add = (id: string, c: string[]) => {
-          for (const k of c) porCategoria[k] = (porCategoria[k] || 0) + 1;
-          tarefas.push({ id, c, p: Math.min(...c.map((k) => PRIORIDADE[k] ?? 9)) });
-        };
-        for (const [id, flat] of rdDeals) {
-          const c = comparar(flat, snap.get(id));
-          if (c.length) add(id, c);
-        }
-        // Exclusões: só com a varredura COMPLETA — senão um deal de uma página que
-        // falhou pareceria excluído. Mesmo assim, cada um é confirmado por 404.
-        const varreduraCompleta = errosPagina.length === 0 && cobertura.total_rd != null &&
-          rdDeals.size >= cobertura.total_rd;
-        if (varreduraCompleta) {
-          for (const [id, s] of snap) if (!s.deleted_at && !rdDeals.has(id)) add(id, ["sumiu_do_rd"]);
-        }
-        tarefas.sort((a, b) => a.p - b.p);
-        const fila: Tarefa[] = tarefas.slice(0, maxEscritas).map(({ id, c }) => ({ id, c }));
-        return { paginas, errosPagina, cobertura, varreduraCompleta, rdTotal: rdDeals.size, snapTotal: snap.size, porCategoria, total: tarefas.length, fila };
-      })(),
-      PRAZO_VARREDURA_MS,
-      "prazo da varredura estourado — alguma chamada travou sem lançar erro",
-    );
-
-    await soltarTrava(supabase, "espelho_rd_edge");
-    travado = false;
-
-    let encadeado: string | null = null;
-    if (modo === "live" && r.fila.length) {
-      try {
-        await encadear(r.fila, 1, iniciadoEm);
-        encadeado = "ok";
-      } catch (e) {
-        encadeado = String(e).slice(0, 200);
-      }
-    }
-
-    await logar({
-      status: r.errosPagina.length > 0 || (encadeado && encadeado !== "ok") ? "partial" : "success",
-      paginas: r.paginas,
-      requests: r.paginas,
-      deals_processados: 0,
-      eventos_gerados: 0,
-      erro: encadeado && encadeado !== "ok" ? encadeado : null,
-      checkpoint: {
-        modo,
-        etapa: "varredura",
-        rd_total: r.rdTotal,
-        snapshot_total: r.snapTotal,
-        cobertura: r.cobertura,
-        varredura_completa: r.varreduraCompleta,
-        divergentes_no_total: r.total,
-        por_categoria: r.porCategoria,
-        enfileirados: modo === "live" ? r.fila.length : 0,
-        paginas_com_erro: r.errosPagina,
-        dt_ms: Date.now() - t0,
-        rd_429: respostas429,
-      },
-    });
-  } catch (e) {
-    await logar({ status: "failure", erro: String(e).slice(0, 500) });
-  } finally {
-    if (travado) await soltarTrava(supabase, "espelho_rd_edge");
-  }
-}
-
-// ETAPA 2 — um lote: aplica até TAM_LOTE deals da fila (GET individual = dado
-// fresco do RD, não o da varredura) e passa o resto pro próximo lote.
 async function executarLote(supabase: Sb, t0: number, fila: Tarefa[], lote: number, ciclo: string) {
   const logar = novoLogger(supabase, "espelho_rd_edge_lote", new Date(t0).toISOString());
   let travado = false;
   const agora = fila.slice(0, TAM_LOTE);
   let resto = fila.slice(TAM_LOTE);
-  let aplicados = 0, falhas = 0, excluidos = 0, eventos = 0;
+  let aplicados = 0, falhas = 0, excluidos = 0, eventos = 0, repostos = 0;
   const erros: { id: string; erro: string }[] = [];
   try {
-    const rdToken = await lerToken(supabase);
+    const token = await lerToken(supabase);
     travado = await pegarTrava(supabase);
     if (!travado) {
-      // Não perde a fila: devolve o lote inteiro pro próximo elo.
-      resto = fila;
+      resto = fila; // não perde a fila: devolve o lote inteiro pro próximo elo
       throw new Error("trava ocupada — lote adiado para o próximo elo");
     }
 
@@ -617,34 +638,42 @@ async function executarLote(supabase: Sb, t0: number, fila: Tarefa[], lote: numb
             const t = agora[proxima++];
             try {
               if (t.c.includes("sumiu_do_rd")) {
-                if ((await verificarExclusao(supabase, rdToken, t.id)) === "excluido") excluidos++;
+                if ((await verificarExclusao(supabase, token, t.id)) === "excluido") excluidos++;
               } else {
-                eventos += await aplicarCompleto(supabase, rdToken, t.id, t.c.includes("restaurado"));
+                eventos += await aplicarCompleto(supabase, token, t.id, t.c.includes("restaurado"));
               }
               aplicados++;
             } catch (e) {
-              falhas++;
-              erros.push({ id: t.id, erro: String(e).slice(0, 200) });
+              const r = (t.r || 0) + 1;
+              if (e instanceof ErroRD && e.status === 429 && r <= MAX_REPETICOES_429) {
+                resto.push({ ...t, r }); // tenta de novo num lote seguinte, sem contar falha
+                repostos++;
+              } else {
+                falhas++;
+                erros.push({ id: t.id, erro: String(e).slice(0, 200) });
+              }
             }
           }
         };
         await Promise.all(Array.from({ length: CONCORRENCIA_ESCRITA }, trabalhador));
       })(),
-      PRAZO_LOTE_MS,
+      PRAZO_ELO_MS,
       "prazo do lote estourado",
     );
   } catch (e) {
     erros.push({ id: "-", erro: String(e).slice(0, 200) });
   } finally {
-    if (travado) await soltarTrava(supabase, "espelho_rd_edge_lote");
+    if (travado) await soltarTrava(supabase);
   }
 
   let encadeado: string | null = null;
   if (resto.length) {
+    const falta = DURACAO_MIN_LOTE_MS - (Date.now() - t0);
+    if (falta > 0) await sleep(falta);
     if (lote >= MAX_LOTES) encadeado = `parou no limite de ${MAX_LOTES} lotes; ${resto.length} ficam pro próximo ciclo`;
     else {
       try {
-        await encadear(resto, lote + 1, ciclo);
+        await encadear({ fila: resto, lote: lote + 1, ciclo });
         encadeado = "ok";
       } catch (e) {
         encadeado = String(e).slice(0, 200);
@@ -665,6 +694,7 @@ async function executarLote(supabase: Sb, t0: number, fila: Tarefa[], lote: numb
       aplicados,
       excluidos_confirmados: excluidos,
       falhas,
+      repostos_por_429: repostos,
       restantes: resto.length,
       encadeado,
       dt_ms: Date.now() - t0,
@@ -672,6 +702,8 @@ async function executarLote(supabase: Sb, t0: number, fila: Tarefa[], lote: numb
     },
   });
 }
+
+// ---------------------------------------------------------------------------------
 
 Deno.serve(async (req: Request) => {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -682,13 +714,21 @@ Deno.serve(async (req: Request) => {
   try {
     corpo = await req.json();
   } catch (_) {
-    // pg_cron manda '{}' — corpo vazio também vale como "varredura"
+    // pg_cron manda '{}' — corpo vazio também vale como "coordenador"
   }
-  const trabalho = Array.isArray(corpo?.fila)
-    ? executarLote(supabase, t0, corpo.fila, Number(corpo.lote) || 1, String(corpo.ciclo || ""))
-    : executarVarredura(supabase, t0);
-  // Segundo plano: o chamador recebe 202 na hora, sem depender do timeout dele.
-  // Resultado em sync_execucao (espelho_rd_edge = varredura, espelho_rd_edge_lote = lotes).
+
+  let trabalho: Promise<void>;
+  if (Array.isArray(corpo?.fila)) {
+    trabalho = executarLote(supabase, t0, corpo.fila, Number(corpo.lote) || 1, String(corpo.ciclo || ""));
+  } else if (corpo?.etapa === "fatia") {
+    trabalho = executarFatia(supabase, corpo.fatias, Number(corpo.i) || 0, corpo.acum, corpo.meta);
+  } else if (corpo?.etapa === "final") {
+    trabalho = executarFinal(supabase, corpo.acum, corpo.meta);
+  } else {
+    trabalho = executarCoordenador(supabase, t0);
+  }
+
+  // Segundo plano: quem chama recebe 202 na hora, sem depender do timeout dele.
   // deno-lint-ignore no-explicit-any
   (globalThis as any).EdgeRuntime.waitUntil(trabalho);
   return new Response(JSON.stringify({ aceito: true }), {

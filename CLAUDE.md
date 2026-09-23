@@ -621,11 +621,12 @@ corrigidos em 2 lotes, 0 falhas, e **31 deals excluídos no RD** confirmados
 por 404 e tirados do dashboard (Oral Unic 16, Viva 6, Lisô 4, sem marca 4,
 B2Case 1). Funil Atual Inbound: 2.264 → 2.183 Em andamento.
 
-**Plano do Supabase de Expansão é FREE** (visto no painel em 23/09, com
-aviso "exceeding usage limits"), não Pro: wall clock de Edge Function é
-**150s**. Os prazos internos (`PRAZO_VARREDURA_MS` 125s, `PRAZO_LOTE_MS`
-100s) vencem antes disso, pra o log e a liberação da trava sempre rodarem
-(v12). `max_escritas_por_execucao` foi pra 1000 (Junior rodou o UPDATE).
+**Plano do Supabase de Expansão:** estava FREE (wall clock de Edge Function
+150s, aviso "exceeding usage limits") e o Junior fez upgrade pra **Pro** no
+mesmo dia (wall clock 400s). Os prazos internos (`PRAZO_VARREDURA_MS` 125s,
+`PRAZO_LOTE_MS` 100s, v12) cabem nos dois e ficaram assim de propósito. O
+limite de CPU (2s por chamada), que é o que obriga os lotes, é igual nos dois
+planos. `max_escritas_por_execucao` foi pra 1000 (Junior rodou o UPDATE).
 
 `supabase/functions/espelhar-rd/index.ts` é a fonte. O modo diagnóstico
 `?fase=` saiu (a cópia `espelhar-rd-teste` segue existindo pra isso).

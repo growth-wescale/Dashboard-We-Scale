@@ -21,7 +21,7 @@ import { money, pct, nfCeil } from '@/lib/format'
  * Tela única 16:9, sem menu e sem rolagem, só com o essencial da corrida:
  * meta do time no mês, closers e SDRs na volta atual e a pontuação da
  * Corrida de Performance. Tudo em `vh` pra escalar em qualquer TV. Não tem
- * filtro: a tela alterna sozinha a cada 30s entre a VOLTA atual (dados e metas
+ * filtro: a tela alterna sozinha a cada 15s entre a VOLTA atual (dados e metas
  * só da volta, que vira sozinha na troca de semana) e o MÊS (tudo acumulado).
  * Os dois recortes ficam carregados ao mesmo tempo, então a troca é instantânea.
  *
@@ -33,8 +33,8 @@ const MES_ATIVO = '2026-09-01'
 const MES_LABEL = 'Setembro 2026'
 const DIAS_MES = 30
 const RECARREGA_PAGINA_MS = 60 * 60 * 1000
-/** Tempo em cada modo (volta ↔ mês). 30s dá pra ler a tela inteira sem cansar. */
-const TROCA_MODO_MS = 30_000
+/** Tempo em cada modo (volta ↔ mês). 15s: cada recorte aparece 2x por minuto. */
+const TROCA_MODO_MS = 15_000
 
 type Modo = 'volta' | 'mes'
 

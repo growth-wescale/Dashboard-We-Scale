@@ -555,6 +555,13 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-23 — Modo TV troca de visualização a cada 15s (era 30s)
+
+Pedido do Junior, depois de ver a tela rodando na TV do time: `TROCA_MODO_MS`
+de 30s → **15s**. Cada recorte (Volta / Mês) passa a aparecer 2x por minuto.
+Só a constante mudou — a barrinha de progresso do botão ativo lê o mesmo
+valor, então ela acompanha sozinha.
+
 ### 2026-09-23 — Campanha de Metas: hero ganha "Pole position · SDR"
 
 Pedido do Junior: no cabeçalho escuro (GP We Scale), o card do Closer na

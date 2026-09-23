@@ -538,11 +538,6 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
   (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
   etapas nessa tabela
-- [ ] **Varredura do espelho perto do limite de CPU** — a etapa de varredura
-  (`espelhar-rd`) faz parse de ~10 mil deals numa chamada só, com 2s de CPU. A
-  v8 cabia com folga, mas a base cresce ~40 deals/dia. Se aparecer `CPU Time
-  exceeded` em `function_logs` na varredura, quebrar a varredura em chamadas
-  por funil, igual aos lotes (ver 23/09)
 - [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
   máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
   pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
@@ -620,6 +615,25 @@ com o controle de 429): varredura completa, 0 respostas 429, 44 divergentes
 corrigidos em 2 lotes, 0 falhas, e **31 deals excluídos no RD** confirmados
 por 404 e tirados do dashboard (Oral Unic 16, Viva 6, Lisô 4, sem marca 4,
 B2Case 1). Funil Atual Inbound: 2.264 → 2.183 Em andamento.
+
+**Varredura em fatias (v13, mesmo dia).** Às 12:15 BRT a varredura sozinha
+estourou os 2s de CPU (os logs já mostravam ~1,78s nas anteriores) e morreu
+com a trava presa. Não é questão de plano: o limite de CPU é o mesmo no Pro.
+Agora a varredura também é uma corrente: **coordenador** (o que o cron chama)
+divide o RD em fatias de até 3.000 deals (por funil, ou por etapa se o funil
+for maior — hoje o SDR), cada **fatia** lista a sua parte e compara só com as
+linhas do espelho daquela fatia, a etapa **final** confere exclusões e dispara
+os **lotes**. A varredura não pega mais a trava (só lê); só os lotes pegam.
+Se um elo morrer, a corrente para e o próximo ciclo recomeça, sem trava
+presa. O log da varredura continua 1 linha em `espelho_rd_edge`, escrita pela
+etapa final. 1º ciclo (12:30 BRT): 9.857 / 9.857 deals lidos em ~20
+chamadas, 0 erros, 0 respostas 429, nenhum `CPU Time exceeded`, 23 correções
+(21 deals recém-criados no RD) em ~3 min.
+
+**Repositório estava atrás da produção.** A v11 (tratamento de 429) foi
+publicada mas o arquivo commitado no PR #179 era a v10 — cópia feita antes da
+edição. A v13 versionada aqui junta tudo; repositório e produção voltam a ser
+o mesmo arquivo.
 
 **Plano do Supabase de Expansão:** estava FREE (wall clock de Edge Function
 150s, aviso "exceeding usage limits") e o Junior fez upgrade pra **Pro** no

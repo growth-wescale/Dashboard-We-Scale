@@ -42,8 +42,11 @@ const RD_API = "https://crm.rdstation.com/api/v1";
 const TAM_PAGINA = 200; // máximo aceito pela listagem do RD
 const LIMITE_JANELA_RD = 10_000; // RD recusa page*limit acima disto
 const LIMITE_FATIA = 9_000; // folga abaixo do teto — acima disto o funil é quebrado por etapa
-const PRAZO_VARREDURA_MS = 200_000; // wall clock do plano Pro é 400s
-const PRAZO_LOTE_MS = 120_000;
+// Wall clock da Edge Function no plano Free é 150s: se passar disso a plataforma
+// mata o worker sem rodar o finally, e a trava fica presa 20 min. Os prazos abaixo
+// vencem antes, então o log e a liberação da trava sempre acontecem.
+const PRAZO_VARREDURA_MS = 125_000;
+const PRAZO_LOTE_MS = 100_000;
 const RD_TIMEOUT_MS = 15_000; // fetch() do Deno NÃO tem timeout por padrão
 const CONCORRENCIA_SCAN = 6; // ~6s por página da listagem a partir da Edge Function
 const CONCORRENCIA_ESCRITA = 4;

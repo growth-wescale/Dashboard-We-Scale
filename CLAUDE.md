@@ -621,13 +621,14 @@ corrigidos em 2 lotes, 0 falhas, e **31 deals excluídos no RD** confirmados
 por 404 e tirados do dashboard (Oral Unic 16, Viva 6, Lisô 4, sem marca 4,
 B2Case 1). Funil Atual Inbound: 2.264 → 2.183 Em andamento.
 
+**Plano do Supabase de Expansão é FREE** (visto no painel em 23/09, com
+aviso "exceeding usage limits"), não Pro: wall clock de Edge Function é
+**150s**. Os prazos internos (`PRAZO_VARREDURA_MS` 125s, `PRAZO_LOTE_MS`
+100s) vencem antes disso, pra o log e a liberação da trava sempre rodarem
+(v12). `max_escritas_por_execucao` foi pra 1000 (Junior rodou o UPDATE).
+
 `supabase/functions/espelhar-rd/index.ts` é a fonte. O modo diagnóstico
 `?fase=` saiu (a cópia `espelhar-rd-teste` segue existindo pra isso).
-
-**Não mexido:** `max_escritas_por_execucao` em `espelho_rd_config` segue 150
-(a mudança pra 1000 foi barrada pela trava de segurança do Claude Code — é
-só `update espelho_rd_config set valor='1000' where chave='max_escritas_por_execucao'`).
-Com 150, pico de 400 divergências leva 3 ciclos (45 min) em vez de 1.
 
 ### 2026-09-23 — Modo TV troca de visualização a cada 15s (era 30s)
 

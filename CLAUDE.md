@@ -555,6 +555,18 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-23 — Campanha de Metas: hero ganha "Pole position · SDR"
+
+Pedido do Junior: no cabeçalho escuro (GP We Scale), o card do Closer na
+frente sai um pouco da borda direita (`marginRight: clamp(0px, 4vw, 64px)`)
+e ganha ao lado um card do **SDR na frente**. Critério do SDR: % da meta de
+SQL na janela ativa (mesma meta rateada do Grid dos SDRs, `fatorMetaSdr`),
+desempate por SQL e depois por DIAG; sem nenhum SQL/DIAG mostra "sem dados".
+Texto: "X% da meta · N SQL · N DIAG". `PolePositionCard` virou genérico
+(título/iniciais/cor/nome/detalhe). `useMetasSDRs` subiu pra página e é
+repassado ao `SdrsSection` (1 consulta só). Segue a janela selecionada, igual
+ao card do Closer.
+
 ### 2026-09-22 (2) — Motivos de perda do RD: 463 cadastros viram 36
 
 Junior deu prazo de hoje pro Brunno limpar os motivos de perda. O plano

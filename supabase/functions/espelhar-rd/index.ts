@@ -5,65 +5,78 @@
 // Irmã gêmea de docs/scripts/espelhar_rd.py — mesma lógica, para rodar manual
 // no terminal quando precisar de um backfill pontual.
 //
-// MODO OBSERVE (padrão de fábrica, em espelho_rd_config.modo):
-//   calcula a diferença entre RD e banco, LOGA em sync_execucao, e para. Não
-//   chama nenhuma RPC de escrita. Trocar para 'live' é 1 UPDATE, sem reimplantar.
+// MODO OBSERVE (em espelho_rd_config.modo): calcula a diferença entre RD e banco,
+// LOGA em sync_execucao, e para. Trocar para 'live' é 1 UPDATE, sem reimplantar.
 //
 // VARREDURA POR FUNIL (22/09/2026): a listagem do RD recusa qualquer página além
-// de 10.000 resultados ("Result window is too large, must be less than or equal
-// to 10000"). A base passou de 9.800 deals em set/26, então a varredura sem filtro
-// deixaria de enxergar parte dela assim que cruzasse os 10 mil. Agora cada funil é
-// uma listagem própria (deal_pipeline_id) — cada uma bem abaixo do teto — e, se um
-// funil sozinho chegar perto de 10 mil, ele é quebrado por etapa (deal_stage_id).
-// Um request sem filtro traz o total geral do RD, e a soma das fatias é conferida
-// contra ele: qualquer deal fora de funil conhecido aparece como `cobertura` < total
-// no log, em vez de sumir calado.
+// de 10.000 resultados. Cada funil é uma listagem própria (deal_pipeline_id) e, se
+// um funil sozinho chegar perto de 10 mil, ele é quebrado por etapa. A soma das
+// fatias é conferida contra o total geral do RD (`cobertura` no log).
 //
-// Por que isto não pesa o banco:
-//   - a varredura do RD é só leitura: listagem paginada (nenhuma escrita) + 1
-//     request a /deal_pipelines, com CONCORRENCIA_SCAN requests em paralelo
-//   - a leitura do espelho é 1 SELECT paginado em deal_snapshot — medido: ~1-1.5s
-//   - a comparação campo-a-campo é tudo em memória, ~150ms
-//   - escritas (só em modo live) são sequenciais, no máximo
-//     espelho_rd_config.max_escritas_por_execucao por execução, pelas MESMAS
-//     RPCs que o wf_5 já chama em produção
-//   - segura deals_sync_tentar_lock, então nunca roda ao mesmo tempo que o
-//     wf_5 nem duas vezes seguidas se um ciclo demorar mais que o intervalo
-//   - tem orçamento de tempo próprio: para antes do limite da Edge Function e
-//     devolve o resto pro próximo ciclo — nada é perdido, só adiado
-//
-// Limitação conhecida: se a plataforma matar o worker à força (WORKER_RESOURCE_LIMIT),
-// o `finally` não roda e o lock fica preso até o auto-release de 20 min em
-// deals_sync_tentar_lock. Visto 2x em testes (1x em modo observe sem escrever nada,
-// 1x logo no 1º ciclo live antes de escrever qualquer coisa). Mitigado soltando as
-// estruturas grandes (rdDeals/snap) antes do loop de escrita e reduzindo
-// max_escritas_por_execucao — mas não é 100% coberto pelo comPrazo/finally, só o
-// timeout do lock é garantia dura.
+// VAZÃO (23/09/2026): o Funil Atual ficava horas atrás do RD depois de operação em
+// massa (em 23/09, ~200 perdas + 40 exclusões às 9h e ~185 trocas de responsável às
+// 10h). Causas, todas corrigidas aqui:
+//   1. a varredura do RD (40-100s) comia quase todo o orçamento de 100s, e às vezes
+//      sobrava zero para corrigir. E cada chamada da Edge Function tem só 2s de CPU:
+//      varredura + correções na mesma chamada estoura ("CPU Time exceeded", visto em
+//      23/09 depois de ~80 correções) e a plataforma mata o worker com a trava presa.
+//      Agora são duas etapas. A VARREDURA só compara e monta a fila. As correções
+//      vão em LOTES de TAM_LOTE deals, cada lote numa chamada nova (CPU própria),
+//      que ao terminar dispara o próximo lote com o resto da fila no corpo do POST.
+//      Tudo em segundo plano (EdgeRuntime.waitUntil): o chamador recebe 202 na hora.
+//   2. as correções eram sequenciais (1 por vez). Agora CONCORRENCIA_ESCRITA em paralelo
+//      dentro do lote — cada deal é independente.
+//   3. a fila seguia a ordem da listagem do RD. Agora vai por prioridade: o que muda o
+//      funil (ausente, status, exclusão, etapa, funil) antes de responsável/payload.
+//   4. deal EXCLUÍDO no RD ficava no espelho como "Em andamento" pra sempre — nenhum
+//      job tratava exclusão (só backfill manual). Agora: com a varredura completa,
+//      todo deal do espelho que não voltou do RD é conferido com GET individual, e só
+//      um 404 marca deleted_at (registrar_deal_deletado). Deal que volta (restaurado)
+//      tem o deleted_at limpo.
+//   5. se o wf_5 estava com a trava, o ciclo inteiro era pulado. Agora tenta de novo
+//      algumas vezes antes de desistir (o wf_5 leva ~5s).
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const RD_API = "https://crm.rdstation.com/api/v1";
 const TAM_PAGINA = 200; // máximo aceito pela listagem do RD
 const LIMITE_JANELA_RD = 10_000; // RD recusa page*limit acima disto
-// Folga abaixo do teto: entre ler o total na página 1 e buscar a última página,
-// deals novos podem entrar no funil. Acima disto o funil é quebrado por etapa.
-const LIMITE_FATIA = 9_000;
-const WALL_CLOCK_BUDGET_MS = 100_000; // folga generosa abaixo do limite de 150s do plano Free
-const RD_TIMEOUT_MS = 15_000; // fetch() do Deno NÃO tem timeout por padrão — sem isto, uma
-// conexão parada com o RD prende a function pra sempre. AbortSignal.timeout garante que
-// cada request desiste sozinho, mesmo que a resposta nunca chegue.
-const CONCORRENCIA_SCAN = 6; // medido: ~6s por página da listagem do RD a partir da Edge
-// Function (rede até o RD é bem mais longa daqui que do Mac/n8n). 6 em paralelo mantém a
-// varredura dentro do orçamento. Só leitura, sem risco de escrita duplicada.
+const LIMITE_FATIA = 9_000; // folga abaixo do teto — acima disto o funil é quebrado por etapa
+const PRAZO_VARREDURA_MS = 200_000; // wall clock do plano Pro é 400s
+const PRAZO_LOTE_MS = 120_000;
+const RD_TIMEOUT_MS = 15_000; // fetch() do Deno NÃO tem timeout por padrão
+const CONCORRENCIA_SCAN = 6; // ~6s por página da listagem a partir da Edge Function
+const CONCORRENCIA_ESCRITA = 4;
+// CPU é o limite (2s por chamada), não o tempo. A v8 fazia varredura + 53 correções
+// numa chamada só sem estourar; um lote sem varredura com 25 fica bem abaixo.
+const TAM_LOTE = 25;
+const MAX_LOTES = 60; // trava contra corrente infinita: 60 × 25 = 1.500 deals por ciclo
+const TENTATIVAS_LOCK = 6;
+const ESPERA_LOCK_MS = 8_000;
 const IGNORAR_NO_DIFF = new Set(["_produtos"]);
 const EM_ANDAMENTO = new Set(["open", "ongoing"]);
 
-const t0 = Date.now();
-const tempoEsgotado = () => Date.now() - t0 > WALL_CLOCK_BUDGET_MS;
+// Ordem de correção: o que tira/põe deal no funil ou muda de etapa vem primeiro.
+const PRIORIDADE: Record<string, number> = {
+  ausentes: 0,
+  restaurado: 0,
+  status: 1,
+  sumiu_do_rd: 1,
+  etapa: 2,
+  funil: 2,
+  marca: 3,
+  responsavel: 4,
+  payload: 5,
+};
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Prazo global além do timeout por request: cobre qualquer chamada que possa
-// travar (inclusive as do próprio supabase-js), não só as do RD.
+class ErroRD extends Error {
+  constructor(public status: number, msg: string) {
+    super(msg);
+  }
+}
+
 function comPrazo<T>(promessa: Promise<T>, ms: number, mensagem: string): Promise<T> {
   return Promise.race([
     promessa,
@@ -139,11 +152,13 @@ function achatar(doc: any, mapaEtapas: Map<string, [string, string]>) {
     payload,
   };
 }
+type Flat = ReturnType<typeof achatar>;
 
 // deno-lint-ignore no-explicit-any
-function comparar(flat: any, snap: any | undefined): { cats: string[] } {
-  if (!snap) return { cats: ["ausentes"] };
+function comparar(flat: Flat, snap: any | undefined): string[] {
+  if (!snap) return ["ausentes"];
   const cats: string[] = [];
+  if (snap.deleted_at) cats.push("restaurado");
   if (norm(flat.marca) !== norm(snap.marca)) cats.push("marca");
   if (norm(flat.id_etapa) !== norm(snap.id_etapa)) cats.push("etapa");
   if (flat.id_funil && norm(flat.id_funil) !== norm(snap.id_funil)) cats.push("funil");
@@ -151,14 +166,17 @@ function comparar(flat: any, snap: any | undefined): { cats: string[] } {
   if (norm(flat.responsavel_id) !== norm(snap.responsavel_id)) cats.push("responsavel");
 
   const sp = snap.payload || {};
-  let campoDivergente = false;
   for (const [k, v] of Object.entries(flat.payload)) {
     if (IGNORAR_NO_DIFF.has(k)) continue;
-    if (norm(v) !== norm(sp[k])) { campoDivergente = true; break; }
+    if (norm(v) !== norm(sp[k])) {
+      cats.push("payload");
+      break;
+    }
   }
-  if (campoDivergente) cats.push("payload");
-  return { cats };
+  return cats;
 }
+
+let respostas429 = 0;
 
 async function rd(
   token: string,
@@ -173,11 +191,14 @@ async function rd(
     try {
       const resp = await fetch(`${RD_API}${path}?${qs}`, { signal: AbortSignal.timeout(RD_TIMEOUT_MS) });
       if (resp.ok) return await resp.json();
+      if (resp.status === 429) respostas429++;
       if (resp.status !== 429 && resp.status < 500) {
-        throw new Error(`RD HTTP ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+        // 4xx não se resolve tentando de novo (inclusive 404 = deal excluído)
+        throw new ErroRD(resp.status, `RD HTTP ${resp.status}: ${(await resp.text()).slice(0, 120)}`);
       }
-      ultimoErro = new Error(`RD HTTP ${resp.status}`);
+      ultimoErro = new ErroRD(resp.status, `RD HTTP ${resp.status}`);
     } catch (e) {
+      if (e instanceof ErroRD && e.status !== 429 && e.status < 500) throw e;
       ultimoErro = e;
     }
     await sleep(2 ** i * 500);
@@ -205,18 +226,14 @@ async function carregarFunis(token: string) {
   return { mapa, funis };
 }
 
-// Uma "fatia" é uma listagem filtrada do RD que cabe inteira na janela de 10 mil.
 type Fatia = { rotulo: string; filtro: Record<string, string>; etapas?: Etapa[] };
 type Pedido = { fatia: Fatia; pagina: number };
 
 async function varrerRD(token: string, funis: Funil[], mapaEtapas: Map<string, [string, string]>) {
-  // deno-lint-ignore no-explicit-any
-  const deals = new Map<string, any>();
+  const deals = new Map<string, Flat>();
   const errosPagina: string[] = [];
   let requests = 0;
 
-  // Busca uma lista de pedidos em lotes de CONCORRENCIA_SCAN. Cada resposta vai
-  // pro callback; falha vira entrada em errosPagina (não derruba o lote).
   // deno-lint-ignore no-explicit-any
   async function buscar(pedidos: Pedido[], aoReceber: (p: Pedido, resp: any) => void) {
     for (let i = 0; i < pedidos.length; i += CONCORRENCIA_SCAN) {
@@ -239,15 +256,12 @@ async function varrerRD(token: string, funis: Funil[], mapaEtapas: Map<string, [
     }
   }
 
-  // Total geral, sem filtro — referência pra conferir que as fatias cobrem tudo.
   let totalRd: number | null = null;
-  const geral: Fatia = { rotulo: "geral", filtro: {} };
   const resGeral = await Promise.allSettled([rd(token, "/deals", { limit: "1", page: "1" })]);
   requests++;
   if (resGeral[0].status === "fulfilled") totalRd = Number(resGeral[0].value.total ?? NaN);
-  else errosPagina.push(`${geral.rotulo}: ${String(resGeral[0].reason).slice(0, 80)}`);
+  else errosPagina.push(`geral: ${String(resGeral[0].reason).slice(0, 80)}`);
 
-  // Fase 1: página 1 de cada funil. Descobre o total de cada um.
   const totais = new Map<string, number>();
   const restantes: Pedido[] = [];
   const quebrarPorEtapa: Fatia[] = [];
@@ -269,7 +283,6 @@ async function varrerRD(token: string, funis: Funil[], mapaEtapas: Map<string, [
     else agendarResto(p, total);
   });
 
-  // Fase 1b: funil grande demais → uma fatia por etapa.
   const fatiasEtapa: Fatia[] = quebrarPorEtapa.flatMap((f) =>
     (f.etapas || []).map((e) => ({
       rotulo: `${f.rotulo}/etapa:${e.nome}`,
@@ -278,13 +291,10 @@ async function varrerRD(token: string, funis: Funil[], mapaEtapas: Map<string, [
   );
   await buscar(fatiasEtapa.map((fatia) => ({ fatia, pagina: 1 })), (p, resp) => {
     const total = Number(resp.total ?? 0);
-    // Uma etapa sozinha acima de 10 mil não tem como ser listada inteira: registra
-    // em vez de fingir cobertura completa.
     if (total > LIMITE_JANELA_RD) errosPagina.push(`${p.fatia.rotulo}: ${total} deals, acima da janela do RD`);
     agendarResto(p, Math.min(total, LIMITE_JANELA_RD));
   });
 
-  // Fase 2: demais páginas de todas as fatias.
   await buscar(restantes, () => {});
 
   const somaFatias = [...totais.values()].reduce((a, b) => a + b, 0);
@@ -310,10 +320,10 @@ async function carregarSnapshot(supabase: any) {
     const { data, error } = await supabase
       .from("deal_snapshot")
       .select("id_deal,marca,id_funil,id_etapa,status,responsavel_id,payload,deleted_at")
+      .order("id_deal")
       .range(offset, offset + 999);
     if (error) throw new Error(`select deal_snapshot: ${error.message}`);
     if (!data || data.length === 0) break;
-    // deno-lint-ignore no-explicit-any
     for (const r of data) linhas.set(String(r.id_deal), r);
     offset += 1000;
     if (data.length < 1000) break;
@@ -322,29 +332,7 @@ async function carregarSnapshot(supabase: any) {
 }
 
 // deno-lint-ignore no-explicit-any
-async function aplicarUm(supabase: any, token: string, id: string) {
-  const doc = await rd(token, `/deals/${id}`, {});
-  const flat = achatar(doc, new Map());
-
-  const hist = doc.deal_stage_histories || [];
-  let eventosEtapa = 0;
-  if (hist.length) {
-    const { data, error } = await supabase.rpc("registrar_stage_history", {
-      p_id_deal: flat.id_deal,
-      // deno-lint-ignore no-explicit-any
-      p_historico: hist.map((h: any) => ({
-        id: h.id || h._id,
-        deal_stage_id: h.deal_stage_id,
-        start_date: h.start_date,
-        end_date: h.end_date,
-      })),
-      p_origem: "api_espelho_edge",
-    });
-    if (error) throw new Error(`registrar_stage_history: ${error.message}`);
-    const row = Array.isArray(data) ? data[0] : data;
-    eventosEtapa = row?.eventos_inseridos || 0;
-  }
-
+async function gravarEvento(supabase: any, flat: Flat, extra: { lostNote?: string | null; closedAt?: string | null }) {
   const { data: evData, error: evErr } = await supabase.rpc("processar_deal_evento", {
     p_id_deal: flat.id_deal,
     p_id_contact: null,
@@ -368,10 +356,47 @@ async function aplicarUm(supabase: any, token: string, id: string) {
     await supabase.rpc("registrar_fechamento", {
       p_id_deal: flat.id_deal,
       p_tipo: ev.gerou_perda ? "perda" : "ganho",
-      p_motivo_perda: doc.deal_lost_reason?.name ?? null,
-      p_anotacao_perda: doc.deal_lost_note ?? null,
-      p_closed_at: doc.closed_at || doc.lost_at || doc.win_date || null,
+      p_motivo_perda: flat.motivo_perda,
+      p_anotacao_perda: extra.lostNote ?? null,
+      p_closed_at: extra.closedAt ?? null,
     });
+  }
+  return ev?.eventos_gerados || 0;
+}
+
+// Caminho completo: GET individual (histórico de etapas + anotação de perda + contato).
+// deno-lint-ignore no-explicit-any
+async function aplicarCompleto(supabase: any, token: string, id: string, restaurado: boolean) {
+  const doc = await rd(token, `/deals/${id}`, {});
+  const flat = achatar(doc, new Map());
+
+  const hist = doc.deal_stage_histories || [];
+  let eventosEtapa = 0;
+  if (hist.length) {
+    const { data, error } = await supabase.rpc("registrar_stage_history", {
+      p_id_deal: flat.id_deal,
+      // deno-lint-ignore no-explicit-any
+      p_historico: hist.map((h: any) => ({
+        id: h.id || h._id,
+        deal_stage_id: h.deal_stage_id,
+        start_date: h.start_date,
+        end_date: h.end_date,
+      })),
+      p_origem: "api_espelho_edge",
+    });
+    if (error) throw new Error(`registrar_stage_history: ${error.message}`);
+    const row = Array.isArray(data) ? data[0] : data;
+    eventosEtapa = row?.eventos_inseridos || 0;
+  }
+
+  const eventos = await gravarEvento(supabase, flat, {
+    lostNote: doc.deal_lost_note ?? null,
+    closedAt: doc.closed_at || doc.lost_at || doc.win_date || null,
+  });
+
+  if (restaurado) {
+    const { error } = await supabase.from("deal_snapshot").update({ deleted_at: null }).eq("id_deal", flat.id_deal);
+    if (error) throw new Error(`limpar deleted_at: ${error.message}`);
   }
 
   const contato = (doc.contacts || [])[0];
@@ -387,82 +412,40 @@ async function aplicarUm(supabase: any, token: string, id: string) {
     });
   }
 
-  return { eventosEtapa, eventos: ev?.eventos_gerados || 0 };
+  return eventos + eventosEtapa;
 }
 
-Deno.serve(async (req: Request) => {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, serviceKey);
-
-  // Modo diagnóstico: ?fase=mapa|scan1|scan|snapshot1|snapshot|diff mede só aquela
-  // etapa, sem lock, sem log, sem escrever nada — útil pra depurar sem esperar o
-  // ciclo inteiro. Mantido de propósito (não afeta o caminho real de baixo).
-  const fase = new URL(req.url).searchParams.get("fase");
-  if (fase) {
-    const dt0 = Date.now();
-    try {
-      const { data: tokenData } = await supabase.rpc("get_secret", { secret_name: "rd_token" });
-      const rdToken = tokenData as string;
-      const dtToken = Date.now() - dt0;
-
-      if (fase === "mapa") {
-        const { mapa, funis } = await carregarFunis(rdToken);
-        return new Response(JSON.stringify({ fase, dtToken, dtTotal: Date.now() - dt0, etapas: mapa.size, funis: funis.length }), { headers: { "Content-Type": "application/json" } });
-      }
-      if (fase === "scan1") {
-        const t1 = Date.now();
-        const resp = await rd(rdToken, "/deals", { limit: String(TAM_PAGINA), page: "1" });
-        return new Response(JSON.stringify({ fase, dtToken, dtUmaPagina: Date.now() - t1, qtd: (resp.deals || []).length, hasMore: resp.has_more }), { headers: { "Content-Type": "application/json" } });
-      }
-      if (fase === "scan") {
-        const t1 = Date.now();
-        const { mapa, funis } = await carregarFunis(rdToken);
-        const { deals, paginas, errosPagina, cobertura } = await varrerRD(rdToken, funis, mapa);
-        return new Response(JSON.stringify({ fase, dtToken, dtScan: Date.now() - t1, dtTotal: Date.now() - dt0, total: deals.size, paginas, errosPagina, cobertura }), { headers: { "Content-Type": "application/json" } });
-      }
-      if (fase === "snapshot1") {
-        const t1 = Date.now();
-        const { data, error } = await supabase.from("deal_snapshot").select("id_deal").range(0, 999);
-        return new Response(JSON.stringify({ fase, dtToken, dtUmaPagina: Date.now() - t1, qtd: data?.length, error: error?.message }), { headers: { "Content-Type": "application/json" } });
-      }
-      if (fase === "snapshot") {
-        const t1 = Date.now();
-        const snap = await carregarSnapshot(supabase);
-        return new Response(JSON.stringify({ fase, dtToken, dtSnapshot: Date.now() - t1, total: snap.size }), { headers: { "Content-Type": "application/json" } });
-      }
-      if (fase === "diff") {
-        const t1 = Date.now();
-        const { mapa, funis } = await carregarFunis(rdToken);
-        const { deals: rdDeals, paginas, errosPagina, cobertura } = await varrerRD(rdToken, funis, mapa);
-        const tScan = Date.now();
-        const snap = await carregarSnapshot(supabase);
-        const tSnap = Date.now();
-        let divergentes = 0;
-        for (const [id, flat] of rdDeals) {
-          const { cats } = comparar(flat, snap.get(id));
-          if (cats.length) divergentes++;
-        }
-        const tCmp = Date.now();
-        return new Response(JSON.stringify({
-          fase, dtToken, paginas, errosPagina, cobertura,
-          dtScan: tScan - t1, dtSnapshot: tSnap - tScan, dtComparacao: tCmp - tSnap, dtTotal: tCmp - dt0,
-          rdTotal: rdDeals.size, snapTotal: snap.size, divergentes,
-        }), { headers: { "Content-Type": "application/json" } });
-      }
-      return new Response(JSON.stringify({ erro: "fase desconhecida" }), { status: 400 });
-    } catch (e) {
-      return new Response(JSON.stringify({ fase, erro: String(e), dtTotal: Date.now() - dt0 }), { status: 500, headers: { "Content-Type": "application/json" } });
+// Deal que estava no espelho e não voltou da varredura: só um 404 do RD prova exclusão.
+// Se o RD devolve o deal (criado depois da varredura, ou movido no meio dela), aplica.
+// deno-lint-ignore no-explicit-any
+async function verificarExclusao(supabase: any, token: string, id: string): Promise<"excluido" | "existe"> {
+  try {
+    await rd(token, `/deals/${id}`, {});
+  } catch (e) {
+    if (e instanceof ErroRD && e.status === 404) {
+      const { error } = await supabase.rpc("registrar_deal_deletado", {
+        p_id_deal: id,
+        p_data_evento: new Date().toISOString(),
+      });
+      if (error) throw new Error(`registrar_deal_deletado: ${error.message}`);
+      return "excluido";
     }
+    throw e;
   }
+  await aplicarCompleto(supabase, token, id, false);
+  return "existe";
+}
 
-  const iniciadoEm = new Date().toISOString();
-  let lockAdquirido = false;
+type Tarefa = { id: string; c: string[] }; // c = categorias da divergência
 
-  const logar = async (extra: Record<string, unknown>) => {
+// deno-lint-ignore no-explicit-any
+type Sb = any;
+
+function novoLogger(supabase: Sb, job: string, iniciadoEm: string) {
+  return async (extra: Record<string, unknown>) => {
     try {
       await supabase.from("sync_execucao").insert({
-        job: "espelho_rd_edge",
+        job,
         iniciado_em: iniciadoEm,
         terminado_em: new Date().toISOString(),
         ...extra,
@@ -471,137 +454,242 @@ Deno.serve(async (req: Request) => {
       // logging nunca deve derrubar a execução
     }
   };
+}
 
+// O wf_5 segura a trava por ~5s. Em vez de pular o ciclo inteiro, espera um pouco.
+async function pegarTrava(supabase: Sb): Promise<boolean> {
+  for (let i = 0; i < TENTATIVAS_LOCK; i++) {
+    const { data } = await supabase.rpc("deals_sync_tentar_lock", { p_timeout_minutos: 20 });
+    if (data === true) return true;
+    if (i < TENTATIVAS_LOCK - 1) await sleep(ESPERA_LOCK_MS);
+  }
+  return false;
+}
+
+async function soltarTrava(supabase: Sb, job: string) {
+  await supabase.rpc("deals_sync_liberar_lock", {
+    p_watermark: null, // preserva o watermark do wf_5 (COALESCE na função)
+    p_status: "success",
+    p_records: 0,
+    p_report: { job },
+  });
+}
+
+async function lerToken(supabase: Sb): Promise<string> {
+  const { data, error } = await supabase.rpc("get_secret", { secret_name: "rd_token" });
+  if (error || !data) throw new Error(`get_secret rd_token: ${error?.message || "vazio"}`);
+  return data as string;
+}
+
+// Dispara o próximo lote numa chamada nova da própria function (CPU zerada).
+async function encadear(fila: Tarefa[], lote: number, ciclo: string) {
+  const resp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/espelhar-rd`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ fila, lote, ciclo }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (resp.status !== 202) throw new Error(`encadear lote ${lote}: HTTP ${resp.status}`);
+}
+
+// ETAPA 1 — varredura: compara RD × espelho, monta a fila por prioridade e passa
+// pro 1º lote. Não grava nada no espelho (a CPU da chamada vai toda na varredura).
+async function executarVarredura(supabase: Sb, t0: number) {
+  const iniciadoEm = new Date(t0).toISOString();
+  const logar = novoLogger(supabase, "espelho_rd_edge", iniciadoEm);
+  let travado = false;
   try {
-    const { data: tokenData, error: tokenErr } = await supabase.rpc("get_secret", { secret_name: "rd_token" });
-    if (tokenErr || !tokenData) throw new Error(`get_secret rd_token: ${tokenErr?.message || "vazio"}`);
-    const rdToken = tokenData as string;
-
+    const rdToken = await lerToken(supabase);
     const { data: configRows } = await supabase.from("espelho_rd_config").select("chave,valor");
     // deno-lint-ignore no-explicit-any
     const config = Object.fromEntries((configRows || []).map((r: any) => [r.chave, r.valor]));
-    const modo = config.modo === "live" ? "live" : "observe"; // qualquer valor != 'live' vira observe
-    const maxEscritas = Number(config.max_escritas_por_execucao || 150);
-    const delayMs = Number(config.delay_ms_entre_requests || 200);
+    const modo = config.modo === "live" ? "live" : "observe";
+    const maxEscritas = Number(config.max_escritas_por_execucao || 1000);
 
-    const { data: lockOk } = await supabase.rpc("deals_sync_tentar_lock", { p_timeout_minutos: 20 });
-    if (lockOk !== true) {
-      await logar({
-        status: "success",
-        checkpoint: { pulado: "lock_ocupado_pelo_wf_5_ou_outra_execucao_do_espelho" },
-      });
-      return new Response(JSON.stringify({ skip: true, motivo: "lock ocupado" }), {
-        headers: { "Content-Type": "application/json" },
-      });
+    travado = await pegarTrava(supabase);
+    if (!travado) {
+      await logar({ status: "success", checkpoint: { pulado: "lock_ocupado_pelo_wf_5_ou_outra_execucao_do_espelho" } });
+      return;
     }
-    lockAdquirido = true;
 
-    // Tudo que segue é uma sequência de chamadas de rede (RD + Postgres) — qualquer
-    // uma delas poderia travar por conta própria. comPrazo garante que a function
-    // sempre retorna, e o finally sempre libera o lock, mesmo se algo pendurar.
-    const {
-      rdTotal, paginas, errosPagina, cobertura, snapTotal, porCategoria, plano,
-      aplicados, falhas, eventosGerados, parouPorOrcamento, erros,
-    } = await comPrazo(
+    const r = await comPrazo(
       (async () => {
         const { mapa: mapaEtapas, funis } = await carregarFunis(rdToken);
         const { deals: rdDeals, paginas, errosPagina, cobertura } = await varrerRD(rdToken, funis, mapaEtapas);
         const snap = await carregarSnapshot(supabase);
 
         const porCategoria: Record<string, number> = {};
-        const plano: string[] = [];
+        const tarefas: (Tarefa & { p: number })[] = [];
+        const add = (id: string, c: string[]) => {
+          for (const k of c) porCategoria[k] = (porCategoria[k] || 0) + 1;
+          tarefas.push({ id, c, p: Math.min(...c.map((k) => PRIORIDADE[k] ?? 9)) });
+        };
         for (const [id, flat] of rdDeals) {
-          const { cats } = comparar(flat, snap.get(id));
-          if (cats.length) {
-            plano.push(id);
-            for (const c of cats) porCategoria[c] = (porCategoria[c] || 0) + 1;
-          }
+          const c = comparar(flat, snap.get(id));
+          if (c.length) add(id, c);
         }
-        const rdTotal = rdDeals.size;
-        const snapTotal = snap.size;
-        // Achado num teste real (31/08): a 1ª execução em modo live levou WORKER_RESOURCE_LIMIT
-        // (HTTP 546) sem escrever nada. rdDeals e snap ficavam vivos durante TODA a escrita
-        // porque eram referenciados no retorno só pra .size. Soltando as duas antes do loop
-        // de escrita, o coletor de lixo pode liberar essa memória.
-        rdDeals.clear();
-        snap.clear();
-
-        let aplicados = 0, falhas = 0, eventosGerados = 0, parouPorOrcamento = false;
-        const erros: { id: string; erro: string }[] = [];
-
-        if (modo === "live") {
-          for (const id of plano) {
-            if (aplicados + falhas >= maxEscritas) break;
-            if (tempoEsgotado()) {
-              parouPorOrcamento = true;
-              break;
-            }
-            try {
-              const r = await aplicarUm(supabase, rdToken, id);
-              aplicados++;
-              eventosGerados += r.eventos + r.eventosEtapa;
-            } catch (e) {
-              falhas++;
-              erros.push({ id, erro: String(e).slice(0, 200) });
-            }
-            await sleep(delayMs);
-          }
+        // Exclusões: só com a varredura COMPLETA — senão um deal de uma página que
+        // falhou pareceria excluído. Mesmo assim, cada um é confirmado por 404.
+        const varreduraCompleta = errosPagina.length === 0 && cobertura.total_rd != null &&
+          rdDeals.size >= cobertura.total_rd;
+        if (varreduraCompleta) {
+          for (const [id, s] of snap) if (!s.deleted_at && !rdDeals.has(id)) add(id, ["sumiu_do_rd"]);
         }
-
-        return { rdTotal, paginas, errosPagina, cobertura, snapTotal, porCategoria, plano, aplicados, falhas, eventosGerados, parouPorOrcamento, erros };
+        tarefas.sort((a, b) => a.p - b.p);
+        const fila: Tarefa[] = tarefas.slice(0, maxEscritas).map(({ id, c }) => ({ id, c }));
+        return { paginas, errosPagina, cobertura, varreduraCompleta, rdTotal: rdDeals.size, snapTotal: snap.size, porCategoria, total: tarefas.length, fila };
       })(),
-      130_000,
-      "prazo global de 130s estourado — alguma chamada travou sem lançar erro",
+      PRAZO_VARREDURA_MS,
+      "prazo da varredura estourado — alguma chamada travou sem lançar erro",
     );
+
+    await soltarTrava(supabase, "espelho_rd_edge");
+    travado = false;
+
+    let encadeado: string | null = null;
+    if (modo === "live" && r.fila.length) {
+      try {
+        await encadear(r.fila, 1, iniciadoEm);
+        encadeado = "ok";
+      } catch (e) {
+        encadeado = String(e).slice(0, 200);
+      }
+    }
 
     await logar({
-      status: falhas > 0 || errosPagina.length > 0 ? "partial" : "success",
-      paginas,
-      requests: paginas + aplicados,
-      deals_processados: aplicados,
-      eventos_gerados: eventosGerados,
-      erro: erros.length ? JSON.stringify(erros.slice(0, 20)) : null,
+      status: r.errosPagina.length > 0 || (encadeado && encadeado !== "ok") ? "partial" : "success",
+      paginas: r.paginas,
+      requests: r.paginas,
+      deals_processados: 0,
+      eventos_gerados: 0,
+      erro: encadeado && encadeado !== "ok" ? encadeado : null,
       checkpoint: {
         modo,
-        rd_total: rdTotal,
-        snapshot_total: snapTotal,
-        cobertura,
-        divergentes_no_total: plano.length,
-        por_categoria: porCategoria,
-        aplicados,
-        falhas,
-        paginas_com_erro: errosPagina,
-        parou_por_orcamento: parouPorOrcamento,
-        restantes_no_proximo_ciclo: Math.max(0, plano.length - aplicados - falhas),
+        etapa: "varredura",
+        rd_total: r.rdTotal,
+        snapshot_total: r.snapTotal,
+        cobertura: r.cobertura,
+        varredura_completa: r.varreduraCompleta,
+        divergentes_no_total: r.total,
+        por_categoria: r.porCategoria,
+        enfileirados: modo === "live" ? r.fila.length : 0,
+        paginas_com_erro: r.errosPagina,
+        dt_ms: Date.now() - t0,
+        rd_429: respostas429,
       },
     });
-
-    return new Response(
-      JSON.stringify({
-        modo,
-        rd_total: rdTotal,
-        cobertura,
-        divergentes: plano.length,
-        aplicados,
-        falhas,
-        eventos_gerados: eventosGerados,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
   } catch (e) {
     await logar({ status: "failure", erro: String(e).slice(0, 500) });
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
   } finally {
-    if (lockAdquirido) {
-      await supabase.rpc("deals_sync_liberar_lock", {
-        p_watermark: null, // preserva o watermark do wf_5 (COALESCE na função)
-        p_status: "success",
-        p_records: 0,
-        p_report: { job: "espelho_rd_edge" },
-      });
+    if (travado) await soltarTrava(supabase, "espelho_rd_edge");
+  }
+}
+
+// ETAPA 2 — um lote: aplica até TAM_LOTE deals da fila (GET individual = dado
+// fresco do RD, não o da varredura) e passa o resto pro próximo lote.
+async function executarLote(supabase: Sb, t0: number, fila: Tarefa[], lote: number, ciclo: string) {
+  const logar = novoLogger(supabase, "espelho_rd_edge_lote", new Date(t0).toISOString());
+  let travado = false;
+  const agora = fila.slice(0, TAM_LOTE);
+  let resto = fila.slice(TAM_LOTE);
+  let aplicados = 0, falhas = 0, excluidos = 0, eventos = 0;
+  const erros: { id: string; erro: string }[] = [];
+  try {
+    const rdToken = await lerToken(supabase);
+    travado = await pegarTrava(supabase);
+    if (!travado) {
+      // Não perde a fila: devolve o lote inteiro pro próximo elo.
+      resto = fila;
+      throw new Error("trava ocupada — lote adiado para o próximo elo");
+    }
+
+    await comPrazo(
+      (async () => {
+        let proxima = 0;
+        const trabalhador = async () => {
+          while (proxima < agora.length) {
+            const t = agora[proxima++];
+            try {
+              if (t.c.includes("sumiu_do_rd")) {
+                if ((await verificarExclusao(supabase, rdToken, t.id)) === "excluido") excluidos++;
+              } else {
+                eventos += await aplicarCompleto(supabase, rdToken, t.id, t.c.includes("restaurado"));
+              }
+              aplicados++;
+            } catch (e) {
+              falhas++;
+              erros.push({ id: t.id, erro: String(e).slice(0, 200) });
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: CONCORRENCIA_ESCRITA }, trabalhador));
+      })(),
+      PRAZO_LOTE_MS,
+      "prazo do lote estourado",
+    );
+  } catch (e) {
+    erros.push({ id: "-", erro: String(e).slice(0, 200) });
+  } finally {
+    if (travado) await soltarTrava(supabase, "espelho_rd_edge_lote");
+  }
+
+  let encadeado: string | null = null;
+  if (resto.length) {
+    if (lote >= MAX_LOTES) encadeado = `parou no limite de ${MAX_LOTES} lotes; ${resto.length} ficam pro próximo ciclo`;
+    else {
+      try {
+        await encadear(resto, lote + 1, ciclo);
+        encadeado = "ok";
+      } catch (e) {
+        encadeado = String(e).slice(0, 200);
+      }
     }
   }
+
+  await logar({
+    status: falhas > 0 || erros.length > 0 || (encadeado && encadeado !== "ok") ? "partial" : "success",
+    requests: aplicados + falhas,
+    deals_processados: aplicados,
+    eventos_gerados: eventos,
+    erro: erros.length ? JSON.stringify(erros.slice(0, 20)) : null,
+    checkpoint: {
+      ciclo,
+      lote,
+      no_lote: agora.length,
+      aplicados,
+      excluidos_confirmados: excluidos,
+      falhas,
+      restantes: resto.length,
+      encadeado,
+      dt_ms: Date.now() - t0,
+      rd_429: respostas429,
+    },
+  });
+}
+
+Deno.serve(async (req: Request) => {
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const t0 = Date.now(); // por requisição — worker quente reaproveita o módulo
+  respostas429 = 0;
+  // deno-lint-ignore no-explicit-any
+  let corpo: any = {};
+  try {
+    corpo = await req.json();
+  } catch (_) {
+    // pg_cron manda '{}' — corpo vazio também vale como "varredura"
+  }
+  const trabalho = Array.isArray(corpo?.fila)
+    ? executarLote(supabase, t0, corpo.fila, Number(corpo.lote) || 1, String(corpo.ciclo || ""))
+    : executarVarredura(supabase, t0);
+  // Segundo plano: o chamador recebe 202 na hora, sem depender do timeout dele.
+  // Resultado em sync_execucao (espelho_rd_edge = varredura, espelho_rd_edge_lote = lotes).
+  // deno-lint-ignore no-explicit-any
+  (globalThis as any).EdgeRuntime.waitUntil(trabalho);
+  return new Response(JSON.stringify({ aceito: true }), {
+    status: 202,
+    headers: { "Content-Type": "application/json" },
+  });
 });

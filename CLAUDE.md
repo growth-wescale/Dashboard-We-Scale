@@ -538,6 +538,11 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
   (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
   etapas nessa tabela
+- [ ] **Varredura do espelho perto do limite de CPU** — a etapa de varredura
+  (`espelhar-rd`) faz parse de ~10 mil deals numa chamada só, com 2s de CPU. A
+  v8 cabia com folga, mas a base cresce ~40 deals/dia. Se aparecer `CPU Time
+  exceeded` em `function_logs` na varredura, quebrar a varredura em chamadas
+  por funil, igual aos lotes (ver 23/09)
 - [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
   máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
   pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
@@ -559,6 +564,70 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-23 — Funil Atual ficava horas atrás do RD: espelho reescrito (vazão, exclusões, CPU)
+
+Junior: o Funil Atual (espelho dos deals Em andamento) não batia com o RD —
+deal que já tinha trocado de etapa ou sido perdido seguia aparecendo.
+
+**O dashboard não tinha culpa.** `vw_funil_vendas` batia 100% com
+`deal_snapshot` (2.264 deals Em andamento, mesma etapa em todos). O atraso
+estava entre o RD e o espelho. Às 9h de 23/09 houve operação em massa no RD:
+~200 perdas e 40 exclusões, e às 10h ~185 trocas de responsável. O `wf_5`
+(n8n) processa no máximo 30 deals por rodada numa janela fixa de 60 min, e
+o que sobra fica pro `espelho_rd_edge`. Este corrigia ~36 deals por ciclo de
+15 min, e às vezes 0.
+
+**Causas no `espelhar-rd`, todas corrigidas (v11):**
+1. **Orçamento de tempo:** a varredura do RD leva 40-100s e o orçamento era
+   100s, então às vezes não sobrava tempo pra corrigir nada (14:00 de 23/09:
+   183 divergentes, 0 aplicados).
+2. **CPU:** Edge Function tem **2s de CPU por chamada**. A 1ª tentativa
+   (varredura + correções em paralelo na mesma chamada) morreu com `CPU Time
+   exceeded` depois de ~80 correções, com a trava presa (liberada à mão).
+   Agora são duas etapas: a **varredura** só compara e monta a fila, e as
+   correções vão em **lotes de 25**, cada lote numa chamada nova da própria
+   function (CPU zerada), que dispara o próximo com o resto da fila no corpo do
+   POST. Tudo em `EdgeRuntime.waitUntil`: o pg_net recebe 202 na hora. Log:
+   `sync_execucao.job = 'espelho_rd_edge'` (varredura) e
+   `'espelho_rd_edge_lote'` (cada lote).
+3. **Ordem:** a fila seguia a ordem da listagem do RD. Agora vai por
+   prioridade: ausente/status/exclusão → etapa/funil → marca → responsável →
+   payload.
+4. **Deal excluído no RD ficava "Em andamento" pra sempre.** Nenhum job
+   tratava exclusão: `deleted_at` só era preenchido por backfill manual
+   (17-18/09). Agora, **só com varredura completa** (nenhuma página com erro
+   e `deals_lidos ≥ total_rd`), todo deal do espelho que não voltou do RD é
+   conferido com `GET /deals/:id`, e **só um 404** chama
+   `registrar_deal_deletado`. Se o RD devolve o deal, ele é reaplicado. Deal
+   restaurado no RD tem o `deleted_at` limpo.
+5. **Trava:** se o `wf_5` estava com ela, o ciclo inteiro era pulado (17 de 80
+   ciclos em 24h). Agora tenta 6× com 8s de intervalo.
+6. **Limite do RD (429):** com os lotes encadeados sem pausa, o RD passou a
+   devolver 429 (o token é dividido com o `wf_5` e o n8n). Agora respeita o
+   `Retry-After` (ou espera crescente até 30s, 6 tentativas), cada lote dura no
+   mínimo 20s (~75 req/min), e deal que toma 429 volta pro fim da fila até 3×
+   em vez de virar falha. Página da varredura que falha por 429 deixa a
+   varredura incompleta, e aí a checagem de exclusão fica pro próximo ciclo
+   (de propósito).
+
+Também: `carregarSnapshot` paginava `deal_snapshot` **sem ORDER BY** (mesma
+armadilha da seção 7). Agora ordena por `id_deal`.
+
+**Efeito medido** no 1º ciclo com lotes (14:30 UTC): 93 divergentes corrigidos
+em ~40s (4 lotes). Antes eram ~36 por ciclo de 15 min. 2º ciclo (14:45, já
+com o controle de 429): varredura completa, 0 respostas 429, 44 divergentes
+corrigidos em 2 lotes, 0 falhas, e **31 deals excluídos no RD** confirmados
+por 404 e tirados do dashboard (Oral Unic 16, Viva 6, Lisô 4, sem marca 4,
+B2Case 1). Funil Atual Inbound: 2.264 → 2.183 Em andamento.
+
+`supabase/functions/espelhar-rd/index.ts` é a fonte. O modo diagnóstico
+`?fase=` saiu (a cópia `espelhar-rd-teste` segue existindo pra isso).
+
+**Não mexido:** `max_escritas_por_execucao` em `espelho_rd_config` segue 150
+(a mudança pra 1000 foi barrada pela trava de segurança do Claude Code — é
+só `update espelho_rd_config set valor='1000' where chave='max_escritas_por_execucao'`).
+Com 150, pico de 400 divergências leva 3 ciclos (45 min) em vez de 1.
 
 ### 2026-09-23 — Modo TV troca de visualização a cada 15s (era 30s)
 

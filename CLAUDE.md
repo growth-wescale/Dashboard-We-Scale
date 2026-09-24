@@ -664,6 +664,30 @@ Texto: "X% da meta · N SQL · N DIAG". `PolePositionCard` virou genérico
 repassado ao `SdrsSection` (1 consulta só). Segue a janela selecionada, igual
 ao card do Closer.
 
+### 2026-09-22 (3) — Eventos carregados sem filtro de data: troca de período instantânea
+
+Junior reportou duas queixas de performance: (1) "o dash está demorando muito
+para carregar" e (2) "quando filtro vários meses ele não carrega nunca".
+
+**Causa raiz: `useFunilEventos` filtrava datas no servidor e incluía
+`inicio:fim` na chave de cache.** A cada troca de período, a chave mudava e
+o cache era descartado, forçando rebusca de todos os ~19k eventos. Com
+multi-seleção distante (ex.: Jan + Set), a bounding box abrangia 9 meses e
+buscava praticamente a view inteira — ~7 páginas × 450ms = ~3s de espera. O
+funil ficava em branco durante esse tempo.
+
+**Fix: mesmo padrão de `useFunilVendas`.** A view é carregada uma vez por
+origem, sem filtro de data no servidor. Chave de cache virou
+`vw_funil_etapas_v2:{origem}` (estável). O recorte de período já era feito no
+cliente via `isInWindow`/`win` — continua funcionando sem mudança. Resultado:
+primeira carga ~1s (paralelo, igual antes), qualquer troca de período após isso
+é instantânea.
+
+Três arquivos: `useFunilEventos.ts` (remove `inicio`/`fim` do `Params` e da
+query), `FunilVendas.tsx` e `PerformanceVendas.tsx` (chamadas simplificadas).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (470 testes).
+
 ### 2026-09-22 (2) — Motivos de perda do RD: 463 cadastros viram 36
 
 Junior deu prazo de hoje pro Brunno limpar os motivos de perda. O plano

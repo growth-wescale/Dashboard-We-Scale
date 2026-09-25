@@ -560,6 +560,19 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-25 — Xayane fixada como SDR do deal Theodoro Rodrigues (override manual)
+
+Pedido do Junior: a Xayane é a SDR do deal `6ab52d24d078f6002a867ebd`
+(Theodoro Rodrigues, Inpot, Reunião Agendada SQL no Closer, criado em 24/09).
+O dashboard já mostrava Xayane, mas só pela fonte `campo_rd` (campo "SDR
+Responsável" = "Xay"), a mais fraca da cadeia: o dono do deal no RD é o
+Douglas desde a criação, sem nenhuma `troca_responsavel`, então nem `posse`
+nem `handoff` viam a Xayane. Se alguém apagasse ou mudasse o campo, ela
+sairia. Gravado `atribuicao_manual.sdr_override = 'Xayane'` (com `motivo`),
+que tem prioridade sobre todas as fontes. `REFRESH` da matview rodado.
+Closer segue Douglas. Nota: `sdr_fonte` continua `campo_rd` porque o
+override entra direto em `nome_sdr` e não muda esse rótulo.
+
 ### 2026-09-23 — Funil Atual ficava horas atrás do RD: espelho reescrito (vazão, exclusões, CPU)
 
 Junior: o Funil Atual (espelho dos deals Em andamento) não batia com o RD —

@@ -1,5 +1,9 @@
 # Dashboard We Scale — Contexto para Claude Code
 
+## Memória operacional compartilhada
+
+Consultar o vault `/Users/gablimas/Library/Mobile Documents/iCloud~md~obsidian/Documents/Reccon`, entrada `11 We Scale/Cérebro We Scale.md` e nota `11 We Scale/Projetos/Dashboard We Scale/Projeto - Dashboard We Scale.md`. Ao concluir mudanças duráveis, atualizar a nota e reconciliar as ações/pendências do cockpit. Usar `/Users/gablimas/.codex/skills/manter-cerebro-operacional/SKILL.md` quando disponível. Registrar fonte, data e distinguir código local de produção verificada; nunca copiar segredos ou dados de leads. A atualização do histórico abaixo complementa a memória no vault.
+
 > Este arquivo é carregado automaticamente em toda conversa nesta pasta.
 > **Ao terminar qualquer mudança no dashboard ou no banco, registre em "Histórico
 > de mudanças" no fim do arquivo** e atualize a seção correspondente aqui em cima.
@@ -559,6 +563,43 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-28 (2) — Auditoria de cobertura de campanhas Meta + We Scale SOP atualizado
+
+Pedido do Junior: "confira as campanhas que estamos puxando no banco e o nome
+delas".
+
+**Achados e correções na Edge Function `ingest-meta-ads` (v6, Supabase
+Marketing):**
+
+1. **Conta ausente:** `1480293653136673` (We Scale - B2B / Beauty Connection /
+   Scale Partner B2B) nunca estava em `MARCA_MAP` — todas as campanhas dela
+   eram silenciosamente descartadas. Adicionada. O backfill retornou 0 linhas
+   para essa conta (sem dados históricos no Meta para o período), mas o Junior
+   confirmou R$2.627,57 de spend real (Beauty Connection / evento Lisô) —
+   gravado manualmente nas constantes.
+
+2. **Campanha IDA escapando:** `IDA_FUNDO_CONVERSOES_SULESUDESTE__SITEFORMS_AON`
+   é uma variante diferente da bloqueada `FORMS_AON`; adicionada a
+   `EXCLUDED_CAMPAIGNS`. Já havia 22 leads / R$188.65 históricos (09-09→09-10)
+   no banco — não foram removidos, apenas não reingeridos.
+
+3. **Contas documentadas também adicionadas ao `MARCA_MAP`:** `1923360421973366`
+   (Lisô B2B P - CA NOVA → Lisô Laser) e `1303764587731935` (Leonardo Pereira →
+   We Scale, já estava mapeada, confirmado).
+
+**Backfill completo** disparado via `trigger_ingest` com `time_range 01-28/09`:
+2.049 linhas upsertadas, sem erros.
+
+**`weScaleSop.ts` e `sop-weekly.html` atualizados** com valores confirmados pelo
+Junior (substituem os do backfill, que não capturou a conta Beauty Connection):
+- MTD set/26: **R$12.431 invest** · 68 leads · 49 MQL · **CP-MQL R$254**
+- Scale Partner: R$9.804 invest · 68 leads
+- Beauty Connection (evento Lisô): R$2.628 invest · 0 leads (conta `1480293653136673`,
+  sem campanhas ativas no Meta em set/26 mas com spend confirmado pelo Junior)
+- Gráfico semanal do HTML expandido de 2 para 4 semanas (S1:12, S2:15, S3:9, S4:13)
+
+Não verificado na tela — são só constantes hardcoded e HTML estático.
 
 ### 2026-09-28 — Campanha de Metas: Corrida conta unidade vendida, não deal fechado
 

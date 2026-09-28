@@ -597,7 +597,15 @@ Verificado: `npm run build` + `npx vitest run` (477 testes, 4 novos em
 Consulta do hook conferida com a chave anon contra a base real, e **visto
 renderizado** com dado real numa rota temporária sem login (removida antes
 do commit): trilha Closer da página (volta 4 e mês inteiro) batendo com os
-cards de meta, e Modo TV em 1920×1080.
+cards de meta, e Modo TV em 1920×1080. PR #191.
+
+**Deploy não disparou no merge.** O GitHub registrou o merge do #191 mas não
+gerou o evento de push no `main`, e sem ele o `Deploy` nunca rodou (mesma
+conta e mesmo `gh pr merge` do #190, que disparou normal; status do GitHub
+"operational"). Como o `deploy.yml` só tem gatilho `push`, o deploy saiu no
+merge do PR seguinte (só docs). Se acontecer de novo: conferir com `gh api
+"repos/growth-wescale/Dashboard-We-Scale/actions/runs?head_sha=<sha>"` e
+soltar com um PR novo.
 
 ### 2026-09-25 — Xayane fixada como SDR do deal Theodoro Rodrigues (override manual)
 

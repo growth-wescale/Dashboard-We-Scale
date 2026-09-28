@@ -7,7 +7,8 @@ import { useVendasFunil } from '@/hooks/useVendasFunil'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { DealCardKanban } from '@/components/timeline/DealCardKanban'
-import { stageLabel } from '@/lib/metrics'
+import { stageLabel, toWindow } from '@/lib/metrics'
+import { dealNaJanela } from '@/lib/funilFilterOptions'
 import { nf } from '@/lib/format'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
@@ -2029,18 +2030,29 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
 const KANBAN_COLS = 260
 const KANBAN_POR_COLUNA = 30
 
-function SopKanbanSlide({ onPrev, onNext }: { onPrev: () => void; onNext: () => void }) {
+const DIAGNOSTICO_PLUS = new Set<string>([
+  'Diagnóstico', 'SAL', 'Oportunidade COF', 'Comitê', 'Pré-Contrato', 'Fechamento',
+])
+
+function SopKanbanSlide({ onPrev, onNext, dates }: { onPrev: () => void; onNext: () => void; dates: DateRanges }) {
   const { data: rowsInbound } = useFunilVendas('Inbound')
   const { data: rowsProsp } = useFunilVendas('Prospecção Ativa')
   const agora = useMemo(() => new Date(), [])
   const [limites, setLimites] = useState<Record<string, number>>({})
+  const [modo, setModo] = useState<'diagnostico' | 'completo'>('diagnostico')
+
+  const win = useMemo(
+    () => toWindow(null, null, [{ from: dates.mtdCurStart, to: dates.mtdCurEnd }]),
+    [dates.mtdCurStart, dates.mtdCurEnd],
+  )
 
   const colunas = useMemo(() => {
     const todos = [...rowsInbound, ...rowsProsp].filter(
-      r => r.eh_ciclo_atual && r.status_atual === 'Em andamento',
+      r => r.eh_ciclo_atual && r.status_atual === 'Em andamento' && dealNaJanela(r, win, false),
     )
-    return montarKanban(todos, agora).filter(col => col.cards.length > 0)
-  }, [rowsInbound, rowsProsp, agora])
+    const kanban = montarKanban(todos, agora).filter(col => col.cards.length > 0)
+    return modo === 'diagnostico' ? kanban.filter(col => DIAGNOSTICO_PLUS.has(col.etapa)) : kanban
+  }, [rowsInbound, rowsProsp, agora, win, modo])
 
   const total = useMemo(() => colunas.reduce((s, c) => s + c.cards.length, 0), [colunas])
 
@@ -2052,11 +2064,30 @@ function SopKanbanSlide({ onPrev, onNext }: { onPrev: () => void; onNext: () => 
       }}>
         <button onClick={onPrev} style={navBtnStyle}><ChevronLeft size={14} /></button>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ws-text-primary)' }}>
-          Funil Atual — Em andamento
+          Funil do Mês — Em andamento
         </span>
         <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-          {nf(total)} deals · todos os funis
+          {nf(total)} deals · {dates.monthSuffix === 'MTD' ? dates.mtdLabel : dates.monthSuffix}
         </span>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 12, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
+          {(['diagnostico', 'completo'] as const).map(m => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => { setModo(m); setLimites({}) }}
+              style={{
+                padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: modo === m ? 700 : 400, fontFamily: 'var(--font-body)',
+                background: modo === m ? '#fff' : 'transparent',
+                color: modo === m ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)',
+                boxShadow: modo === m ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                transition: 'all .15s',
+              }}
+            >
+              {m === 'diagnostico' ? 'Diagnóstico +' : 'Completo'}
+            </button>
+          ))}
+        </div>
         <div style={{ marginLeft: 'auto' }}>
           <button onClick={onNext} style={navBtnStyle}><ChevronRight size={14} /></button>
         </div>
@@ -2310,6 +2341,7 @@ export function SopMarketing() {
         <SopKanbanSlide
           onPrev={() => setActiveSlide(slides.length - 1)}
           onNext={() => setActiveSlide(0)}
+          dates={dates}
         />
       ) : (
         <SopSlide

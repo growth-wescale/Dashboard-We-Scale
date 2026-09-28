@@ -2034,10 +2034,14 @@ const DIAGNOSTICO_PLUS = new Set<string>([
   'Diagnóstico', 'SAL', 'Oportunidade COF', 'Comitê', 'Pré-Contrato', 'Fechamento',
 ])
 
-function SopKanbanSlide({ onPrev, onNext, dates }: { onPrev: () => void; onNext: () => void; dates: DateRanges }) {
-  const { data: rowsInbound } = useFunilVendas('Inbound')
-  const { data: rowsProsp } = useFunilVendas('Prospecção Ativa')
+function SopKanbanSlide({ onPrev, onNext, dates, onReady }: { onPrev: () => void; onNext: () => void; dates: DateRanges; onReady?: () => void }) {
+  const { data: rowsInbound, loading: loadingIn } = useFunilVendas('Inbound')
+  const { data: rowsProsp, loading: loadingPr } = useFunilVendas('Prospecção Ativa')
   const agora = useMemo(() => new Date(), [])
+
+  useEffect(() => {
+    if (!loadingIn && !loadingPr) onReady?.()
+  }, [loadingIn, loadingPr, onReady])
   const [limites, setLimites] = useState<Record<string, number>>({})
   const [modo, setModo] = useState<'diagnostico' | 'completo'>('diagnostico')
 
@@ -2226,10 +2230,11 @@ export function SopMarketing() {
         compress: true,
       })
 
-      for (let i = 0; i < slides.length; i++) {
-        setPdfProgress(`Carregando slide ${i + 1}/${slides.length}...`)
+      const totalSlides = slides.length + 1
+      for (let i = 0; i <= slides.length; i++) {
+        setPdfProgress(`Carregando slide ${i + 1}/${totalSlides}...`)
 
-        // Aguarda o SopSlide sinalizar que todos os fetches terminaram (via onReady).
+        // Aguarda o SopSlide/SopKanbanSlide sinalizar que todos os fetches terminaram (via onReady).
         // Timeout de 30s por slide como fallback.
         await new Promise<void>((resolve) => {
           readyResolverRef.current = resolve
@@ -2249,7 +2254,7 @@ export function SopMarketing() {
 
         const el = exportSlideRef.current
         if (!el) continue
-        setPdfProgress(`Renderizando slide ${i + 1}/${slides.length}...`)
+        setPdfProgress(`Renderizando slide ${i + 1}/${totalSlides}...`)
 
         const canvas = await html2canvas(el, {
           scale: 1,
@@ -2308,18 +2313,26 @@ export function SopMarketing() {
             ref={el => { exportSlideRef.current = el }}
             style={{ width: 1920, height: 1080, overflow: 'hidden', background: '#F8F9FB' }}
           >
-            <SopSlide
-              key={slides[exportingIdx].id}
-              slide={slides[exportingIdx]} dates={dates}
-              slideIndex={exportingIdx} total={slides.length}
-              onPrev={() => {}} onNext={() => {}}
-              isFullscreen={false} onToggleFullscreen={() => {}}
-              exportHeight={1080}
-              monthMode={monthMode} onMonthModeChange={setMonthMode}
-              customStart={customStart} onCustomStartChange={setCustomStart}
-              customEnd={customEnd} onCustomEndChange={setCustomEnd}
-              onReady={handleSlideReady}
-            />
+            {exportingIdx < slides.length ? (
+              <SopSlide
+                key={slides[exportingIdx].id}
+                slide={slides[exportingIdx]} dates={dates}
+                slideIndex={exportingIdx} total={slides.length + 1}
+                onPrev={() => {}} onNext={() => {}}
+                isFullscreen={false} onToggleFullscreen={() => {}}
+                exportHeight={1080}
+                monthMode={monthMode} onMonthModeChange={setMonthMode}
+                customStart={customStart} onCustomStartChange={setCustomStart}
+                customEnd={customEnd} onCustomEndChange={setCustomEnd}
+                onReady={handleSlideReady}
+              />
+            ) : (
+              <SopKanbanSlide
+                onPrev={() => {}} onNext={() => {}}
+                dates={dates}
+                onReady={handleSlideReady}
+              />
+            )}
           </div>
         </div>
       )}

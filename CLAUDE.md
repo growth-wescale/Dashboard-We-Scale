@@ -564,6 +564,20 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-28 (4) — Kanban S&OP entra no export PDF
+
+O `downloadPDF` da S&OP agora inclui o slide kanban como última página. O loop que antes iterava `i < slides.length` passou a `i <= slides.length`, com `totalSlides = slides.length + 1` para os labels de progresso ("Carregando slide N/9..."). `SopKanbanSlide` ganhou `onReady?: () => void` — dispara via `useEffect` quando os dois `useFunilVendas` (Inbound + Prospecção Ativa) terminam de carregar, mesmo mecanismo dos slides de marca. PR #195, deploy automático.
+
+### 2026-09-28 (3) — Kanban S&OP: filtro de mês + toggle Diagnóstico+/Completo
+
+O slide Kanban da S&OP (`SopKanbanSlide` em `SopMarketing.tsx`) ganhou dois ajustes:
+
+**Filtro de mês.** Antes mostrava todos os deals Em andamento (funil inteiro histórico). Agora usa `dealNaJanela(r, win, false)` com `win = toWindow(null, null, [{ from: dates.mtdCurStart, to: dates.mtdCurEnd }])` — filtra deals que têm alguma data de etapa dentro da janela MTD do mês selecionado na S&OP. Não é safra de MQL (criação no mês), é atividade no mês.
+
+**Toggle pill.** Padrão "Diagnóstico +" filtra as colunas para as 6 etapas do fundo do funil (`DIAGNOSTICO_PLUS = { Diagnóstico, SAL, Oportunidade COF, Comitê, Pré-Contrato, Fechamento }`). Alternativa "Completo" mostra todas as etapas com deals no período. Trocar o modo zera a paginação.
+
+Título atualizado para "Funil do Mês — Em andamento". PR #194, deploy automático.
+
 ### 2026-09-28 (2) — Auditoria de cobertura de campanhas Meta + We Scale SOP atualizado
 
 Pedido do Junior: "confira as campanhas que estamos puxando no banco e o nome

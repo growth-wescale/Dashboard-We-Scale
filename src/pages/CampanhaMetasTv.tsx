@@ -204,7 +204,7 @@ export function CampanhaMetasTv() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vh(2) }}>
           <Placar titulo="Corrida de Performance · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={SDRS_ATIVOS} loading={corrida.loading} />
-          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="vendas" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
+          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="unidades" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
         </div>
       </div>
     </div>
@@ -417,7 +417,7 @@ function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: bo
               {loading ? '—' : temMeta ? pct(c.pctAtingimento, 0) : '—'}
             </div>
             <div style={{ fontSize: vh(1.6), color: TEXTO_2, textAlign: 'center', whiteSpace: 'nowrap' }}>
-              {moneyCompact(c.realizado)} · {c.realizadoQtd} {c.realizadoQtd === 1 ? 'venda' : 'vendas'}
+              {moneyCompact(c.realizado)} · {c.realizadoQtd} un
             </div>
 
             <div style={{
@@ -482,7 +482,7 @@ function MiniBarra({ rotulo, valor, meta, cor, loading }: { rotulo: string; valo
 function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
   titulo: string
   periodo: string
-  unidade: 'RR' | 'vendas'
+  unidade: 'RR' | 'unidades'
   linhas: LinhaTrilha[]
   visual: ReadonlyArray<{ nome: string; iniciais: string; cor: string; foto?: string }>
   loading: boolean
@@ -511,7 +511,7 @@ function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
                   <div style={{ width: `${(pontos / max) * 100}%`, height: '100%', background: p.cor, transition: 'width 600ms ease' }} />
                 </div>
                 <div style={{ marginTop: vh(0.4), fontSize: vh(1.3), color: TEXTO_3 }}>
-                  {vol} {unidade === 'RR' ? 'RR' : vol === 1 ? 'venda' : 'vendas'}
+                  {vol} {unidade === 'RR' ? 'RR' : vol === 1 ? 'unidade' : 'unidades'}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>

@@ -4,6 +4,11 @@ import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucid
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
+import { useFunilVendas } from '@/hooks/useFunilVendas'
+import { montarKanban } from '@/lib/timeline/kanban'
+import { DealCardKanban } from '@/components/timeline/DealCardKanban'
+import { stageLabel } from '@/lib/metrics'
+import { nf } from '@/lib/format'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
@@ -2019,6 +2024,94 @@ function ConversaoFunilTable({ cur, prev, curLabel, prevLabel, accent }: Convers
   )
 }
 
+// ── SopKanbanSlide ─────────────────────────────────────────────────────────────
+
+const KANBAN_COLS = 260
+const KANBAN_POR_COLUNA = 30
+
+function SopKanbanSlide({ onPrev, onNext }: { onPrev: () => void; onNext: () => void }) {
+  const { data: rowsInbound } = useFunilVendas('Inbound')
+  const { data: rowsProsp } = useFunilVendas('Prospecção Ativa')
+  const agora = useMemo(() => new Date(), [])
+  const [limites, setLimites] = useState<Record<string, number>>({})
+
+  const colunas = useMemo(() => {
+    const todos = [...rowsInbound, ...rowsProsp].filter(
+      r => r.eh_ciclo_atual && r.status_atual === 'Em andamento',
+    )
+    return montarKanban(todos, agora).filter(col => col.cards.length > 0)
+  }, [rowsInbound, rowsProsp, agora])
+
+  const total = useMemo(() => colunas.reduce((s, c) => s + c.cards.length, 0), [colunas])
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#F8F9FB', overflow: 'hidden' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px',
+        borderBottom: '1px solid #e2e8f0', flexShrink: 0, background: '#fff',
+      }}>
+        <button onClick={onPrev} style={navBtnStyle}><ChevronLeft size={14} /></button>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--ws-text-primary)' }}>
+          Funil Atual — Em andamento
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+          {nf(total)} deals · todos os funis
+        </span>
+        <div style={{ marginLeft: 'auto' }}>
+          <button onClick={onNext} style={navBtnStyle}><ChevronRight size={14} /></button>
+        </div>
+      </div>
+      <div style={{
+        flex: 1, overflowX: 'auto', overflowY: 'hidden',
+        display: 'flex', gap: 10, padding: '12px 20px', alignItems: 'flex-start',
+      }}>
+        {colunas.map(col => {
+          const limite = limites[col.etapa] ?? KANBAN_POR_COLUNA
+          const restantes = col.cards.length - limite
+          return (
+            <div key={col.etapa} style={{
+              flex: `0 0 ${KANBAN_COLS}px`, width: KANBAN_COLS, display: 'flex', flexDirection: 'column',
+              background: 'var(--ws-bg)', border: '1px solid var(--ws-border)', borderRadius: 12,
+              maxHeight: '100%',
+            }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8,
+                padding: '8px 10px', borderBottom: '1px solid var(--ws-border)',
+                background: 'var(--ws-bg)', borderRadius: '12px 12px 0 0', flexShrink: 0,
+              }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ws-text-primary)' }}>
+                  {stageLabel(col.etapa, 'Inbound')}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                  {nf(col.cards.length)}
+                </span>
+              </div>
+              <div style={{ overflowY: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {col.cards.slice(0, limite).map(c => (
+                  <DealCardKanban key={`${c.row.id_lead}::${c.row.ciclo}`} card={c} />
+                ))}
+                {restantes > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setLimites(l => ({ ...l, [col.etapa]: limite + KANBAN_POR_COLUNA }))}
+                    style={{
+                      padding: '6px 8px', borderRadius: 999, border: '1px solid var(--ws-border)',
+                      background: 'var(--ws-surface)', color: 'var(--ws-text-primary)',
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    Ver mais ({nf(restantes)})
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── SopMarketing ───────────────────────────────────────────────────────────────
 
 export function SopMarketing() {
@@ -2055,8 +2148,9 @@ export function SopMarketing() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setActiveSlide(s => (s + 1) % slides.length) }
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setActiveSlide(s => (s - 1 + slides.length) % slides.length) }
+      const total = slides.length + 1
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setActiveSlide(s => (s + 1) % total) }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setActiveSlide(s => (s - 1 + total) % total) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -2163,7 +2257,8 @@ export function SopMarketing() {
     )
   }
 
-  const idxAtivo = Math.min(activeSlide, slides.length - 1)
+  const idxAtivo = Math.min(activeSlide, slides.length)
+  const isKanban = idxAtivo === slides.length
   const slide = slides[idxAtivo]
 
   return (
@@ -2211,16 +2306,23 @@ export function SopMarketing() {
         </div>
       )}
 
-      <SopSlide
-        key={slide.id} slide={slide} dates={dates}
-        slideIndex={idxAtivo} total={slides.length}
-        onPrev={() => setActiveSlide(s => (s - 1 + slides.length) % slides.length)}
-        onNext={() => setActiveSlide(s => (s + 1) % slides.length)}
-        isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
-        monthMode={monthMode} onMonthModeChange={setMonthMode}
-        customStart={customStart} onCustomStartChange={setCustomStart}
-        customEnd={customEnd} onCustomEndChange={setCustomEnd}
-      />
+      {isKanban ? (
+        <SopKanbanSlide
+          onPrev={() => setActiveSlide(slides.length - 1)}
+          onNext={() => setActiveSlide(0)}
+        />
+      ) : (
+        <SopSlide
+          key={slide.id} slide={slide} dates={dates}
+          slideIndex={idxAtivo} total={slides.length + 1}
+          onPrev={() => setActiveSlide(s => (s - 1 + slides.length + 1) % (slides.length + 1))}
+          onNext={() => setActiveSlide(s => (s + 1) % (slides.length + 1))}
+          isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen}
+          monthMode={monthMode} onMonthModeChange={setMonthMode}
+          customStart={customStart} onCustomStartChange={setCustomStart}
+          customEnd={customEnd} onCustomEndChange={setCustomEnd}
+        />
+      )}
 
       <div style={{
         position: 'fixed', bottom: 12, left: '50%', transform: 'translateX(-50%)',
@@ -2238,6 +2340,14 @@ export function SopMarketing() {
               background: i === idxAtivo ? s.accent : '#cbd5e1', transition: 'all 0.2s',
             }} />
         ))}
+        <button
+          onClick={() => setActiveSlide(slides.length)}
+          title="Funil Atual"
+          style={{
+            width: isKanban ? 18 : 6, height: 6,
+            borderRadius: 3, border: 'none', cursor: 'pointer', padding: 0, outline: 'none',
+            background: isKanban ? 'var(--ws-text-primary)' : '#cbd5e1', transition: 'all 0.2s',
+          }} />
       </div>
 
       <button

@@ -77,7 +77,7 @@ novo.
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD. O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
-- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 só pro toggle de vendas (venda fechada sem produto ainda conta como 1 unidade vendida)
+- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
 
 ### Inbound × Prospecção Ativa
@@ -559,6 +559,45 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-28 — Campanha de Metas: Corrida conta unidade vendida, não deal fechado
+
+Pedido do Junior: na aba Campanha de Metas, venda é unidade vendida, não
+deal fechado.
+
+**Onde contava deal:** só na **trilha Closer da Corrida de Performance**
+(página e Modo TV). `pontosCloser` (`corridaPerformance.ts`) somava 1 por
+venda ganha, então um deal de 2 franquias valia 1 no volume e nos pontos. Os
+cards dos closers, a Meta do time e Metas por Marca já somavam
+`quantidade_unidades`, e a mesma tela mostrava Jéssica com "5/6 un" no card e
+"3 vendas" na Corrida.
+
+**Fix:** `VendaUnidade` ganhou `unidades` (`saleUnits`, piso 1: venda ganha
+sem produto no RD conta 1) e `pontosCloser` abre cada venda em N unidades do
+placar. Volume, "Fonte 2 pts", ticket médio, velocidade e pontos passam a ser
+por unidade. `useCorridaPerformance` busca `quantidade_unidades`. Rótulos:
+"N unidades" no volume da trilha (página e placar da TV) e "N un" no pódio da
+TV, que antes dizia "N vendas" mas já contava unidade. `useMetasClosers` e
+`useRealizadoPorMarca` trocaram a cópia inline da regra por `saleUnits`, sem
+mudar número. `saleUnits` passou a aceitar `Pick<FunnelRow,
+'quantidade_unidades'>`.
+
+**Bônus de mesmo dia segue a régua escrita na tela** ("mais de 1 unidade no
+mesmo dia"): venda de 2 unidades ativa o ×1,5 nas duas, igual a 2 vendas de 1
+unidade no mesmo dia. Se o Junior quiser o bônus só pra 2+ vendas separadas
+no dia, a mudança fica toda em `pontosCloser`.
+
+**Impacto em set/26 (ciclo mensal):** Jéssica 3 → 5 unidades e 5,0 → 11 pts
+(passa de P2 a P1); Bruna 2 → 3 e 5,3 → 7,5; Aurélio (1) e Douglas (2) sem
+mudança, só têm deal de 1 unidade. Sem o bônus no deal de 2 unidades, Jéssica
+ficaria com 8 pts, e a ordem seria a mesma.
+
+Verificado: `npm run build` + `npx vitest run` (477 testes, 4 novos em
+`corridaPerformance.test.ts`) + `oxlint` limpo, em worktree fora do OneDrive.
+Consulta do hook conferida com a chave anon contra a base real, e **visto
+renderizado** com dado real numa rota temporária sem login (removida antes
+do commit): trilha Closer da página (volta 4 e mês inteiro) batendo com os
+cards de meta, e Modo TV em 1920×1080.
 
 ### 2026-09-25 — Xayane fixada como SDR do deal Theodoro Rodrigues (override manual)
 

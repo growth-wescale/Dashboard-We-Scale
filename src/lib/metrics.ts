@@ -246,7 +246,7 @@ export function isSale(row: FunnelRow): boolean {
 }
 
 /** Unidades de um deal ganho. Nulo, zero ou negativo contam como 1. */
-export function saleUnits(row: FunnelRow): number {
+export function saleUnits(row: Pick<FunnelRow, 'quantidade_unidades'>): number {
   const q = Number(row.quantidade_unidades)
   return Number.isFinite(q) && q > 0 ? q : 1
 }

@@ -302,6 +302,7 @@ describe('pontosCloser — multiplicador por-venda, nunca sobre a média', () =>
       marca: 'B2Case',
       dataRr: '2026-08-01T12:00:00Z',
       dataVenda: new Date(rrRef + d * 86_400_000).toISOString(),
+      unidades: 1,
     }))
     const [linha] = pontosCloser(vendas, ['A'])
     // por-venda: 3d → 1.5 ; 50/48/51/49 → 0.5 cada → 1.5 + 4×0.5 = 3.5
@@ -316,8 +317,8 @@ describe('pontosCloser — multiplicador por-venda, nunca sobre a média', () =>
 describe('pontosCloser — multiplicador de ticket por marca', () => {
   it('venda de marca de ticket alto pontua mais que uma de ticket baixo, mesma fonte e ritmo', () => {
     const vendas: VendaUnidade[] = [
-      { nome: 'A', fonte: 'Inbound', marca: 'B2Case', dataRr: '2026-08-01T12:00:00Z', dataVenda: '2026-08-15T12:00:00Z' },
-      { nome: 'B', fonte: 'Inbound', marca: 'Viva', dataRr: '2026-08-01T12:00:00Z', dataVenda: '2026-08-15T12:00:00Z' },
+      { nome: 'A', fonte: 'Inbound', marca: 'B2Case', dataRr: '2026-08-01T12:00:00Z', dataVenda: '2026-08-15T12:00:00Z', unidades: 1 },
+      { nome: 'B', fonte: 'Inbound', marca: 'Viva', dataRr: '2026-08-01T12:00:00Z', dataVenda: '2026-08-15T12:00:00Z', unidades: 1 },
     ]
     const linhas = pontosCloser(vendas, ['A', 'B'])
     const a = linhas.find(l => l.nome === 'A')!
@@ -325,5 +326,55 @@ describe('pontosCloser — multiplicador de ticket por marca', () => {
     // 14 dias → 1,5× de velocidade. A: 1 × (1 × 1,0) × 1,5 = 1,5. B: 1 × (1 × 2,0) × 1,5 = 3,0.
     expect(a.pontos).toBe(1.5)
     expect(b.pontos).toBe(3)
+  })
+})
+
+describe('pontosCloser — conta unidade vendida, não deal fechado', () => {
+  // RR em 01/08, venda 14 dias depois → 1,5× de velocidade. B2Case = ticket 1,0×.
+  const venda = (nome: string, unidades: number, extra: Partial<VendaUnidade> = {}): VendaUnidade => ({
+    nome,
+    fonte: 'Inbound',
+    marca: 'B2Case',
+    dataRr: '2026-08-01T12:00:00Z',
+    dataVenda: '2026-08-15T12:00:00Z',
+    unidades,
+    ...extra,
+  })
+
+  it('volume e "Fonte 2 pts" somam as unidades de cada venda', () => {
+    const [linha] = pontosCloser([
+      venda('A', 2, { fonte: 'Franqueado' }),
+      venda('A', 1, { dataVenda: '2026-08-10T12:00:00Z' }),
+    ], ['A'])
+    expect(linha.volume).toBe(3)
+    expect(linha.volume2pts).toBe(2)
+  })
+
+  it('cada unidade pontua — e 2 unidades no mesmo dia ganham o bônus ×1,5', () => {
+    const linhas = pontosCloser([venda('A', 1), venda('B', 2)], ['A', 'B'])
+    const a = linhas.find(l => l.nome === 'A')!
+    const b = linhas.find(l => l.nome === 'B')!
+    // A: 1 unidade × (1 pt × 1,0 ticket) × 1,5 vel = 1,5
+    expect(a.pontos).toBe(1.5)
+    // B: 2 unidades × (1 pt × 1,5 bônus × 1,0 ticket) × 1,5 vel = 4,5
+    expect(b.pontos).toBe(4.5)
+  })
+
+  it('quantidade inválida (0, negativa, NaN) conta 1 unidade — a venda nunca some', () => {
+    const [linha] = pontosCloser([
+      venda('A', 0, { dataVenda: '2026-08-13T12:00:00Z' }),
+      venda('A', -1, { dataVenda: '2026-08-14T12:00:00Z' }),
+      venda('A', Number.NaN, { dataVenda: '2026-08-15T12:00:00Z' }),
+    ], ['A'])
+    expect(linha.volume).toBe(3)
+  })
+
+  it('ticketMedio é ponderado pelas unidades', () => {
+    const [linha] = pontosCloser([
+      venda('A', 3, { marca: 'Viva' }),
+      venda('A', 1, { dataVenda: '2026-08-10T12:00:00Z' }),
+    ], ['A'])
+    // (3 × 2,0 + 1 × 1,0) / 4 = 1,75
+    expect(linha.ticketMedio).toBe(1.75)
   })
 })

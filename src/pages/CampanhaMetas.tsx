@@ -509,7 +509,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
 
 /* ── Corrida de Performance: trilhas SDR e Closer (2 cards) ────────────── */
 // Segue "corrida-de-performance-logica.md": pontos de volume × multiplicador
-// de velocidade, aplicado POR UNIDADE (cada RR / cada venda). Cada card mostra
+// de velocidade, aplicado POR UNIDADE (cada RR / cada unidade vendida). Cada card mostra
 // a regra + a pontuação do mês por pessoa. Modelo híbrido (decisão do Junior,
 // 08/09): sem ranking cross-trilha, sem os guardrails de no-show/desconto.
 
@@ -518,7 +518,7 @@ interface TrilhaRegra {
   /** Frase simples do que é medido e por que — pra quem nunca viu a régua entender de cara. */
   velocidadeDescricao: string
   tiers: readonly SpeedTier[]
-  unidade: 'RR' | 'vendas'
+  unidade: 'RR' | 'unidades'
 }
 
 const TRILHA_SDR: TrilhaRegra = {
@@ -531,7 +531,7 @@ const TRILHA_CLOSER: TrilhaRegra = {
   titulo: 'Trilha Closer',
   velocidadeDescricao: 'quanto mais rápido fechar a venda depois da reunião, maior o multiplicador',
   tiers: CLOSER_SPEED_TIERS,
-  unidade: 'vendas',
+  unidade: 'unidades',
 }
 
 const SDR_VISUAL = new Map(SDRS_ATIVOS.map(s => [s.nome, { iniciais: s.iniciais, cor: s.cor }]))
@@ -549,9 +549,9 @@ function pontosFmt(n: number): string {
 function multFmt(n: number): string {
   return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}×`
 }
-/** "RR" não pluraliza (sigla); "venda"/"vendas" concorda com a quantidade. */
-function unidadeLabel(unidade: 'RR' | 'vendas', volume: number): string {
-  return unidade === 'RR' ? 'RR' : (volume === 1 ? 'venda' : 'vendas')
+/** "RR" não pluraliza (sigla); "unidade"/"unidades" concorda com a quantidade. */
+function unidadeLabel(unidade: 'RR' | 'unidades', volume: number): string {
+  return unidade === 'RR' ? 'RR' : (volume === 1 ? 'unidade' : 'unidades')
 }
 /** "dia"/"dias" concorda com a quantidade. */
 function diaLabel(n: number): string {

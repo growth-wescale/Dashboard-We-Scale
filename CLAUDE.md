@@ -205,6 +205,19 @@ não via `troca_responsavel`. Um deal parado em Contato Efetivo, redistribuído
 nas férias e agendado depois direto no funil do Closer ficava com o SDR
 antigo.
 
+**SDR que ficaria vazio: dois fallbacks no fim da cadeia** (desde 29/09, só
+entram quando todas as outras fontes deram nada, nunca trocam um nome já
+eleito):
+1. `posse_final` — ciclo corrente, deal numa etapa de camada SDR (aberto **ou
+   fechado**) e dono atual com cargo `SDR`/`SDR/Closer`. Cobre o deal que
+   nasceu com o Closer, voltou pra um SDR (No Show, redistribuição) e foi
+   perdido: a `posse_atual` só vale pra deal aberto, então o SDR sumia no
+   instante da perda.
+2. `posse` com dono `SDR/Closer` igual ao Closer eleito — quem faz os dois
+   papéis (Vanessa Daniel no Odonto Legacy) aparece nas duas colunas.
+Deal que nasceu e ficou só com Closer (indicação, franqueado, evento), com
+"SDR Responsável" vazio no RD, continua **sem SDR** — é o dado real.
+
 **Perdido, reaberto e perdido de novo no mesmo dia não abre ciclo novo.**
 Em `vw_deal_eventos_ciclo` (CTE `perdas`), com o deal perdido, uma perda só
 fecha ciclo se `_closed_at` cair em **dia posterior** (Brasília) ao da perda.
@@ -493,6 +506,14 @@ sobrepõem e linhas se repetem/somem — de forma **determinística**, então nu
 parece flutuação. Em 15/09 isso escondia 81 eventos/mês. Desempate até a chave
 (ou todas as colunas selecionadas). Use `buscarTodasPaginas` (`paginacao.ts`).
 
+**Origem nova de sync = entrar na lista de `processar_deal_evento`.** Todo
+caminho que chama `registrar_stage_history` antes de `processar_deal_evento`
+precisa ter o seu `p_origem` em `v_etapa_vem_do_historico`. Senão a segunda
+função grava a mesma etapa de novo (data = `updated_at`, ms a minutos depois)
+e o modo Passagens mostra "repetidos" que não existem no RD. Foi o que a
+`espelhar-rd` (`api_espelho_edge`) fez de 31/08 (modo live) a 29/09: 2,5 mil passagens
+fantasmas.
+
 **Lentidão: medir antes de mexer no banco.** `response.origin_time` nos
 `edge_logs` (query_logs) mostra o tempo do servidor; comparar com o tempo no
 cliente. curl abre TLS por request e distorce — medir com Node `fetch`
@@ -554,6 +575,51 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-29 — Repetidos falsos no modo Passagens; deals sem SDR
+
+Junior abriu no RD um deal (`6a9d7aa4eeed3c00017bea5c`, Inpot) que o funil
+mostrava como repetido em Pré-Contrato. No RD ele passou 1 vez. Pediu também
+pra achar o SDR de `6a9ade29b3f58200254ce47e` (Eletrovias), vazio no dash.
+
+**Repetidos falsos.** A Edge Function `espelhar-rd` chama
+`registrar_stage_history` (etapa pelo histórico do RD, sem marca/responsável)
+e depois `processar_deal_evento`, que grava a MESMA etapa de novo com data =
+`updated_at`. A função só pulava a etapa pra `api_sync`/`api_backfill*`, e
+`api_espelho_edge`/`api_espelho` tinham ficado de fora. Cada mudança de etapa
+sincronizada pela Edge Function virava 2 passagens (o `ON CONFLICT` não pega,
+os timestamps diferem de ms a minutos). No deal do print: SAL, COF, Comitê e
+Pré-Contrato em dobro. Deals únicos quase não mudam, porque a dedup é por
+deal/ciclo/mês. Passagens e "repetidos" estavam inflados.
+
+Fix: as duas origens entraram em `v_etapa_vem_do_historico`. Limpeza: **2.548
+linhas apagadas** em 2.008 deals (1,7 mil em setembro), backup em
+`_backup_etapa_duplicada_espelho_20260929`. Regra da duplicata: mudança de
+etapa de origem espelho com passagem anterior da mesma etapa, sem outra etapa,
+`deal_retomado` ou outra etapa no histórico do RD entre as duas, e com
+perda/ganho no meio só se a diferença for < 1 min. 4 linhas apagadas de
+início foram **restauradas**. Nelas a perda tinha o mesmo timestamp da
+passagem gêmea, e a linha era o único registro de uma reabertura real
+(3 ciclos 2/3 tinham sumido).
+
+**Deal sem SDR.** O deal nasceu com a Jéssica (indicação), foi pro Thiago no
+No Show em 15/09 e foi perdido por ele em 28/09. Enquanto estava aberto, a
+`posse_atual` dava Thiago, mas na perda o nome sumiu. Novos fallbacks em
+`vw_deal_ciclo` (regra na seção 4). Varredura desde agosto: 20 deals sem SDR.
+5 foram corrigidos (Thiago Henn → Thiago, Waldenice → Xayane, 3 Odonto Legacy
+→ Vanessa Daniel). Os outros 15 nunca tiveram SDR (nasceram com o Closer,
+"SDR Responsável" vazio no RD).
+
+**Efeito colateral conferido:** `6a8b3353…` (Prospecção Ativa) trocou SDR
+Vanessa → Sarah. A duplicata estava datada depois da redistribuição pra
+Vanessa. Sem ela, a regra `posse` amostra o dono no instante real da mudança
+de etapa, que era a Sarah.
+
+Checksum `vw_funil_vendas`: ganhos 61 e receita R$ 2.780.776,98 iguais, 0
+ciclos perdidos, sem SDR 154 → 149. Backups: `_backup_funil_pre_20260929`,
+`_backup_viewdefs` (`fn_processar_deal_evento_pre_espelho_20260929`,
+`vw_deal_ciclo_pre_sdr_final_20260929`). Script:
+`docs/sql/2026-09-29-etapa-duplicada-espelho-e-sdr-vazio.sql`.
 
 ### 2026-09-22 (2) — Motivos de perda do RD: 463 cadastros viram 36
 

@@ -21,7 +21,7 @@ import { money, pct, nfCeil } from '@/lib/format'
  * Tela única 16:9, sem menu e sem rolagem, só com o essencial da corrida:
  * meta do time no mês, closers e SDRs na volta atual e a pontuação da
  * Corrida de Performance. Tudo em `vh` pra escalar em qualquer TV. Não tem
- * filtro: a tela alterna sozinha a cada 30s entre a VOLTA atual (dados e metas
+ * filtro: a tela alterna sozinha a cada 15s entre a VOLTA atual (dados e metas
  * só da volta, que vira sozinha na troca de semana) e o MÊS (tudo acumulado).
  * Os dois recortes ficam carregados ao mesmo tempo, então a troca é instantânea.
  *
@@ -33,8 +33,8 @@ const MES_ATIVO = '2026-09-01'
 const MES_LABEL = 'Setembro 2026'
 const DIAS_MES = 30
 const RECARREGA_PAGINA_MS = 60 * 60 * 1000
-/** Tempo em cada modo (volta ↔ mês). 30s dá pra ler a tela inteira sem cansar. */
-const TROCA_MODO_MS = 30_000
+/** Tempo em cada modo (volta ↔ mês). 15s: cada recorte aparece 2x por minuto. */
+const TROCA_MODO_MS = 15_000
 
 type Modo = 'volta' | 'mes'
 
@@ -204,7 +204,7 @@ export function CampanhaMetasTv() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vh(2) }}>
           <Placar titulo="Corrida de Performance · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={SDRS_ATIVOS} loading={corrida.loading} />
-          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="vendas" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
+          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="unidades" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
         </div>
       </div>
     </div>
@@ -417,7 +417,7 @@ function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: bo
               {loading ? '—' : temMeta ? pct(c.pctAtingimento, 0) : '—'}
             </div>
             <div style={{ fontSize: vh(1.6), color: TEXTO_2, textAlign: 'center', whiteSpace: 'nowrap' }}>
-              {moneyCompact(c.realizado)} · {c.realizadoQtd} {c.realizadoQtd === 1 ? 'venda' : 'vendas'}
+              {moneyCompact(c.realizado)} · {c.realizadoQtd} un
             </div>
 
             <div style={{
@@ -482,7 +482,7 @@ function MiniBarra({ rotulo, valor, meta, cor, loading }: { rotulo: string; valo
 function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
   titulo: string
   periodo: string
-  unidade: 'RR' | 'vendas'
+  unidade: 'RR' | 'unidades'
   linhas: LinhaTrilha[]
   visual: ReadonlyArray<{ nome: string; iniciais: string; cor: string; foto?: string }>
   loading: boolean
@@ -511,7 +511,7 @@ function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
                   <div style={{ width: `${(pontos / max) * 100}%`, height: '100%', background: p.cor, transition: 'width 600ms ease' }} />
                 </div>
                 <div style={{ marginTop: vh(0.4), fontSize: vh(1.3), color: TEXTO_3 }}>
-                  {vol} {unidade === 'RR' ? 'RR' : vol === 1 ? 'venda' : 'vendas'}
+                  {vol} {unidade === 'RR' ? 'RR' : vol === 1 ? 'unidade' : 'unidades'}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>

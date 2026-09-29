@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { saleUnits } from '@/lib/metrics'
 
 /**
  * Realizado (unidades e faturamento) por marca num mês específico. Cruza
@@ -50,9 +51,7 @@ function aggregate(rows: RawWin[]): Map<string, RealizadoMarca> {
   for (const r of rows) {
     if (!r.marca) continue
     const cur = map.get(r.marca) ?? { marca: r.marca, qtd: 0, faturamento: 0 }
-    const q = Number(r.quantidade_unidades)
-    // saleUnits behavior: null/0/negativo contam como 1 unidade (venda fechada sem produto)
-    cur.qtd += Number.isFinite(q) && q > 0 ? q : 1
+    cur.qtd += saleUnits(r) // null/0 = venda sem produto no RD, conta 1 unidade
     cur.faturamento += Number(r.valor_contrato) || 0
     map.set(r.marca, cur)
   }

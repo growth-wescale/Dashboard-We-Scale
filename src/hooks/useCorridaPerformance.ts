@@ -3,6 +3,7 @@ import { supabaseVendas } from '@/lib/supabaseVendas'
 import { SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
 import { CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
 import { emJanelas, janelasKey, type Janela } from '@/constants/metasCampanhaF1'
+import { saleUnits } from '@/lib/metrics'
 import {
   pontosSdr,
   pontosCloser,
@@ -24,7 +25,8 @@ import {
  * Três recortes do mês:
  *   - RR realizada  (`data_reuniao_realizada`)         → trilha SDR + realizado RR
  *   - SQL agendado  (`data_agendamento_reuniao_sql`)   → realizado SQL do SDR
- *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer
+ *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer, por
+ *     unidade vendida (`quantidade_unidades` via `saleUnits`, não 1 por deal)
  *
  * `janelas` (opcional) recorta os 3 conjuntos para a união desses intervalos
  * de data — usado pelo seletor de voltas. A query sempre traz o mês inteiro;
@@ -68,6 +70,7 @@ interface RawVenda {
   nome_closer: string | null
   fonte_macro: string | null
   marca: string | null
+  quantidade_unidades: number | null
   data_reuniao_realizada: string | null
   data_venda: string | null
 }
@@ -95,7 +98,7 @@ async function fetchSqls(inicio: string, fimTs: string): Promise<RawSql[]> {
 async function fetchVendas(inicio: string, fimTs: string): Promise<RawVenda[]> {
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('nome_closer, fonte_macro, marca, data_reuniao_realizada, data_venda')
+    .select('nome_closer, fonte_macro, marca, quantidade_unidades, data_reuniao_realizada, data_venda')
     .eq('status_atual', 'Ganho')
     .gte('data_venda', inicio)
     .lte('data_venda', fimTs)
@@ -210,6 +213,7 @@ export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[
           marca: v.marca,
           dataRr: v.data_reuniao_realizada,
           dataVenda: v.data_venda,
+          unidades: saleUnits(v),
         }
       })
       .filter((u): u is VendaUnidade => u !== null)

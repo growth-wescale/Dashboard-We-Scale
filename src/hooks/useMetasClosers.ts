@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import { emJanelas, janelasKey, type Janela } from '@/constants/metasCampanhaF1'
+import { saleUnits } from '@/lib/metrics'
 
 /**
  * Metas mensais dos closers da campanha F1 GP We Scale. Filtra
@@ -127,8 +128,7 @@ function aggregate(
     if (!CLOSER_NOMES_SET.has(key)) continue
     const cur = realizadoMap.get(key) ?? { fin: 0, qtd: 0 }
     cur.fin += Number(r.valor_contrato) || 0
-    const q = Number(r.quantidade_unidades)
-    cur.qtd += Number.isFinite(q) && q > 0 ? q : 1
+    cur.qtd += saleUnits(r)
     realizadoMap.set(key, cur)
   }
 

@@ -401,13 +401,7 @@ export function FunilVendas() {
   // Sem filtro de marca no servidor: a coluna `marca` da view de eventos é
   // nula em boa parte da base. O recorte por marca sai de `idsEscopo` (deals
   // de `vw_funil_vendas`, já filtrados) — ver useFunilEventos.
-  const { data: eventos } = useFunilEventos({
-    enabled: true,
-    origem,
-    inicio: range.start,
-    // No modo safra o evento pode ser posterior à janela do MQL.
-    fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
-  })
+  const { data: eventos } = useFunilEventos({ enabled: true, origem })
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
   // Marca é sempre filtrada aqui no cliente (a busca traz o recorte inteiro

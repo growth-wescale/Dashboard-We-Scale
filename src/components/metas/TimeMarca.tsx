@@ -2,12 +2,12 @@ import { useRef, useState } from 'react'
 import { Check, GripVertical, Plus, Scale, X } from 'lucide-react'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import {
-  ajustarPeso, dividirIgualmente, metasPorPessoa, moverDivisa, normalizarPesos, ROTULO_ETAPA,
+  ajustarPeso, dividirIgualmente, encaixarFaixas, metasPorPessoa, moverDivisa, normalizarPesos, ROTULO_ETAPA,
   type EtapaMetaConfig, type FunilCalculado, type MarcaConfig, type MetaPessoa,
 } from '@/lib/configMetas'
 import type { PessoaComFuncao } from '@/lib/metasEngine'
 import { CampoNumero } from './CampoNumero'
-import { fmtBRL, fmtDec, ghostButtonStyle, pillStyle } from './metasUi'
+import { fmtBRL, fmtInt, ghostButtonStyle, pillStyle } from './metasUi'
 
 type Funcao = 'SDR' | 'Closer'
 
@@ -21,7 +21,7 @@ const CORES = ['#6366F1', '#0EA5E9', '#F59E0B', '#10B981', '#EC4899', '#8B5CF6',
 
 const ETAPAS_PESSOA: Record<Funcao, EtapaMetaConfig[]> = {
   SDR: ['Reunião Agendada SQL', 'Reunião Realizada', 'SAL', 'Ligações'],
-  Closer: ['Oportunidade COF', 'Fechamento'],
+  Closer: ['Fechamento', 'Oportunidade COF'],
 }
 
 function fmtPeso(n: number): string {
@@ -43,6 +43,8 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
   // Pessoa que veio do mês anterior mas saiu do time (ex.: Closer desligado) — avisa pra trocar.
   const inativos = new Set(roster.filter(r => !r.ativo).map(r => r.nome))
   const previa = metasPorPessoa(marca, funil)
+  // Closer divide vendas inteiras: o peso anda em faixas de 100 ÷ vendas do mês.
+  const vendasMes = marca.vendas != null && marca.vendas > 0 ? Math.round(marca.vendas) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -52,9 +54,12 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
         const somaOk = dessa.length === 0 || Math.abs(soma - 100) <= 0.01
         const disponiveis = roster.filter(r => r.ativo && (r.cargo === funcao || r.cargo === 'SDR/Closer') && !dessa.some(d => d.nome === r.nome))
 
-        const adicionar = (nome: string) => onMudarPessoas(dividirIgualmente([...marca.pessoas, { nome, funcao, peso: 0 }], funcao))
-        const remover = (nome: string) => onMudarPessoas(normalizarPesos(marca.pessoas.filter(p => !(p.nome === nome && p.funcao === funcao)), funcao))
-        const mudarPeso = (nome: string, peso: number) => onMudarPessoas(ajustarPeso(marca.pessoas, funcao, nome, peso))
+        const unidades = funcao === 'Closer' ? vendasMes : null
+        const passo = unidades ? 100 / unidades : 1
+        const encaixar = (ps: PessoaComFuncao[]) => (unidades ? encaixarFaixas(ps, funcao, unidades) : ps)
+        const adicionar = (nome: string) => onMudarPessoas(encaixar(dividirIgualmente([...marca.pessoas, { nome, funcao, peso: 0 }], funcao)))
+        const remover = (nome: string) => onMudarPessoas(encaixar(normalizarPesos(marca.pessoas.filter(p => !(p.nome === nome && p.funcao === funcao)), funcao)))
+        const mudarPeso = (nome: string, peso: number) => onMudarPessoas(ajustarPeso(marca.pessoas, funcao, nome, peso, unidades))
         const mudarPesos = (pesos: number[]) => {
           let i = 0
           onMudarPessoas(marca.pessoas.map(p => (p.funcao === funcao ? { ...p, peso: pesos[i++] } : p)))
@@ -73,12 +78,12 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
                   : <span style={pillStyle('erro')}>soma {fmtPeso(soma)} — precisa ser 100%</span>
               )}
               {!somaOk && (
-                <button type="button" onClick={() => onMudarPessoas(normalizarPesos(marca.pessoas, funcao))} style={{ ...ghostButtonStyle, fontSize: 12, color: 'var(--status-risco)' }}>
+                <button type="button" onClick={() => onMudarPessoas(encaixar(normalizarPesos(marca.pessoas, funcao)))} style={{ ...ghostButtonStyle, fontSize: 12, color: 'var(--status-risco)' }}>
                   Corrigir para 100%
                 </button>
               )}
               {dessa.length > 1 && (
-                <button type="button" onClick={() => onMudarPessoas(dividirIgualmente(marca.pessoas, funcao))} style={{ ...ghostButtonStyle, fontSize: 12 }}>
+                <button type="button" onClick={() => onMudarPessoas(encaixar(dividirIgualmente(marca.pessoas, funcao)))} style={{ ...ghostButtonStyle, fontSize: 12 }}>
                   <Scale size={13} /> Dividir igualmente
                 </button>
               )}
@@ -93,10 +98,14 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
               </div>
             ) : (
               <>
-                <BarraPesos pessoas={dessa} onPesos={mudarPesos} />
+                <BarraPesos pessoas={dessa} passo={passo} onPesos={mudarPesos} />
                 {dessa.length > 1 && (
                   <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '6px 0 0' }}>
-                    Arraste as divisórias da barra ou use as setinhas — a soma sempre fecha 100%.
+                    {funcao === 'Closer'
+                      ? unidades
+                        ? `Faixas de ${fmtPeso(passo)}: com ${unidades} ${unidades === 1 ? 'venda' : 'vendas'} no mês, cada Closer fica com vendas inteiras. Arraste as divisórias ou use as setinhas.`
+                        : 'Informe as vendas do mês na Base pra dividir entre os Closers em vendas inteiras.'
+                      : 'Arraste as divisórias ou use as setinhas — a soma sempre fecha 100% e cada meta sai em número inteiro.'}
                   </div>
                 )}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))', gap: 10, marginTop: 14 }}>
@@ -107,6 +116,7 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
                       cor={CORES[i % CORES.length]}
                       foto={fotos.get(p.nome) ?? null}
                       sozinha={dessa.length === 1}
+                      passo={passo}
                       inativa={inativos.has(p.nome)}
                       meta={previa.find(x => x.nome === p.nome && x.funcao === funcao)}
                       onPeso={v => mudarPeso(p.nome, v)}
@@ -149,7 +159,7 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
  * slider: arrastar (mouse ou toque) ou seta ←/→ troca peso só entre os dois
  * vizinhos (`moverDivisa`), então a soma não sai de 100%.
  */
-function BarraPesos({ pessoas, onPesos }: { pessoas: PessoaComFuncao[]; onPesos: (pesos: number[]) => void }) {
+function BarraPesos({ pessoas, passo, onPesos }: { pessoas: PessoaComFuncao[]; passo: number; onPesos: (pesos: number[]) => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const [arrastando, setArrastando] = useState<number | null>(null)
   const pesos = pessoas.map(p => p.peso)
@@ -186,12 +196,12 @@ function BarraPesos({ pessoas, onPesos }: { pessoas: PessoaComFuncao[]; onPesos:
           aria-valuetext={`${pessoas[i].nome} ${fmtPeso(pesos[i])}, ${pessoas[i + 1].nome} ${fmtPeso(pesos[i + 1])}`}
           className="cm-divisa"
           onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); setArrastando(i) }}
-          onPointerMove={e => { if (arrastando === i) onPesos(moverDivisa(pesos, i, posicao(e.clientX))) }}
+          onPointerMove={e => { if (arrastando === i) onPesos(moverDivisa(pesos, i, posicao(e.clientX), passo)) }}
           onPointerUp={() => setArrastando(null)}
           onPointerCancel={() => setArrastando(null)}
           onKeyDown={e => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); onPesos(moverDivisa(pesos, i, pos - 1)) }
-            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); onPesos(moverDivisa(pesos, i, pos + 1)) }
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); onPesos(moverDivisa(pesos, i, pos - passo, passo)) }
+            if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); onPesos(moverDivisa(pesos, i, pos + passo, passo)) }
           }}
           style={{
             position: 'absolute', top: -4, bottom: -4, left: `calc(${pos}% - 12px)`, width: 24,
@@ -211,11 +221,12 @@ function BarraPesos({ pessoas, onPesos }: { pessoas: PessoaComFuncao[]; onPesos:
   )
 }
 
-function CartaoPessoa({ pessoa, cor, foto, sozinha, inativa, meta, onPeso, onRemover }: {
+function CartaoPessoa({ pessoa, cor, foto, sozinha, passo, inativa, meta, onPeso, onRemover }: {
   pessoa: PessoaComFuncao
   cor: string
   foto: string | null
   sozinha: boolean
+  passo: number
   inativa: boolean
   meta: MetaPessoa | undefined
   onPeso: (peso: number) => void
@@ -241,7 +252,7 @@ function CartaoPessoa({ pessoa, cor, foto, sozinha, inativa, meta, onPeso, onRem
           <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{sozinha ? 'única nesta função · 100%' : 'peso'}</div>
         </div>
         {!sozinha && (
-          <CampoNumero valor={pessoa.peso} onMudar={v => { if (v != null) onPeso(v) }} casas={2} passo={1} max={100} sufixo="%" largura={60} rotulo={`Peso de ${pessoa.nome}`} />
+          <CampoNumero valor={pessoa.peso} onMudar={v => { if (v != null) onPeso(v) }} casas={2} passo={passo} max={100} sufixo="%" largura={60} rotulo={`Peso de ${pessoa.nome}`} />
         )}
         <button type="button" onClick={onRemover} aria-label={`Remover ${pessoa.nome}`} style={{ ...ghostButtonStyle, padding: 4 }}>
           <X size={14} />
@@ -258,7 +269,7 @@ function CartaoPessoa({ pessoa, cor, foto, sozinha, inativa, meta, onPeso, onRem
         )}
         {etapas.map(e => (
           <span key={e} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 'var(--radius-sm)', background: 'var(--ws-bg)' }}>
-            <span style={{ color: 'var(--ws-text-secondary)' }}>{ROTULO_ETAPA[e]}</span> <b>{fmtDec(meta!.valores[e]!)}</b>
+            <span style={{ color: 'var(--ws-text-secondary)' }}>{ROTULO_ETAPA[e]}</span> <b>{fmtInt(meta!.valores[e]!)}</b>
           </span>
         ))}
         {meta?.faturamento != null && (

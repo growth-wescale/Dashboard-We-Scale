@@ -4,7 +4,7 @@ import type { EstadoMes, EstadoMesMarca } from '@/hooks/useMetaMes'
 import {
   ajustarPeso, arredondarMeta, calcularFunil, definirModoEtapa, distribuicaoDerivada, distribuirProporcional,
   distribuirVendasProporcional, dividirIgualmente, marcaDeVersao, marcaDoMesAnterior, marcaEmBranco, marcasDisponiveis,
-  mesAnterior, metasDaSemana, metasPorPessoa, montarPublicacao, moverDivisa, normalizarPesos, ordenarMarcas,
+  mesAnterior, encaixarFaixas, metasPessoaSemana, metasPorPessoa, metasPorSemana, repartirInteiro, repartirMatriz, montarPublicacao, moverDivisa, normalizarPesos, ordenarMarcas,
   paraConfigEtapas, pendenciasMarca, rascunhoDeVersao, rascunhoDoMesAnterior, rascunhoEmBranco, referenciaDeVersao,
   resumoRascunho, statusMarca, vendasDistribuidas,
   type MarcaConfig,
@@ -221,7 +221,9 @@ describe('metasPorPessoa', () => {
   it('SDR leva Ligações/SQL/Diagnóstico/SAL, Closer leva COF/Vendas/faturamento, pelo peso', () => {
     const r = metasPorPessoa(definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'conversao', taxa: 0.4 }))
     const thiago = r.find(p => p.nome === 'Thiago')!
-    expect(thiago.valores['Reunião Agendada SQL']).toBe(38.5)
+    // 77 SQL em 50/50 → 39 + 38: nunca meia reunião
+    expect(thiago.valores['Reunião Agendada SQL']).toBe(39)
+    expect(r.find(p => p.nome === 'Xayane')!.valores['Reunião Agendada SQL']).toBe(38)
     expect(thiago.valores.SAL).toBe(16)
     expect(thiago.valores['Oportunidade COF']).toBeUndefined()
     const douglas = r.find(p => p.nome === 'Douglas')!
@@ -276,7 +278,7 @@ describe('montarPublicacao', () => {
       : { ...m, vendas: 5 })
     const pub = montarPublicacao(r)
     const thiago = pub.linhasEspelho.find(l => l.nome_colaborador === 'Thiago')!
-    expect(thiago).toMatchObject({ marca: 'Inpot', funcao: 'SDR', meta_sql: 38.5, meta_agendamento: 38.5, meta_reuniao_realizada: 24.5, meta_volume_sal: '16' })
+    expect(thiago).toMatchObject({ marca: 'Inpot', funcao: 'SDR', meta_sql: 39, meta_agendamento: 39, meta_reuniao_realizada: 25, meta_volume_sal: '16' })
     const douglas = pub.linhasEspelho.find(l => l.nome_colaborador === 'Douglas')!
     expect(douglas).toMatchObject({ meta_cof: 13, meta_qtd_vendas: 6, meta_financeira: 449400 })
     const aurelio = pub.linhasEspelho.find(l => l.nome_colaborador === 'Aurélio Briano')!
@@ -289,7 +291,7 @@ describe('montarPublicacao', () => {
     const pub = montarPublicacao(r)
     const s2 = pub.distribuicaoSemanal.filter(d => d.semanaNumero === 2)
     expect(s2.find(d => d.nomePessoa === 'Douglas' && d.etapa === 'Fechamento')!.valor).toBe(2)
-    expect(s2.find(d => d.nomePessoa === 'Thiago' && d.etapa === 'Reunião Agendada SQL')!.valor).toBe(12.83)
+    expect(pub.distribuicaoSemanal.every(d => Number.isInteger(d.valor))).toBe(true)
     // Odonto Legacy não distribuiu nada → nenhuma linha semanal dela
     expect(pub.distribuicaoSemanal.some(d => d.marca === 'Odonto Scale')).toBe(false)
   })
@@ -305,20 +307,34 @@ function outubroComSemanas() {
 }
 
 describe('semanas: só vendas se distribuem, o resto vem junto', () => {
-  it('metasDaSemana leva cada etapa na mesma fração das vendas da semana', () => {
-    const m = outubroComSemanas().marcas.find(x => x.marca === 'Inpot')!
-    const s = metasDaSemana(m, 2)
-    expect(s.Fechamento).toBe(2)
-    expect(s['Oportunidade COF']).toBeCloseTo(13 / 3, 6)
-    expect(s.SAL).toBeCloseTo(32 / 3, 6)
-    expect(s['Reunião Agendada SQL']).toBeCloseTo(77 / 3, 6)
-    expect(s['Ligações']).toBeCloseTo(1769 / 3, 6)
+  it('metasPorSemana dá números inteiros por semana que fecham a meta do mês', () => {
+    const r = outubroComSemanas()
+    const semanas = metasPorSemana(r, 'Inpot')
+    expect(semanas.map(x => x.Fechamento)).toEqual([1, 2, 1, 1, 1])
+    expect(semanas.map(x => x['Reunião Agendada SQL'])).toEqual([13, 25, 13, 13, 13])
+    for (const e of ['Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações'] as const) {
+      expect(semanas.every(x => Number.isInteger(x[e]))).toBe(true)
+    }
+    expect(semanas.reduce((a, x) => a + (x.SAL ?? 0), 0)).toBe(32)
+    expect(semanas.reduce((a, x) => a + (x['Ligações'] ?? 0), 0)).toBe(1769)
+  })
+
+  it('metasPessoaSemana: inteiros que fecham a meta da pessoa no mês e a da marca na semana', () => {
+    const r = outubroComSemanas()
+    const pessoas = metasPessoaSemana(r, 'Inpot')
+    const thiago = pessoas.find(p => p.nome === 'Thiago')!
+    const xayane = pessoas.find(p => p.nome === 'Xayane')!
+    const sql = (p: typeof thiago) => p.porSemana.map(x => x['Reunião Agendada SQL'] ?? 0)
+    expect(sql(thiago).reduce((a, b) => a + b, 0)).toBe(39)
+    expect(sql(xayane).reduce((a, b) => a + b, 0)).toBe(38)
+    expect(sql(thiago).map((v, i) => v + sql(xayane)[i])).toEqual([13, 25, 13, 13, 13])
+    expect(pessoas.find(p => p.nome === 'Douglas')!.porSemana.map(x => x.Fechamento)).toEqual([1, 2, 1, 1, 1])
   })
 
   it('distribuicaoDerivada reparte a semana entre as pessoas pelo peso e fecha no mês', () => {
     const itens = distribuicaoDerivada(outubroComSemanas())
     const somaThiagoSql = itens.filter(d => d.nomePessoa === 'Thiago' && d.etapa === 'Reunião Agendada SQL').reduce((a, d) => a + d.valor, 0)
-    expect(somaThiagoSql).toBeCloseTo(38.5, 1)
+    expect(somaThiagoSql).toBe(39)
     const douglasVendas = itens.filter(d => d.nomePessoa === 'Douglas' && d.etapa === 'Fechamento').map(d => d.valor)
     expect(douglasVendas).toEqual([1, 2, 1, 1, 1])
     expect(itens.some(d => d.nomePessoa === 'Thiago' && d.etapa === 'Oportunidade COF')).toBe(false)
@@ -446,5 +462,35 @@ describe('pesos que sempre fecham 100%', () => {
     expect(r.map(p => p.peso)).toEqual([50, 50])
     const vazio = normalizarPesos([{ nome: 'A', funcao: 'SDR', peso: 0 }, { nome: 'B', funcao: 'SDR', peso: 0 }], 'SDR')
     expect(vazio.map(p => p.peso)).toEqual([50, 50])
+  })
+})
+
+describe('metas inteiras por pessoa', () => {
+  it('repartirInteiro divide um inteiro pelos pesos e sempre fecha o total', () => {
+    expect(repartirInteiro(77, [50, 50])).toEqual([39, 38])
+    expect(repartirInteiro(10, [1, 1, 1])).toEqual([4, 3, 3])
+    expect(repartirInteiro(2, [80, 20])).toEqual([2, 0])
+    expect(repartirInteiro(5, [0, 0])).toEqual([3, 2])
+    expect(repartirInteiro(0, [50, 50])).toEqual([0, 0])
+  })
+
+  it('repartirMatriz fecha linhas (pessoa no mês) e colunas (semana da marca)', () => {
+    const m = repartirMatriz([39, 38], [13, 25, 13, 13, 13])
+    expect(m.map(l => l.reduce((a, b) => a + b, 0))).toEqual([39, 38])
+    expect(m[0].map((v, i) => v + m[1][i])).toEqual([13, 25, 13, 13, 13])
+    expect(m.flat().every(v => Number.isInteger(v) && v >= 0)).toBe(true)
+  })
+
+  it('Closers: pesos só em faixas que dão vendas inteiras', () => {
+    const closers = [{ nome: 'Bruna', funcao: 'Closer' as const, peso: 80 }, { nome: 'Jéssica', funcao: 'Closer' as const, peso: 20 }]
+    // 2 vendas: faixas de 50% — 80/20 vira 100/0 (1,6 venda não existe)
+    expect(encaixarFaixas(closers, 'Closer', 2).map(p => p.peso)).toEqual([100, 0])
+    expect(encaixarFaixas(closers, 'Closer', 5).map(p => p.peso)).toEqual([80, 20])
+    const metade = [{ ...closers[0], peso: 50 }, { ...closers[1], peso: 50 }]
+    expect(ajustarPeso(metade, 'Closer', 'Bruna', 60, 2).map(p => p.peso)).toEqual([50, 50])
+    expect(ajustarPeso(metade, 'Closer', 'Bruna', 80, 2).map(p => p.peso)).toEqual([100, 0])
+    expect(ajustarPeso(metade, 'Closer', 'Bruna', 60, 5).map(p => p.peso)).toEqual([60, 40])
+    expect(moverDivisa([50, 50], 0, 70, 50)).toEqual([50, 50])
+    expect(moverDivisa([50, 50], 0, 80, 50)).toEqual([100, 0])
   })
 })

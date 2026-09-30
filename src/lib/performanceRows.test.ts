@@ -8,15 +8,15 @@ import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 const win = toWindow(null, null, [{ from: '2026-08-01', to: '2026-08-31' }])
 
 const roster: MembroRoster[] = [
-  { nome: 'Xayane', cargo: 'SDR', foto: null },
-  { nome: 'Douglas', cargo: 'Closer', foto: null },
+  { nome: 'Xayane', cargo: 'SDR', foto: null, ativo: true },
+  { nome: 'Douglas', cargo: 'Closer', foto: null, ativo: true },
 ]
 
 const rosterMulti: MembroRoster[] = [
-  { nome: 'Xayane', cargo: 'SDR', foto: null },
-  { nome: 'Thiago', cargo: 'SDR', foto: null },
-  { nome: 'Douglas', cargo: 'Closer', foto: null },
-  { nome: 'Aurélio', cargo: 'Closer', foto: null },
+  { nome: 'Xayane', cargo: 'SDR', foto: null, ativo: true },
+  { nome: 'Thiago', cargo: 'SDR', foto: null, ativo: true },
+  { nome: 'Douglas', cargo: 'Closer', foto: null, ativo: true },
+  { nome: 'Aurélio', cargo: 'Closer', foto: null, ativo: true },
 ]
 
 const metasSdr: MetaAgregada[] = [

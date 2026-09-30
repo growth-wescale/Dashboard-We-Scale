@@ -10,3 +10,18 @@
 
 .cm-seg button:focus-visible,
 .cm-card-marca:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 2px; }
+
+/* Campo numérico com setinhas */
+.cm-campo:focus-within { border-color: var(--brand-accent) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 18%, transparent); }
+.cm-seta:hover:not(:disabled) { background: var(--ws-bg) !important; color: var(--ws-text-primary) !important; }
+.cm-seta:active:not(:disabled) { background: color-mix(in srgb, var(--brand-accent) 15%, var(--ws-surface)) !important; }
+
+/* Barra de pesos */
+.cm-divisa:focus-visible { outline: none; }
+.cm-divisa:focus-visible > span { box-shadow: 0 0 0 3px var(--brand-accent) !important; }
+.cm-chip:hover { border-color: var(--brand-accent) !important; color: var(--brand-accent) !important; }
+
+@media (max-width: 640px) {
+  .cm-barra-funil { display: none; }
+  .cm-barra-nome { display: none; }
+}

@@ -32,7 +32,7 @@ export const ROTULO_ETAPA: Record<EtapaMetaConfig, string> = {
   'Reunião Agendada SQL': 'SQL',
   'Reunião Realizada': 'Diagnóstico',
   SAL: 'SAL',
-  'Oportunidade COF': 'COF',
+  'Oportunidade COF': 'Oportunidade',
   Fechamento: 'Vendas',
 }
 
@@ -410,6 +410,65 @@ export function dividirIgualmente(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'C
     i += 1
     return { ...p, peso: i === n ? ultima : base }
   })
+}
+
+const arred2 = (n: number) => Math.round(n * 100) / 100
+
+/** Troca os pesos das pessoas da função, na ordem em que aparecem. */
+function aplicarPesos(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', pesos: number[]): PessoaComFuncao[] {
+  let i = 0
+  return pessoas.map(p => (p.funcao === funcao ? { ...p, peso: pesos[i++] } : p))
+}
+
+/** Arredonda a 2 casas e joga a sobra do arredondamento no índice `fecha`, pra somar 100 exato. */
+function fecharEm100(pesos: number[], fecha: number): number[] {
+  const r = pesos.map(arred2)
+  const sobra = arred2(100 - r.reduce((a, b) => a + b, 0))
+  if (sobra !== 0 && fecha >= 0) r[fecha] = Math.max(0, arred2(r[fecha] + sobra))
+  return r
+}
+
+/**
+ * Muda o peso de UMA pessoa e redistribui o resto (100 − novo) entre as
+ * outras da mesma função, na proporção que elas já tinham — a soma nunca sai
+ * de 100%. Pessoa sozinha na função fica sempre com 100%.
+ */
+export function ajustarPeso(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', nome: string, novoPeso: number): PessoaComFuncao[] {
+  const alvo = pessoas.filter(p => p.funcao === funcao)
+  if (alvo.length <= 1) return aplicarPesos(pessoas, funcao, alvo.map(() => 100))
+  const v = arred2(Math.min(100, Math.max(0, novoPeso)))
+  const somaOutros = alvo.filter(p => p.nome !== nome).reduce((s, p) => s + p.peso, 0)
+  const nOutros = alvo.length - 1
+  const pesos = alvo.map(p => {
+    if (p.nome === nome) return v
+    return somaOutros > 0 ? ((100 - v) * p.peso) / somaOutros : (100 - v) / nOutros
+  })
+  const ultimoOutro = alvo.reduce((ult, p, i) => (p.nome !== nome ? i : ult), -1)
+  return aplicarPesos(pessoas, funcao, fecharEm100(pesos, ultimoOutro))
+}
+
+/**
+ * Arrasta a divisa entre as pessoas `i` e `i + 1` da barra de pesos até a
+ * posição acumulada `posicao` (0–100, em passos de 1%). Só esses dois
+ * vizinhos mudam, e a divisa não atravessa as vizinhas.
+ */
+export function moverDivisa(pesos: number[], i: number, posicao: number): number[] {
+  const inicio = pesos.slice(0, i).reduce((a, b) => a + b, 0)
+  const fim = inicio + pesos[i] + pesos[i + 1]
+  const p = Math.min(fim, Math.max(inicio, Math.round(posicao)))
+  const r = [...pesos]
+  r[i] = arred2(p - inicio)
+  r[i + 1] = arred2(fim - p)
+  return r
+}
+
+/** Reescala os pesos da função pra somarem 100 mantendo a proporção (tudo zero → partes iguais). */
+export function normalizarPesos(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer'): PessoaComFuncao[] {
+  const alvo = pessoas.filter(p => p.funcao === funcao)
+  if (alvo.length === 0) return pessoas
+  const soma = alvo.reduce((s, p) => s + p.peso, 0)
+  const pesos = alvo.map(p => (soma > 0 ? (100 * p.peso) / soma : 100 / alvo.length))
+  return aplicarPesos(pessoas, funcao, fecharEm100(pesos, alvo.length - 1))
 }
 
 export interface MetaPessoa {

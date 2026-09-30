@@ -57,13 +57,13 @@ export function EditorMarca({ marca, mesReferencia, proximaMarca, onMudar, onVol
       <Secao numero={1} titulo="Base do mês" descricao="O ponto de partida. Todo o funil é calculado a partir das vendas.">
         <div className="rs-grid rs-cols-3" style={{ gap: 12 }}>
           <Bloco rotulo="Vendas previstas">
-            <CampoNumero valor={marca.vendas} onMudar={v => onMudar({ ...marca, vendas: v })} destaque largura={110} sufixo="unid." rotulo="Vendas previstas" autoFocus={marca.vendas == null} />
+            <CampoNumero valor={marca.vendas} onMudar={v => onMudar({ ...marca, vendas: v })} destaque largura={80} passo={1} sufixo="unid." rotulo="Vendas previstas" autoFocus={marca.vendas == null} />
             {ref?.vendas != null && (
               <Sugestao igual={marca.vendas === ref.vendas} texto={`${ref.rotulo}: ${fmtDec(ref.vendas)}`} onUsar={() => onMudar({ ...marca, vendas: ref.vendas })} />
             )}
           </Bloco>
           <Bloco rotulo="Taxa de franquia média por unidade">
-            <CampoNumero valor={marca.ticketMedio} onMudar={v => onMudar({ ...marca, ticketMedio: v })} destaque largura={140} prefixo="R$" rotulo="Taxa de franquia média" />
+            <CampoNumero valor={marca.ticketMedio} onMudar={v => onMudar({ ...marca, ticketMedio: v })} destaque largura={110} passo={1000} prefixo="R$" rotulo="Taxa de franquia média" />
             {ref?.ticketMedio != null && (
               <Sugestao igual={marca.ticketMedio === ref.ticketMedio} texto={`${ref.rotulo}: ${fmtBRL(ref.ticketMedio)}`} onUsar={() => onMudar({ ...marca, ticketMedio: ref.ticketMedio })} />
             )}
@@ -78,7 +78,7 @@ export function EditorMarca({ marca, mesReferencia, proximaMarca, onMudar, onVol
       <Secao
         numero={2}
         titulo="Funil de metas"
-        descricao={`Calculado de baixo pra cima a partir das vendas. Em cada etapa, use a conversão de ${ref?.rotulo ?? 'referência'}, informe uma nova conversão ou digite o número direto.`}
+        descricao={`Começa nas vendas e volta etapa por etapa: quantas Oportunidades, SAL, Diagnósticos e SQL são necessários pra chegar nelas. Em cada etapa, use a conversão de ${ref?.rotulo ?? 'referência'}, informe uma nova ou digite o número direto.`}
       >
         <FunilReverso marca={marca} funil={funil} onMudar={onMudar} />
       </Secao>

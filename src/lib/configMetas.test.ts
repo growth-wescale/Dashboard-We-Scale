@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { gerarSemanas, resolverFunilMarca, type ConfigEtapa } from '@/lib/metasEngine'
 import type { EstadoMes, EstadoMesMarca } from '@/hooks/useMetaMes'
 import {
-  arredondarMeta, calcularFunil, definirModoEtapa, distribuirProporcional, dividirIgualmente,
+  ajustarPeso, arredondarMeta, calcularFunil, definirModoEtapa, distribuirProporcional, dividirIgualmente,
   marcaDeVersao, marcaDoMesAnterior, marcaEmBranco, marcasDisponiveis, mesAnterior, metasPorPessoa,
-  montarPublicacao, ordenarMarcas, paraConfigEtapas, pendenciasMarca, rascunhoDeVersao,
+  montarPublicacao, moverDivisa, normalizarPesos, ordenarMarcas, paraConfigEtapas, pendenciasMarca, rascunhoDeVersao,
   rascunhoDoMesAnterior, rascunhoEmBranco, referenciaDeVersao, resumoRascunho, statusMarca,
   type MarcaConfig,
 } from '@/lib/configMetas'
@@ -154,7 +154,7 @@ describe('calcularFunil', () => {
     const m: MarcaConfig = { ...inpotOutubro(6), etapas: { ...inpotOutubro(6).etapas, 'Oportunidade COF': { tipo: 'sem_meta' } } }
     const f = calcularFunil(m)
     expect(f.etapas.SAL.meta).toBeNull()
-    expect(f.etapas.SAL.problema).toMatch(/COF está sem meta/)
+    expect(f.etapas.SAL.problema).toMatch(/Oportunidade está sem meta/)
   })
 
   it('conversão em branco é problema', () => {
@@ -345,5 +345,55 @@ describe('distribuirProporcional', () => {
     const semanas = gerarSemanas('2026-10-01', 'terca') // 5, 7, 7, 7, 5 dias
     expect(distribuirProporcional(41, semanas)).toEqual([7, 9, 9, 9, 7])
     expect(distribuirProporcional(40.5, semanas).reduce((a, b) => a + b, 0)).toBe(41)
+  })
+})
+
+describe('pesos que sempre fecham 100%', () => {
+  const time = [
+    { nome: 'A', funcao: 'SDR' as const, peso: 50 },
+    { nome: 'B', funcao: 'SDR' as const, peso: 30 },
+    { nome: 'C', funcao: 'SDR' as const, peso: 20 },
+    { nome: 'D', funcao: 'Closer' as const, peso: 100 },
+  ]
+  const soma = (ps: { funcao: string; peso: number }[], f: string) => ps.filter(p => p.funcao === f).reduce((s, p) => s + p.peso, 0)
+
+  it('ajustarPeso redistribui o resto entre os outros, na proporção deles', () => {
+    const r = ajustarPeso(time, 'SDR', 'A', 60)
+    expect(r.map(p => p.peso)).toEqual([60, 24, 16, 100])
+  })
+
+  it('ajustarPeso nunca passa de 100 nem fica negativo', () => {
+    expect(ajustarPeso(time, 'SDR', 'A', 150).filter(p => p.funcao === 'SDR').map(p => p.peso)).toEqual([100, 0, 0])
+    expect(ajustarPeso(time, 'SDR', 'A', -5).filter(p => p.funcao === 'SDR').map(p => p.peso)).toEqual([0, 60, 40])
+  })
+
+  it('ajustarPeso reparte igual quando os outros estavam zerados', () => {
+    const zerados = ajustarPeso(time, 'SDR', 'A', 100)
+    expect(ajustarPeso(zerados, 'SDR', 'A', 40).filter(p => p.funcao === 'SDR').map(p => p.peso)).toEqual([40, 30, 30])
+  })
+
+  it('ajustarPeso fecha em 100 mesmo com dízima', () => {
+    const r = ajustarPeso(time, 'SDR', 'A', 33.33)
+    expect(soma(r, 'SDR')).toBeCloseTo(100, 10)
+    expect(r[0].peso).toBe(33.33)
+  })
+
+  it('pessoa sozinha na função fica sempre com 100%', () => {
+    expect(ajustarPeso(time, 'Closer', 'D', 40).find(p => p.nome === 'D')!.peso).toBe(100)
+  })
+
+  it('moverDivisa troca peso só entre os dois vizinhos, em passos de 1%', () => {
+    expect(moverDivisa([50, 30, 20], 0, 42.4)).toEqual([42, 38, 20])
+    expect(moverDivisa([50, 30, 20], 1, 90)).toEqual([50, 40, 10])
+    // não atravessa a divisa vizinha
+    expect(moverDivisa([50, 30, 20], 0, 95)).toEqual([80, 0, 20])
+    expect(moverDivisa([50, 30, 20], 1, 10)).toEqual([50, 0, 50])
+  })
+
+  it('normalizarPesos corrige soma errada mantendo a proporção', () => {
+    const r = normalizarPesos([{ nome: 'A', funcao: 'SDR', peso: 60 }, { nome: 'B', funcao: 'SDR', peso: 60 }], 'SDR')
+    expect(r.map(p => p.peso)).toEqual([50, 50])
+    const vazio = normalizarPesos([{ nome: 'A', funcao: 'SDR', peso: 0 }, { nome: 'B', funcao: 'SDR', peso: 0 }], 'SDR')
+    expect(vazio.map(p => p.peso)).toEqual([50, 50])
   })
 })

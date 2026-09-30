@@ -117,7 +117,7 @@ export function PassoSemanas({ rascunho, onMudar, onVoltar, onAvancar }: {
         <div key={g.marca} style={cardStyle}>
           <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600 }}>{marcaLabel(g.marca)}</h3>
           <div className="rs-scroll-x">
-            <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 180 + semanas.length * 72 + 220 }}>
+            <table style={{ borderCollapse: 'collapse', fontSize: 13, minWidth: 180 + semanas.length * 92 + 220 }}>
               <thead>
                 <tr style={{ color: 'var(--ws-text-secondary)', fontSize: 11, textAlign: 'left' }}>
                   <th style={{ padding: '6px 8px', fontWeight: 600, whiteSpace: 'nowrap' }}>Pessoa · etapa</th>
@@ -136,7 +136,7 @@ export function PassoSemanas({ rascunho, onMudar, onVoltar, onAvancar }: {
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{l.nome} · {ROTULO_ETAPA[l.etapa as EtapaMetaConfig]}</td>
                       {semanas.map((s, i) => (
                         <td key={s.numero} style={{ padding: '4px' }}>
-                          <CampoNumero valor={doMes[i]} onMudar={v => mudarCelula(l, s.numero, v)} largura={60} rotulo={`${l.nome} ${ROTULO_ETAPA[l.etapa as EtapaMetaConfig]} S${s.numero}`} />
+                          <CampoNumero valor={doMes[i]} onMudar={v => mudarCelula(l, s.numero, v)} largura={44} rotulo={`${l.nome} ${ROTULO_ETAPA[l.etapa as EtapaMetaConfig]} S${s.numero}`} />
                         </td>
                       ))}
                       <td style={{ padding: '6px 8px', whiteSpace: 'nowrap', color: cor, fontWeight: 600 }}>

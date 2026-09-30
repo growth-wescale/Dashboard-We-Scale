@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { ArrowLeft, ArrowRight, Trash2 } from 'lucide-react'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
-import { calcularFunil, pendenciasMarca, statusMarca, type MarcaConfig } from '@/lib/configMetas'
+import { calcularFunil, encaixarFaixas, pendenciasMarca, statusMarca, type MarcaConfig } from '@/lib/configMetas'
 import { CampoNumero } from './CampoNumero'
 import { FunilReverso } from './FunilReverso'
 import { TimeMarca } from './TimeMarca'
@@ -21,6 +21,16 @@ export function EditorMarca({ marca, mesReferencia, proximaMarca, onMudar, onVol
   onProxima: () => void
   onRemover: () => void
 }) {
+  // Closer divide vendas inteiras: vendas mudaram → pesos dos Closers reencaixam nas faixas (100 ÷ vendas).
+  const mudarVendas = (v: number | null) => onMudar({ ...marca, vendas: v, pessoas: encaixarFaixas(marca.pessoas, 'Closer', v) })
+
+  // Ao abrir a marca, encaixa pesos de Closer que vieram fora das faixas (rascunho antigo, mês anterior).
+  useEffect(() => {
+    const encaixadas = encaixarFaixas(marca.pessoas, 'Closer', marca.vendas)
+    if (encaixadas.some((p, i) => p.peso !== marca.pessoas[i].peso)) onMudar({ ...marca, pessoas: encaixadas })
+    // só na abertura da marca (o editor é remontado por marca)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const funil = calcularFunil(marca)
   const pendencias = pendenciasMarca(marca, funil)
   const status = statusMarca(marca, pendencias)
@@ -57,9 +67,9 @@ export function EditorMarca({ marca, mesReferencia, proximaMarca, onMudar, onVol
       <Secao numero={1} titulo="Base do mês" descricao="O ponto de partida. Todo o funil é calculado a partir das vendas.">
         <div className="rs-grid rs-cols-3" style={{ gap: 12 }}>
           <Bloco rotulo="Vendas previstas">
-            <CampoNumero valor={marca.vendas} onMudar={v => onMudar({ ...marca, vendas: v })} destaque largura={80} passo={1} sufixo="unid." rotulo="Vendas previstas" autoFocus={marca.vendas == null} />
+            <CampoNumero valor={marca.vendas} onMudar={mudarVendas} destaque largura={80} passo={1} sufixo="unid." rotulo="Vendas previstas" autoFocus={marca.vendas == null} />
             {ref?.vendas != null && (
-              <Sugestao igual={marca.vendas === ref.vendas} texto={`${ref.rotulo}: ${fmtDec(ref.vendas)}`} onUsar={() => onMudar({ ...marca, vendas: ref.vendas })} />
+              <Sugestao igual={marca.vendas === ref.vendas} texto={`${ref.rotulo}: ${fmtDec(ref.vendas)}`} onUsar={() => mudarVendas(ref.vendas)} />
             )}
           </Bloco>
           <Bloco rotulo="Taxa de franquia média por unidade">

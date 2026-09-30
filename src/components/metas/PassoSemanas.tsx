@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Eraser, Minus,
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { gerarSemanas, type DiaSemana, type Semana } from '@/lib/metasEngine'
 import {
-  ETAPAS_CLOSER, ETAPAS_SDR, ROTULO_ETAPA, calcularFunil, diasDaSemana, distribuirVendasProporcional, metasDaSemana,
+  ROTULO_ETAPA, calcularFunil, diasDaSemana, distribuirVendasProporcional, metasPessoaSemana, metasPorSemana,
   vendasDistribuidas, type EtapaMetaConfig, type MarcaConfig, type RascunhoConfig, type VendaSemana,
 } from '@/lib/configMetas'
 import {
@@ -143,6 +143,7 @@ function CartaoMarcaSemanas({ rascunho, marca, semanas, onVendas }: {
 
   const funil = calcularFunil(marca)
   const derivadas = DERIVADAS.filter(e => funil.etapas[e].meta != null)
+  const metasSemanas = metasPorSemana(rascunho, marca.marca, funil)
 
   function definir(semanaNumero: number, valor: number) {
     const resto = rascunho.vendasPorSemana.filter(v => !(v.marca === marca.marca && v.semanaNumero === semanaNumero))
@@ -201,7 +202,7 @@ function CartaoMarcaSemanas({ rascunho, marca, semanas, onVendas }: {
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${semanas.length}, minmax(132px, 1fr))`, gap: 10, minWidth: semanas.length * 142 }}>
           {semanas.map((s, i) => {
             const valor = porSemana[i]
-            const semana = metasDaSemana(marca, valor, funil)
+            const semana = metasSemanas[i]
             const ativa = valor > 0
             return (
               <div key={s.numero} style={{
@@ -241,7 +242,7 @@ function CartaoMarcaSemanas({ rascunho, marca, semanas, onVendas }: {
                     <div key={e} style={{ display: 'flex', justifyContent: 'space-between', gap: 6, fontSize: 12 }}>
                       <span style={{ color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{ROTULO_ETAPA[e]}</span>
                       <b style={{ color: ativa ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)', fontWeight: ativa ? 600 : 400 }}>
-                        {ativa ? fmtDec(semana[e] ?? 0) : '—'}
+                        {ativa ? fmtInt(semana[e] ?? 0) : '—'}
                       </b>
                     </div>
                   ))}
@@ -259,19 +260,19 @@ function CartaoMarcaSemanas({ rascunho, marca, semanas, onVendas }: {
             <Users size={13} /> {verPessoas ? 'Esconder' : 'Ver'} a meta de cada pessoa por semana
             <ChevronDown size={13} style={{ transform: verPessoas ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
           </button>
-          {verPessoas && <TabelaPessoas marca={marca} semanas={semanas} porSemana={porSemana} />}
+          {verPessoas && <TabelaPessoas rascunho={rascunho} marca={marca} semanas={semanas} />}
         </div>
       )}
     </div>
   )
 }
 
-function TabelaPessoas({ marca, semanas, porSemana }: { marca: MarcaConfig; semanas: Semana[]; porSemana: number[] }) {
+function TabelaPessoas({ rascunho, marca, semanas }: { rascunho: RascunhoConfig; marca: MarcaConfig; semanas: Semana[] }) {
   const funil = calcularFunil(marca)
-  const porSemanaMetas = porSemana.map(v => metasDaSemana(marca, v, funil))
-  const linhas = marca.pessoas.flatMap(p => (p.funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER)
-    .filter(e => funil.etapas[e].meta != null)
-    .map(e => ({ pessoa: p, etapa: e })))
+  const ordem: EtapaMetaConfig[] = ['Fechamento', 'Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações']
+  const linhas = metasPessoaSemana(rascunho, marca.marca).flatMap(p => ordem
+    .filter(e => funil.etapas[e].meta != null && p.porSemana.some(s => s[e] != null))
+    .map(e => ({ pessoa: p, etapa: e, valores: p.porSemana.map(s => s[e] ?? 0) })))
   const th = { padding: '6px 8px', fontSize: 11, fontWeight: 600, color: 'var(--ws-text-secondary)', textAlign: 'right' as const, whiteSpace: 'nowrap' as const }
   const td = { padding: '6px 8px', textAlign: 'right' as const, whiteSpace: 'nowrap' as const }
   return (
@@ -285,18 +286,15 @@ function TabelaPessoas({ marca, semanas, porSemana }: { marca: MarcaConfig; sema
           </tr>
         </thead>
         <tbody>
-          {linhas.map(({ pessoa, etapa }) => {
-            const valores = porSemanaMetas.map(m => ((m[etapa] ?? 0) * pessoa.peso) / 100)
-            return (
-              <tr key={`${pessoa.nome}|${etapa}`} style={{ borderTop: '1px solid var(--ws-border)' }}>
-                <td style={{ ...td, textAlign: 'left' }}>
-                  <b>{pessoa.nome}</b> <span style={{ color: 'var(--ws-text-secondary)' }}>· {ROTULO_ETAPA[etapa]}</span>
-                </td>
-                {valores.map((v, i) => <td key={i} style={{ ...td, color: v > 0 ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)' }}>{v > 0 ? fmtDec(v) : '—'}</td>)}
-                <td style={{ ...td, fontWeight: 600 }}>{fmtDec(valores.reduce((a, b) => a + b, 0))}</td>
-              </tr>
-            )
-          })}
+          {linhas.map(({ pessoa, etapa, valores }) => (
+            <tr key={`${pessoa.funcao}|${pessoa.nome}|${etapa}`} style={{ borderTop: '1px solid var(--ws-border)' }}>
+              <td style={{ ...td, textAlign: 'left' }}>
+                <b>{pessoa.nome}</b> <span style={{ color: 'var(--ws-text-secondary)' }}>· {ROTULO_ETAPA[etapa]}</span>
+              </td>
+              {valores.map((v, i) => <td key={i} style={{ ...td, color: v > 0 ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)' }}>{v > 0 ? fmtInt(v) : '—'}</td>)}
+              <td style={{ ...td, fontWeight: 600 }}>{fmtInt(valores.reduce((a, b) => a + b, 0))}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

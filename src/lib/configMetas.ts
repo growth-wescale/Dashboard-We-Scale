@@ -8,7 +8,7 @@
  */
 import { BRAND_LIST } from '@/constants/brands'
 import {
-  gerarLinhasEspelho, gerarSemanas, resolverFunilMarca,
+  gerarSemanas, resolverFunilMarca,
   type ConfigEtapa, type DiaSemana, type EtapaMeta, type LinhaEspelho,
   type PessoaComFuncao, type ResolucaoFunil, type Semana,
 } from '@/lib/metasEngine'
@@ -88,7 +88,7 @@ export type OrigemRascunho =
   | { tipo: 'branco' }
 
 /** Quantas vendas da marca caem em cada semana — a única coisa distribuída à
- *  mão. As outras etapas da semana vêm na mesma fração (`metasDaSemana`). */
+ *  mão. As outras etapas da semana vêm na mesma proporção (`metasPorSemana`). */
 export interface VendaSemana {
   marca: string
   semanaNumero: number
@@ -431,13 +431,60 @@ function fecharEm100(pesos: number[], fecha: number): number[] {
 }
 
 /**
+ * Reparte um total inteiro em partes inteiras proporcionais aos pesos
+ * (maiores restos: cada um leva o piso, e a sobra vai pra quem tem a maior
+ * parte quebrada — desempate pelo maior peso, depois pela ordem). A soma
+ * sempre fecha o total. Pesos todos zero = partes iguais.
+ */
+export function repartirInteiro(total: number, pesos: number[]): number[] {
+  const t = Math.max(0, Math.round(total))
+  if (pesos.length === 0) return []
+  const base = pesos.some(x => x > 0) ? pesos.map(x => Math.max(0, x)) : pesos.map(() => 1)
+  const soma = base.reduce((a, b) => a + b, 0)
+  const brutos = base.map(x => (t * x) / soma)
+  const r = brutos.map(b => Math.floor(b + 1e-9))
+  let resto = t - r.reduce((a, b) => a + b, 0)
+  const ordem = brutos
+    .map((b, i) => ({ i, frac: b - Math.floor(b + 1e-9), peso: base[i] }))
+    .sort((a, b) => b.frac - a.frac || b.peso - a.peso || a.i - b.i)
+  for (let k = 0; resto > 0; k = (k + 1) % ordem.length) {
+    r[ordem[k].i] += 1
+    resto -= 1
+  }
+  return r
+}
+
+/**
+ * Encaixa os pesos da função em faixas que dão `unidades` inteiras por pessoa
+ * (Closer: vendas — com 2 vendas as faixas são 0/50/100%). Sem unidades,
+ * devolve igual.
+ */
+export function encaixarFaixas(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', unidades: number | null): PessoaComFuncao[] {
+  const alvo = pessoas.filter(p => p.funcao === funcao)
+  if (!unidades || unidades <= 0 || alvo.length === 0) return pessoas
+  const partes = repartirInteiro(unidades, alvo.map(p => p.peso))
+  return aplicarPesos(pessoas, funcao, fecharEm100(partes.map(k => (k * 100) / unidades), alvo.length - 1))
+}
+
+/**
  * Muda o peso de UMA pessoa e redistribui o resto (100 − novo) entre as
  * outras da mesma função, na proporção que elas já tinham — a soma nunca sai
- * de 100%. Pessoa sozinha na função fica sempre com 100%.
+ * de 100%. Pessoa sozinha na função fica sempre com 100%. Com `unidades`
+ * (Closer: vendas do mês), o peso anda em faixas de 100/unidades e cada um
+ * fica com vendas inteiras.
  */
-export function ajustarPeso(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', nome: string, novoPeso: number): PessoaComFuncao[] {
+export function ajustarPeso(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', nome: string, novoPeso: number, unidades?: number | null): PessoaComFuncao[] {
   const alvo = pessoas.filter(p => p.funcao === funcao)
   if (alvo.length <= 1) return aplicarPesos(pessoas, funcao, alvo.map(() => 100))
+  const ultimoOutro = alvo.reduce((ult, p, i) => (p.nome !== nome ? i : ult), -1)
+  if (unidades && unidades > 0) {
+    const k = Math.min(unidades, Math.max(0, Math.round((novoPeso / 100) * unidades)))
+    const outros = alvo.filter(p => p.nome !== nome)
+    const partes = repartirInteiro(unidades - k, outros.map(p => p.peso))
+    let j = 0
+    const pesos = alvo.map(p => ((p.nome === nome ? k : partes[j++]) * 100) / unidades)
+    return aplicarPesos(pessoas, funcao, fecharEm100(pesos, ultimoOutro))
+  }
   const v = arred2(Math.min(100, Math.max(0, novoPeso)))
   const somaOutros = alvo.filter(p => p.nome !== nome).reduce((s, p) => s + p.peso, 0)
   const nOutros = alvo.length - 1
@@ -445,19 +492,19 @@ export function ajustarPeso(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer'
     if (p.nome === nome) return v
     return somaOutros > 0 ? ((100 - v) * p.peso) / somaOutros : (100 - v) / nOutros
   })
-  const ultimoOutro = alvo.reduce((ult, p, i) => (p.nome !== nome ? i : ult), -1)
   return aplicarPesos(pessoas, funcao, fecharEm100(pesos, ultimoOutro))
 }
 
 /**
  * Arrasta a divisa entre as pessoas `i` e `i + 1` da barra de pesos até a
- * posição acumulada `posicao` (0–100, em passos de 1%). Só esses dois
- * vizinhos mudam, e a divisa não atravessa as vizinhas.
+ * posição acumulada `posicao` (0–100), encaixando em múltiplos de `passo`
+ * (1% por padrão; Closer usa 100/vendas). Só esses dois vizinhos mudam, e a
+ * divisa não atravessa as vizinhas.
  */
-export function moverDivisa(pesos: number[], i: number, posicao: number): number[] {
+export function moverDivisa(pesos: number[], i: number, posicao: number, passo = 1): number[] {
   const inicio = pesos.slice(0, i).reduce((a, b) => a + b, 0)
   const fim = inicio + pesos[i] + pesos[i + 1]
-  const p = Math.min(fim, Math.max(inicio, Math.round(posicao)))
+  const p = Math.min(fim, Math.max(inicio, Math.round(posicao / passo) * passo))
   const r = [...pesos]
   r[i] = arred2(p - inicio)
   r[i + 1] = arred2(fim - p)
@@ -481,19 +528,32 @@ export interface MetaPessoa {
   faturamento: number | null
 }
 
+/**
+ * Meta de cada pessoa: a meta da marca repartida em inteiros pelo peso
+ * (`repartirInteiro`) — nunca meia reunião nem 1,6 venda. A soma das pessoas
+ * fecha a meta da marca. Faturamento do Closer = as vendas dele × ticket.
+ */
 export function metasPorPessoa(m: MarcaConfig, funil: FunilCalculado = calcularFunil(m)): MetaPessoa[] {
-  return m.pessoas.map(p => {
-    const fracao = p.peso / 100
-    const valores: Partial<Record<EtapaMetaConfig, number>> = {}
-    for (const e of p.funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
+  const porChave = new Map<string, MetaPessoa>()
+  const chave = (p: PessoaComFuncao) => `${p.funcao}|${p.nome}`
+  for (const p of m.pessoas) porChave.set(chave(p), { nome: p.nome, funcao: p.funcao, peso: p.peso, valores: {}, faturamento: null })
+  for (const funcao of ['SDR', 'Closer'] as const) {
+    const grupo = m.pessoas.filter(p => p.funcao === funcao)
+    if (grupo.length === 0) continue
+    for (const e of funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
       const meta = funil.etapas[e].meta
-      if (meta != null) valores[e] = meta * fracao
+      if (meta == null) continue
+      const partes = repartirInteiro(meta, grupo.map(p => p.peso))
+      grupo.forEach((p, i) => { porChave.get(chave(p))!.valores[e] = partes[i] })
     }
-    return {
-      nome: p.nome, funcao: p.funcao, peso: p.peso, valores,
-      faturamento: p.funcao === 'Closer' && funil.faturamento != null ? funil.faturamento * fracao : null,
+    if (funcao === 'Closer' && funil.faturamento != null && m.ticketMedio != null) {
+      for (const p of grupo) {
+        const mp = porChave.get(chave(p))!
+        mp.faturamento = (mp.valores.Fechamento ?? 0) * m.ticketMedio
+      }
     }
-  })
+  }
+  return [...porChave.values()]
 }
 
 // ── Persistência ─────────────────────────────────────────────────────────
@@ -533,10 +593,42 @@ export interface Publicacao {
   distribuicaoSemanal: DistribuicaoSemanalItem[]
 }
 
+/**
+ * Linhas de `DB_Metas_Performance` (o que o dashboard lê) com as metas
+ * inteiras por pessoa. Mesma partição de `gerarLinhasEspelho`: SDR leva SQL
+ * (= agendamento), Diagnóstico e SAL; Closer leva Oportunidade, vendas e
+ * faturamento.
+ */
+export function linhasEspelho(r: RascunhoConfig): LinhaEspelho[] {
+  const linhas: LinhaEspelho[] = []
+  for (const m of r.marcas) {
+    const pessoas = metasPorPessoa(m)
+    for (const funcao of ['SDR', 'Closer'] as const) {
+      for (const p of pessoas.filter(x => x.funcao === funcao)) {
+        const v = p.valores
+        linhas.push({
+          mes_referencia: r.mesReferencia,
+          marca: m.marca,
+          nome_colaborador: p.nome,
+          funcao,
+          meta_sql: funcao === 'SDR' ? v['Reunião Agendada SQL'] ?? null : null,
+          meta_agendamento: funcao === 'SDR' ? v['Reunião Agendada SQL'] ?? null : null,
+          meta_reuniao_realizada: funcao === 'SDR' ? v['Reunião Realizada'] ?? null : null,
+          meta_volume_sal: funcao === 'SDR' && v.SAL != null ? String(v.SAL) : null,
+          meta_cof: funcao === 'Closer' ? v['Oportunidade COF'] ?? null : null,
+          meta_financeira: funcao === 'Closer' ? p.faturamento : null,
+          meta_qtd_vendas: funcao === 'Closer' ? v.Fechamento ?? null : null,
+        })
+      }
+    }
+  }
+  return linhas
+}
+
 export function montarPublicacao(r: RascunhoConfig): Publicacao {
   return {
     marcas: r.marcas.map(m => ({ marca: m.marca, ticketMedio: m.ticketMedio ?? 0, etapas: paraConfigEtapas(m), pessoas: m.pessoas })),
-    linhasEspelho: gerarLinhasEspelho(r.mesReferencia, r.marcas.map(m => ({ marca: m.marca, resolucao: resolucaoArredondada(m), pessoas: m.pessoas }))),
+    linhasEspelho: linhasEspelho(r),
     distribuicaoSemanal: distribuicaoDerivada(r),
   }
 }
@@ -551,20 +643,7 @@ export function diasDaSemana(s: Semana): number {
 
 /** Reparte o total (arredondado pra cima) pelos dias de cada semana, em inteiros que somam o total. */
 export function distribuirProporcional(total: number, semanas: Semana[]): number[] {
-  const inteiro = arredondarMeta(total)
-  const dias = semanas.map(diasDaSemana)
-  const somaDias = dias.reduce((a, b) => a + b, 0)
-  if (somaDias === 0) return semanas.map(() => 0)
-  const brutos = dias.map(d => (inteiro * d) / somaDias)
-  const base = brutos.map(Math.floor)
-  let resto = inteiro - base.reduce((a, b) => a + b, 0)
-  const ordem = brutos.map((b, i) => ({ i, frac: b - Math.floor(b) })).sort((a, b) => b.frac - a.frac || a.i - b.i)
-  for (const { i } of ordem) {
-    if (resto <= 0) break
-    base[i] += 1
-    resto -= 1
-  }
-  return base
+  return repartirInteiro(arredondarMeta(total), semanas.map(diasDaSemana))
 }
 
 /** Vendas por semana de uma versão publicada: soma a etapa Fechamento dos Closers. */
@@ -602,37 +681,97 @@ export function vendasDistribuidas(r: RascunhoConfig, marca: string): {
   return { porSemana, distribuido, total, situacao }
 }
 
-/** Metas de uma semana da marca: cada etapa na mesma fração das vendas da semana. */
-export function metasDaSemana(m: MarcaConfig, vendasSemana: number, funil: FunilCalculado = calcularFunil(m)): Partial<Record<EtapaMetaConfig, number>> {
-  const r: Partial<Record<EtapaMetaConfig, number>> = {}
-  if (!m.vendas || m.vendas <= 0) return r
-  const fracao = vendasSemana / m.vendas
+/**
+ * Metas da marca em cada semana, em inteiros: cada etapa repartida pelas
+ * vendas das semanas (`repartirInteiro`), fechando a meta do mês. Vendas da
+ * semana = o que o gestor distribuiu. Sem vendas distribuídas, tudo vazio.
+ */
+export function metasPorSemana(r: RascunhoConfig, marca: string, funil?: FunilCalculado): Array<Partial<Record<EtapaMetaConfig, number>>> {
+  const m = r.marcas.find(x => x.marca === marca)
+  const { porSemana, distribuido } = vendasDistribuidas(r, marca)
+  if (!m || distribuido <= 0) return r.semanas.map(() => ({}))
+  const f = funil ?? calcularFunil(m)
+  const semanas = r.semanas.map((): Partial<Record<EtapaMetaConfig, number>> => ({}))
   for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
-    const meta = funil.etapas[e].meta
-    if (meta != null) r[e] = e === 'Fechamento' ? vendasSemana : meta * fracao
+    const meta = f.etapas[e].meta
+    if (meta == null) continue
+    const partes = e === 'Fechamento' ? porSemana : repartirInteiro(meta, porSemana)
+    partes.forEach((v, i) => { semanas[i][e] = v })
   }
-  return r
+  return semanas
 }
 
-/** Linhas de `meta_pessoa_semana` derivadas das vendas por semana — só de marca distribuída por completo. */
+/**
+ * Reparte inteiros numa grade pessoa × semana fechando as duas somas: cada
+ * pessoa soma a cota dela (`cotas`) e cada semana soma o total dela
+ * (`totais`). Semana a semana, cada pessoa mira a parte proporcional do que
+ * ainda falta pra ela; a sobra vai pra maior parte quebrada, sem passar da
+ * cota. A última semana fecha sozinha.
+ */
+export function repartirMatriz(cotas: number[], totais: number[]): number[][] {
+  const restante = [...cotas]
+  const m = cotas.map(() => totais.map(() => 0))
+  totais.forEach((totalSemana, w) => {
+    const somaRestante = restante.reduce((a, b) => a + b, 0)
+    const alvo = Math.min(totalSemana, somaRestante)
+    if (alvo <= 0) return
+    const brutos = restante.map(x => (x * alvo) / somaRestante)
+    const alloc = brutos.map((b, p) => Math.min(restante[p], Math.floor(b + 1e-9)))
+    let sobra = alvo - alloc.reduce((a, b) => a + b, 0)
+    const ordem = brutos.map((b, p) => ({ p, frac: b - Math.floor(b + 1e-9) })).sort((a, b) => b.frac - a.frac || restante[b.p] - restante[a.p] || a.p - b.p)
+    while (sobra > 0) {
+      let deu = false
+      for (const { p } of ordem) {
+        if (sobra <= 0) break
+        if (alloc[p] < restante[p]) { alloc[p] += 1; sobra -= 1; deu = true }
+      }
+      if (!deu) break
+    }
+    alloc.forEach((v, p) => { m[p][w] = v; restante[p] -= v })
+  })
+  return m
+}
+
+export interface MetaPessoaSemana {
+  nome: string
+  funcao: 'SDR' | 'Closer'
+  porSemana: Array<Partial<Record<EtapaMetaConfig, number>>>
+}
+
+/** Meta de cada pessoa em cada semana, em inteiros que fecham a meta dela no mês e a da marca na semana. */
+export function metasPessoaSemana(r: RascunhoConfig, marca: string): MetaPessoaSemana[] {
+  const m = r.marcas.find(x => x.marca === marca)
+  if (!m) return []
+  const funil = calcularFunil(m)
+  const pessoas = metasPorPessoa(m, funil)
+  const semanas = metasPorSemana(r, marca, funil)
+  const out: MetaPessoaSemana[] = pessoas.map(p => ({ nome: p.nome, funcao: p.funcao, porSemana: r.semanas.map(() => ({})) }))
+  for (const funcao of ['SDR', 'Closer'] as const) {
+    const idx = pessoas.map((p, i) => (p.funcao === funcao ? i : -1)).filter(i => i >= 0)
+    if (idx.length === 0) continue
+    for (const e of funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
+      if (funil.etapas[e].meta == null) continue
+      const cotas = idx.map(i => pessoas[i].valores[e] ?? 0)
+      const totais = semanas.map(s => s[e] ?? 0)
+      const grade = repartirMatriz(cotas, totais)
+      idx.forEach((i, k) => grade[k].forEach((v, w) => { out[i].porSemana[w][e] = v }))
+    }
+  }
+  return out
+}
+
+/** Linhas de `meta_pessoa_semana` — só de marca com as vendas distribuídas por completo. */
 export function distribuicaoDerivada(r: RascunhoConfig): DistribuicaoSemanalItem[] {
   const itens: DistribuicaoSemanalItem[] = []
   for (const m of r.marcas) {
-    const { porSemana, situacao } = vendasDistribuidas(r, m.marca)
-    if (situacao !== 'completo') continue
-    const funil = calcularFunil(m)
-    r.semanas.forEach((s, i) => {
-      if (porSemana[i] <= 0) return
-      const semana = metasDaSemana(m, porSemana[i], funil)
-      for (const p of m.pessoas) {
-        for (const etapa of p.funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
-          const v = semana[etapa]
-          if (v == null) continue
-          const valor = arred2((v * p.peso) / 100)
-          if (valor > 0) itens.push({ marca: m.marca, nomePessoa: p.nome, semanaNumero: s.numero, etapa, valor })
+    if (vendasDistribuidas(r, m.marca).situacao !== 'completo') continue
+    for (const p of metasPessoaSemana(r, m.marca)) {
+      p.porSemana.forEach((valores, w) => {
+        for (const [etapa, valor] of Object.entries(valores) as [EtapaMetaConfig, number][]) {
+          if (valor > 0) itens.push({ marca: m.marca, nomePessoa: p.nome, semanaNumero: r.semanas[w].numero, etapa, valor })
         }
-      }
-    })
+      })
+    }
   }
   return itens
 }

@@ -585,6 +585,33 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-30 (6) — Configuração das Metas: toda meta por pessoa é número inteiro
+
+Junior: "tá ficando número quebrado, isso não existe" — SDR com SQL 12,1 e,
+pior, Closer com 1,6 venda. Ninguém faz meia reunião nem 0,6 venda.
+
+- **Pessoa no mês:** a meta da marca é repartida em inteiros pelo peso
+  (`repartirInteiro`, maiores restos — desempate pelo maior peso, depois pela
+  ordem). A soma das pessoas fecha a meta da marca. Vale pra todas as etapas
+  de SDR e Closer; faturamento do Closer = as vendas dele × ticket.
+- **Closer em faixas:** o peso do Closer só anda em múltiplos de 100 ÷ vendas
+  do mês (2 vendas → 0/50/100%; 5 → de 20 em 20%). Barra (`moverDivisa` com
+  `passo`), setinhas e `ajustarPeso(..., unidades)` encaixam; mudar as vendas
+  na Base ou abrir a marca reencaixa sozinho (`encaixarFaixas`). SDR segue com
+  peso livre (1%), mas as metas saem inteiras.
+- **Espelho:** `montarPublicacao` deixou de usar `gerarLinhasEspelho`
+  (rateio decimal) — `linhasEspelho` grava em `DB_Metas_Performance` os
+  inteiros de `metasPorPessoa`.
+- **Semanas:** metas da marca por semana em inteiros (`metasPorSemana`,
+  repartindo cada etapa pelas vendas das semanas) e por pessoa × semana em
+  inteiros que fecham as duas somas (`repartirMatriz`: a pessoa fecha a meta
+  dela no mês, a semana fecha a meta da marca).
+
+Verificado: build + 531 testes (4 novos) + oxlint; visto renderizado com o
+cenário do print (Oral Unic, 2 vendas, SDRs 39/24/12/25 → SQL 12/7/4/8 = 31;
+Closers 80/20 viram 100/0 ao abrir, setinha leva a 50/50 = 1 venda cada;
+semanas sem nenhum decimal, tabela por pessoa fecha no mês).
+
 ### 2026-09-30 (5) — Configuração das Metas: semanas distribuem só as vendas
 
 Junior: "não faz sentido distribuir todas as metas por semana. Só devemos

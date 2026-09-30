@@ -4,7 +4,7 @@ import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { nf, money } from '@/lib/format'
-import { BarList, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
+import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
 import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
@@ -58,8 +58,8 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   // modos Aging/Atual é o tempo em andamento no funil inteiro (antiga coluna
   // "Em andamento"), ao lado do tempo parado só nesta etapa.
   const headers = leadtimeCols
-    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Parado na etapa', 'Leadtime']
-    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Leadtime', 'Data na etapa']
+    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Parado na etapa', 'Leadtime']
+    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Leadtime', 'Data na etapa']
   const alignRight = new Set(['Unidades', 'Taxa de Franquia', 'Leadtime', 'Parado na etapa'])
 
   // Sem corte por "Outros" (decisão do Junior, 22/09) — toda marca real do
@@ -181,6 +181,7 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
                 <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   {r.valor_produto != null ? money(r.valor_produto) : '—'}
                 </td>
+                <CelulasDatasDeal row={r} />
                 {leadtimeCols ? (
                   <>
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(diasDesde(dataEtapa, agora))}</td>

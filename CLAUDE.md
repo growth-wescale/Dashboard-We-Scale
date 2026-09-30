@@ -585,6 +585,36 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-30 — Pop-ups de deal ganham "Data de criação" e "Data da última reativação"
+
+Pedido do Junior: as duas colunas em todos os pop-ups de deal de Vendas, sem
+quebra de linha. Entraram nos 4 (`StageDealsDrawer`/`StageDealsPanel` (que
+também serve o `MetaBreakdownDrawer` da Performance), `SimpleDealsDrawer`,
+`PerdaDealsDrawer`, `RepeatedDealsDrawer`), sempre logo antes de Leadtime. As
+células ficam num componente compartilhado, `CelulasDatasDeal` em
+`dealDrawerShared.tsx`, então os 4 não divergem.
+
+**Nenhuma mudança de banco.** As duas datas já vinham em `vw_funil_vendas` e no
+`COLS` do `useFunilVendas`:
+- **Data de criação** = `data_criacao_original`, a criação real do deal, que
+  não reseta em reciclagem. Preenchida em 7.808/7.808 linhas.
+- **Data da última reativação** = `data_criacao_negociacao` (início do ciclo),
+  **só quando `ciclo > 1`**. No ciclo 1 ela é a própria criação (difere de
+  `data_criacao_original` por milissegundos), então vira "—" = nunca
+  reativado. Medido: 87 linhas de ciclo 2+. Numa linha de ciclo antigo mostra
+  a reativação que abriu **aquele** ciclo, nunca uma posterior aos eventos da
+  própria linha (`dataUltimaReativacao`, testada).
+
+Drawers alargados pra caber as colunas (Simple 680→900px, Perda 760→980,
+Repetidos 860→980; Etapa já tinha 980). Todo `th`/`td` com `nowrap`, e o que
+passar da largura rola na horizontal.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (480 testes, 3 novos)
+em worktree fora do OneDrive. Popup de etapa **visto renderizado** com dado
+sintético numa página temporária (removida antes do commit): as 13 colunas
+ficam em uma linha só (todas as células com a mesma altura, 42px), com "—"
+no ciclo 1 e 06/08/2026 no ciclo 3.
+
 ### 2026-09-29 — Repetidos falsos no modo Passagens; deals sem SDR
 
 Junior abriu no RD um deal (`6a9d7aa4eeed3c00017bea5c`, Inpot) que o funil

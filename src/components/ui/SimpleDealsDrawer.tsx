@@ -10,7 +10,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
+import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -34,7 +34,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
       }} />
 
       <div className="rs-drawer" style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(680px, 96vw)',
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(900px, 96vw)',
         background: 'var(--ws-surface)', borderLeft: '1px solid var(--ws-border)',
         boxShadow: '-8px 0 40px rgba(0,0,0,.18)', zIndex: 1001,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -64,7 +64,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Marca', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Valor', 'Leadtime', 'Data'].map(h => (
+                {['Negociação', 'Marca', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Valor', ...COLS_DATAS_DEAL, 'Leadtime', 'Data'].map(h => (
                   <th key={h} style={{
                     padding: '10px 16px', textAlign: ['Valor', 'Unidades', 'Taxa de Franquia', 'Leadtime'].includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -76,7 +76,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
             <tbody>
               {deals.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={10} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal no recorte selecionado.
                   </td>
                 </tr>
@@ -109,6 +109,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {r.valor_contrato ? money(r.valor_contrato) : '—'}
                   </td>
+                  <CelulasDatasDeal row={r} />
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                     {fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, r.data_venda, Date.now()))}
                   </td>

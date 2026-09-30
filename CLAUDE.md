@@ -18,7 +18,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo, Configuração das Metas** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -584,6 +584,70 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-09-30 (2) — Configuração das Metas: painel de marcas + funil reverso
+
+Junior pediu pra refazer o lançamento de metas (`/metas`, antes "Metas" /
+Hub de Metas), com três queixas: o nome, "Começar do zero" levar a uma aba
+Semanas sem próximo passo e Taxas em branco, e "Nova versão a partir desta"
+mostrar Taxas sem deixar mudar nada por marca.
+
+**Diagnóstico do fluxo antigo (7 passos):** "do zero" criava rascunho com
+**0 marcas** e nenhum passo permitia adicionar marca; a V1 de setembro foi
+**importada com tudo `fixo`**, e Taxas só listava etapas `derivado` → "volte
+ao Passo 3" em toda marca; Taxas (2) dependia do Funil (3); a sugestão "mês
+anterior" só lia taxa gravada (setembro não tem nenhuma); nada persistia antes
+de publicar; e a distribuição semanal (1º passo) não tem leitor no dashboard.
+
+**Fluxo novo** (spec `docs/superpowers/specs/2026-09-30-configuracao-metas-wizard-design.md`):
+tela inicial por mês (sem meta → "Configurar metas de {mês}" já parte do mês
+anterior; com versões → lista com Ativar / Criar revisão) e montagem em 3
+passos — **Marcas** (painel com status Não configurada / Em configuração /
+Configurada, derivado das pendências, + editor por marca), **Semanas**
+(manual como antes, com atalho "proporcional aos dias") e **Revisar e
+publicar** (marcas × etapas, prévia por pessoa, pendências com link).
+
+**Regras (decisões do Junior nesta sessão):**
+- Funil reverso **SQL → Diagnóstico → SAL → COF → Vendas**; Vendas + taxa de
+  franquia média são a base. **Ligações** fica fora da cadeia: conversão sobre
+  o SQL ou número fixo.
+- Cada etapa: conversão de referência · nova conversão · número manual (vira
+  ponto de partida pras de cima) · sem meta (leva junto as de cima até a
+  primeira manual).
+- **Inteiro pra cima, sem cascata:** cada etapa sobe do valor EXATO da de
+  baixo e só o resultado é arredondado (`ceil(x - 1e-9)`). Pessoa = meta da
+  marca × peso, sem arredondar (o dashboard já mostra pra cima).
+- **Referência:** mês novo usa a versão ativa do mês anterior — taxa gravada
+  se a etapa derivava da de baixo, senão a **implícita dos números**
+  (`exato(baixo)/exato(etapa)`; é o caso de toda a V1 de setembro, ex. Inpot
+  COF→Vendas 5/10,6 = 47,2%). Revisão usa a própria versão base; `fixo` de
+  versão `importado` volta como referência, de versão `hub` como manual.
+- Rascunho salvo **no navegador** (`localStorage['ws-config-metas:v1:<mes>']`).
+- Publicar exige todas as marcas do rascunho configuradas.
+
+**Onde mora:** toda a regra em `src/lib/configMetas.ts` (puro, 33 testes);
+rascunho em `src/lib/rascunhoMetas.ts`; telas em `src/components/metas/`
+(`PainelMarcas`, `EditorMarca`, `FunilReverso`, `TimeMarca`, `PassoSemanas`,
+`PassoRevisarPublicar`, `CampoNumero`); `PassoTaxas`/`PassoFunilMarca`/
+`PassoPessoas`/`PassoDistribuicaoSemanal` apagados. **Sem mudança de banco:**
+o rascunho vira o mesmo `ConfigEtapa[]` de antes (referência/nova →
+`derivado` da etapa de baixo com `taxa_origem` `mes_anterior`/`manual`;
+manual → `fixo`; sem meta → `desligado`) e o espelho sai dos valores
+arredondados pela mesma `gerarLinhasEspelho`. `metasEngine.ts` intacto.
+Menu e catálogo de permissões dizem "Configuração das Metas" (chave
+`aba.metas` mantida).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (516 testes, 36
+novos) + `oxlint` limpo, em worktree fora do OneDrive. **Visto renderizado
+com dado real** numa rota temporária sem login (removida antes do commit):
+outubro a partir de setembro, Inpot 6 vendas → COF 13 / SAL 34 / Diag 52 /
+SQL 81 / Ligações 1.870; SAL com nova conversão 40% → 32 (sem cascata);
+manual e sem meta em cascata; rascunho sobrevive a recarregar; semanas
+proporcionais fecham na meta; revisão da V1 de setembro reabre com 25 vendas
+e R$ 981.385 (idêntico à V1); em branco pergunta as marcas; 375 px sem
+rolagem horizontal. **Nenhuma versão publicada no teste** (versão não pode
+ser apagada) — o 1º lançamento real (outubro) é o teste de ponta a ponta da
+gravação.
 
 ### 2026-09-30 — Odonto Legacy ganha Interesse Reunião e Conexão
 

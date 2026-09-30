@@ -1,0 +1,349 @@
+import { describe, expect, it } from 'vitest'
+import { gerarSemanas, resolverFunilMarca, type ConfigEtapa } from '@/lib/metasEngine'
+import type { EstadoMes, EstadoMesMarca } from '@/hooks/useMetaMes'
+import {
+  arredondarMeta, calcularFunil, definirModoEtapa, distribuirProporcional, dividirIgualmente,
+  marcaDeVersao, marcaDoMesAnterior, marcaEmBranco, marcasDisponiveis, mesAnterior, metasPorPessoa,
+  montarPublicacao, ordenarMarcas, paraConfigEtapas, pendenciasMarca, rascunhoDeVersao,
+  rascunhoDoMesAnterior, rascunhoEmBranco, referenciaDeVersao, resumoRascunho, statusMarca,
+  type MarcaConfig,
+} from '@/lib/configMetas'
+
+// V1 real de setembro/2026 (importada: tudo `fixo`), conferida no banco em 30/09.
+function fixo(etapa: ConfigEtapa['etapa'], valorFixo: number): ConfigEtapa {
+  return { etapa, modo: 'fixo', valorFixo }
+}
+const INPOT_SET: EstadoMesMarca = {
+  marca: 'Inpot',
+  ticketMedio: 74900,
+  etapas: [
+    fixo('Ligações', 1557.6), fixo('Reunião Agendada SQL', 67.1), fixo('Reunião Realizada', 42.9),
+    fixo('SAL', 28), fixo('Oportunidade COF', 10.6), fixo('Fechamento', 5),
+  ],
+  pessoas: [
+    { nome: 'Douglas', funcao: 'Closer', peso: 100 },
+    { nome: 'Thiago', funcao: 'SDR', peso: 50 },
+    { nome: 'Xayane', funcao: 'SDR', peso: 50 },
+  ],
+}
+const ODONTO_SET: EstadoMesMarca = {
+  marca: 'Odonto Scale',
+  ticketMedio: 5597,
+  etapas: [fixo('Fechamento', 5)],
+  pessoas: [{ nome: 'Aurélio Briano', funcao: 'Closer', peso: 100 }],
+}
+const SETEMBRO: EstadoMes = {
+  status: 'publicado', diaViradaSemana: 'terca', semanas: gerarSemanas('2026-09-01', 'terca'),
+  marcas: [ODONTO_SET, INPOT_SET], distribuicaoSemanal: [],
+}
+
+function inpotOutubro(vendas: number | null = 6): MarcaConfig {
+  return { ...marcaDoMesAnterior(INPOT_SET, 'setembro'), vendas }
+}
+
+describe('arredondarMeta', () => {
+  it('arredonda pra cima e ignora ruído de ponto flutuante', () => {
+    expect(arredondarMeta(10.6)).toBe(11)
+    expect(arredondarMeta(28.000000000000004)).toBe(28)
+    expect(arredondarMeta(0)).toBe(0)
+    expect(arredondarMeta(-3)).toBe(0)
+  })
+})
+
+describe('mesAnterior', () => {
+  it('volta um mês, virando o ano', () => {
+    expect(mesAnterior('2026-10-01')).toBe('2026-09-01')
+    expect(mesAnterior('2027-01-01')).toBe('2026-12-01')
+  })
+})
+
+describe('referenciaDeVersao', () => {
+  it('tira a conversão implícita dos números fixos da V1 importada', () => {
+    const ref = referenciaDeVersao(INPOT_SET, 'setembro')
+    expect(ref.rotulo).toBe('setembro')
+    expect(ref.vendas).toBe(5)
+    expect(ref.ticketMedio).toBe(74900)
+    expect(ref.taxas['Oportunidade COF']).toBeCloseTo(5 / 10.6, 6)
+    expect(ref.taxas.SAL).toBeCloseTo(10.6 / 28, 6)
+    expect(ref.taxas['Reunião Realizada']).toBeCloseTo(28 / 42.9, 6)
+    expect(ref.taxas['Reunião Agendada SQL']).toBeCloseTo(42.9 / 67.1, 6)
+    expect(ref.taxas['Ligações']).toBeCloseTo(67.1 / 1557.6, 6)
+    expect(ref.valores).toMatchObject({ Fechamento: 5, 'Oportunidade COF': 11, SAL: 28, 'Reunião Realizada': 43, 'Reunião Agendada SQL': 68, 'Ligações': 1558 })
+  })
+
+  it('prefere a taxa gravada quando a etapa derivava da de baixo', () => {
+    const estado: EstadoMesMarca = {
+      ...INPOT_SET,
+      etapas: [fixo('Fechamento', 5), { etapa: 'Oportunidade COF', modo: 'derivado', etapaOrigem: 'Fechamento', taxa: 0.5, taxaOrigem: 'manual' }],
+    }
+    expect(referenciaDeVersao(estado, 'V1').taxas['Oportunidade COF']).toBe(0.5)
+  })
+
+  it('marca sem etapas acima de Vendas não tem taxa nenhuma', () => {
+    expect(referenciaDeVersao(ODONTO_SET, 'setembro').taxas).toEqual({})
+  })
+})
+
+describe('marcaDoMesAnterior', () => {
+  it('traz ticket, conversões e pessoas, mas deixa as vendas em branco', () => {
+    const m = marcaDoMesAnterior(INPOT_SET, 'setembro')
+    expect(m.vendas).toBeNull()
+    expect(m.ticketMedio).toBe(74900)
+    expect(Object.values(m.etapas).every(e => e.tipo === 'referencia')).toBe(true)
+    expect(m.pessoas).toHaveLength(3)
+    expect(m.pessoas).not.toBe(INPOT_SET.pessoas)
+    expect(statusMarca(m)).toBe('nao_configurada')
+  })
+
+  it('etapa que não existia no mês anterior começa sem meta', () => {
+    const m = marcaDoMesAnterior(ODONTO_SET, 'setembro')
+    expect(Object.values(m.etapas).every(e => e.tipo === 'sem_meta')).toBe(true)
+  })
+})
+
+describe('calcularFunil', () => {
+  it('com as vendas de setembro reproduz setembro, arredondado pra cima', () => {
+    const f = calcularFunil(inpotOutubro(5))
+    expect(f.etapas['Oportunidade COF'].meta).toBe(11)
+    expect(f.etapas.SAL.meta).toBe(28)
+    expect(f.etapas['Reunião Realizada'].meta).toBe(43)
+    expect(f.etapas['Reunião Agendada SQL'].meta).toBe(68)
+    expect(f.etapas['Ligações'].meta).toBe(1558)
+    expect(f.etapas.Fechamento.meta).toBe(5)
+    expect(f.faturamento).toBe(374500)
+  })
+
+  it('arredonda sem cascata: cada etapa sobe do valor EXATO da de baixo', () => {
+    const m = definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'conversao', taxa: 0.4 })
+    const f = calcularFunil(m)
+    // COF exato = 12,72 → 13. SAL = 12,72 / 0,4 = 31,8 → 32 (em cascata daria 13/0,4 = 32,5 → 33)
+    expect(f.etapas['Oportunidade COF'].meta).toBe(13)
+    expect(f.etapas.SAL.exato).toBeCloseTo(31.8, 6)
+    expect(f.etapas.SAL.meta).toBe(32)
+    expect(f.etapas.SAL.alterada).toBe(true)
+    expect(f.etapas['Reunião Realizada'].meta).toBe(49)
+    expect(f.etapas['Reunião Agendada SQL'].meta).toBe(77)
+    expect(f.etapas['Ligações'].meta).toBe(1769)
+    expect(f.faturamento).toBe(449400)
+  })
+
+  it('número manual vira ponto de partida pras etapas de cima', () => {
+    const m = definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'manual', valor: 40 })
+    const f = calcularFunil(m)
+    expect(f.etapas.SAL.meta).toBe(40)
+    expect(f.etapas.SAL.origem).toBe('manual')
+    expect(f.etapas.SAL.taxa).toBeCloseTo(12.72 / 40, 6)
+    expect(f.etapas['Reunião Realizada'].meta).toBe(arredondarMeta(40 / (28 / 42.9)))
+    expect(f.etapas['Oportunidade COF'].meta).toBe(13)
+  })
+
+  it('nova conversão igual à de referência não conta como alterada', () => {
+    const ref = referenciaDeVersao(INPOT_SET, 'setembro').taxas['Oportunidade COF']!
+    const f = calcularFunil(definirModoEtapa(inpotOutubro(6), 'Oportunidade COF', { tipo: 'conversao', taxa: ref }))
+    expect(f.etapas['Oportunidade COF'].alterada).toBe(false)
+  })
+
+  it('sem vendas, nada é calculado e nenhuma etapa reclama', () => {
+    const f = calcularFunil(inpotOutubro(null))
+    expect(f.etapas.SAL.meta).toBeNull()
+    expect(f.etapas.SAL.problema).toBeNull()
+    expect(f.faturamento).toBeNull()
+  })
+
+  it('etapa por conversão acima de etapa sem meta aponta o problema', () => {
+    const m: MarcaConfig = { ...inpotOutubro(6), etapas: { ...inpotOutubro(6).etapas, 'Oportunidade COF': { tipo: 'sem_meta' } } }
+    const f = calcularFunil(m)
+    expect(f.etapas.SAL.meta).toBeNull()
+    expect(f.etapas.SAL.problema).toMatch(/COF está sem meta/)
+  })
+
+  it('conversão em branco é problema', () => {
+    const f = calcularFunil(definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'conversao', taxa: null }))
+    expect(f.etapas.SAL.problema).toMatch(/conversão/)
+  })
+})
+
+describe('definirModoEtapa', () => {
+  it('sem meta leva junto as etapas de cima até a primeira manual', () => {
+    let m = definirModoEtapa(inpotOutubro(6), 'Reunião Realizada', { tipo: 'manual', valor: 50 })
+    m = definirModoEtapa(m, 'Oportunidade COF', { tipo: 'sem_meta' })
+    expect(m.etapas.SAL.tipo).toBe('sem_meta')
+    expect(m.etapas['Reunião Realizada'].tipo).toBe('manual')
+    expect(m.etapas['Reunião Agendada SQL'].tipo).toBe('referencia')
+  })
+})
+
+describe('pendenciasMarca e statusMarca', () => {
+  it('Inpot com vendas e time completo está configurada', () => {
+    const m = inpotOutubro(6)
+    expect(pendenciasMarca(m)).toEqual([])
+    expect(statusMarca(m)).toBe('configurada')
+  })
+
+  it('aponta ticket, pesos e Closer faltando', () => {
+    const m: MarcaConfig = {
+      ...inpotOutubro(6),
+      ticketMedio: null,
+      pessoas: [{ nome: 'Thiago', funcao: 'SDR', peso: 60 }, { nome: 'Xayane', funcao: 'SDR', peso: 30 }],
+    }
+    const textos = pendenciasMarca(m).map(p => p.texto)
+    expect(textos).toContain('Informe a taxa de franquia média')
+    expect(textos).toContain('Adicione pelo menos um Closer')
+    expect(textos.some(t => t.includes('SDRs somam 90%'))).toBe(true)
+    expect(statusMarca(m)).toBe('em_configuracao')
+  })
+
+  it('marca só com Closer não precisa de SDR quando as etapas de SDR estão sem meta', () => {
+    const m = { ...marcaDoMesAnterior(ODONTO_SET, 'setembro'), vendas: 5 }
+    expect(pendenciasMarca(m)).toEqual([])
+    expect(statusMarca(m)).toBe('configurada')
+  })
+
+  it('marca em branco lista as conversões que faltam', () => {
+    const m = { ...marcaEmBranco('Viva'), vendas: 2, ticketMedio: 69900 }
+    const funil = pendenciasMarca(m).filter(p => p.secao === 'funil')
+    expect(funil).toHaveLength(5)
+  })
+})
+
+describe('dividirIgualmente', () => {
+  it('reparte 100% entre as pessoas da função e fecha a soma na última', () => {
+    const r = dividirIgualmente([
+      { nome: 'A', funcao: 'SDR', peso: 10 }, { nome: 'B', funcao: 'SDR', peso: 10 },
+      { nome: 'C', funcao: 'SDR', peso: 10 }, { nome: 'D', funcao: 'Closer', peso: 100 },
+    ], 'SDR')
+    expect(r.map(p => p.peso)).toEqual([33.33, 33.33, 33.34, 100])
+  })
+})
+
+describe('metasPorPessoa', () => {
+  it('SDR leva Ligações/SQL/Diagnóstico/SAL, Closer leva COF/Vendas/faturamento, pelo peso', () => {
+    const r = metasPorPessoa(definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'conversao', taxa: 0.4 }))
+    const thiago = r.find(p => p.nome === 'Thiago')!
+    expect(thiago.valores['Reunião Agendada SQL']).toBe(38.5)
+    expect(thiago.valores.SAL).toBe(16)
+    expect(thiago.valores['Oportunidade COF']).toBeUndefined()
+    const douglas = r.find(p => p.nome === 'Douglas')!
+    expect(douglas.valores['Oportunidade COF']).toBe(13)
+    expect(douglas.valores.Fechamento).toBe(6)
+    expect(douglas.faturamento).toBe(449400)
+  })
+})
+
+describe('paraConfigEtapas e ida-e-volta', () => {
+  it('grava vendas fixa, referência/nova como derivada da de baixo, manual como fixa', () => {
+    let m = definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'conversao', taxa: 0.4 })
+    m = definirModoEtapa(m, 'Reunião Realizada', { tipo: 'manual', valor: 50 })
+    const cfgs = paraConfigEtapas(m)
+    expect(cfgs.find(c => c.etapa === 'Fechamento')).toEqual({ etapa: 'Fechamento', modo: 'fixo', valorFixo: 6 })
+    expect(cfgs.find(c => c.etapa === 'SAL')).toEqual({ etapa: 'SAL', modo: 'derivado', etapaOrigem: 'Oportunidade COF', taxa: 0.4, taxaOrigem: 'manual' })
+    expect(cfgs.find(c => c.etapa === 'Oportunidade COF')).toMatchObject({ modo: 'derivado', etapaOrigem: 'Fechamento', taxaOrigem: 'mes_anterior' })
+    expect(cfgs.find(c => c.etapa === 'Reunião Realizada')).toEqual({ etapa: 'Reunião Realizada', modo: 'fixo', valorFixo: 50 })
+    expect(cfgs.find(c => c.etapa === 'Ligações')).toMatchObject({ modo: 'derivado', etapaOrigem: 'Reunião Agendada SQL' })
+    // o motor antigo chega nos mesmos valores exatos
+    expect(resolverFunilMarca(cfgs, 74900).valores.SAL).toBeCloseTo(31.8, 6)
+  })
+
+  it('republicar a versão (hub) dá as mesmas metas', () => {
+    let m = definirModoEtapa(inpotOutubro(6), 'SAL', { tipo: 'conversao', taxa: 0.4 })
+    m = definirModoEtapa(m, 'Reunião Realizada', { tipo: 'manual', valor: 50 })
+    const volta = marcaDeVersao({ marca: m.marca, ticketMedio: 74900, etapas: paraConfigEtapas(m), pessoas: m.pessoas }, 'V1', false)
+    expect(volta.vendas).toBe(6)
+    expect(volta.etapas['Reunião Realizada']).toEqual({ tipo: 'manual', valor: 50 })
+    expect(volta.etapas.SAL.tipo).toBe('referencia')
+    const a = calcularFunil(m).etapas
+    const b = calcularFunil(volta).etapas
+    for (const e of ['Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL', 'Oportunidade COF', 'Fechamento'] as const) {
+      expect(b[e].meta).toBe(a[e].meta)
+    }
+  })
+
+  it('revisão de versão importada trata os fixos como conversão de referência', () => {
+    const m = marcaDeVersao(INPOT_SET, 'V1', true)
+    expect(m.vendas).toBe(5)
+    expect(Object.values(m.etapas).every(e => e.tipo === 'referencia')).toBe(true)
+    const h = marcaDeVersao(INPOT_SET, 'V1', false)
+    expect(h.etapas.SAL).toEqual({ tipo: 'manual', valor: 28 })
+  })
+})
+
+describe('montarPublicacao', () => {
+  it('gera o espelho com as metas arredondadas, rateadas por peso', () => {
+    const r = { ...rascunhoDoMesAnterior('2026-10-01', SETEMBRO, 'setembro') }
+    r.marcas = r.marcas.map(m => m.marca === 'Inpot'
+      ? definirModoEtapa({ ...m, vendas: 6 }, 'SAL', { tipo: 'conversao', taxa: 0.4 })
+      : { ...m, vendas: 5 })
+    const pub = montarPublicacao(r)
+    const thiago = pub.linhasEspelho.find(l => l.nome_colaborador === 'Thiago')!
+    expect(thiago).toMatchObject({ marca: 'Inpot', funcao: 'SDR', meta_sql: 38.5, meta_agendamento: 38.5, meta_reuniao_realizada: 24.5, meta_volume_sal: '16' })
+    const douglas = pub.linhasEspelho.find(l => l.nome_colaborador === 'Douglas')!
+    expect(douglas).toMatchObject({ meta_cof: 13, meta_qtd_vendas: 6, meta_financeira: 449400 })
+    const aurelio = pub.linhasEspelho.find(l => l.nome_colaborador === 'Aurélio Briano')!
+    expect(aurelio).toMatchObject({ marca: 'Odonto Scale', meta_qtd_vendas: 5, meta_cof: null })
+    expect(pub.marcas.find(m => m.marca === 'Inpot')!.ticketMedio).toBe(74900)
+  })
+
+  it('descarta distribuição semanal de pessoa, marca ou semana que não existem mais', () => {
+    const r = rascunhoDoMesAnterior('2026-10-01', SETEMBRO, 'setembro')
+    r.distribuicaoSemanal = [
+      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Reunião Agendada SQL', valor: 8 },
+      { marca: 'Inpot', nomePessoa: 'Fulano', semanaNumero: 1, etapa: 'Reunião Agendada SQL', valor: 8 },
+      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 9, etapa: 'Reunião Agendada SQL', valor: 8 },
+      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 2, etapa: 'Oportunidade COF', valor: 8 },
+      { marca: 'Viva', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Reunião Agendada SQL', valor: 8 },
+    ]
+    expect(montarPublicacao(r).distribuicaoSemanal).toEqual([r.distribuicaoSemanal[0]])
+  })
+})
+
+describe('rascunhos', () => {
+  it('do mês anterior: semanas do mês novo, marcas ordenadas, sem distribuição', () => {
+    const r = rascunhoDoMesAnterior('2026-10-01', SETEMBRO, 'setembro')
+    expect(r.origem).toEqual({ tipo: 'mes_anterior', mes: '2026-09-01', rotulo: 'setembro' })
+    expect(r.semanas[0]).toEqual({ numero: 1, inicio: '2026-10-01', fim: '2026-10-05' })
+    expect(r.marcas.map(m => m.marca)).toEqual(['Odonto Scale', 'Inpot'])
+    expect(r.distribuicaoSemanal).toEqual([])
+  })
+
+  it('de versão: mantém semanas e distribuição da versão', () => {
+    const estado: EstadoMes = { ...SETEMBRO, distribuicaoSemanal: [{ marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Ligações', valor: 100 }] }
+    const r = rascunhoDeVersao('2026-09-01', { id: 7, numero: 1, rotulo: 'Lançamento', origem: 'importado' }, estado)
+    expect(r.origem).toEqual({ tipo: 'versao', versaoId: 7, numero: 1, rotulo: 'Lançamento' })
+    expect(r.semanas).toBe(estado.semanas)
+    expect(r.distribuicaoSemanal).toHaveLength(1)
+    expect(r.marcas.find(m => m.marca === 'Inpot')!.referencia!.rotulo).toBe('V1')
+  })
+
+  it('em branco: marcas sem referência', () => {
+    const r = rascunhoEmBranco('2026-10-01', ['Viva'])
+    expect(r.origem).toEqual({ tipo: 'branco' })
+    expect(r.marcas[0].referencia).toBeNull()
+  })
+
+  it('resumo soma vendas/faturamento e conta as prontas', () => {
+    const r = rascunhoDoMesAnterior('2026-10-01', SETEMBRO, 'setembro')
+    r.marcas = r.marcas.map(m => m.marca === 'Inpot' ? { ...m, vendas: 6 } : m)
+    expect(resumoRascunho(r)).toEqual({ vendas: 6, faturamento: 449400, prontas: 1, total: 2 })
+  })
+})
+
+describe('marcas', () => {
+  it('ordena pela ordem do BRAND_LIST', () => {
+    expect(ordenarMarcas([{ marca: 'Viva' }, { marca: 'Oral Unic' }, { marca: 'Inpot' }]).map(m => m.marca)).toEqual(['Oral Unic', 'Inpot', 'Viva'])
+  })
+
+  it('lista as marcas que ainda não estão no rascunho', () => {
+    const r = rascunhoEmBranco('2026-10-01', ['Viva', 'Inpot'])
+    const d = marcasDisponiveis(r)
+    expect(d).toContain('Oral Unic')
+    expect(d).not.toContain('Viva')
+  })
+})
+
+describe('distribuirProporcional', () => {
+  it('reparte o total inteiro pelos dias de cada semana e fecha a soma', () => {
+    const semanas = gerarSemanas('2026-10-01', 'terca') // 5, 7, 7, 7, 5 dias
+    expect(distribuirProporcional(41, semanas)).toEqual([7, 9, 9, 9, 7])
+    expect(distribuirProporcional(40.5, semanas).reduce((a, b) => a + b, 0)).toBe(41)
+  })
+})

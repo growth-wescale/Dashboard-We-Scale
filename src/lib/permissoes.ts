@@ -32,13 +32,13 @@ export const ABAS: readonly DefAba[] = [
   { chave: 'aba.linha-do-tempo',   label: 'Linha do Tempo',       rota: '/linha-do-tempo',     area: 'Vendas' },
   { chave: 'aba.analise-objecoes', label: 'Análise de Objeções',  rota: '/analise-objecoes',   area: 'Vendas' },
   { chave: 'aba.campanha-metas',   label: 'Campanha de Metas',    rota: '/gp-setembro',        area: 'Vendas' },
-  { chave: 'aba.metas',            label: 'Metas',                rota: '/metas',              area: 'Vendas' },
+  { chave: 'aba.metas',            label: 'Configuração das Metas', rota: '/metas',              area: 'Vendas' },
 ]
 
 export const PERM_GERENCIAR_USUARIOS = 'acao.usuarios-gerenciar'
 
 export const ACOES: readonly DefAcao[] = [
-  { chave: 'acao.metas-publicar', label: 'Publicar e ativar metas', descricao: 'No Hub de Metas: publicar uma versão nova e trocar a versão ativa do mês.' },
+  { chave: 'acao.metas-publicar', label: 'Publicar e ativar metas', descricao: 'Na Configuração das Metas: publicar uma versão nova e trocar a versão ativa do mês.' },
   { chave: 'acao.okrs-editar',    label: 'Atualizar OKRs',          descricao: 'Mudar o valor atual dos OKRs em Meta & OKRs.' },
   { chave: 'acao.assistente-ia',  label: 'Usar o assistente IA',    descricao: 'Chat flutuante que responde com dados de todas as marcas.' },
   { chave: PERM_GERENCIAR_USUARIOS, label: 'Gerenciar usuários e papéis', descricao: 'Convidar, desativar e dar qualquer acesso a qualquer pessoa. Na prática, é ser administrador.' },

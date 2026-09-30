@@ -48,7 +48,7 @@ const VENDAS_SUB = [
   { key: 'linha-do-tempo',      label: 'Linha do Tempo' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
-  { key: 'metas',               label: 'Metas' },
+  { key: 'metas',               label: 'Configuração das Metas' },
 ]
 
 const NAV_ITEMS = [

@@ -585,6 +585,37 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-30 (4) — Configuração das Metas só oferece quem está ativo; cadastro de Closers corrigido
+
+Junior viu na tela de metas, como opção de Closer, gente que não está mais
+no time (Cristhian, Danilo, Giullia, Rômulo…) e não viu a Paula. Hoje os
+Closers ativos são **Douglas, Paula, Bruna e Jéssica**.
+
+**Causa:** `useRosterVendas` lê `nome_cargo_foto` filtrando só por cargo — a
+coluna `ativo` existia e nunca era lida. Além disso o cadastro estava
+defasado: Aurélio Briano e Giullia com `ativo = true`, e **Paula Marinheiro**
+(nome exato no RD: 67 deals como responsável, 6 já eleitos como Closer) sem
+linha nenhuma.
+
+**Código:** `MembroRoster` ganhou `ativo`. A lista **não** é filtrada na fonte,
+porque a aba Performance usa o roster pra validar nomes de meses passados
+(quem saiu tem que continuar aparecendo no histórico). Só a Configuração das
+Metas filtra: "Adicionar" mostra só ativos, e pessoa que veio do mês anterior
+mas está inativa ganha aviso vermelho no card ("remova e escolha quem
+assume") — caso do Aurélio na Oral Unic/Viva/Odonto Legacy de outubro.
+
+**Banco (Supabase de Expansão, `nome_cargo_foto`):** Aurélio Briano e Giullia
+→ `ativo = false`; inserida Paula Marinheiro (id 19, `Closer`, ativa, sem
+foto). `vw_deal_ciclo`/`vw_deal_eventos_ciclo` leem só `cargo` (nunca
+`ativo`); md5 de `nome_sdr`/`nome_closer` de `vw_deal_ciclo` inteira e dos 68
+ciclos onde a Paula é dona/responsável **idênticos antes e depois**. Efeito
+colateral bom: a Paula passa a ser reconhecida como Closer pela tabela de
+Closers da Performance (antes o nome dela não estava no roster).
+
+**Em aberto:** Vanessa Daniel segue `SDR/Closer` ativa e por isso aparece
+como opção nas duas funções. Mudar o cargo dela afeta a eleição de SDR/Closer
+(`handoff`, trava de cargo) — decisão do Junior.
+
 ### 2026-09-30 (3) — Configuração das Metas: funil na ordem das vendas, setinhas e pesos que fecham 100%
 
 Ajustes pedidos pelo Junior depois do primeiro uso da tela nova:

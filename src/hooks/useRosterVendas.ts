@@ -7,6 +7,9 @@ export interface MembroRoster {
   nome: string
   cargo: CargoVendas
   foto: string | null
+  /** `nome_cargo_foto.ativo`. Quem saiu continua na lista (a Performance precisa
+   *  do nome pra meses passados); só quem escolhe gente pro mês filtra por ele. */
+  ativo: boolean
 }
 
 interface UseRosterResult {
@@ -18,7 +21,7 @@ interface UseRosterResult {
 async function fetchRoster(): Promise<{ rows: MembroRoster[]; error: string | null }> {
   const { data, error } = await supabaseVendas
     .from('nome_cargo_foto')
-    .select('nome, cargo, foto')
+    .select('nome, cargo, foto, ativo')
     .in('cargo', ['SDR', 'Closer', 'SDR/Closer'])
     .order('nome', { ascending: true })
 

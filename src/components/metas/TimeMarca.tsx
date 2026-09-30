@@ -40,6 +40,8 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
 }) {
   const { data: roster } = useRosterVendas()
   const fotos = new Map(roster.map(r => [r.nome, r.foto]))
+  // Pessoa que veio do mês anterior mas saiu do time (ex.: Closer desligado) — avisa pra trocar.
+  const inativos = new Set(roster.filter(r => !r.ativo).map(r => r.nome))
   const previa = metasPorPessoa(marca, funil)
 
   return (
@@ -48,7 +50,7 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
         const dessa = marca.pessoas.filter(p => p.funcao === funcao)
         const soma = dessa.reduce((s, p) => s + p.peso, 0)
         const somaOk = dessa.length === 0 || Math.abs(soma - 100) <= 0.01
-        const disponiveis = roster.filter(r => (r.cargo === funcao || r.cargo === 'SDR/Closer') && !dessa.some(d => d.nome === r.nome))
+        const disponiveis = roster.filter(r => r.ativo && (r.cargo === funcao || r.cargo === 'SDR/Closer') && !dessa.some(d => d.nome === r.nome))
 
         const adicionar = (nome: string) => onMudarPessoas(dividirIgualmente([...marca.pessoas, { nome, funcao, peso: 0 }], funcao))
         const remover = (nome: string) => onMudarPessoas(normalizarPesos(marca.pessoas.filter(p => !(p.nome === nome && p.funcao === funcao)), funcao))
@@ -105,6 +107,7 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
                       cor={CORES[i % CORES.length]}
                       foto={fotos.get(p.nome) ?? null}
                       sozinha={dessa.length === 1}
+                      inativa={inativos.has(p.nome)}
                       meta={previa.find(x => x.nome === p.nome && x.funcao === funcao)}
                       onPeso={v => mudarPeso(p.nome, v)}
                       onRemover={() => remover(p.nome)}
@@ -208,11 +211,12 @@ function BarraPesos({ pessoas, onPesos }: { pessoas: PessoaComFuncao[]; onPesos:
   )
 }
 
-function CartaoPessoa({ pessoa, cor, foto, sozinha, meta, onPeso, onRemover }: {
+function CartaoPessoa({ pessoa, cor, foto, sozinha, inativa, meta, onPeso, onRemover }: {
   pessoa: PessoaComFuncao
   cor: string
   foto: string | null
   sozinha: boolean
+  inativa: boolean
   meta: MetaPessoa | undefined
   onPeso: (peso: number) => void
   onRemover: () => void
@@ -221,7 +225,7 @@ function CartaoPessoa({ pessoa, cor, foto, sozinha, meta, onPeso, onRemover }: {
   const etapas = ETAPAS_PESSOA[pessoa.funcao].filter(e => meta?.valores[e] != null)
 
   return (
-    <div style={{ borderRadius: 'var(--radius-sm)', border: '1px solid var(--ws-border)', padding: 12, background: 'var(--ws-surface)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ borderRadius: 'var(--radius-sm)', border: '1px solid ' + (inativa ? 'var(--status-risco)' : 'var(--ws-border)'), padding: 12, background: 'var(--ws-surface)', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{
           width: 38, height: 38, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', background: cor, color: '#fff',
@@ -243,6 +247,11 @@ function CartaoPessoa({ pessoa, cor, foto, sozinha, meta, onPeso, onRemover }: {
           <X size={14} />
         </button>
       </div>
+      {inativa && (
+        <div style={{ fontSize: 12, color: 'var(--status-risco)' }}>
+          Não está mais ativa no time — remova e escolha quem assume.
+        </div>
+      )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {etapas.length === 0 && pessoa.funcao === 'SDR' && (
           <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>sem metas de SDR nesta marca</span>

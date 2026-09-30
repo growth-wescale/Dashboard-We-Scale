@@ -5,7 +5,7 @@ import type { VersaoMeta } from '@/hooks/useMetaMes'
 import { publicarVersao } from '@/hooks/useSalvarMeta'
 import {
   ETAPAS_FUNIL, ROTULO_ETAPA, arredondarMeta, calcularFunil, metasPorPessoa, montarPublicacao,
-  pendenciasMarca, resumoRascunho, statusMarca, type EtapaMetaConfig, type RascunhoConfig,
+  pendenciasMarca, resumoRascunho, statusMarca, vendasDistribuidas, type EtapaMetaConfig, type RascunhoConfig,
 } from '@/lib/configMetas'
 import {
   STATUS_MARCA_UI, bannerStyle, cardStyle, disabledButtonStyle, fmtBRL, fmtInt, inputStyle,
@@ -44,6 +44,10 @@ export function PassoRevisarPublicar({ rascunho, proximoNumero, versaoAtiva, tot
   })
   const resumo = resumoRascunho(rascunho)
   const incompletas = itens.filter(i => i.status !== 'configurada')
+  // Semana é opcional, mas pela metade não: ou distribui todas as vendas da marca, ou nenhuma.
+  const semanasPelaMetade = rascunho.marcas
+    .map(m => ({ marca: m.marca, ...vendasDistribuidas(rascunho, m.marca) }))
+    .filter(s => s.situacao === 'parcial' || s.situacao === 'excedido')
 
   const pessoas = new Map<string, { nome: string; funcao: 'SDR' | 'Closer'; marcas: string[]; valores: Partial<Record<EtapaMetaConfig, number>>; faturamento: number }>()
   for (const { m, funil } of itens) {
@@ -60,7 +64,7 @@ export function PassoRevisarPublicar({ rascunho, proximoNumero, versaoAtiva, tot
 
   const faltaMotivo = proximoNumero > 1 && motivo.trim() === ''
   const semPermissao = !pode('acao.metas-publicar')
-  const bloqueado = incompletas.length > 0 || itens.length === 0 || faltaMotivo || semPermissao || rotulo.trim() === ''
+  const bloqueado = incompletas.length > 0 || semanasPelaMetade.length > 0 || itens.length === 0 || faltaMotivo || semPermissao || rotulo.trim() === ''
 
   async function publicar() {
     setPublicando(true)
@@ -102,6 +106,20 @@ export function PassoRevisarPublicar({ rascunho, proximoNumero, versaoAtiva, tot
                 <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>{pendencias.map(p => p.texto).join(' · ')}</div>
               </div>
               <button type="button" onClick={() => onAbrirMarca(m.marca)} style={smallButtonStyle}>Abrir</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {semanasPelaMetade.length > 0 && (
+        <div style={cardStyle}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600, color: 'var(--status-risco)' }}>Distribuição semanal pela metade</h3>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+            A distribuição por semana é opcional, mas quando começa precisa fechar todas as vendas da marca. Complete ou limpe no passo Semanas.
+          </p>
+          {semanasPelaMetade.map(s => (
+            <div key={s.marca} style={{ fontSize: 13, padding: '6px 0', borderTop: '1px solid var(--ws-border)' }}>
+              <b>{marcaLabel(s.marca)}</b> — {fmtInt(s.distribuido)} de {fmtInt(s.total)} vendas distribuídas
             </div>
           ))}
         </div>

@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { gerarSemanas, resolverFunilMarca, type ConfigEtapa } from '@/lib/metasEngine'
 import type { EstadoMes, EstadoMesMarca } from '@/hooks/useMetaMes'
 import {
-  ajustarPeso, arredondarMeta, calcularFunil, definirModoEtapa, distribuirProporcional, dividirIgualmente,
-  marcaDeVersao, marcaDoMesAnterior, marcaEmBranco, marcasDisponiveis, mesAnterior, metasPorPessoa,
-  montarPublicacao, moverDivisa, normalizarPesos, ordenarMarcas, paraConfigEtapas, pendenciasMarca, rascunhoDeVersao,
-  rascunhoDoMesAnterior, rascunhoEmBranco, referenciaDeVersao, resumoRascunho, statusMarca,
+  ajustarPeso, arredondarMeta, calcularFunil, definirModoEtapa, distribuicaoDerivada, distribuirProporcional,
+  distribuirVendasProporcional, dividirIgualmente, marcaDeVersao, marcaDoMesAnterior, marcaEmBranco, marcasDisponiveis,
+  mesAnterior, metasDaSemana, metasPorPessoa, montarPublicacao, moverDivisa, normalizarPesos, ordenarMarcas,
+  paraConfigEtapas, pendenciasMarca, rascunhoDeVersao, rascunhoDoMesAnterior, rascunhoEmBranco, referenciaDeVersao,
+  resumoRascunho, statusMarca, vendasDistribuidas,
   type MarcaConfig,
 } from '@/lib/configMetas'
 
@@ -283,16 +284,62 @@ describe('montarPublicacao', () => {
     expect(pub.marcas.find(m => m.marca === 'Inpot')!.ticketMedio).toBe(74900)
   })
 
-  it('descarta distribuição semanal de pessoa, marca ou semana que não existem mais', () => {
-    const r = rascunhoDoMesAnterior('2026-10-01', SETEMBRO, 'setembro')
-    r.distribuicaoSemanal = [
-      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Reunião Agendada SQL', valor: 8 },
-      { marca: 'Inpot', nomePessoa: 'Fulano', semanaNumero: 1, etapa: 'Reunião Agendada SQL', valor: 8 },
-      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 9, etapa: 'Reunião Agendada SQL', valor: 8 },
-      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 2, etapa: 'Oportunidade COF', valor: 8 },
-      { marca: 'Viva', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Reunião Agendada SQL', valor: 8 },
-    ]
-    expect(montarPublicacao(r).distribuicaoSemanal).toEqual([r.distribuicaoSemanal[0]])
+  it('publica a distribuição semanal derivada das vendas, só de marca distribuída por completo', () => {
+    const r = outubroComSemanas()
+    const pub = montarPublicacao(r)
+    const s2 = pub.distribuicaoSemanal.filter(d => d.semanaNumero === 2)
+    expect(s2.find(d => d.nomePessoa === 'Douglas' && d.etapa === 'Fechamento')!.valor).toBe(2)
+    expect(s2.find(d => d.nomePessoa === 'Thiago' && d.etapa === 'Reunião Agendada SQL')!.valor).toBe(12.83)
+    // Odonto Legacy não distribuiu nada → nenhuma linha semanal dela
+    expect(pub.distribuicaoSemanal.some(d => d.marca === 'Odonto Scale')).toBe(false)
+  })
+})
+
+function outubroComSemanas() {
+  const r = rascunhoDoMesAnterior('2026-10-01', SETEMBRO, 'setembro')
+  r.marcas = r.marcas.map(m => m.marca === 'Inpot'
+    ? definirModoEtapa({ ...m, vendas: 6 }, 'SAL', { tipo: 'conversao', taxa: 0.4 })
+    : { ...m, vendas: 5 })
+  r.vendasPorSemana = [1, 2, 1, 1, 1].map((valor, i) => ({ marca: 'Inpot', semanaNumero: i + 1, valor }))
+  return r
+}
+
+describe('semanas: só vendas se distribuem, o resto vem junto', () => {
+  it('metasDaSemana leva cada etapa na mesma fração das vendas da semana', () => {
+    const m = outubroComSemanas().marcas.find(x => x.marca === 'Inpot')!
+    const s = metasDaSemana(m, 2)
+    expect(s.Fechamento).toBe(2)
+    expect(s['Oportunidade COF']).toBeCloseTo(13 / 3, 6)
+    expect(s.SAL).toBeCloseTo(32 / 3, 6)
+    expect(s['Reunião Agendada SQL']).toBeCloseTo(77 / 3, 6)
+    expect(s['Ligações']).toBeCloseTo(1769 / 3, 6)
+  })
+
+  it('distribuicaoDerivada reparte a semana entre as pessoas pelo peso e fecha no mês', () => {
+    const itens = distribuicaoDerivada(outubroComSemanas())
+    const somaThiagoSql = itens.filter(d => d.nomePessoa === 'Thiago' && d.etapa === 'Reunião Agendada SQL').reduce((a, d) => a + d.valor, 0)
+    expect(somaThiagoSql).toBeCloseTo(38.5, 1)
+    const douglasVendas = itens.filter(d => d.nomePessoa === 'Douglas' && d.etapa === 'Fechamento').map(d => d.valor)
+    expect(douglasVendas).toEqual([1, 2, 1, 1, 1])
+    expect(itens.some(d => d.nomePessoa === 'Thiago' && d.etapa === 'Oportunidade COF')).toBe(false)
+  })
+
+  it('vendasDistribuidas diz se a marca está vazia, parcial ou completa', () => {
+    const r = outubroComSemanas()
+    expect(vendasDistribuidas(r, 'Inpot')).toMatchObject({ porSemana: [1, 2, 1, 1, 1], distribuido: 6, total: 6, situacao: 'completo' })
+    expect(vendasDistribuidas(r, 'Odonto Scale').situacao).toBe('vazio')
+    r.vendasPorSemana = r.vendasPorSemana.filter(v => v.semanaNumero !== 5)
+    expect(vendasDistribuidas(r, 'Inpot')).toMatchObject({ distribuido: 5, situacao: 'parcial' })
+    r.marcas = r.marcas.map(m => (m.marca === 'Inpot' ? { ...m, vendas: null } : m))
+    expect(vendasDistribuidas(r, 'Inpot').situacao).toBe('sem_vendas')
+  })
+
+  it('distribuirVendasProporcional preenche pelos dias de cada semana', () => {
+    const r = outubroComSemanas()
+    const novo = distribuirVendasProporcional(r, 'Odonto Scale')
+    expect(vendasDistribuidas({ ...r, vendasPorSemana: novo }, 'Odonto Scale')).toMatchObject({ porSemana: [1, 1, 1, 1, 1], situacao: 'completo' })
+    // não mexe nas outras marcas
+    expect(novo.filter(v => v.marca === 'Inpot')).toEqual(r.vendasPorSemana)
   })
 })
 
@@ -302,15 +349,19 @@ describe('rascunhos', () => {
     expect(r.origem).toEqual({ tipo: 'mes_anterior', mes: '2026-09-01', rotulo: 'setembro' })
     expect(r.semanas[0]).toEqual({ numero: 1, inicio: '2026-10-01', fim: '2026-10-05' })
     expect(r.marcas.map(m => m.marca)).toEqual(['Odonto Scale', 'Inpot'])
-    expect(r.distribuicaoSemanal).toEqual([])
+    expect(r.vendasPorSemana).toEqual([])
   })
 
   it('de versão: mantém semanas e distribuição da versão', () => {
-    const estado: EstadoMes = { ...SETEMBRO, distribuicaoSemanal: [{ marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Ligações', valor: 100 }] }
+    const estado: EstadoMes = { ...SETEMBRO, distribuicaoSemanal: [
+      { marca: 'Inpot', nomePessoa: 'Thiago', semanaNumero: 1, etapa: 'Ligações', valor: 100 },
+      { marca: 'Inpot', nomePessoa: 'Douglas', semanaNumero: 1, etapa: 'Fechamento', valor: 2 },
+      { marca: 'Inpot', nomePessoa: 'Douglas', semanaNumero: 3, etapa: 'Fechamento', valor: 3 },
+    ] }
     const r = rascunhoDeVersao('2026-09-01', { id: 7, numero: 1, rotulo: 'Lançamento', origem: 'importado' }, estado)
     expect(r.origem).toEqual({ tipo: 'versao', versaoId: 7, numero: 1, rotulo: 'Lançamento' })
     expect(r.semanas).toBe(estado.semanas)
-    expect(r.distribuicaoSemanal).toHaveLength(1)
+    expect(r.vendasPorSemana).toEqual([{ marca: 'Inpot', semanaNumero: 1, valor: 2 }, { marca: 'Inpot', semanaNumero: 3, valor: 3 }])
     expect(r.marcas.find(m => m.marca === 'Inpot')!.referencia!.rotulo).toBe('V1')
   })
 

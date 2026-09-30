@@ -49,12 +49,6 @@ export const ETAPA_ABAIXO: Record<EtapaConfiguravel, EtapaFunil> = {
 export const ETAPAS_SDR: readonly EtapaMetaConfig[] = ['Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
 export const ETAPAS_CLOSER: readonly EtapaMetaConfig[] = ['Oportunidade COF', 'Fechamento']
 
-/** Etapas da distribuição semanal manual (as mesmas do Hub antigo). */
-export const ETAPAS_SEMANAIS: Record<'SDR' | 'Closer', readonly EtapaMeta[]> = {
-  SDR: ['Ligações', 'Reunião Agendada SQL'],
-  Closer: ['Oportunidade COF', 'Fechamento'],
-}
-
 export function funcaoDaEtapaSemanal(etapa: EtapaMeta): 'SDR' | 'Closer' {
   return etapa === 'Oportunidade COF' || etapa === 'Fechamento' ? 'Closer' : 'SDR'
 }
@@ -93,13 +87,21 @@ export type OrigemRascunho =
   | { tipo: 'versao'; versaoId: number; numero: number; rotulo: string }
   | { tipo: 'branco' }
 
+/** Quantas vendas da marca caem em cada semana — a única coisa distribuída à
+ *  mão. As outras etapas da semana vêm na mesma fração (`metasDaSemana`). */
+export interface VendaSemana {
+  marca: string
+  semanaNumero: number
+  valor: number
+}
+
 export interface RascunhoConfig {
   mesReferencia: string
   origem: OrigemRascunho
   diaViradaSemana: DiaSemana
   semanas: Semana[]
   marcas: MarcaConfig[]
-  distribuicaoSemanal: DistribuicaoSemanalItem[]
+  vendasPorSemana: VendaSemana[]
   atualizadoEm: string
 }
 
@@ -229,7 +231,7 @@ export function rascunhoDoMesAnterior(mesReferencia: string, anterior: EstadoMes
     diaViradaSemana: anterior.diaViradaSemana,
     semanas: gerarSemanas(mesReferencia, anterior.diaViradaSemana),
     marcas: ordenarMarcas(anterior.marcas.map(m => marcaDoMesAnterior(m, rotulo))),
-    distribuicaoSemanal: [],
+    vendasPorSemana: [],
     atualizadoEm: agora.toISOString(),
   }
 }
@@ -247,7 +249,7 @@ export function rascunhoDeVersao(
     diaViradaSemana: estado.diaViradaSemana,
     semanas: estado.semanas,
     marcas: ordenarMarcas(estado.marcas.map(m => marcaDeVersao(m, rotulo, versao.origem === 'importado'))),
-    distribuicaoSemanal: estado.distribuicaoSemanal,
+    vendasPorSemana: vendasDaDistribuicao(estado.distribuicaoSemanal),
     atualizadoEm: agora.toISOString(),
   }
 }
@@ -259,7 +261,7 @@ export function rascunhoEmBranco(mesReferencia: string, marcas: string[], agora 
     diaViradaSemana: 'terca',
     semanas: gerarSemanas(mesReferencia, 'terca'),
     marcas: ordenarMarcas(marcas.map(marcaEmBranco)),
-    distribuicaoSemanal: [],
+    vendasPorSemana: [],
     atualizadoEm: agora.toISOString(),
   }
 }
@@ -532,13 +534,10 @@ export interface Publicacao {
 }
 
 export function montarPublicacao(r: RascunhoConfig): Publicacao {
-  const semanas = new Set(r.semanas.map(s => s.numero))
-  const existe = (d: DistribuicaoSemanalItem) => r.marcas.some(m => m.marca === d.marca
-    && m.pessoas.some(p => p.nome === d.nomePessoa && p.funcao === funcaoDaEtapaSemanal(d.etapa)))
   return {
     marcas: r.marcas.map(m => ({ marca: m.marca, ticketMedio: m.ticketMedio ?? 0, etapas: paraConfigEtapas(m), pessoas: m.pessoas })),
     linhasEspelho: gerarLinhasEspelho(r.mesReferencia, r.marcas.map(m => ({ marca: m.marca, resolucao: resolucaoArredondada(m), pessoas: m.pessoas }))),
-    distribuicaoSemanal: r.distribuicaoSemanal.filter(d => d.valor > 0 && semanas.has(d.semanaNumero) && existe(d)),
+    distribuicaoSemanal: distribuicaoDerivada(r),
   }
 }
 
@@ -566,6 +565,86 @@ export function distribuirProporcional(total: number, semanas: Semana[]): number
     resto -= 1
   }
   return base
+}
+
+/** Vendas por semana de uma versão publicada: soma a etapa Fechamento dos Closers. */
+function vendasDaDistribuicao(itens: DistribuicaoSemanalItem[]): VendaSemana[] {
+  const porChave = new Map<string, VendaSemana>()
+  for (const d of itens) {
+    if (d.etapa !== 'Fechamento') continue
+    const chave = `${d.marca}|${d.semanaNumero}`
+    const atual = porChave.get(chave) ?? { marca: d.marca, semanaNumero: d.semanaNumero, valor: 0 }
+    atual.valor = arred2(atual.valor + d.valor)
+    porChave.set(chave, atual)
+  }
+  return [...porChave.values()].sort((a, b) => a.marca.localeCompare(b.marca) || a.semanaNumero - b.semanaNumero)
+}
+
+export type SituacaoSemanas = 'sem_vendas' | 'vazio' | 'parcial' | 'completo' | 'excedido'
+
+/** Como está a distribuição das vendas da marca pelas semanas do rascunho. */
+export function vendasDistribuidas(r: RascunhoConfig, marca: string): {
+  porSemana: number[]
+  distribuido: number
+  total: number
+  situacao: SituacaoSemanas
+} {
+  const m = r.marcas.find(x => x.marca === marca)
+  const total = m?.vendas ?? 0
+  const porSemana = r.semanas.map(s => r.vendasPorSemana.find(v => v.marca === marca && v.semanaNumero === s.numero)?.valor ?? 0)
+  const distribuido = arred2(porSemana.reduce((a, b) => a + b, 0))
+  let situacao: SituacaoSemanas
+  if (!(total > 0)) situacao = 'sem_vendas'
+  else if (distribuido === 0) situacao = 'vazio'
+  else if (distribuido < total) situacao = 'parcial'
+  else if (distribuido > total) situacao = 'excedido'
+  else situacao = 'completo'
+  return { porSemana, distribuido, total, situacao }
+}
+
+/** Metas de uma semana da marca: cada etapa na mesma fração das vendas da semana. */
+export function metasDaSemana(m: MarcaConfig, vendasSemana: number, funil: FunilCalculado = calcularFunil(m)): Partial<Record<EtapaMetaConfig, number>> {
+  const r: Partial<Record<EtapaMetaConfig, number>> = {}
+  if (!m.vendas || m.vendas <= 0) return r
+  const fracao = vendasSemana / m.vendas
+  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+    const meta = funil.etapas[e].meta
+    if (meta != null) r[e] = e === 'Fechamento' ? vendasSemana : meta * fracao
+  }
+  return r
+}
+
+/** Linhas de `meta_pessoa_semana` derivadas das vendas por semana — só de marca distribuída por completo. */
+export function distribuicaoDerivada(r: RascunhoConfig): DistribuicaoSemanalItem[] {
+  const itens: DistribuicaoSemanalItem[] = []
+  for (const m of r.marcas) {
+    const { porSemana, situacao } = vendasDistribuidas(r, m.marca)
+    if (situacao !== 'completo') continue
+    const funil = calcularFunil(m)
+    r.semanas.forEach((s, i) => {
+      if (porSemana[i] <= 0) return
+      const semana = metasDaSemana(m, porSemana[i], funil)
+      for (const p of m.pessoas) {
+        for (const etapa of p.funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
+          const v = semana[etapa]
+          if (v == null) continue
+          const valor = arred2((v * p.peso) / 100)
+          if (valor > 0) itens.push({ marca: m.marca, nomePessoa: p.nome, semanaNumero: s.numero, etapa, valor })
+        }
+      }
+    })
+  }
+  return itens
+}
+
+/** Vendas da marca repartidas pelos dias de cada semana (inteiros que fecham o mês). Outras marcas intactas. */
+export function distribuirVendasProporcional(r: RascunhoConfig, marca: string): VendaSemana[] {
+  const total = r.marcas.find(m => m.marca === marca)?.vendas ?? 0
+  const valores = distribuirProporcional(total, r.semanas)
+  return [
+    ...r.vendasPorSemana.filter(v => v.marca !== marca),
+    ...r.semanas.flatMap((s, i) => (valores[i] > 0 ? [{ marca, semanaNumero: s.numero, valor: valores[i] }] : [])),
+  ]
 }
 
 // ── Resumo ───────────────────────────────────────────────────────────────

@@ -393,7 +393,9 @@ function Montagem({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{
-        ...cardStyle, padding: '14px 18px', position: 'sticky', top: compacto ? 56 : 0, zIndex: 20,
+        ...cardStyle, padding: '14px 18px', zIndex: 20,
+        // Fixo só no desktop: no celular o cabeçalho (com os 3 passos quebrando linha) cobriria um terço da tela.
+        position: compacto ? 'static' : 'sticky', top: 0,
         display: 'flex', alignItems: 'center', gap: '12px 20px', flexWrap: 'wrap',
       }}>
         <div style={{ flex: '1 1 240px', minWidth: 0 }}>

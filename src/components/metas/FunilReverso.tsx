@@ -42,11 +42,13 @@ export function FunilReverso({ marca, funil, onMudar }: {
   funil: FunilCalculado
   onMudar: (m: MarcaConfig) => void
 }) {
+  // Antes das vendas, nada foi calculado ainda — apontar erro em cada etapa só assusta.
+  const mostrarProblemas = marca.vendas != null
   const mudarModo = (etapa: EtapaConfiguravel, modo: ModoEtapaConfig) => onMudar(definirModoEtapa(marca, etapa, modo))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <LinhaEtapa etapa="Ligações" calc={funil.etapas['Ligações']} modo={marca.etapas['Ligações']} onMudarModo={mudarModo} />
+      <LinhaEtapa etapa="Ligações" calc={funil.etapas['Ligações']} modo={marca.etapas['Ligações']} onMudarModo={mudarModo} mostrarProblema={mostrarProblemas} />
       <Conector etapa="Ligações" calc={funil.etapas['Ligações']} modo={marca.etapas['Ligações']} referencia={marca.referencia} onMudarModo={mudarModo} />
       {ETAPAS_FUNIL.map(etapa => (
         <Fragment key={etapa}>
@@ -55,6 +57,7 @@ export function FunilReverso({ marca, funil, onMudar }: {
             calc={funil.etapas[etapa]}
             modo={etapa === 'Fechamento' ? undefined : marca.etapas[etapa]}
             onMudarModo={mudarModo}
+            mostrarProblema={mostrarProblemas}
           />
           {etapa !== 'Fechamento' && (
             <Conector etapa={etapa} calc={funil.etapas[etapa]} modo={marca.etapas[etapa]} referencia={marca.referencia} onMudarModo={mudarModo} />
@@ -65,11 +68,12 @@ export function FunilReverso({ marca, funil, onMudar }: {
   )
 }
 
-function LinhaEtapa({ etapa, calc, modo, onMudarModo }: {
+function LinhaEtapa({ etapa, calc, modo, onMudarModo, mostrarProblema }: {
   etapa: EtapaMetaConfig
   calc: EtapaCalculada
   modo: ModoEtapaConfig | undefined
   onMudarModo: (etapa: EtapaConfiguravel, modo: ModoEtapaConfig) => void
+  mostrarProblema: boolean
 }) {
   const ancora = etapa === 'Fechamento'
   const ligacoes = etapa === 'Ligações'
@@ -108,7 +112,7 @@ function LinhaEtapa({ etapa, calc, modo, onMudarModo }: {
           </span>
         )}
       </div>
-      {calc.problema && (
+      {mostrarProblema && calc.problema && (
         <div style={{ fontSize: 12, color: 'var(--status-risco)', padding: '4px 16px 0' }}>{calc.problema}</div>
       )}
     </div>

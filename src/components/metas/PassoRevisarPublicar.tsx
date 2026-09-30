@@ -163,7 +163,7 @@ export function PassoRevisarPublicar({ rascunho, proximoNumero, versaoAtiva, tot
                 <th style={{ ...th, textAlign: 'left' }}>Pessoa</th>
                 <th style={{ ...th, textAlign: 'left' }}>Marcas</th>
                 <th style={th}>SQL</th><th style={th}>Diagnóstico</th><th style={th}>SAL</th>
-                <th style={th}>COF</th><th style={th}>Vendas</th><th style={th}>Faturamento</th>
+                <th style={th}>Oportunidade</th><th style={th}>Vendas</th><th style={th}>Faturamento</th>
               </tr>
             </thead>
             <tbody>

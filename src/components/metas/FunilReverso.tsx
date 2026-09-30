@@ -1,12 +1,20 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, Flag, Phone } from 'lucide-react'
+import { ArrowDown, Flag, Phone } from 'lucide-react'
 import {
-  ETAPA_ABAIXO, ETAPAS_FUNIL, ROTULO_ETAPA, definirModoEtapa,
+  ETAPA_ABAIXO, ROTULO_ETAPA, definirModoEtapa,
   type EtapaCalculada, type EtapaConfiguravel, type EtapaMetaConfig, type FunilCalculado,
   type MarcaConfig, type ModoEtapaConfig, type ReferenciaMarca,
 } from '@/lib/configMetas'
 import { CampoNumero } from './CampoNumero'
 import { capitalizar, fmtDec, fmtInt, fmtPct, pillStyle, type PillKind } from './metasUi'
+
+/**
+ * Ordem da tela: a partir das vendas (informadas logo acima, na Base do mês),
+ * voltando etapa por etapa até o SQL; Ligações por último, fora da cadeia.
+ * A conversão de cada etapa fica no conector ACIMA dela (entre ela e a etapa
+ * de baixo do funil, que na tela aparece antes).
+ */
+const ORDEM_TELA: EtapaMetaConfig[] = ['Fechamento', 'Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações']
 
 const DONO: Record<EtapaMetaConfig, string> = {
   'Ligações': 'SDR', 'Reunião Agendada SQL': 'SDR', 'Reunião Realizada': 'SDR', SAL: 'SDR',
@@ -45,33 +53,41 @@ export function FunilReverso({ marca, funil, onMudar }: {
   // Antes das vendas, nada foi calculado ainda — apontar erro em cada etapa só assusta.
   const mostrarProblemas = marca.vendas != null
   const mudarModo = (etapa: EtapaConfiguravel, modo: ModoEtapaConfig) => onMudar(definirModoEtapa(marca, etapa, modo))
+  // Escala da barrinha: a maior etapa do funil (Ligações tem ordem de grandeza própria).
+  const escala = Math.max(1, ...ORDEM_TELA.filter(e => e !== 'Ligações').map(e => funil.etapas[e].meta ?? 0))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <LinhaEtapa etapa="Ligações" calc={funil.etapas['Ligações']} modo={marca.etapas['Ligações']} onMudarModo={mudarModo} mostrarProblema={mostrarProblemas} />
-      <Conector etapa="Ligações" calc={funil.etapas['Ligações']} modo={marca.etapas['Ligações']} referencia={marca.referencia} onMudarModo={mudarModo} />
-      {ETAPAS_FUNIL.map(etapa => (
+      {ORDEM_TELA.map(etapa => (
         <Fragment key={etapa}>
+          {etapa !== 'Fechamento' && (
+            <Conector
+              etapa={etapa}
+              calc={funil.etapas[etapa]}
+              modo={marca.etapas[etapa]}
+              referencia={marca.referencia}
+              onMudarModo={mudarModo}
+            />
+          )}
           <LinhaEtapa
             etapa={etapa}
             calc={funil.etapas[etapa]}
             modo={etapa === 'Fechamento' ? undefined : marca.etapas[etapa]}
+            escala={etapa === 'Ligações' ? null : escala}
             onMudarModo={mudarModo}
             mostrarProblema={mostrarProblemas}
           />
-          {etapa !== 'Fechamento' && (
-            <Conector etapa={etapa} calc={funil.etapas[etapa]} modo={marca.etapas[etapa]} referencia={marca.referencia} onMudarModo={mudarModo} />
-          )}
         </Fragment>
       ))}
     </div>
   )
 }
 
-function LinhaEtapa({ etapa, calc, modo, onMudarModo, mostrarProblema }: {
+function LinhaEtapa({ etapa, calc, modo, escala, onMudarModo, mostrarProblema }: {
   etapa: EtapaMetaConfig
   calc: EtapaCalculada
   modo: ModoEtapaConfig | undefined
+  escala: number | null
   onMudarModo: (etapa: EtapaConfiguravel, modo: ModoEtapaConfig) => void
   mostrarProblema: boolean
 }) {
@@ -80,6 +96,7 @@ function LinhaEtapa({ etapa, calc, modo, onMudarModo, mostrarProblema }: {
   const semMeta = calc.origem === 'sem_meta'
   const selo = SELO[calc.origem]
   const detalhe = ancora ? ' · vem da Base do mês' : ligacoes ? ' · atividade, fora da cadeia de conversão' : ''
+  const largura = escala && calc.meta != null ? Math.max(3, (calc.meta / escala) * 100) : 0
 
   return (
     <div>
@@ -97,12 +114,21 @@ function LinhaEtapa({ etapa, calc, modo, onMudarModo, mostrarProblema }: {
           </div>
           <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>meta do {DONO[etapa]}{detalhe}</div>
         </div>
+        {escala != null && (
+          <div className="cm-barra-funil" aria-hidden style={{ width: 140, height: 8, borderRadius: 4, background: 'var(--ws-bg)', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', width: `${largura}%`, borderRadius: 4, transition: 'width .35s ease',
+              background: ancora ? 'var(--brand-accent)' : 'color-mix(in srgb, var(--brand-accent) 45%, var(--ws-surface))',
+            }} />
+          </div>
+        )}
         <span style={pillStyle(selo.kind)}>{selo.texto}</span>
         {modo?.tipo === 'manual' ? (
           <CampoNumero
             valor={modo.valor}
             onMudar={v => onMudarModo(etapa as EtapaConfiguravel, { tipo: 'manual', valor: v })}
-            largura={100}
+            passo={ligacoes ? 10 : 1}
+            largura={80}
             destaque
             rotulo={`Número de ${ROTULO_ETAPA[etapa]}`}
           />
@@ -131,7 +157,7 @@ function Conector({ etapa, calc, modo, referencia, onMudarModo }: {
   const refTaxa = referencia?.taxas[etapa] ?? null
 
   let texto: string
-  if (modo.tipo === 'sem_meta') texto = 'sem meta nesta etapa'
+  if (modo.tipo === 'sem_meta') texto = `${ROTULO_ETAPA[etapa]}: sem meta nesta etapa`
   else if (calc.taxa == null) texto = `${ROTULO_ETAPA[etapa]} → ${ROTULO_ETAPA[abaixo]}: sem conversão`
   else {
     texto = `${ROTULO_ETAPA[etapa]} → ${ROTULO_ETAPA[abaixo]}: ${fmtPct(calc.taxa)}`
@@ -164,7 +190,7 @@ function Conector({ etapa, calc, modo, referencia, onMudarModo }: {
       display: 'flex', alignItems: 'center', gap: '8px 12px', flexWrap: 'wrap',
       margin: '0 0 0 26px', padding: '10px 0 10px 18px', borderLeft: '2px solid var(--ws-border)',
     }}>
-      <ArrowUp size={14} color="var(--ws-text-secondary)" aria-hidden />
+      <ArrowDown size={14} color="var(--ws-text-secondary)" aria-hidden />
       <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)', flex: '1 1 200px', minWidth: 0 }}>{texto}</span>
       <div className="cm-seg" role="group" aria-label={`Como definir ${ROTULO_ETAPA[etapa]}`} style={{
         display: 'inline-flex', flexWrap: 'wrap', border: '1px solid var(--ws-border-strong)',
@@ -196,8 +222,10 @@ function Conector({ etapa, calc, modo, referencia, onMudarModo }: {
       {modo.tipo === 'conversao' && (
         <CampoNumero
           casas={1}
+          passo={1}
+          max={100}
           sufixo="%"
-          largura={76}
+          largura={56}
           autoFocus={focarTaxa}
           valor={modo.taxa != null ? modo.taxa * 100 : null}
           onMudar={v => onMudarModo(etapa, { tipo: 'conversao', taxa: v == null ? null : v / 100 })}

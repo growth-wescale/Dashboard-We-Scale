@@ -585,6 +585,38 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-30 (3) — Configuração das Metas: funil na ordem das vendas, setinhas e pesos que fecham 100%
+
+Ajustes pedidos pelo Junior depois do primeiro uso da tela nova:
+
+- **Funil começa nas vendas.** O editor da marca agora desenha Vendas no
+  topo (logo abaixo da Base do mês) e volta etapa por etapa: Oportunidade →
+  SAL → Diagnóstico → SQL → Ligações. Cada conector fica acima da etapa que ele
+  calcula. Barrinha em cada etapa mostra o tamanho relativo (o "formato" do
+  funil); some no celular.
+- **Setinhas em todo campo numérico** (`CampoNumero`): ▲▼ ao lado do campo e
+  seta do teclado, com `passo`/`min`/`max` — vendas de 1 em 1, taxa de
+  franquia de R$ 1.000, conversão de 1 ponto (máx. 100%), manual de 1 (Ligações
+  de 10), peso de 1. O texto do campo sempre acompanha o valor real.
+- **Pesos nunca saem de 100%.** `ajustarPeso` (mudar o peso de uma pessoa
+  redistribui o resto entre as outras da função, na proporção delas),
+  `moverDivisa` (barra arrastável: troca peso só entre os dois vizinhos, em
+  passos de 1%) e `normalizarPesos` (corrige rascunho antigo com soma errada,
+  botão "Corrigir para 100%"). Pessoa sozinha na função fica travada em 100%.
+  Adicionar pessoa redivide igual; remover reescala mantendo a proporção.
+- **Time da marca refeito:** barra colorida por função com divisórias
+  arrastáveis (mouse, toque e ←/→), cards por pessoa com foto do
+  `nome_cargo_foto`, peso com setinhas e metas da pessoa ao vivo, e chips
+  "+ nome" pra adicionar.
+- **"COF" vira "Oportunidade"** em toda a Configuração das Metas (rótulo de
+  `ROTULO_ETAPA`; a chave interna `'Oportunidade COF'` e o banco não mudam).
+  Outras abas (Performance, Campanha) continuam dizendo COF.
+
+Verificado: build + 523 testes (7 novos de pesos) + oxlint, e visto
+renderizado com dado real (Inpot outubro: arrastar 50/50 → 30/70, 3 SDRs →
+33,33/33,33/33,34, seta no peso mantém 100%; setinhas de vendas e ticket;
+celular sem rolagem horizontal).
+
 ### 2026-09-30 (2) — Configuração das Metas: painel de marcas + funil reverso
 
 Junior pediu pra refazer o lançamento de metas (`/metas`, antes "Metas" /

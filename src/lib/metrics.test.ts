@@ -826,9 +826,10 @@ describe('stageLabel', () => {
 
 describe('etapasDaMarca', () => {
   const todas = ['MQL', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL', 'Comitê', 'Pré-Contrato'] as const
-  it('só Odonto Legacy: esconde Interesse Reunião, Conexão e Comitê', () => {
-    expect(etapasDaMarca(todas, ['Odonto Scale'])).toEqual(['MQL', 'Reunião Agendada SQL', 'Pré-Contrato'])
-    expect(etapasDaMarca(todas, ['Odonto Legacy'])).toEqual(['MQL', 'Reunião Agendada SQL', 'Pré-Contrato'])
+  it('só Odonto Legacy: esconde só Comitê (Interesse Reunião e Conexão existem desde 30/09)', () => {
+    const semComite = ['MQL', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL', 'Pré-Contrato']
+    expect(etapasDaMarca(todas, ['Odonto Scale'])).toEqual(semComite)
+    expect(etapasDaMarca(todas, ['Odonto Legacy'])).toEqual(semComite)
   })
   it('outra marca ou 2+ marcas: mantém tudo', () => {
     expect(etapasDaMarca(todas, ['Inpot'])).toEqual([...todas])

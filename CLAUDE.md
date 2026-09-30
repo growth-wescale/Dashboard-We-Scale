@@ -585,6 +585,29 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-30 — Odonto Legacy ganha Interesse Reunião e Conexão
+
+Junior criou no RD, no funil Odonto Legacy (`68b84341646c55001ed64e4f`),
+as etapas **Interesse Reunião** (`6abd312af18c3800295c6771`) depois de
+Contato Efetivo e **Conexão** (`6abd3149d43c010029ad60b2`) antes da Reunião
+Agendada, pro bot da marca mover o lead como já faz no funil SDR.
+
+**Banco:** as duas cadastradas em `rd_funis_etapas` (ordem 4 e 5; No Show
+em diante empurrados +2, `ordem` é só exibição). Sem isso
+`registrar_stage_history` gravaria os eventos sem nome, invisíveis (mesmo
+caso do Scale Partner, 21/09). Nenhum evento dessas etapas tinha chegado
+ainda, então não houve backfill. Os nomes batem exatamente com
+`etapa_canonica` (camada SDR), então nenhuma view mudou.
+
+**Dashboard:** `ETAPAS_AUSENTES_POR_MARCA['Odonto Scale']` ficou só com
+`'Comitê'` — as duas etapas voltam a aparecer com só Odonto Legacy
+selecionada (Visão Macro nos 3 modos e funil SDR da Performance).
+
+**Leitura:** antes de 30/09 as duas etapas ficam zeradas no histórico da
+marca; conversões envolvendo elas só comparam a partir daí. Deal que já
+estava em Contato Efetivo pula direto pra Reunião Agendada, então a
+conversão pode passar de 100% no mês de transição.
+
 ### 2026-09-30 — Pop-ups de deal ganham "Data de criação" e "Data da última reativação"
 
 Pedido do Junior: as duas colunas em todos os pop-ups de deal de Vendas, sem

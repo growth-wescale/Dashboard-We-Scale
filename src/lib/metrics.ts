@@ -216,8 +216,10 @@ const STAGE_ALIASES: Record<string, StageKey> = {
  */
 const ETAPAS_AUSENTES_POR_MARCA: Record<string, readonly StageKey[]> = {
   // Funil Odonto Legacy: Novos Leads → Tentando Contato → Contato Efetivo →
-  // Reunião Agendada → Diagnóstico → Negociação SAL → Documentação.
-  'Odonto Scale': ['Interesse Reunião', 'Conexão', 'Comitê'],
+  // Interesse Reunião → Conexão → Reunião Agendada → Diagnóstico →
+  // Negociação SAL → Documentação. Interesse Reunião e Conexão existem desde
+  // 30/09/2026 (antes disso ficam zeradas no histórico da marca).
+  'Odonto Scale': ['Comitê'],
 }
 
 /** `stages` sem as etapas que não existem no funil, quando há 1 marca só selecionada. */

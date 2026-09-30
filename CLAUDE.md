@@ -585,6 +585,34 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-09-30 (5) — Configuração das Metas: semanas distribuem só as vendas
+
+Junior: "não faz sentido distribuir todas as metas por semana. Só devemos
+distribuir as metas de venda e as demais métricas vêm junto". Antes o passo
+Semanas pedia digitar, pessoa por pessoa, Ligações/SQL/Oportunidade/Vendas de
+cada semana.
+
+**Regra nova:** o gestor distribui só as **vendas da marca** pelas semanas.
+Cada etapa da semana = meta da etapa × (vendas da semana ÷ vendas do mês) —
+`metasDaSemana`; cada pessoa recebe a semana × peso (`distribuicaoDerivada`,
+que gera as linhas de `meta_pessoa_semana` na publicação, agora com todas as
+etapas da pessoa: SDR Ligações/SQL/Diagnóstico/SAL, Closer Oportunidade/Vendas).
+A semana continua **opcional**, mas **pela metade bloqueia a publicação**
+(`vendasDistribuidas`: `vazio`/`parcial`/`completo`/`excedido`/`sem_vendas`).
+O rascunho troca `distribuicaoSemanal` por `vendasPorSemana`; rascunho antigo
+no navegador abre sem distribuição; revisão de versão reconstrói as vendas por
+semana somando o Fechamento dos Closers.
+
+**Tela:** cada venda vira uma ficha na cor da marca, num monte "a distribuir";
+cada semana é uma coluna com ＋/− (o ＋ trava quando o monte acaba, clicar numa
+ficha a devolve), metas derivadas embaixo, "Proporcional aos dias" por marca
+e "Distribuir todas pelos dias", e a tabela por pessoa sob demanda.
+
+Verificado: build + 527 testes (4 novos) + oxlint; visto renderizado com dado
+real (Oral Unic 2 vendas em S2/S4 → 2,5 Oportunidade / 15,5 SQL / 520
+Ligações por semana; tabela por pessoa fecha no mês; distribuição pela metade
+bloqueia; "Distribuir todas" → 7/7; celular sem rolagem horizontal).
+
 ### 2026-09-30 (4) — Configuração das Metas só oferece quem está ativo; cadastro de Closers corrigido
 
 Junior viu na tela de metas, como opção de Closer, gente que não está mais

@@ -22,7 +22,9 @@ export function carregarRascunho(mesReferencia: string): RascunhoConfig | null {
     if (!bruto) return null
     const r = JSON.parse(bruto) as Partial<RascunhoConfig> | null
     if (!r || r.mesReferencia !== mesReferencia || !r.origem || !Array.isArray(r.marcas) || !Array.isArray(r.semanas)) return null
-    return { ...r, distribuicaoSemanal: Array.isArray(r.distribuicaoSemanal) ? r.distribuicaoSemanal : [] } as RascunhoConfig
+    // Rascunho do formato antigo (distribuição por pessoa) abre sem distribuição semanal.
+    const { distribuicaoSemanal: _antigo, ...resto } = r as Partial<RascunhoConfig> & { distribuicaoSemanal?: unknown }
+    return { ...resto, vendasPorSemana: Array.isArray(r.vendasPorSemana) ? r.vendasPorSemana : [] } as RascunhoConfig
   } catch {
     return null
   }

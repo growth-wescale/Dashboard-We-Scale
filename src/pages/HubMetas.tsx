@@ -445,7 +445,7 @@ function Montagem({
             atualizar({
               ...rascunho,
               marcas: rascunho.marcas.filter(x => x.marca !== marca.marca),
-              distribuicaoSemanal: rascunho.distribuicaoSemanal.filter(d => d.marca !== marca.marca),
+              vendasPorSemana: rascunho.vendasPorSemana.filter(v => v.marca !== marca.marca),
             })
             setMarcaAberta(null)
           }}

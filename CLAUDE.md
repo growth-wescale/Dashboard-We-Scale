@@ -70,6 +70,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
 | `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
+| `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
 `vw_marketing_funil` é a view **antiga**, sem nenhuma aba de Vendas
@@ -302,6 +303,7 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
+src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
 src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
 src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
 
@@ -316,11 +318,13 @@ src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "t
 src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
 src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
+src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
 src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer) — sem consumidor desde 01/10/2026
+src/hooks/useReunioesCloser.ts    lê vw_closer_reunioes inteira (sem filtro de data — recorte em reunioesCloser.ts)
 src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
 ```
 
@@ -577,7 +581,9 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
 - [x] ~~Linha do Tempo em branco até rodar o script das views~~ — RESOLVIDO em 16/09: views `vw_deal_timeline_eventos/_tarefas/_reunioes` aplicadas no Supabase de Expansão (migration `linha_do_tempo_views_bloco_a_e_b`). Junior optou por rodar os blocos A **e** B, então anotação de tarefa e resumo de reunião ficam legíveis por quem tiver a anon key — decisão consciente dele, registrada aqui porque amplia a pendência da anon key exposta
 - [ ] **Aba Linha do Tempo só aparece pro Administrador até rodar `docs/sql/2026-09-16-acesso-linha-do-tempo.sql`** no Supabase de Marketing — os demais papéis não têm a permissão `aba.linha-do-tempo`
-- [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09)
+- [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09; `DB_Reunioes_MeetRox` também pela Performance › Closer, 01/10)
+- [ ] **Closers gravam reunião de venda sem tipo de call no MeetRox** — em set/26 foram 52 sem tipo contra 86 tipadas (Jéssica 35, Douglas 15), muitas com título de venda ("Devolutiva Comitê", "Alinhamento Contrato", "Finalização"). Ficam fora da contagem R1–R5 do bloco "Reuniões no MeetRox"; o próprio bloco lista elas. Correção é de processo (classificar a call no MeetRox), não de código
+- [ ] **Closer novo some com o nome do MeetRox** em `vw_closer_reunioes` até ganhar uma linha no CTE `pessoa` da view (e-mail → nome do RD) ou e-mail em `nome_cargo_foto` — senão aparece como "Fulano Sobrenome Completo" e não casa com o filtro de Closer da barra
 - [ ] **`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia** — o insert de evento `'perda'` não tem `EXCEPTION WHEN unique_violation` pro índice `ux_deal_eventos_perda_por_dia` (só o `ON CONFLICT` do índice de timestamp exato). Se um deal for perdido, reaberto e perdido de novo no mesmo dia calendário, a segunda perda derruba a função inteira — visto 1x num backfill em 25/08. Raro, mas real
 - [ ] **Páginas de Marketing ainda não responsivas** — Visão Geral, Saúde da Marca, Meta & OKRs e S&OP herdaram o menu em gaveta e a barra do topo compacta (14/09), mas as grades internas seguem com colunas fixas e quebram no celular. São do Gabriel; aplicar o mesmo padrão `rs-*` da seção 7 quando ele quiser
 - [ ] **Chave `service_role` do Supabase de Expansão e token do RD circularam em texto plano** (JSONs de workflow do n8n, exportados pra debug em 25/08). `service_role` ignora RLS por completo — rotacionar as duas quando der
@@ -585,6 +591,65 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-01 (5) — Performance › Closer ganha "Reuniões no MeetRox" (R1 a R5)
+
+Pedido do Junior: ver na aba Closer os tipos de reunião que os Closers fazem
+(R1–R5), por Closer e por marca, puxando do MeetRox. O dado já estava no
+banco: o WF1 do projeto `meetrox-sync` (n8n, a cada 5 min) grava toda call em
+`DB_Reunioes_MeetRox`, com o tipo de call escolhido na gravação.
+
+**Os tipos** (`call_type_id` do MeetRox, com `scorecard_name` de reserva):
+R1 Diagnóstico (4554), R2 Apresentação Técnica e Financeira (4555), R3
+Geomarketing + Explicação do Comitê (4556), R4 Alinhamento COF (4557), R5
+Devolutiva do Comitê + Fechamento (4558). "Undefined" (4553) = sem tipo.
+
+**Banco:** view nova `vw_closer_reunioes` (só metadado: nada de transcrição,
+resumo ou scorecard; `DB_Reunioes_MeetRox` tem RLS só pra `authenticated` e o
+dash é `anon`). Três decisões dentro dela:
+- **Negócio** por `coalesce(id_deal, crm_deal_id)` (mesma regra da Linha do
+  Tempo) e marca/origem/fonte/SDR lidos de `vw_funil_vendas` — mesmas regras
+  das outras abas. Deal reciclado usa o ciclo em vigor na data da reunião.
+  Em set/26, 81 de 86 reuniões tipadas têm negócio no funil.
+- **Nome do Closer**: o MeetRox grava o nome completo ("Jessica Alves
+  Santos"); a view traduz por e-mail para o nome do RD ("Jéssica"), senão o
+  filtro de Closer da barra não casaria. Ver pendência.
+- **Sem tipo só de Closer**: SDR grava conversa com lead sem tipo (Vanessa,
+  Sarah, Thiago, Xayane — só "Undefined") e isso não é reunião de venda.
+
+Medido: 74 ms para a base toda (1.347 linhas), 2 requests.
+
+**Tela** (`ReunioesMeetroxSection`, entre "Conversões — fundo do funil" e
+Leadtime): 5 cards R1→R5 (quantidade, % do total, duração média, nota da IA,
+nº de closers), tabela tipo × Closer **ou** × marca (toggle) com mix R1→R5
+em barra empilhada, duração, nota IA e coluna "Sem tipo", e linha de total.
+Todo número abre popup com as reuniões (data, tipo, Closer, negócio com link
+pro RD e pra Linha do Tempo, marca, duração, nota, link da gravação). Cores:
+rampa ordinal de um tom só (teal do Closer, claro → escuro), validada com
+`validate_palette.js --ordinal` no tema claro.
+
+**Regras de filtro** (`filtrarReunioes`, testada):
+- Período pela **data da reunião** (Brasília). "Deals criados no período" não
+  se aplica.
+- **Closer = quem conduziu a reunião** (quem gravou), não o `nome_closer` do
+  negócio. SDR, Fonte e Sub-fonte pelo negócio.
+- Reunião **sem negócio no funil** entra só com todas as marcas marcadas
+  (Consolidado) e conta como Inbound — Prospecção Ativa não tem Closer (mesmo
+  fallback de `buildScopeFilter`). Na visão por marca vira a linha "Sem
+  negócio vinculado", sempre por último e sem posição.
+- **Deals únicos**: o mesmo negócio conta 1× por tipo no mês (some regravação
+  de call que caiu); reunião sem tipo ou sem negócio nunca é deduplicada.
+  **Passagens**: toda gravação conta.
+
+Conferido na tela contra SQL (set/26, Inbound, Consolidado, Passagens):
+Jéssica 28/6/2/2/1 · Douglas 24/8/3 · Bruna 11 · Aurélio 1 (R1/R2/R3/R4/R5),
+sem tipo 35/15/1/1, durações e notas idênticas. Por marca: Eletrovias
+25/5/2/1/1, Inpot 24/7/1, B2Case 10/1, Viva 0/1/2.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (552 testes, 9 novos
+em `reunioesCloser.test.ts`) + `oxlint` limpo, em worktree fora do OneDrive.
+**Visto renderizado** com dado real numa cópia local com rota sem login
+(removida, nunca no commit), em 1440×900 e 375×812.
 
 ### 2026-10-01 (4) — Performance: tabelas de SDR/Closer contam pelos mesmos eventos dos cards
 

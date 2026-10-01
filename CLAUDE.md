@@ -586,6 +586,37 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-01 (4) — Performance: tabelas de SDR/Closer contam pelos mesmos eventos dos cards
+
+Continuação da (3). Conferindo SDR por SDR depois do fix, ainda sobrava
+diferença: set/26 Thiago SQL card 23 × tabela 22, Vanessa 19 × 20; em ago/26,
+SAL do Thiago 23 × 21 e da Xayane 24 × 22. Não era mais o ciclo, era a
+**regra**: o card conta por evento (`countStageEvents`) e a tabela
+(`buildSdrRows`/`buildCloserRows`) pela data da etapa gravada na linha do
+deal. Duas diferenças:
+
+- **Trava de funil da SQL só no card.** A tabela contava qualquer
+  `data_agendamento_reuniao_sql`, inclusive agendamento fora do funil do
+  Closer (ex.: "Scale Partner - Manoel", Vanessa, 29/09; Nunzio e Ademir, os
+  artefatos de Prospecção Ativa de 27/08).
+- **Reentrada na etapa.** A linha guarda uma data por ciclo; o card conta o
+  deal de novo no mês em que ele volta à etapa (ex.: Fabiano Mundstein, SQL
+  24/08 e de novo 01/09 no Closer — tabela pôs em agosto, card nos dois).
+
+Fix: `buildSdrRows`/`buildCloserRows` ganharam parâmetro opcional
+`ContagemPorEvento` (eventos + modos + o MESMO `evOpts` dos cards). SQL/Diag/
+SAL (SDR) e Diag/SAL/COF (Closer) passam a sair de `eventsInStage`, creditados
+ao `nome_sdr`/`nome_closer` do ciclo do evento. MQL e vendas continuam pela
+linha (o card também). De graça, a tabela passou a seguir o toggle
+Passagens/Deals únicos, que antes ignorava. Com um SDR filtrado, card = linha.
+Sem filtro, a soma das linhas pode ficar abaixo do card só por negócio sem SDR
+ou com SDR fora do roster — nota da tela reescrita.
+
+Set/26 Inbound, card = tabela: Sarah 70/42/23, Xayane 25/24/16, Thiago
+23/14/10, Vanessa 19/6/1 (SQL/Diag/SAL). `sdrRowsHoje`/`closerRowsHoje` (anel
+"Hoje" do popup) seguem pela linha: os eventos só vêm carregados para o
+período selecionado.
+
 ### 2026-10-01 (3) — Performance/SDR: cards e tabela divergiam com filtro de SDR
 
 Junior filtrou set/26, Inbound, SDR = Xayane: cards SQL 27 / Diag 25 / SAL 17

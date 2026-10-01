@@ -429,6 +429,12 @@ export function PerformanceVendas() {
     [safra, noEscopo],
   )
 
+  // Tabelas por pessoa contam pelos mesmos eventos dos cards.
+  const contagem = useMemo(
+    () => ({ eventos, modes: viewModes, opts: evOpts }),
+    [eventos, viewModes, evOpts],
+  )
+
   const strip = useMemo(() => ({
     mql: countStage(scoped, 'MQL', win, viewModes),
     // denominador por evento p/ casar com tentando/ce/sql, que também são countStageEvents
@@ -478,12 +484,12 @@ export function PerformanceVendas() {
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
   // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".
   const sdrRows: SdrRow[] = useMemo(
-    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster),
-    [scoped, win, mesUnico, metasPessoa, roster],
+    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster, contagem),
+    [scoped, win, mesUnico, metasPessoa, roster, contagem],
   )
   const closerRows: CloserRow[] = useMemo(
-    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode),
-    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode],
+    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode, contagem),
+    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode, contagem],
   )
   // Sufixo dos rótulos de venda quando o toggle está em Unidades — mesmo padrão da Visão Macro.
   const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
@@ -806,7 +812,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Os cards usam a mesma contagem por evento da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
+            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR fora da equipe atual, não entra nela, então a soma das linhas pode ficar abaixo do card. Com um SDR filtrado, os dois batem.
           </p>
 
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />

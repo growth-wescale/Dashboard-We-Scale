@@ -124,8 +124,8 @@ export interface TicketFaixa extends TicketTier {
 
 export const TICKET_FAIXAS: readonly TicketFaixa[] = [
   { tier: 1, mult: 1.0, label: 'até R$ 200 mil', marcas: ['B2Case', 'Eletrovias'] },
-  { tier: 2, mult: 1.25, label: 'R$ 201 mil – 500 mil', marcas: ['Inpot', 'Lisô Laser'] },
-  { tier: 3, mult: 1.5, label: 'R$ 501 mil – 1 milhão', marcas: ['Oral Unic'] },
+  { tier: 2, mult: 1.5, label: 'R$ 201 mil – 500 mil', marcas: ['Inpot', 'Lisô Laser'] },
+  { tier: 3, mult: 1.75, label: 'R$ 501 mil – 1 milhão', marcas: ['Oral Unic'] },
   { tier: 4, mult: 2.0, label: 'acima de R$ 1 milhão', marcas: ['Viva'] },
 ]
 

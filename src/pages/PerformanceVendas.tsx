@@ -9,6 +9,7 @@ import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
 import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { TrapFunnel } from '@/components/ui/TrapFunnel'
+import { ReunioesMeetroxSection } from '@/components/ui/ReunioesMeetroxSection'
 import type { FunnelStage } from '@/components/ui/TrapFunnel'
 import { SCard } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
@@ -18,6 +19,8 @@ import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
 import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
+import { useReunioesCloser } from '@/hooks/useReunioesCloser'
+import { filtrarReunioes } from '@/lib/reunioesCloser'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
 import type { SdrRow, CloserRow } from '@/lib/performanceRows'
 import { buildPersonMetaRows, buildPersonSimplesRows, buildPersonPeriodoRows, fracaoMetaMensal } from '@/lib/metaBreakdown'
@@ -394,6 +397,7 @@ export function PerformanceVendas() {
   const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
   const { data: eventos } = useFunilEventos({ enabled: true, origem })
   const { data: roster } = useRosterVendas()
+  const { data: reunioesBase, loading: reunioesLoading, error: reunioesError } = useReunioesCloser()
 
   const scope = useMemo(
     () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
@@ -406,6 +410,16 @@ export function PerformanceVendas() {
     [ranges],
   )
   const noEscopo = useMemo(() => noEscopoDoCiclo(scoped), [scoped])
+
+  // Reuniões do MeetRox (aba Closer): pela data da reunião, com os mesmos
+  // filtros da barra — Closer = quem conduziu; marca/fonte/SDR do negócio.
+  const reunioes = useMemo(
+    () => filtrarReunioes(reunioesBase, {
+      origem, marcas: marcasParaEscopo, consolidado: todasSelecionadas,
+      fontes, subFontes, sdrs, closers, win, eventSource: viewModes.eventSource,
+    }),
+    [reunioesBase, origem, marcasParaEscopo, todasSelecionadas, fontes, subFontes, sdrs, closers, win, viewModes.eventSource],
+  )
   const safra = useMemo(
     () => (viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null),
     [scoped, win, viewModes.funnelView],
@@ -750,7 +764,7 @@ export function PerformanceVendas() {
           sdrsDisponiveis={opcoes.sdrs}
           closersDisponiveis={opcoes.closers}
         />
-        <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance" />
+        <QueryErrorBanner errors={[rowsError, metasError, reunioesError]} scope="Performance" />
         <FiltrosObrigatoriosAviso faltando={faltandoObrigatorio} />
       </div>
     )
@@ -784,7 +798,7 @@ export function PerformanceVendas() {
         closersDisponiveis={opcoes.closers}
       />
 
-      <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance" />
+      <QueryErrorBanner errors={[rowsError, metasError, reunioesError]} scope="Performance" />
 
       <TabsBar current={tab} onChange={setTab} />
 
@@ -887,6 +901,9 @@ export function PerformanceVendas() {
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} nota={notaConversao} />
           </div>
 
+          <ReunioesMeetroxSection reunioes={reunioes} loading={reunioesLoading} origem={origem}
+            subtitulo={`${scopeLabel} · ${subtitlePeriodo}`} accent={CLOSER_ACCENT} />
+
           <div style={{ marginTop: 32 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)' }}>
@@ -916,7 +933,7 @@ export function PerformanceVendas() {
       )}
 
       <div style={{ marginTop: 40, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center' }}>
-        {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>
+        {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>{tab === 'closer' && <> + <code>vw_closer_reunioes</code> (MeetRox)</>}
       </div>
 
       <StageDealsDrawer

@@ -373,6 +373,21 @@ export function dealKey(r: { id_lead?: unknown; ciclo?: unknown }): string {
   return `${String(r.id_lead ?? '')}::${String(r.ciclo ?? 1)}`
 }
 
+/**
+ * Filtro de evento pelo recorte da barra: o evento só conta se o CICLO dele
+ * (deal + ciclo) estiver entre as linhas filtradas de `vw_funil_vendas`.
+ *
+ * Por ciclo, não por deal: SDR, Closer e Fonte são atributos do ciclo. Um deal
+ * reciclado pode ter o ciclo 1 da Xayane e o ciclo 3 da Sarah — casando só por
+ * `id_lead`, os eventos do ciclo da Sarah entravam no card da Xayane (set/26:
+ * SQL 27 no card × 25 na tabela e no popup). Sem filtro de pessoa não muda nada:
+ * medido em Inbound desde jul/26, todo evento tem o ciclo dele na view.
+ */
+export function noEscopoDoCiclo(scoped: FunnelRow[]): (e: FunnelEventRow) => boolean {
+  const chaves = new Set(scoped.map(r => dealKey(r)))
+  return e => chaves.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))
+}
+
 /** Ciclos cuja safra (MQL) cai na janela — base do modo coorte. */
 export function cohortKeys(
   rows: FunnelRow[],
@@ -423,7 +438,7 @@ export interface FunnelEventRow {
    * Marca do DEAL (deal_snapshot, com fallback do funil Odonto Legacy) — não a
    * marca do evento, que não é confiável. Só serve para a regra de funil
    * obrigatório de "Reunião Agendada SQL"; o recorte por marca continua vindo
-   * de `vw_funil_vendas` (idsEscopo).
+   * de `vw_funil_vendas` (noEscopoDoCiclo).
    */
   marca_deal?: string | null
   /**
@@ -581,11 +596,10 @@ export function dealsInStage(
 
   const byKey = new Map(scoped.map(r => [dealKey(r), r]))
   const safra = modes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
-  const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
   const eventosNaEtapa = eventsInStage(events, stage, win, modes, {
     cohortIds: safra,
-    extra: e => idsEscopo.has(String(e.id_deal)),
+    extra: noEscopoDoCiclo(scoped),
   })
 
   const out: StageDeal[] = []
@@ -618,11 +632,10 @@ export function repeatedDealsInStage(
 
   const byKey = new Map(scoped.map(r => [dealKey(r), r]))
   const safra = modes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
-  const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
 
   const passagens = eventsInStage(events, stage, win, { ...modes, eventSource: 'passages' }, {
     cohortIds: safra,
-    extra: e => idsEscopo.has(String(e.id_deal)),
+    extra: noEscopoDoCiclo(scoped),
   })
 
   const vistos = new Set<string>()

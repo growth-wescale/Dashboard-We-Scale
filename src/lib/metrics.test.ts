@@ -16,6 +16,7 @@ import {
   groupRepeatedDeals,
   isInWindow,
   mqlWord,
+  noEscopoDoCiclo,
   repeatedDealsInStage,
   resolveStage,
   STAGE_LABEL,
@@ -835,5 +836,34 @@ describe('etapasDaMarca', () => {
     expect(etapasDaMarca(todas, ['Inpot'])).toEqual([...todas])
     expect(etapasDaMarca(todas, ['Odonto Scale', 'Inpot'])).toEqual([...todas])
     expect(etapasDaMarca(todas, [])).toEqual([...todas])
+  })
+})
+
+// ── Escopo por ciclo ───────────────────────────────────────────────────────
+
+describe('noEscopoDoCiclo', () => {
+  const ev = (ciclo: number): FunnelEventRow => ({
+    id_deal: 'd1', dia: '2026-08-05', etapa_canonica: 'Diagnóstico',
+    id_etapa: 'et-generica', nome_funil: 'Closer', ciclo, rn_deal_etapa_mes: 1,
+  })
+  // Deal reciclado: ciclo 1 da Xayane, ciclo 3 da Sarah. Filtro SDR = Xayane.
+  const linhas = [
+    row({ id_lead: 'd1', ciclo: 1, nome_sdr: 'Xayane' }),
+    row({ id_lead: 'd1', ciclo: 3, nome_sdr: 'Sarah Padilha' }),
+  ]
+  const scoped = linhas.filter(buildScopeFilter({ sdrs: ['Xayane'] }))
+
+  it('evento de outro ciclo do mesmo deal não entra no recorte da pessoa', () => {
+    const noEscopo = noEscopoDoCiclo(scoped)
+    expect(noEscopo(ev(1))).toBe(true)
+    expect(noEscopo(ev(3))).toBe(false)
+  })
+
+  it('card e popup contam o mesmo número', () => {
+    const eventos = [ev(3)]
+    const card = countStageEvents(eventos, 'Diagnóstico', AGOSTO, modes(), { extra: noEscopoDoCiclo(scoped) })
+    const popup = dealsInStage(scoped, eventos, 'Diagnóstico', AGOSTO, modes(), 'performance')
+    expect(card).toBe(0)
+    expect(popup).toHaveLength(0)
   })
 })

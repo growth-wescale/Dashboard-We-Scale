@@ -585,6 +585,21 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-01 (2) — Configuração das Metas: peso digitado não reequilibra mais os outros
+
+O chefe do Junior tentou digitar os % de 3 SDRs e o sistema ia "consertando"
+os outros pra fechar 100% a cada tecla — só conseguiu pela barra. Agora:
+digitar ou usar a setinha muda **só aquela pessoa** (sai `ajustarPeso` da
+tela; a barra continua trocando peso entre os dois vizinhos e sempre fecha
+100%). Soma ≠ 100 → aviso vermelho com quanto passou/faltou
+(`textoSomaPesos`), em quem a pessoa mexeu por último e o % de cada um;
+campos e barra em vermelho (o que falta aparece tracejado, a barra não
+arrasta até fechar) e **"Próxima marca" travado**. Closer com peso fora da
+faixa de vendas inteiras (múltiplos de 100 ÷ vendas) vira pendência nova,
+com os nomes de quem está fora. Ambos bloqueiam a publicação. Verificado com
+3 SDRs: 33,33 → Thiago 60 (aviso "126,66% — 26,66 pontos acima", Thiago
+apontado) → Xayane 20 → Sarah 20 (fecha, libera).
+
 ### 2026-10-01 — Campanha de Metas por mês; teste de outubro apagado
 
 **Teste de outubro validado e apagado.** Junior publicou uma V1 de teste de

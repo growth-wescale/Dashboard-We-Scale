@@ -371,6 +371,24 @@ function fmtPeso(n: number): string {
   return (Math.round(n * 100) / 100).toLocaleString('pt-BR')
 }
 
+/** "Os pesos dos SDRs somam 110% — 10 pontos acima de 100%" / "… faltam 10 pontos pra 100%". */
+export function textoSomaPesos(grupo: string, soma: number): string {
+  const dif = Math.abs(soma - 100)
+  return soma > 100
+    ? `Os pesos dos ${grupo} somam ${fmtPeso(soma)}% — ${fmtPeso(dif)} ${dif === 1 ? 'ponto' : 'pontos'} acima de 100%`
+    : `Os pesos dos ${grupo} somam ${fmtPeso(soma)}% — ${dif === 1 ? 'falta' : 'faltam'} ${fmtPeso(dif)} ${dif === 1 ? 'ponto' : 'pontos'} pra 100%`
+}
+
+/** Passo dos pesos de Closer (100 ÷ vendas), ou null sem vendas. */
+export function faixaCloser(vendas: number | null): number | null {
+  return vendas != null && vendas > 0 ? 100 / Math.round(vendas) : null
+}
+
+export function pesoNaFaixa(peso: number, faixa: number): boolean {
+  const k = peso / faixa
+  return Math.abs(k - Math.round(k)) < 0.001
+}
+
 export function pendenciasMarca(m: MarcaConfig, funil: FunilCalculado = calcularFunil(m)): Pendencia[] {
   const p: Pendencia[] = []
   if (m.vendas == null) p.push({ secao: 'base', texto: 'Informe as vendas previstas do mês' })
@@ -387,9 +405,14 @@ export function pendenciasMarca(m: MarcaConfig, funil: FunilCalculado = calcular
   if (closers.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um Closer' })
   if (sdrComMeta && sdrs.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um SDR — ou marque as etapas de SDR como sem meta' })
   const somaSdr = sdrs.reduce((s, x) => s + x.peso, 0)
-  if (sdrs.length > 0 && Math.abs(somaSdr - 100) > 0.01) p.push({ secao: 'time', texto: `Os pesos dos SDRs somam ${fmtPeso(somaSdr)}% — precisam somar 100%` })
+  if (sdrs.length > 0 && Math.abs(somaSdr - 100) > 0.01) p.push({ secao: 'time', texto: textoSomaPesos('SDRs', somaSdr) })
   const somaCloser = closers.reduce((s, x) => s + x.peso, 0)
-  if (closers.length > 0 && Math.abs(somaCloser - 100) > 0.01) p.push({ secao: 'time', texto: `Os pesos dos Closers somam ${fmtPeso(somaCloser)}% — precisam somar 100%` })
+  if (closers.length > 0 && Math.abs(somaCloser - 100) > 0.01) p.push({ secao: 'time', texto: textoSomaPesos('Closers', somaCloser) })
+  // Closer leva vendas inteiras: com N vendas, o peso anda em múltiplos de 100/N.
+  const faixa = faixaCloser(m.vendas)
+  if (faixa && closers.some(x => !pesoNaFaixa(x.peso, faixa))) {
+    p.push({ secao: 'time', texto: `Com ${m.vendas} ${m.vendas === 1 ? 'venda' : 'vendas'}, os pesos dos Closers precisam ser múltiplos de ${fmtPeso(faixa)}%` })
+  }
   return p
 }
 

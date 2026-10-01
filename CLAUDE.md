@@ -585,6 +585,23 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-01 — Corrida de Performance: ticket das faixas 2 e 3 sobe
+
+Pedido do Junior. Multiplicador de ticket da marca em `TICKET_FAIXAS`
+(`src/lib/corridaPerformance.ts`), fonte única do cálculo e da régua "Como a
+pontuação funciona" da Campanha de Metas:
+
+| Faixa | Marcas | Antes | Agora |
+|---|---|---|---|
+| até R$ 200 mil | B2Case · Eletrovias | 1,0× | 1,0× |
+| R$ 201 mil – 500 mil | Inpot · Lisô Laser | 1,25× | **1,5×** |
+| R$ 501 mil – 1 milhão | Oral Unic | 1,5× | **1,75×** |
+| acima de R$ 1 milhão | Viva | 2,0× | 2,0× |
+
+Vale retroativo pro mês inteiro (a pontuação é recalculada a cada carga, não
+é gravada). Testes de `corridaPerformance.test.ts` atualizados pros valores
+novos.
+
 ### 2026-10-01 (2) — Configuração das Metas: peso digitado não reequilibra mais os outros
 
 O chefe do Junior tentou digitar os % de 3 SDRs e o sistema ia "consertando"

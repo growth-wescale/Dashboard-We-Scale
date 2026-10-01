@@ -67,9 +67,9 @@ describe('ticketTierDe / multTicket', () => {
   it('mapeia as 4 faixas de investimento por marca', () => {
     expect(multTicket('B2Case')).toBe(1.0)
     expect(multTicket('Eletrovias')).toBe(1.0)
-    expect(multTicket('Inpot')).toBe(1.25)
-    expect(multTicket('Lisô Laser')).toBe(1.25)
-    expect(multTicket('Oral Unic')).toBe(1.5)
+    expect(multTicket('Inpot')).toBe(1.5)
+    expect(multTicket('Lisô Laser')).toBe(1.5)
+    expect(multTicket('Oral Unic')).toBe(1.75)
     expect(multTicket('Viva')).toBe(2.0)
   })
 
@@ -82,10 +82,10 @@ describe('ticketTierDe / multTicket', () => {
   })
 
   it('tolera acento e caixa', () => {
-    expect(multTicket('lisô laser')).toBe(1.25)
-    expect(multTicket('ORAL UNIC')).toBe(1.5)
+    expect(multTicket('lisô laser')).toBe(1.5)
+    expect(multTicket('ORAL UNIC')).toBe(1.75)
     expect(multTicket('viva')).toBe(2.0)
-    expect(multTicket('  Inpot ')).toBe(1.25)
+    expect(multTicket('  Inpot ')).toBe(1.5)
   })
 
   it('ticketTierDe expõe tier e rótulo junto do multiplicador', () => {
@@ -212,8 +212,8 @@ describe('pontosSdr — multiplicador de ticket por marca', () => {
   it('ticket e fonte multiplicam juntos', () => {
     const rrs = [rr('R', 1, 4, 'Prospecção Ativa', 'Oral Unic')]
     const [linha] = pontosSdr(rrs, ['R'])
-    // 1 × (2 fonte × 1,5 ticket) × 0,8 velocidade = 2,4
-    expect(linha.pontos).toBe(2.4)
+    // 1 × (2 fonte × 1,75 ticket) × 0,8 velocidade = 2,8
+    expect(linha.pontos).toBe(2.8)
   })
 
   it('ticketMedio é a média do multiplicador das unidades da pessoa; 1,0 quem não teve nenhuma', () => {
@@ -222,7 +222,7 @@ describe('pontosSdr — multiplicador de ticket por marca', () => {
       rr('S', 2, 0.4, 'Inbound', 'Oral Unic'),
     ]
     const linhas = pontosSdr(rrs, ['S', 'T'])
-    expect(linhas.find(l => l.nome === 'S')!.ticketMedio).toBe(1.38) // (1,25 + 1,5) / 2, arredondado
+    expect(linhas.find(l => l.nome === 'S')!.ticketMedio).toBe(1.63) // (1,5 + 1,75) / 2, arredondado
     expect(linhas.find(l => l.nome === 'T')!.ticketMedio).toBe(1)
   })
 

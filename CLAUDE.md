@@ -320,7 +320,8 @@ src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
-src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
+src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer) — sem consumidor desde 01/10/2026
+src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
 ```
 
 ### Os controles da barra
@@ -584,6 +585,38 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-01 (3) — Performance/SDR: cards e tabela divergiam com filtro de SDR
+
+Junior filtrou set/26, Inbound, SDR = Xayane: cards SQL 27 / Diag 25 / SAL 17
+com meta 246 / 146 / 92; tabela SQL 25 / Diag 24 / SAL 16 com meta 72. Duas
+causas independentes.
+
+**Contagem: o recorte do evento era por deal, não por ciclo.** Os cards contam
+eventos de `vw_funil_etapas_v2` cujo `id_deal` estivesse entre as linhas
+filtradas (`idsEscopo` = `Set(id_lead)`). SDR/Closer/Fonte são atributos do
+**ciclo**: 2 deals reciclados tinham um ciclo antigo da Xayane e o ciclo de
+set/26 da Sarah Padilha (Leonardo André Rosa: SQL+Diag+SAL; Jorge de Almeida
+Bastos: SQL) — os eventos do ciclo da Sarah entravam no card da Xayane. A
+tabela e o popup da etapa (`dealsInStage`, que já casava por `dealKey`) não
+contavam — por isso o popup listava 25 com o card dizendo 27. Fix:
+`noEscopoDoCiclo(scoped)` em `metrics.ts` casa por `id_lead + ciclo`, usado
+nos cards da Performance, no funil da Visão Macro, em `dealsInStage` e em
+`repeatedDealsInStage`. **Sem filtro de pessoa nada muda**: medido em Inbound
+desde jul/26, todo evento tem o ciclo dele em `vw_funil_vendas` (0 diferença
+por etapa/mês).
+
+**Meta: o card ignorava o filtro de pessoa.** Somava a meta do time por marca
+(`useMetasTimeResumo`); a tabela usa a meta da pessoa. Agora os cards leem
+`metaDoRecorte` (`src/lib/metaRecorte.ts`, testado): marcas selecionadas,
+estreitadas por `sdrs` no lado SDR (SQL/Diag/SAL) e por `closers` no lado
+Closer (COF/vendas/receita) — mesma linha de `DB_Metas_Performance` da tabela.
+Xayane set/26: 246/146/92 → 73/43/27. A coluna Meta SQL da tabela passou a
+arredondar pra cima (`nfCeil`), como o card (72,05 → 73 nos dois).
+
+`useMetasTimeResumo` ficou sem consumidor no app (só o teste dele) — não
+apagado nesta mudança. **Fora do escopo:** o card de Meta da Visão Macro (`useMetaResumo`)
+também ignora filtro de Closer.
 
 ### 2026-10-01 — Corrida de Performance: ticket das faixas 2 e 3 sobe
 

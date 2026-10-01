@@ -16,7 +16,7 @@ import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
-import { useMetasTimeResumo } from '@/hooks/useMetasTimeResumo'
+import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
 import type { SdrRow, CloserRow } from '@/lib/performanceRows'
@@ -25,7 +25,7 @@ import type { PessoasBreakdown } from '@/components/ui/MetaBreakdownDrawer'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
+  buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, noEscopoDoCiclo, sumRevenue, toWindow,
   rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel, etapasDaMarca,
 } from '@/lib/metrics'
 import type { StageKey, StageDeal } from '@/lib/metrics'
@@ -245,7 +245,7 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sql)}</span>
             <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.sal)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaSql > 0 ? nf(r.metaSql) : '—'}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaSql > 0 ? nfCeil(r.metaSql) : '—'}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaSql > 0 ? pct(r.pctAting) : '—'}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.mqlToSql)}</span>
           </div>
@@ -405,7 +405,7 @@ export function PerformanceVendas() {
     () => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))),
     [ranges],
   )
-  const idsEscopo = useMemo(() => new Set(scoped.map(r => String(r.id_lead))), [scoped])
+  const noEscopo = useMemo(() => noEscopoDoCiclo(scoped), [scoped])
   const safra = useMemo(
     () => (viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null),
     [scoped, win, viewModes.funnelView],
@@ -425,8 +425,8 @@ export function PerformanceVendas() {
 
   // ── Contagens por evento (strips) ──────────────────────────────────────────
   const evOpts = useMemo(
-    () => ({ cohortIds: safra, extra: (e: { id_deal: unknown }) => idsEscopo.has(String(e.id_deal)) }),
-    [safra, idsEscopo],
+    () => ({ cohortIds: safra, extra: noEscopo }),
+    [safra, noEscopo],
   )
 
   const strip = useMemo(() => ({
@@ -447,22 +447,21 @@ export function PerformanceVendas() {
   const mesUnico = periodMode === 'mes' && periodValues.length === 1 ? periodValues[0] : null
   const fimJanela = ranges[0]?.end ?? range.end
 
-  const { porMarca: metaTime, error: metaTimeError } = useMetasTimeResumo({ mesesKeys: mesUnico ? [mesUnico] : [] })
-  const metaTimeSel = useMemo(() => {
-    const acc = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0, metaSal: 0 }
-    for (const b of marcasSelecionadas) {
-      const m = b.marca ? metaTime.get(b.marca) : undefined
-      if (!m) continue
-      acc.metaSql += m.metaSql; acc.metaReuniao += m.metaReuniao; acc.metaCof += m.metaCof
-      acc.metaFinanceira += m.metaFinanceira; acc.metaQtdVendas += m.metaQtdVendas; acc.metaSal += m.metaSal
-    }
-    return acc
-  }, [marcasSelecionadas, metaTime])
-
-  // Metas por pessoa (para a coluna % das tabelas).
+  // Metas por pessoa (para a coluna % das tabelas e para os cards).
   const { data: metasPessoa, rows: metasRows, error: metasError } = useMetasPerformance({
     mesKey: mesUnico ?? range.start.slice(0, 7),
   })
+
+  // Meta dos cards: marcas selecionadas, estreitada pelo filtro de SDR/Closer —
+  // mesma base da coluna Meta da tabela, então os dois nunca divergem.
+  const metaTimeSel = useMemo(
+    () => metaDoRecorte(metasRows, {
+      marcas: marcasSelecionadas.flatMap(b => (b.marca ? [b.marca as string] : [])),
+      sdrs,
+      closers,
+    }),
+    [metasRows, marcasSelecionadas, sdrs, closers],
+  )
 
   // Meta de conversão do recorte (marca × pessoa), derivada das metas de volume
   // do mês. Fora de um mês único ela não existe — mesma regra dos cards de meta
@@ -745,7 +744,7 @@ export function PerformanceVendas() {
           sdrsDisponiveis={opcoes.sdrs}
           closersDisponiveis={opcoes.closers}
         />
-        <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
+        <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance" />
         <FiltrosObrigatoriosAviso faltando={faltandoObrigatorio} />
       </div>
     )
@@ -779,7 +778,7 @@ export function PerformanceVendas() {
         closersDisponiveis={opcoes.closers}
       />
 
-      <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
+      <QueryErrorBanner errors={[rowsError, metasError]} scope="Performance" />
 
       <TabsBar current={tab} onChange={setTab} />
 

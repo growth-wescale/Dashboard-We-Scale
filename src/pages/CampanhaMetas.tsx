@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
-import { useMetasClosers, CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
+import { useMetasClosers } from '@/hooks/useMetasClosers'
 import type { CloserMeta } from '@/hooks/useMetasClosers'
-import { useMetasSDRs, type SdrMeta, SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
-import { useHistoricoAtingimento, MESES_HISTORICO_LABELS } from '@/hooks/useHistoricoAtingimento'
+import { useMetasSDRs, type SdrMeta } from '@/hooks/useMetasSDRs'
+import { useHistoricoAtingimento } from '@/hooks/useHistoricoAtingimento'
+import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
 import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
 import { CLOSER_SPEED_TIERS, SDR_SPEED_TIERS, TICKET_FAIXAS } from '@/lib/corridaPerformance'
 import type { LinhaTrilha, SpeedTier } from '@/lib/corridaPerformance'
 import {
-  VOLTAS_F1,
   janelasDasVoltas,
   janelaLabel,
   pctDecorridoJanela,
@@ -18,6 +18,10 @@ import {
   fatorMetaSdr,
   diaDaCampanha,
   voltaDoDia,
+  mesAtualCampanha,
+  mesesDaCampanha,
+  montarCampanha,
+  type VoltaDef,
 } from '@/constants/metasCampanhaF1'
 
 // Ordem canônica das marcas na seção "Metas por Marca" (mesmo recorte que a
@@ -25,10 +29,6 @@ import {
 const MARCAS_FRANQUIA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 'Eletrovias'] as const
 import { money, pct, nf, nfCeil } from '@/lib/format'
 
-const MES_ATIVO = '2026-09-01'
-const MES_LABEL = 'Setembro 2026'
-const MES_SHORT = 'Setembro 2026'
-const DIAS_MES = 30
 const POOL_PREMIOS = 12000
 type Ciclo = 'semanal' | 'mensal'
 
@@ -48,37 +48,63 @@ function moneyCompact(n: number): string {
   return money(n)
 }
 
+/**
+ * A campanha começou em setembro/2026; dá pra escolher qualquer mês de lá até
+ * o atual. Trocar de mês remonta a página (key) — volta selecionada, ciclo e
+ * dados recomeçam do mês novo.
+ */
 export function CampanhaMetas() {
-  const dia = diaDaCampanha()
-  const [ciclo, setCiclo] = useState<Ciclo>('semanal')
-  const [voltasSel, setVoltasSel] = useState<number[]>([voltaDoDia(dia)])
+  const [mes, setMes] = useState(() => mesAtualCampanha())
+  return <CampanhaDoMes key={mes} mes={mes} onMes={setMes} />
+}
 
-  const toggleVolta = (n: number) =>
-    setVoltasSel(prev => {
-      if (prev.includes(n)) {
-        const next = prev.filter(x => x !== n)
-        return next.length ? next : prev // nunca fica vazio
-      }
-      return [...prev, n].sort((a, b) => a - b)
-    })
+function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void }) {
+  // Voltas = semanas da versão ativa do mês (setembro mantém as 4 voltas da campanha).
+  const { semanas, fracoesCloser } = useSemanasCampanha(mes)
+  const campanha = useMemo(() => montarCampanha(mes, semanas), [mes, semanas])
+  const dia = diaDaCampanha(campanha)
+  const [ciclo, setCiclo] = useState<Ciclo>('semanal')
+  // Até alguém escolher, a volta selecionada é a do dia (acompanha as semanas quando carregam).
+  const [voltasEscolhidas, setVoltasSel] = useState<number[] | null>(null)
+  const voltasSel = useMemo(() => {
+    const validas = (voltasEscolhidas ?? []).filter(n => n <= campanha.voltas.length)
+    return validas.length ? validas : [voltaDoDia(campanha, dia)]
+  }, [voltasEscolhidas, campanha, dia])
+
+  const toggleVolta = (n: number) => {
+    const prev = voltasSel
+    if (prev.includes(n)) {
+      const next = prev.filter(x => x !== n)
+      setVoltasSel(next.length ? next : prev) // nunca fica vazio
+    } else {
+      setVoltasSel([...prev, n].sort((a, b) => a - b))
+    }
+  }
 
   // Janela ativa (undefined no Ciclo mensal = mês inteiro).
   const janelas = useMemo(
-    () => (ciclo === 'mensal' ? undefined : janelasDasVoltas(voltasSel)),
-    [ciclo, voltasSel],
+    () => (ciclo === 'mensal' ? undefined : janelasDasVoltas(campanha, voltasSel)),
+    [ciclo, voltasSel, campanha],
   )
-  const rotuloJanela = janelaLabel(ciclo, voltasSel)
-  const notaJanela = ciclo === 'semanal' ? 'meta da(s) volta(s) pela forma da planilha' : undefined
+  const rotuloJanela = janelaLabel(campanha, ciclo, voltasSel)
+  const notaJanela = ciclo === 'semanal'
+    ? (mes === '2026-09-01' ? 'meta da(s) volta(s) pela forma da planilha' : fracoesCloser ? 'meta da(s) volta(s) pela distribuição semanal das vendas' : 'meta da(s) volta(s) rateada pelos dias')
+    : undefined
 
-  const { closers: closersRaw, loading: loadingClosers, metasCadastradas } = useMetasClosers(MES_ATIVO, janelas)
-  const { historico, loading: loadingHist } = useHistoricoAtingimento()
-  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(MES_ATIVO, janelas)
+  const { closers: closersRaw, loading: loadingClosers, metasCadastradas } = useMetasClosers(mes, janelas)
+  const metasSdr = useMetasSDRs(mes)
+  const nomesCloser = useMemo(() => closersRaw.map(c => c.nome), [closersRaw])
+  const pilotos = useMemo(() => ({ sdr: metasSdr.sdrs.map(s => s.nome), closer: nomesCloser }), [metasSdr.sdrs, nomesCloser])
+  const { historico, meses: mesesHistorico, loading: loadingHist } = useHistoricoAtingimento(mes, nomesCloser)
+  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(mes, pilotos, janelas)
+  const visualCloser = useMemo(() => new Map(closersRaw.map(c => [c.nome, { iniciais: c.iniciais, cor: c.cor }])), [closersRaw])
+  const visualSdr = useMemo(() => new Map(metasSdr.sdrs.map(s => [s.nome, { iniciais: s.iniciais, cor: s.cor }])), [metasSdr.sdrs])
 
   // Escala a meta mensal de cada closer pro conjunto de voltas e recomputa o %.
   const closers = useMemo(
     () =>
       closersRaw.map(c => {
-        const fator = ciclo === 'mensal' ? 1 : fatorMetaCloser(c.nome, voltasSel)
+        const fator = ciclo === 'mensal' ? 1 : fatorMetaCloser(campanha, c.nome, voltasSel, fracoesCloser)
         const metaFinanceira = c.metaFinanceira * fator
         const metaQtdVendas = c.metaQtdVendas * fator
         return {
@@ -88,7 +114,7 @@ export function CampanhaMetas() {
           pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
         }
       }),
-    [closersRaw, ciclo, voltasSel],
+    [closersRaw, ciclo, voltasSel, campanha, fracoesCloser],
   )
 
   // Ranking ordenado por % atingimento desc, empate por realizado desc
@@ -112,14 +138,13 @@ export function CampanhaMetas() {
   }, [closers])
 
   const pctTotal = totais.metaFin > 0 ? (totais.realFin / totais.metaFin) * 100 : 0
-  const pctEsperado = pctDecorridoJanela(ciclo, voltasSel, dia)
-  const metaFatorSdr = ciclo === 'mensal' ? 1 : fatorMetaSdr(voltasSel)
-  const diasRestantes = Math.max(0, DIAS_MES - dia)
-  const volta = voltaDoDia(dia)
+  const pctEsperado = pctDecorridoJanela(campanha, ciclo, voltasSel, dia)
+  const metaFatorSdr = ciclo === 'mensal' ? 1 : fatorMetaSdr(campanha, voltasSel)
+  const diasRestantes = Math.max(0, campanha.diasMes - dia)
+  const volta = voltaDoDia(campanha, dia)
 
   // SDR na frente: % da meta de SQL na janela (meta rateada como no Grid),
   // desempate por SQL e depois por RR.
-  const metasSdr = useMetasSDRs(MES_ATIVO)
   const poleSdr = useMemo<PoleSdr | null>(() => {
     const linhas = metasSdr.sdrs.map(s => {
       const real = sdrRealizado.get(s.nome) ?? { sql: 0, rr: 0 }
@@ -135,12 +160,10 @@ export function CampanhaMetas() {
     <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
       <PageTop
         title="Campanha de Metas"
-        subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${DIAS_MES}`}
+        subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${campanha.diasMes}`}
         titleAside={
           <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ padding: '4px 12px', borderRadius: 999, background: 'var(--brand-accent)', color: '#fff', fontSize: 13, fontWeight: 500 }}>
-              {MES_SHORT}
-            </span>
+            <SeletorMesCampanha mes={mes} onMes={onMes} />
             <a href="/gp-setembro/tv" target="_blank" rel="noopener" style={{
               padding: '4px 12px', borderRadius: 999, border: '1px solid var(--ws-border)', background: '#fff',
               color: 'var(--ws-text-primary)', fontSize: 13, fontWeight: 500, textDecoration: 'none', whiteSpace: 'nowrap',
@@ -156,16 +179,17 @@ export function CampanhaMetas() {
           padding: '10px 14px', marginBottom: 16, borderRadius: 8,
           background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 13,
         }}>
-          ⚠️ <b>Metas de setembro ainda não cadastradas em DB_Metas_Performance.</b>
+          ⚠️ <b>Metas de {campanha.nomeMes.toLowerCase()} ainda não publicadas na Configuração das Metas.</b>{' '}
           Ranking, cards de piloto e meta do time aparecem zerados até o time cadastrar.
         </div>
       )}
 
-      <HeroBanner volta={volta} diasRestantes={diasRestantes} pole={pole} poleSdr={poleSdr} />
+      <HeroBanner volta={volta} totalVoltas={campanha.voltas.length} rotuloMes={campanha.rotulo} diasRestantes={diasRestantes} pole={pole} poleSdr={poleSdr} />
 
       <CicloVoltas
         ciclo={ciclo}
         setCiclo={setCiclo}
+        voltas={campanha.voltas}
         voltasSel={voltasSel}
         toggleVolta={toggleVolta}
       />
@@ -186,13 +210,13 @@ export function CampanhaMetas() {
             notaJanela={notaJanela}
           />
 
-          <TrilhasGrid sdr={sdrTrilha} closer={closerTrilha} loading={loadingCorrida} />
+          <TrilhasGrid sdr={sdrTrilha} closer={closerTrilha} visualSdr={visualSdr} visualCloser={visualCloser} loading={loadingCorrida} />
 
           <PilotosGrid closers={closers} historico={historico} loading={loadingClosers || loadingHist} />
         </div>
       </div>
 
-      <HistoricoTable historico={historico} loading={loadingHist} />
+      <HistoricoTable historico={historico} meses={mesesHistorico} cores={visualCloser} loading={loadingHist} />
 
       <SdrsSection
         metas={metasSdr}
@@ -201,9 +225,10 @@ export function CampanhaMetas() {
         loadingCorrida={loadingCorrida}
         metaFator={metaFatorSdr}
         rotuloJanela={rotuloJanela}
+        nomeMes={campanha.nomeMes}
       />
 
-      <MetasMarcaSection />
+      <MetasMarcaSection mes={mes} />
     </div>
   )
 }
@@ -223,8 +248,10 @@ interface PoleSdr {
   pct: number
 }
 
-function HeroBanner({ volta, diasRestantes, pole, poleSdr }: {
+function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, pole, poleSdr }: {
   volta: number
+  totalVoltas: number
+  rotuloMes: string
   diasRestantes: number
   pole: CloserMeta | null
   poleSdr: PoleSdr | null
@@ -246,7 +273,7 @@ function HeroBanner({ volta, diasRestantes, pole, poleSdr }: {
 
       <div style={{ position: 'relative', zIndex: 1, flex: '1 1 280px', minWidth: 0 }}>
         <div style={{ fontSize: 11, fontWeight: 600, color: '#E10600', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-          Fórmula 1 · {MES_LABEL}
+          Fórmula 1 · {rotuloMes}
         </div>
         <h1 style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 8vw, 42px)', fontWeight: 500, color: '#fff', lineHeight: 1.05 }}>
           GP We Scale
@@ -256,7 +283,7 @@ function HeroBanner({ volta, diasRestantes, pole, poleSdr }: {
         </div>
 
         <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <HeroChip dot="#E10600">Volta {volta} de 4</HeroChip>
+          <HeroChip dot="#E10600">Volta {volta} de {totalVoltas}</HeroChip>
           <HeroChip>{diasRestantes} dias para a bandeirada</HeroChip>
           <HeroChip>Pool de prêmios · {moneyCompact(POOL_PREMIOS)}</HeroChip>
         </div>
@@ -339,10 +366,11 @@ function PolePositionCard({ titulo, iniciais, cor, nome, detalhe }: {
 /* ── Toggle Ciclo + Voltas ──────────────────────────────────────────────── */
 
 function CicloVoltas({
-  ciclo, setCiclo, voltasSel, toggleVolta,
+  ciclo, setCiclo, voltas, voltasSel, toggleVolta,
 }: {
   ciclo: Ciclo
   setCiclo: (c: Ciclo) => void
+  voltas: readonly VoltaDef[]
   voltasSel: number[]
   toggleVolta: (v: number) => void
 }) {
@@ -374,7 +402,7 @@ function CicloVoltas({
             voltas · marque várias para o acumulado
           </span>
         )}
-        {VOLTAS_F1.map(v => {
+        {voltas.map(v => {
           const ativo = semanal && voltasSel.includes(v.num)
           return (
             <button key={v.num} onClick={() => toggleVolta(v.num)} disabled={!semanal} style={{
@@ -534,8 +562,6 @@ const TRILHA_CLOSER: TrilhaRegra = {
   unidade: 'unidades',
 }
 
-const SDR_VISUAL = new Map(SDRS_ATIVOS.map(s => [s.nome, { iniciais: s.iniciais, cor: s.cor }]))
-const CLOSER_VISUAL = new Map(CLOSERS_ATIVOS.map(c => [c.nome, { iniciais: c.iniciais, cor: c.cor }]))
 
 /** Dias com no máx. 1 casa ("0,4d", "17d"). */
 function diasFmt(n: number): string {
@@ -572,13 +598,19 @@ function faixaVelocidadeLabel(tiers: readonly SpeedTier[], i: number): string {
   return `até ${diasFmt(atual.limiteDias)} ${diaLabel(atual.limiteDias)}`
 }
 
-function TrilhasGrid({ sdr, closer, loading }: { sdr: LinhaTrilha[]; closer: LinhaTrilha[]; loading: boolean }) {
+function TrilhasGrid({ sdr, closer, visualSdr, visualCloser, loading }: {
+  sdr: LinhaTrilha[]
+  closer: LinhaTrilha[]
+  visualSdr: Map<string, { iniciais: string; cor: string }>
+  visualCloser: Map<string, { iniciais: string; cor: string }>
+  loading: boolean
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <RegraFonteTicketCard />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
-        <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={SDR_VISUAL} loading={loading} />
-        <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={CLOSER_VISUAL} loading={loading} />
+        <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={visualSdr} loading={loading} />
+        <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={visualCloser} loading={loading} />
       </div>
     </div>
   )
@@ -1022,9 +1054,11 @@ function BarraHistorico({ pct: valor, temMeta }: { pct: number; temMeta: boolean
 /* ── Tabela Histórico de resultados ─────────────────────────────────────── */
 
 function HistoricoTable({
-  historico, loading,
+  historico, meses, cores, loading,
 }: {
   historico: ReturnType<typeof useHistoricoAtingimento>['historico']
+  meses: string[]
+  cores: Map<string, { iniciais: string; cor: string }>
   loading: boolean
 }) {
   return (
@@ -1046,7 +1080,7 @@ function HistoricoTable({
           <thead>
             <tr style={{ background: 'var(--ws-bg)', borderTop: '1px solid var(--ws-border)', borderBottom: '1px solid var(--ws-border)' }}>
               <th style={{ ...thHist, textAlign: 'left' }}>PILOTO</th>
-              {MESES_HISTORICO_LABELS.map(m => (
+              {meses.map(m => (
                 <th key={m} style={thHist}>{m}</th>
               ))}
               <th style={{ ...thHist, background: '#F3F4F6' }}>MÉDIA</th>
@@ -1056,7 +1090,7 @@ function HistoricoTable({
             {loading ? (
               <tr><td colSpan={8} style={{ ...tdHist, textAlign: 'center', color: 'var(--ws-text-secondary)' }}>Carregando…</td></tr>
             ) : historico.map(h => {
-              const cor = CLOSERS_ATIVOS.find(c => c.nome === h.nome)?.cor ?? '#888'
+              const cor = cores.get(h.nome)?.cor ?? '#888'
               return (
                 <tr key={h.nome} style={{ borderTop: '1px solid var(--ws-border)' }}>
                   <td style={{ ...tdHist, textAlign: 'left' }}>
@@ -1116,7 +1150,7 @@ function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
 // (SQL e RR) vem de `useCorridaPerformance` — mesma fonte da aba Performance.
 
 function SdrsSection({
-  metas, realizado, trilha, loadingCorrida, metaFator, rotuloJanela,
+  metas, realizado, trilha, loadingCorrida, metaFator, rotuloJanela, nomeMes,
 }: {
   metas: ReturnType<typeof useMetasSDRs>
   realizado: Map<string, SdrRealizado>
@@ -1125,6 +1159,7 @@ function SdrsSection({
   /** Fator da meta mensal do SDR (rateio por dias) para a janela ativa. */
   metaFator: number
   rotuloJanela: string
+  nomeMes: string
 }) {
   const { sdrs, loading: loadingMetas, metasCadastradas } = metas
   const trilhaPorNome = useMemo(() => new Map(trilha.map(t => [t.nome, t])), [trilha])
@@ -1151,7 +1186,7 @@ function SdrsSection({
           padding: '8px 12px', marginBottom: 12, borderRadius: 8,
           background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 12,
         }}>
-          ⚠️ Metas de setembro/2026 dos SDRs ainda não cadastradas em <code>DB_Metas_Performance</code>.
+          ⚠️ Metas de {nomeMes.toLowerCase()} dos SDRs ainda não publicadas na Configuração das Metas.
         </div>
       )}
 
@@ -1267,10 +1302,9 @@ function VelocidadeLinha({ dias, tag, loading }: { dias: number | null; tag: str
 
 /* ── Seção separada: metas por marca (editor) ───────────────────────────── */
 
-function MetasMarcaSection() {
-  const [mesMarcaRef, setMesMarcaRef] = useState<string>('2026-09-01')
-  const { porMarca: metasMap, loading: loadingMetas } = useMetaPorMarca(mesMarcaRef)
-  const { porMarca: realizadoMap, loading: loadingReal } = useRealizadoPorMarca(mesMarcaRef)
+function MetasMarcaSection({ mes }: { mes: string }) {
+  const { porMarca: metasMap, loading: loadingMetas } = useMetaPorMarca(mes)
+  const { porMarca: realizadoMap, loading: loadingReal } = useRealizadoPorMarca(mes)
   const loading = loadingMetas || loadingReal
 
   const linhas = useMemo(() => {
@@ -1294,13 +1328,6 @@ function MetasMarcaSection() {
     { metaQtd: 0, metaFat: 0, realQtd: 0, realFat: 0 },
   ), [linhas])
 
-  const MESES = [
-    { key: '2026-09-01', label: 'Setembro' },
-    { key: '2026-10-01', label: 'Outubro' },
-    { key: '2026-11-01', label: 'Novembro' },
-    { key: '2026-12-01', label: 'Dezembro' },
-  ]
-
   return (
     <div style={{ marginTop: 32 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -1311,17 +1338,6 @@ function MetasMarcaSection() {
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
             Meta e realizado do mês, por marca — mesma meta cadastrada que alimenta o resto da página.
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {MESES.map(m => (
-            <button key={m.key} onClick={() => setMesMarcaRef(m.key)} style={{
-              padding: '6px 12px', borderRadius: 999,
-              border: '1px solid ' + (mesMarcaRef === m.key ? 'var(--brand-accent)' : 'var(--ws-border)'),
-              background: mesMarcaRef === m.key ? 'var(--brand-accent)' : '#fff',
-              color: mesMarcaRef === m.key ? '#fff' : 'var(--ws-text-primary)',
-              fontSize: 12, cursor: 'pointer',
-            }}>{m.label}</button>
-          ))}
         </div>
       </div>
 
@@ -1375,3 +1391,29 @@ const thMarca: React.CSSProperties = {
   color: 'var(--ws-text-secondary)',
 }
 const tdMarca: React.CSSProperties = { padding: '12px 16px' }
+
+/* ── Seletor de mês da campanha ─────────────────────────────────────────── */
+
+const NOMES_MES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+function SeletorMesCampanha({ mes, onMes }: { mes: string; onMes: (m: string) => void }) {
+  const meses = mesesDaCampanha()
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, padding: 3, borderRadius: 999, background: '#fff', border: '1px solid var(--ws-border)' }}>
+      {meses.map(m => {
+        const ativo = m === mes
+        const [ano, mm] = m.split('-').map(Number)
+        return (
+          <button key={m} type="button" onClick={() => onMes(m)} aria-pressed={ativo} style={{
+            padding: '4px 12px', borderRadius: 999, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+            background: ativo ? 'var(--brand-accent)' : 'transparent',
+            color: ativo ? '#fff' : 'var(--ws-text-primary)',
+            fontSize: 13, fontWeight: ativo ? 600 : 400, textTransform: 'capitalize',
+          }}>
+            {NOMES_MES_CURTO[mm - 1]} {ano}
+          </button>
+        )
+      })}
+    </span>
+  )
+}

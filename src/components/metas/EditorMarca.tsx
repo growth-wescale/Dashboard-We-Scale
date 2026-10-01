@@ -6,7 +6,7 @@ import { CampoNumero } from './CampoNumero'
 import { FunilReverso } from './FunilReverso'
 import { TimeMarca } from './TimeMarca'
 import {
-  STATUS_MARCA_UI, bannerStyle, cardStyle, fmtBRL, fmtDec, ghostButtonStyle, infoBoxStyle,
+  STATUS_MARCA_UI, bannerStyle, cardStyle, disabledButtonStyle, fmtBRL, fmtDec, ghostButtonStyle, infoBoxStyle,
   nomeMesMinusculo, pillStyle, primaryButtonStyle, secondaryButtonStyle,
 } from './metasUi'
 import './metas.css'
@@ -34,6 +34,8 @@ export function EditorMarca({ marca, mesReferencia, proximaMarca, onMudar, onVol
   const funil = calcularFunil(marca)
   const pendencias = pendenciasMarca(marca, funil)
   const status = statusMarca(marca, pendencias)
+  // Pesos que não fecham (soma ≠ 100 ou Closer fora da faixa) travam a ida pra próxima marca.
+  const pesosTravam = pendencias.some(p => p.secao === 'time' && p.texto.includes('pesos'))
   const ref = marca.referencia
   const nome = marcaLabel(marca.marca)
   const mes = nomeMesMinusculo(mesReferencia)
@@ -109,7 +111,8 @@ export function EditorMarca({ marca, mesReferencia, proximaMarca, onMudar, onVol
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <button type="button" onClick={onVoltar} style={secondaryButtonStyle}>Voltar para marcas</button>
-        <button type="button" onClick={onProxima} style={{ ...primaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        {pesosTravam && <span style={{ fontSize: 12, color: 'var(--status-risco)', alignSelf: 'center' }}>Feche os pesos do time pra seguir</span>}
+        <button type="button" onClick={onProxima} disabled={pesosTravam} style={{ ...(pesosTravam ? disabledButtonStyle : primaryButtonStyle), display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           {proximaMarca ? <>Próxima marca: {proximaMarca}</> : <>Concluir e ver todas as marcas</>} <ArrowRight size={14} />
         </button>
       </div>

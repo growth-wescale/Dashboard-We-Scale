@@ -585,6 +585,62 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-01 (2) — Configuração das Metas: peso digitado não reequilibra mais os outros
+
+O chefe do Junior tentou digitar os % de 3 SDRs e o sistema ia "consertando"
+os outros pra fechar 100% a cada tecla — só conseguiu pela barra. Agora:
+digitar ou usar a setinha muda **só aquela pessoa** (sai `ajustarPeso` da
+tela; a barra continua trocando peso entre os dois vizinhos e sempre fecha
+100%). Soma ≠ 100 → aviso vermelho com quanto passou/faltou
+(`textoSomaPesos`), em quem a pessoa mexeu por último e o % de cada um;
+campos e barra em vermelho (o que falta aparece tracejado, a barra não
+arrasta até fechar) e **"Próxima marca" travado**. Closer com peso fora da
+faixa de vendas inteiras (múltiplos de 100 ÷ vendas) vira pendência nova,
+com os nomes de quem está fora. Ambos bloqueiam a publicação. Verificado com
+3 SDRs: 33,33 → Thiago 60 (aviso "126,66% — 26,66 pontos acima", Thiago
+apontado) → Xayane 20 → Sarah 20 (fecha, libera).
+
+### 2026-10-01 — Campanha de Metas por mês; teste de outubro apagado
+
+**Teste de outubro validado e apagado.** Junior publicou uma V1 de teste de
+outubro pela Configuração das Metas. Conferido no banco antes de apagar: V1
+ativa (`origem = 'hub'`), virada na terça, 5 semanas, 7 marcas com taxa,
+conversões de setembro (`taxa_origem = 'mes_anterior'`) e time; Oral Unic
+(1 venda) com Oportunidade 3 / SAL 6 / Diagnóstico 9 / SQL 16 / Ligações 520
+— conta conferida etapa a etapa —, espelho em `DB_Metas_Performance` (Douglas
+1 venda/R$ 74.900/3 Oportunidades; Sarah SQL 16/Diag 9/SAL 6) e semana em
+`meta_pessoa_semana` (tudo na S2). Apagado a pedido dele, numa transação com
+as travas `*_imutavel` desligadas só durante o delete: versão, semanas,
+marcas, etapas, pessoas, semana por pessoa, `DB_Metas_Performance`,
+`meta_log` e `meta_mes` de outubro. Backup completo (100 linhas) em
+`_backup_meta_teste_out2026` (RLS ligado, sem policy). Setembro intacto.
+A meta real de outubro entra como V1.
+
+**Campanha de Metas deixou de ser só setembro.** Seletor de mês no título
+(setembro/2026 até o mês atual; abre no corrente). Tudo segue o mês:
+- **Voltas:** setembro mantém as 4 voltas que a campanha usou; de outubro em
+  diante, as semanas da versão ativa (`meta_semana`, com a virada escolhida
+  na Configuração das Metas); mês sem meta usa virada na terça
+  (`montarCampanha` em `constants/metasCampanhaF1.ts`).
+- **Meta da volta (Closer):** setembro pela forma da planilha; depois, pela
+  distribuição semanal das vendas (`meta_pessoa_semana`, `useSemanasCampanha`);
+  sem distribuição, rateio pelos dias. SDR sempre pelos dias.
+- **Pilotos = quem tem meta no mês** em `DB_Metas_Performance` (sem lista
+  fixa — `CLOSERS_ATIVOS`/`SDRS_ATIVOS` saíram). Perfil F1 (foto, cor,
+  escuderia) de quem já tinha fica em `src/lib/pilotos.ts`; piloto novo ganha
+  iniciais, cor estável e a foto de `nome_cargo_foto`. Efeito em setembro: a
+  Vanessa Daniel sai do Grid dos SDRs (não tinha meta no mês).
+- **Histórico:** os 6 meses antes do mês escolhido. **Metas por Marca** segue
+  o mês da página (saiu o seletor próprio). **Faixa do topo (GpStrip)** e
+  **Modo TV** seguem o mês corrente sozinhos.
+
+Verificado: build + 530 testes (`metasCampanhaF1.test.ts` reescrito,
+`pilotos.test.ts` novo) + oxlint; visto renderizado com dado real numa rota
+sem login (removida): setembro idêntico à produção (Bruna 217%, Douglas 207%,
+Jéssica 167%, Aurélio 113%, meta do time R$ 369.400 / 172%, Pole SDR Sarah
+113%, histórico mar–ago); outubro com 5 voltas (1–5 … 27–31 out) e aviso de
+meta não publicada; TV em outubro sem erros.
+
 ### 2026-09-30 (6) — Configuração das Metas: toda meta por pessoa é número inteiro
 
 Junior: "tá ficando número quebrado, isso não existe" — SDR com SQL 12,1 e,

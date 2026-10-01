@@ -494,3 +494,31 @@ describe('metas inteiras por pessoa', () => {
     expect(moverDivisa([50, 50], 0, 80, 50)).toEqual([100, 0])
   })
 })
+
+describe('pesos digitados livremente', () => {
+  it('Closer fora da faixa de vendas inteiras vira pendência', () => {
+    const m: MarcaConfig = {
+      ...inpotOutubro(2),
+      pessoas: [
+        { nome: 'Douglas', funcao: 'Closer', peso: 70 },
+        { nome: 'Bruna', funcao: 'Closer', peso: 30 },
+        { nome: 'Thiago', funcao: 'SDR', peso: 50 },
+        { nome: 'Xayane', funcao: 'SDR', peso: 50 },
+      ],
+    }
+    expect(pendenciasMarca(m).map(p => p.texto)).toContain('Com 2 vendas, os pesos dos Closers precisam ser múltiplos de 50%')
+    const ok = { ...m, pessoas: m.pessoas.map(p => (p.funcao === 'Closer' ? { ...p, peso: 50 } : p)) }
+    expect(pendenciasMarca(ok)).toEqual([])
+  })
+
+  it('soma diferente de 100 diz quanto passou ou faltou', () => {
+    const m: MarcaConfig = { ...inpotOutubro(6), pessoas: [
+      { nome: 'Douglas', funcao: 'Closer', peso: 100 },
+      { nome: 'Thiago', funcao: 'SDR', peso: 60 },
+      { nome: 'Xayane', funcao: 'SDR', peso: 50 },
+    ] }
+    expect(pendenciasMarca(m).map(p => p.texto)).toContain('Os pesos dos SDRs somam 110% — 10 pontos acima de 100%')
+    const menos = { ...m, pessoas: m.pessoas.map(p => (p.nome === 'Xayane' ? { ...p, peso: 30 } : p)) }
+    expect(pendenciasMarca(menos).map(p => p.texto)).toContain('Os pesos dos SDRs somam 90% — faltam 10 pontos pra 100%')
+  })
+})

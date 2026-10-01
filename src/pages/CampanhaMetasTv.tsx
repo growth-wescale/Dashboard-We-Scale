@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMetasClosers, CLOSERS_ATIVOS, type CloserMeta } from '@/hooks/useMetasClosers'
-import { useMetasSDRs, SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
+import { useMetasClosers, type CloserMeta } from '@/hooks/useMetasClosers'
+import { useMetasSDRs } from '@/hooks/useMetasSDRs'
+import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
 import { useCorridaPerformance } from '@/hooks/useCorridaPerformance'
 import type { LinhaTrilha } from '@/lib/corridaPerformance'
 import {
-  VOLTAS_F1,
+  mesAtualCampanha,
+  montarCampanha,
   janelasDasVoltas,
   pctDecorridoJanela,
   fatorMetaCloser,
@@ -16,7 +18,8 @@ import {
 import { money, pct, nfCeil } from '@/lib/format'
 
 /**
- * Campanha de Metas em modo TV (`/gp-setembro/tv`) — tela do time.
+ * Campanha de Metas em modo TV (`/gp-setembro/tv`) — tela do time, sempre no
+ * mês corrente da campanha (vira sozinha na troca de mês).
  *
  * Tela única 16:9, sem menu e sem rolagem, só com o essencial da corrida:
  * meta do time no mês, closers e SDRs na volta atual e a pontuação da
@@ -29,9 +32,6 @@ import { money, pct, nfCeil } from '@/lib/format'
  * hora em hora pra pegar deploy novo sem ninguém mexer na TV.
  */
 
-const MES_ATIVO = '2026-09-01'
-const MES_LABEL = 'Setembro 2026'
-const DIAS_MES = 30
 const RECARREGA_PAGINA_MS = 60 * 60 * 1000
 /** Tempo em cada modo (volta ↔ mês). 15s: cada recorte aparece 2x por minuto. */
 const TROCA_MODO_MS = 15_000
@@ -74,11 +74,14 @@ function useAgora(): Date {
 
 export function CampanhaMetasTv() {
   const agora = useAgora()
-  const dia = diaDaCampanha(agora)
-  const volta = voltaDoDia(dia)
-  const voltaDef = VOLTAS_F1[volta - 1]
+  const mes = mesAtualCampanha(agora)
+  const { semanas, fracoesCloser } = useSemanasCampanha(mes)
+  const campanha = useMemo(() => montarCampanha(mes, semanas), [mes, semanas])
+  const dia = diaDaCampanha(campanha, agora)
+  const volta = voltaDoDia(campanha, dia)
+  const voltaDef = campanha.voltas[volta - 1]
   const voltasSel = useMemo(() => [volta], [volta])
-  const janelas = useMemo(() => janelasDasVoltas(voltasSel), [voltasSel])
+  const janelas = useMemo(() => janelasDasVoltas(campanha, voltasSel), [campanha, voltasSel])
 
   useEffect(() => {
     const t = setTimeout(() => window.location.reload(), RECARREGA_PAGINA_MS)
@@ -96,16 +99,17 @@ export function CampanhaMetasTv() {
   const ehMes = modo === 'mes'
 
   // Os dois recortes carregados juntos: a troca não espera consulta.
-  const { closers: closersMes, loading: loadingMes } = useMetasClosers(MES_ATIVO)
-  const { closers: closersVoltaRaw, loading: loadingVolta } = useMetasClosers(MES_ATIVO, janelas)
-  const { sdrs, loading: loadingSdrs } = useMetasSDRs(MES_ATIVO)
-  const corridaVolta = useCorridaPerformance(MES_ATIVO, janelas)
-  const corridaMes = useCorridaPerformance(MES_ATIVO)
+  const { closers: closersMes, loading: loadingMes } = useMetasClosers(mes)
+  const { closers: closersVoltaRaw, loading: loadingVolta } = useMetasClosers(mes, janelas)
+  const { sdrs, loading: loadingSdrs } = useMetasSDRs(mes)
+  const pilotos = useMemo(() => ({ sdr: sdrs.map(s => s.nome), closer: closersMes.map(c => c.nome) }), [sdrs, closersMes])
+  const corridaVolta = useCorridaPerformance(mes, pilotos, janelas)
+  const corridaMes = useCorridaPerformance(mes, pilotos)
 
   // Na volta, a meta mensal é escalada pra volta (mesma regra da página da campanha).
   const closersVolta = useMemo(() =>
     closersVoltaRaw.map(c => {
-      const f = fatorMetaCloser(c.nome, voltasSel)
+      const f = fatorMetaCloser(campanha, c.nome, voltasSel, fracoesCloser)
       const metaFinanceira = c.metaFinanceira * f
       return {
         ...c,
@@ -114,7 +118,7 @@ export function CampanhaMetasTv() {
         pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
       }
     }),
-  [closersVoltaRaw, voltasSel])
+  [closersVoltaRaw, voltasSel, campanha, fracoesCloser])
 
   const closers = ehMes ? closersMes : closersVolta
   const loadingClosers = ehMes ? loadingMes : loadingVolta
@@ -135,8 +139,8 @@ export function CampanhaMetasTv() {
     { metaFin: 0, metaQtd: 0, realFin: 0, realQtd: 0 },
   ), [closers])
 
-  const fatorSdr = ehMes ? 1 : fatorMetaSdr(voltasSel)
-  const rotuloPeriodo = ehMes ? 'Mês de Setembro' : (voltaDef?.label ?? '')
+  const fatorSdr = ehMes ? 1 : fatorMetaSdr(campanha, voltasSel)
+  const rotuloPeriodo = ehMes ? `Mês de ${campanha.nomeMes}` : (voltaDef?.label ?? '')
   const deQue = ehMes ? 'do mês' : 'da volta'
 
   return (
@@ -155,6 +159,10 @@ export function CampanhaMetasTv() {
       <Cabecalho
         volta={volta}
         voltaLabel={voltaDef?.label ?? ''}
+        totalVoltas={campanha.voltas.length}
+        rotuloMes={campanha.rotulo}
+        nomeMes={campanha.nomeMes}
+        diasMes={campanha.diasMes}
         dia={dia}
         agora={agora}
         modo={modo}
@@ -170,8 +178,8 @@ export function CampanhaMetasTv() {
           loading={loadingClosers}
           {...time}
           titulo={rotuloPeriodo}
-          fimLabel={ehMes ? 'bandeirada · 30 set' : `fim da volta · ${voltaDef?.diaFim ?? ''} set`}
-          pctEsperado={ehMes ? pctDecorridoJanela('mensal', [], dia) : pctDecorridoJanela('semanal', voltasSel, dia)}
+          fimLabel={ehMes ? `bandeirada · ${campanha.diasMes} ${campanha.abrev}` : `fim da volta · ${voltaDef?.diaFim ?? ''} ${campanha.abrev}`}
+          pctEsperado={ehMes ? pctDecorridoJanela(campanha, 'mensal', [], dia) : pctDecorridoJanela(campanha, 'semanal', voltasSel, dia)}
         />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: vh(2), minHeight: 0 }}>
@@ -180,8 +188,13 @@ export function CampanhaMetasTv() {
           </Painel>
           <Painel titulo="SDRs" sub={`${rotuloPeriodo} · realizado / meta ${deQue}`}>
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: vh(1) }}>
-              {SDRS_ATIVOS.map(s => {
-                const meta = sdrs.find(m => m.nome === s.nome)
+              {!loadingSdrs && sdrs.length === 0 && (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXTO_3, fontSize: vh(2) }}>
+                  Metas do mês ainda não publicadas
+                </div>
+              )}
+              {sdrs.map(s => {
+                const meta = s
                 const real = corrida.sdrRealizado.get(s.nome)
                 return (
                   <SdrLinha
@@ -203,8 +216,8 @@ export function CampanhaMetasTv() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vh(2) }}>
-          <Placar titulo="Corrida de Performance · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={SDRS_ATIVOS} loading={corrida.loading} />
-          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="unidades" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
+          <Placar titulo="Corrida de Performance · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={sdrs} loading={corrida.loading} />
+          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="unidades" linhas={corrida.closerTrilha} visual={closersMes} loading={corrida.loading} />
         </div>
       </div>
     </div>
@@ -213,19 +226,19 @@ export function CampanhaMetasTv() {
 
 /* ── Cabeçalho ──────────────────────────────────────────────────────────── */
 
-function Cabecalho({ volta, voltaLabel, dia, agora, modo, rodada, onModo }: {
-  volta: number; voltaLabel: string; dia: number; agora: Date
+function Cabecalho({ volta, totalVoltas, voltaLabel, rotuloMes, nomeMes, diasMes, dia, agora, modo, rodada, onModo }: {
+  volta: number; totalVoltas: number; voltaLabel: string; rotuloMes: string; nomeMes: string; diasMes: number; dia: number; agora: Date
   modo: Modo; rodada: number; onModo: (m: Modo) => void
 }) {
   const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  const restantes = Math.max(0, DIAS_MES - dia)
+  const restantes = Math.max(0, diasMes - dia)
   return (
     <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vh(3) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: vh(1.8) }}>
         <div style={{ width: vh(0.7), height: vh(6.5), background: VERMELHO, borderRadius: 2 }} />
         <div>
           <Link to="/gp-setembro" style={{ textDecoration: 'none', color: VERMELHO, fontSize: vh(1.5), fontWeight: 600, letterSpacing: '.18em', textTransform: 'uppercase' }}>
-            Fórmula 1 · {MES_LABEL}
+            Fórmula 1 · {rotuloMes}
           </Link>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: vh(4.6), fontWeight: 500, lineHeight: 1 }}>
             GP We Scale
@@ -235,10 +248,10 @@ function Cabecalho({ volta, voltaLabel, dia, agora, modo, rodada, onModo }: {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: vh(1.2) }}>
         <ModoBotao ativo={modo === 'volta'} rodada={rodada} onClick={() => onModo('volta')}>
-          Volta {volta} de 4 · {voltaLabel.split('·')[1]?.trim()}
+          Volta {volta} de {totalVoltas} · {voltaLabel.split('·')[1]?.trim()}
         </ModoBotao>
         <ModoBotao ativo={modo === 'mes'} rodada={rodada} onClick={() => onModo('mes')}>
-          Mês de Setembro
+          Mês de {nomeMes}
         </ModoBotao>
         <Chip>{restantes === 0 ? 'Bandeirada!' : `${restantes} ${restantes === 1 ? 'dia' : 'dias'} para a bandeirada`}</Chip>
         <div style={{ marginLeft: vh(1.5), textAlign: 'right' }}>
@@ -393,6 +406,13 @@ function Avatar({ foto, iniciais, cor, tamanho }: { foto?: string; iniciais: str
 /* ── Closers: pódio com barra realizado × meta da volta ─────────────────── */
 
 function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: boolean }) {
+  if (!loading && ranking.length === 0) {
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXTO_3, fontSize: vh(2) }}>
+        Metas do mês ainda não publicadas
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, ranking.length)}, 1fr)`, gap: vh(2), height: '100%' }}>
       {ranking.map((c, i) => {

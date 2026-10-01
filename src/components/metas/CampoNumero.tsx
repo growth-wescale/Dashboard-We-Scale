@@ -26,7 +26,7 @@ function interpretar(texto: string, casas: number): number | null {
  */
 export function CampoNumero({
   valor, onMudar, casas = 0, passo = 1, min = 0, max, prefixo, sufixo, largura = 110, destaque = false,
-  rotulo, placeholder, autoFocus, desabilitado = false,
+  rotulo, placeholder, autoFocus, desabilitado = false, invalido = false,
 }: {
   valor: number | null
   onMudar: (v: number | null) => void
@@ -42,6 +42,8 @@ export function CampoNumero({
   placeholder?: string
   autoFocus?: boolean
   desabilitado?: boolean
+  /** Borda vermelha (valor que não fecha a regra, ex.: soma dos pesos). */
+  invalido?: boolean
 }) {
   const [texto, setTexto] = useState(() => formatar(valor, casas))
   const textoRef = useRef(texto)
@@ -77,7 +79,8 @@ export function CampoNumero({
       {prefixo && <span style={{ fontSize: 13, color: 'var(--ws-text-secondary)' }}>{prefixo}</span>}
       <span className="cm-campo" style={{
         display: 'inline-flex', alignItems: 'stretch', borderRadius: 'var(--radius-sm)',
-        border: '1px solid var(--ws-border)', background: desabilitado ? 'var(--ws-bg)' : 'var(--ws-surface)', overflow: 'hidden',
+        border: `1px solid ${invalido ? 'var(--status-risco)' : 'var(--ws-border)'}`, boxShadow: invalido ? '0 0 0 2px var(--status-risco-bg)' : 'none',
+        background: desabilitado ? 'var(--ws-bg)' : 'var(--ws-surface)', overflow: 'hidden',
       }}>
         <input
           value={texto}

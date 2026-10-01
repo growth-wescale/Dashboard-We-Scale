@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import { emJanelas, janelasKey, type Janela } from '@/constants/metasCampanhaF1'
 import { saleUnits } from '@/lib/metrics'
+import { nomesComMeta, perfilPiloto } from '@/lib/pilotos'
+import { useRosterVendas } from '@/hooks/useRosterVendas'
 
 /**
- * Metas mensais dos closers da campanha F1 GP We Scale. Filtra
- * `DB_Metas_Performance` pela lista canônica de 4 closers ativos, agrega
- * meta_financeira e meta_qtd_vendas somando todas as marcas de cada closer no
- * mês. Também busca realizado (vendas) por closer via `vw_funil_vendas`.
+ * Metas mensais dos closers da Campanha de Metas. Os pilotos do mês são quem
+ * tem meta de Closer em `DB_Metas_Performance` naquele mês (não uma lista
+ * fixa); agrega meta_financeira e meta_qtd_vendas somando todas as marcas de
+ * cada closer. Perfil (foto/cor/escuderia) em `src/lib/pilotos.ts`. Também busca realizado (vendas) por closer via `vw_funil_vendas`.
  *
  * `janelas` (opcional) recorta o REALIZADO para a união desses intervalos de
  * data (usado pelo seletor de voltas da Campanha de Metas). A meta continua
@@ -19,23 +21,6 @@ import { saleUnits } from '@/lib/metrics'
  * meta por marca da franqueadora — dimensão diferente, agrega por marca em
  * vez de por pessoa).
  */
-
-/** Lista canônica de closers ativos (setembro/2026). Ver
- *  `feedback_closers_ativos.md`. Filtragem por nome protege contra ruído no
- *  cadastro de DB_Metas_Performance (ex.: Vanessa Daniel aparece como Closer
- *  em ago/2026 mas é SDR na realidade). */
-export const CLOSERS_ATIVOS: ReadonlyArray<{
-  nome: string
-  iniciais: string
-  cor: string
-  foto?: string
-  escuderia?: string
-}> = [
-  { nome: 'Jéssica',         iniciais: 'JES', cor: '#00D2BE', foto: '/assets/vendedores/jessica.png', escuderia: 'Mercedes AMG Petronas' },
-  { nome: 'Douglas',         iniciais: 'DOU', cor: '#006F62', foto: '/assets/vendedores/douglas.png', escuderia: 'Aston Martin' },
-  { nome: 'Aurélio Briano',  iniciais: 'AUR', cor: '#005AFF', foto: '/assets/vendedores/aurelio.png', escuderia: 'Williams Racing' },
-  { nome: 'Bruna',           iniciais: 'BRU', cor: '#FF8000', foto: '/assets/vendedores/bruna.png', escuderia: 'McLaren' },
-]
 
 export interface CloserMeta {
   nome: string
@@ -67,8 +52,6 @@ interface RawVendaRow {
 function normalizeNome(s: string): string {
   return s.trim().toLowerCase()
 }
-
-const CLOSER_NOMES_SET = new Set(CLOSERS_ATIVOS.map(c => normalizeNome(c.nome)))
 
 async function fetchMetasCloser(mesRef: string): Promise<{ rows: RawMetaRow[]; error: string | null }> {
   const { data, error } = await supabaseVendas
@@ -105,49 +88,47 @@ async function fetchRealizadoCloser(mesRef: string): Promise<{ rows: RawVendaRow
 function aggregate(
   metasRows: RawMetaRow[],
   vendasRows: RawVendaRow[],
+  fotos: ReadonlyMap<string, string | null>,
   janelas?: readonly Janela[],
 ): CloserMeta[] {
-  // Agrega metas por nome_colaborador (soma todas as marcas)
+  // Pilotos do mês = quem tem meta de Closer no mês (soma todas as marcas).
+  const nomes = nomesComMeta(metasRows, 'Closer')
+  const chaves = new Set(nomes.map(normalizeNome))
+
   const metasMap = new Map<string, { fin: number; qtd: number }>()
   for (const r of metasRows) {
-    if (!r.nome_colaborador) continue
+    if (!r.nome_colaborador || r.funcao !== 'Closer') continue
     const key = normalizeNome(r.nome_colaborador)
-    if (!CLOSER_NOMES_SET.has(key)) continue
     const cur = metasMap.get(key) ?? { fin: 0, qtd: 0 }
     cur.fin += Number(r.meta_financeira) || 0
     cur.qtd += Number(r.meta_qtd_vendas) || 0
     metasMap.set(key, cur)
   }
 
-  // Agrega realizado por nome_closer
   const realizadoMap = new Map<string, { fin: number; qtd: number }>()
   for (const r of vendasRows) {
     if (!r.nome_closer) continue
     if (!emJanelas(r.data_venda, janelas)) continue
     const key = normalizeNome(r.nome_closer)
-    if (!CLOSER_NOMES_SET.has(key)) continue
+    if (!chaves.has(key)) continue
     const cur = realizadoMap.get(key) ?? { fin: 0, qtd: 0 }
     cur.fin += Number(r.valor_contrato) || 0
     cur.qtd += saleUnits(r)
     realizadoMap.set(key, cur)
   }
 
-  return CLOSERS_ATIVOS.map(c => {
-    const key = normalizeNome(c.nome)
+  return nomes.map(nome => {
+    const key = normalizeNome(nome)
+    const perfil = perfilPiloto(nome, fotos.get(nome))
     const meta = metasMap.get(key) ?? { fin: 0, qtd: 0 }
     const real = realizadoMap.get(key) ?? { fin: 0, qtd: 0 }
-    const pct = meta.fin > 0 ? (real.fin / meta.fin) * 100 : 0
     return {
-      nome: c.nome,
-      iniciais: c.iniciais,
-      cor: c.cor,
-      foto: c.foto,
-      escuderia: c.escuderia,
+      ...perfil,
       metaFinanceira: meta.fin,
       metaQtdVendas: meta.qtd,
       realizado: real.fin,
       realizadoQtd: real.qtd,
-      pctAtingimento: pct,
+      pctAtingimento: meta.fin > 0 ? (real.fin / meta.fin) * 100 : 0,
     }
   })
 }
@@ -191,11 +172,13 @@ export function useMetasClosers(mesRef: string, janelas?: readonly Janela[]): Us
   }, [fetchAll])
 
   // Trocar de volta só re-agrega (não refetcha) — a query já traz o mês todo.
+  const { data: roster } = useRosterVendas()
+  const fotos = useMemo(() => new Map(roster.map(r => [r.nome, r.foto])), [roster])
   const jKey = janelasKey(janelas)
   const closers = useMemo(
-    () => aggregate(rawMetas, rawVendas, janelas),
+    () => aggregate(rawMetas, rawVendas, fotos, janelas),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rawMetas, rawVendas, jKey],
+    [rawMetas, rawVendas, fotos, jKey],
   )
   const metasCadastradas = useMemo(
     () => closers.some(c => c.metaFinanceira > 0 || c.metaQtdVendas > 0),

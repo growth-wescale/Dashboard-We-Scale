@@ -615,9 +615,10 @@ deduplicados da base; atribuições por campanha/conjunto/anúncio continuam
 estimativas quando não há chave confiável entre mídia e lead.
 
 Verificação local: build aprovado, 607 testes aprovados (5 novos para períodos
-e divisão segura), lint sem erros e `git diff --check` aprovado. Produção e
-sessão autenticada ainda não verificadas; PR ainda a abrir. PRs antigos #10 e
-#25 deliberadamente ignorados, conforme orientação do usuário.
+e divisão segura), lint sem erros e `git diff --check` aprovado. Commit
+`65ac358`, [PR #218](https://github.com/growth-wescale/Dashboard-We-Scale/pull/218).
+Produção e sessão autenticada ainda não verificadas; merge/deploy pendentes.
+PRs antigos #10 e #25 deliberadamente ignorados, conforme orientação do usuário.
 
 ### 2026-10-02 (2) — Motivo de perda no dashboard vem do EVENTO, não do deal
 

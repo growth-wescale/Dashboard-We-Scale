@@ -602,6 +602,21 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-02 (7) — Octógono vira disputa coletiva
+
+Por decisão de Gabriel, a campanha deixa de representar lutas 1×1. Visão Geral
+e Campanha de Metas agora mostram todos os Closers em um ranking coletivo e
+todos os SDRs em outro, com posição, realizado/meta, barra de progresso e líder.
+O modo TV também anuncia “Todos no octógono” e lista o grupo, sem pares, corners
+ou “VS”. Cargos continuam separados; classificação segue percentual da própria
+meta, com realizado como desempate. Métricas, metas, rounds, abertura, S&OP e
+demais páginas não foram alterados.
+
+Branch `codex/disputa-todos-contra-todos`, baseada na `main` em `024601d`.
+Commit `62473b5`, [PR #222](https://github.com/growth-wescale/Dashboard-We-Scale/pull/222),
+com os dois checks aprovados. Build, lint, 607 testes e diff check passaram.
+Merge/deploy e QA visual autenticado pendentes.
+
 ### 2026-10-02 (6) — Top 5 criativos por marca arquivados
 
 Recorte autorizado: cinco anúncios Meta de maior investimento por marca nos

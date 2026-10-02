@@ -103,16 +103,16 @@ html[data-gp="ufc"] [data-oct-theme="true"][data-brand="viva"] { --brand-accent:
 
 .oct-fights { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(290px,.8fr); gap: 18px; margin-top: 18px; }
 .oct-fights__arena { background: #0B0B0D; color: #fff; border-radius: 18px; padding: 24px; min-height: 257px; border-top: 2px solid #D4AF37; }
-.oct-fights__versus { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: end; gap: 14px; margin: 24px 0 20px; }
-.oct-fights__versus > strong { color: #D4AF37; font: 600 20px var(--font-display); }
-.oct-fights__person { min-width: 0; border-top: 3px solid #C81719; padding-top: 11px; }
-.oct-fights__person--azul { border-color: #2461D8; text-align: right; }
-.oct-fights__person small { display: block; font-size: 10px; color: rgba(255,255,255,.52); text-transform: uppercase; letter-spacing: .1em; }
-.oct-fights__person b { display: block; margin-top: 5px; font: 600 clamp(18px,2.3vw,29px)/1.05 var(--font-display); text-transform: uppercase; overflow-wrap: anywhere; }
-.oct-fights__score { display: grid; grid-template-columns: minmax(0,1fr) 105px minmax(0,1fr); gap: 10px; align-items: center; border-top: 1px solid rgba(255,255,255,.12); padding: 9px 0; }
-.oct-fights__score b { font-weight: 600; font-size: 14px; }
-.oct-fights__score b:last-child { text-align: right; }
-.oct-fights__score span { color: rgba(255,255,255,.56); text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.oct-field { margin-top: 17px; }
+.oct-field__row { display: grid; grid-template-columns: 36px minmax(135px,.9fr) minmax(100px,1.35fr) 62px; gap: 12px; align-items: center; min-height: 53px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,.12); }
+.oct-field__position { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; color: rgba(255,255,255,.55); font-size: 10px; font-weight: 800; }
+.oct-field__position.is-leader { color: #090909; border-color: #E9C866; background: #D4AF37; box-shadow: 0 0 18px rgba(212,175,55,.28); }
+.oct-field__identity { min-width: 0; }
+.oct-field__identity b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px var(--font-display); text-transform: uppercase; }
+.oct-field__identity small { display: block; margin-top: 3px; color: rgba(255,255,255,.48); font-size: 10px; }
+.oct-field__track { height: 7px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.12); }
+.oct-field__track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#8B691A,#E9C866); }
+.oct-field__row > strong { color: #E9C866; text-align: right; font-size: 13px; }
 .oct-fights__rule { color: rgba(255,255,255,.52); font-size: 11px; margin-top: 10px; }
 .oct-fights__state { color: rgba(255,255,255,.7); padding: 52px 0; font-size: 14px; }
 .oct-fights__list { background: var(--ws-surface); border: 1px solid var(--ws-border); border-radius: 18px; overflow: hidden; }
@@ -125,6 +125,11 @@ html[data-gp="ufc"] [data-oct-theme="true"][data-brand="viva"] { --brand-accent:
 .oct-fights__bout span { display: flex; flex-wrap: wrap; gap: 4px 10px; justify-content: space-between; align-items: center; }
 .oct-fights__bout b { font-size: 12px; font-weight: 600; }
 .oct-fights__bout em { font-size: 11px; font-style: normal; color: #8B691A; font-weight: 700; }
+.oct-fights__leader { margin: 14px 17px 5px; padding: 16px; border: 1px solid rgba(212,175,55,.42); border-radius: 12px; background: color-mix(in srgb, #D4AF37 8%, var(--ws-surface)); }
+.oct-fights__leader small, .oct-fights__leader b, .oct-fights__leader span { display: block; }
+.oct-fights__leader small { color: #8B691A; font-size: 9px; font-weight: 800; letter-spacing: .13em; }
+.oct-fights__leader b { margin-top: 7px; font: 600 20px var(--font-display); text-transform: uppercase; }
+.oct-fights__leader span { margin-top: 3px; color: var(--ws-text-secondary); font-size: 11px; }
 .oct-fights__list > p { color: var(--ws-text-secondary); padding: 9px 17px 16px; font-size: 11px; }
 
 /* Abertura: movimento, enquadramento e tempos do vídeo do UI kit aprovado. */
@@ -161,12 +166,12 @@ html[data-gp="ufc"] [data-oct-theme="true"][data-brand="viva"] { --brand-accent:
 .ufc-ghost:hover { background: rgba(255,255,255,.15); color: #fff; }
 .ufc-ghost.on { background: #D4AF37; color: #0B0B0D; }
 
-.oct-tv-duels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5vh; min-height: 0; }
-.oct-tv-duels > div { min-width: 0; display: flex; align-items: center; gap: 1.6vh; padding: .9vh 1.5vh; border: 1px solid rgba(212,175,55,.35); border-left: .4vh solid #D4AF37; border-radius: 1vh; background: rgba(12,12,15,.84); }
-.oct-tv-duels small { flex: 0 0 auto; color: #D4AF37; font-size: 1.35vh; font-weight: 700; letter-spacing: .08em; }
-.oct-tv-duels strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.75vh; }
-.oct-tv-duels span { flex: 0 0 auto; margin-left: auto; color: rgba(255,255,255,.7); font-size: 1.4vh; }
+.oct-tv-field { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5vh; min-height: 0; }
+.oct-tv-field > div { min-width: 0; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 1.6vh; padding: .9vh 1.5vh; border: 1px solid rgba(212,175,55,.35); border-left: .4vh solid #D4AF37; border-radius: 1vh; background: rgba(12,12,15,.84); }
+.oct-tv-field small { color: #D4AF37; font-size: 1.35vh; font-weight: 700; letter-spacing: .08em; }
+.oct-tv-field strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.6vh; }
+.oct-tv-field span { color: rgba(255,255,255,.7); font-size: 1.35vh; white-space: nowrap; }
 
 @media (max-width: 1000px) { .oct-fights { grid-template-columns: 1fr; } }
-@media (max-width: 650px) { .oct-overview { padding: 16px var(--container-pad-mobile) 0; } .oct-stage { min-height: 275px; } .oct-fights__arena { padding: 18px; } .oct-fights__score { grid-template-columns: minmax(0,1fr) 75px minmax(0,1fr); } .oct-fights__score b { font-size: 12px; } .oct-strip, .oct-page-banner { margin: 12px 12px 0; } .oct-page-banner span { display: none; } }
+@media (max-width: 650px) { .oct-overview { padding: 16px var(--container-pad-mobile) 0; } .oct-stage { min-height: 275px; } .oct-fights__arena { padding: 18px; } .oct-field__row { grid-template-columns: 32px minmax(0,1fr) 54px; } .oct-field__track { grid-column: 2 / 4; } .oct-strip, .oct-page-banner { margin: 12px 12px 0; } .oct-page-banner span { display: none; } }
 @media (prefers-reduced-motion: reduce) { .ufv *, .oct-strip *, .oct-stage *, .oct-fights * { animation-duration: .01ms !important; transition-duration: .01ms !important; animation-delay: 0s !important; } }

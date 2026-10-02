@@ -16,7 +16,7 @@ import {
   voltaDoDia,
 } from '@/constants/metasCampanhaF1'
 import { money, pct, nfCeil } from '@/lib/format'
-import { duelosOctogono, rankingOctogono } from '@/lib/octogono'
+import { rankingOctogono } from '@/lib/octogono'
 
 /**
  * Campanha de Metas em modo TV (`/gp-setembro/tv`) — tela do time, sempre no
@@ -151,7 +151,7 @@ export function CampanhaMetasTv() {
   const fatorSdr = ehMes ? 1 : fatorMetaSdr(campanha, voltasSel)
   const rotuloPeriodo = ehMes ? `Mês de ${campanha.nomeMes}` : (voltaDef?.label ?? '').replace('Volta', 'Round')
   const deQue = ehMes ? 'do mês' : 'do round'
-  const duelos = useMemo(() => duelosOctogono(rankingOctogono(closers, sdrs, corrida.sdrRealizado, fatorSdr)), [closers, sdrs, corrida.sdrRealizado, fatorSdr])
+  const rankingsOctogono = useMemo(() => rankingOctogono(closers, sdrs, corrida.sdrRealizado, fatorSdr), [closers, sdrs, corrida.sdrRealizado, fatorSdr])
 
   return (
     <div className="oct-tv-page" style={{
@@ -195,12 +195,13 @@ export function CampanhaMetasTv() {
           pctEsperado={ehMes ? pctDecorridoJanela(campanha, 'mensal', [], dia) : pctDecorridoJanela(campanha, 'semanal', voltasSel, dia)}
         />
 
-        <div className="oct-tv-duels" aria-label="Confrontos entre vendedores">
+        <div className="oct-tv-field" aria-label="Disputa geral do time">
           {(['Closer', 'SDR'] as const).map(cargo => {
-            const duelo = duelos.find(d => d.cargo === cargo)
-            return <div key={cargo}><small>{cargo === 'Closer' ? 'CLOSERS' : 'SDRS'} · EVENTO PRINCIPAL</small>
-              <strong>{duelo ? `${duelo.a.nome}  ×  ${duelo.b.nome}` : 'Aguardando dois competidores com meta'}</strong>
-              {duelo && <span>{Math.round(duelo.a.pct)}%  ·  {Math.round(duelo.b.pct)}%</span>}
+            const lista = cargo === 'Closer' ? rankingsOctogono.closers : rankingsOctogono.sdrs
+            const lider = lista[0]
+            return <div key={cargo}><small>{cargo === 'Closer' ? 'CLOSERS' : 'SDRS'} · TODOS NO OCTÓGONO</small>
+              <strong>{lista.length ? lista.map(p => p.nome).join(' · ') : 'Aguardando competidores com meta'}</strong>
+              {lider && <span>Líder: {lider.nome} · {Math.round(lider.pct)}%</span>}
             </div>
           })}
         </div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leadtimeDias, fmtDias, fmtDuracao, breakdownPorCategoria } from './dealDrawerShared'
+import { leadtimeDias, fmtDias, fmtDuracao, breakdownPorCategoria, dataUltimaReativacao } from './dealDrawerShared'
 
 const DIA = 86_400_000
 const AGORA = new Date('2026-09-08T12:00:00Z').getTime()
@@ -105,5 +105,18 @@ describe('breakdownPorCategoria', () => {
     const semInfo = rows.find(r => r.label === 'Sem informação')
     expect(semInfo?.count).toBe(2)
     expect(semInfo?.values).toEqual([])
+  })
+})
+
+describe('dataUltimaReativacao', () => {
+  it('ciclo 1 nunca foi reativado — devolve null', () => {
+    expect(dataUltimaReativacao({ ciclo: 1, data_criacao_negociacao: '2026-03-10T11:11:11Z' })).toBeNull()
+  })
+  it('ciclo 2+ devolve o início do ciclo (reabertura do deal perdido)', () => {
+    expect(dataUltimaReativacao({ ciclo: 3, data_criacao_negociacao: '2026-08-06T14:40:04Z' })).toBe('2026-08-06T14:40:04Z')
+  })
+  it('ciclo 2+ sem data de início devolve null, sem inventar', () => {
+    expect(dataUltimaReativacao({ ciclo: 2, data_criacao_negociacao: null })).toBeNull()
+    expect(dataUltimaReativacao({ ciclo: 2 })).toBeNull()
   })
 })

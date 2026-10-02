@@ -1,5 +1,9 @@
 # Dashboard We Scale — Contexto para Claude Code
 
+## Memória operacional compartilhada
+
+Consultar o vault `/Users/gablimas/Library/Mobile Documents/iCloud~md~obsidian/Documents/Reccon`, entrada `11 We Scale/Cérebro We Scale.md` e nota `11 We Scale/Projetos/Dashboard We Scale/Projeto - Dashboard We Scale.md`. Ao concluir mudanças duráveis, atualizar a nota e reconciliar as ações/pendências do cockpit. Usar `/Users/gablimas/.codex/skills/manter-cerebro-operacional/SKILL.md` quando disponível. Registrar fonte, data e distinguir código local de produção verificada; nunca copiar segredos ou dados de leads. A atualização do histórico abaixo complementa a memória no vault.
+
 > Este arquivo é carregado automaticamente em toda conversa nesta pasta.
 > **Ao terminar qualquer mudança no dashboard ou no banco, registre em "Histórico
 > de mudanças" no fim do arquivo** e atualize a seção correspondente aqui em cima.
@@ -14,7 +18,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo, Configuração das Metas** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -66,6 +70,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
 | `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
+| `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 
 `vw_marketing_funil` é a view **antiga**, sem nenhuma aba de Vendas
@@ -77,7 +82,7 @@ novo.
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD. O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
-- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 só pro toggle de vendas (venda fechada sem produto ainda conta como 1 unidade vendida)
+- `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
 
 ### Inbound × Prospecção Ativa
@@ -205,6 +210,19 @@ não via `troca_responsavel`. Um deal parado em Contato Efetivo, redistribuído
 nas férias e agendado depois direto no funil do Closer ficava com o SDR
 antigo.
 
+**SDR que ficaria vazio: dois fallbacks no fim da cadeia** (desde 29/09, só
+entram quando todas as outras fontes deram nada, nunca trocam um nome já
+eleito):
+1. `posse_final` — ciclo corrente, deal numa etapa de camada SDR (aberto **ou
+   fechado**) e dono atual com cargo `SDR`/`SDR/Closer`. Cobre o deal que
+   nasceu com o Closer, voltou pra um SDR (No Show, redistribuição) e foi
+   perdido: a `posse_atual` só vale pra deal aberto, então o SDR sumia no
+   instante da perda.
+2. `posse` com dono `SDR/Closer` igual ao Closer eleito — quem faz os dois
+   papéis (Vanessa Daniel no Odonto Legacy) aparece nas duas colunas.
+Deal que nasceu e ficou só com Closer (indicação, franqueado, evento), com
+"SDR Responsável" vazio no RD, continua **sem SDR** — é o dado real.
+
 **Perdido, reaberto e perdido de novo no mesmo dia não abre ciclo novo.**
 Em `vw_deal_eventos_ciclo` (CTE `perdas`), com o deal perdido, uma perda só
 fecha ciclo se `_closed_at` cair em **dia posterior** (Brasília) ao da perda.
@@ -285,6 +303,7 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
+src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
 src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
 src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
 
@@ -299,11 +318,14 @@ src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "t
 src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
 src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
+src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação
 
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
-src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer)
+src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer) — sem consumidor desde 01/10/2026
+src/hooks/useReunioesCloser.ts    lê vw_closer_reunioes inteira (sem filtro de data — recorte em reunioesCloser.ts)
+src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
 ```
 
 ### Os controles da barra
@@ -493,10 +515,28 @@ sobrepõem e linhas se repetem/somem — de forma **determinística**, então nu
 parece flutuação. Em 15/09 isso escondia 81 eventos/mês. Desempate até a chave
 (ou todas as colunas selecionadas). Use `buscarTodasPaginas` (`paginacao.ts`).
 
+**Origem nova de sync = entrar na lista de `processar_deal_evento`.** Todo
+caminho que chama `registrar_stage_history` antes de `processar_deal_evento`
+precisa ter o seu `p_origem` em `v_etapa_vem_do_historico`. Senão a segunda
+função grava a mesma etapa de novo (data = `updated_at`, ms a minutos depois)
+e o modo Passagens mostra "repetidos" que não existem no RD. Foi o que a
+`espelhar-rd` (`api_espelho_edge`) fez de 31/08 (modo live) a 29/09: 2,5 mil passagens
+fantasmas.
+
 **Lentidão: medir antes de mexer no banco.** `response.origin_time` nos
 `edge_logs` (query_logs) mostra o tempo do servidor; comparar com o tempo no
 cliente. curl abre TLS por request e distorce — medir com Node `fetch`
 (keep-alive), que se comporta como o browser.
+
+**Carregamento filtrado de Marketing (02/10/2026).** `useMediaData`, `useLeads`
+e `useVendasFunil` compartilham `useConsultaFiltrada` + `consultaFiltrada.ts`:
+cache em memória de 60s por fonte/filtros, deduplicação em voo, cancelamento
+quando não há consumidores, descarte de respostas antigas e timeout de 60s
+por carga paginada. Refresh manual/polling de 5min forçam revalidação; logout
+ou troca de usuário limpa o cache. `enabled: false` impede consultas extras.
+Não confundir com os hooks novos de Vendas (`useFunilVendas`/`useFunilEventos`).
+As fontes, filtros SQL e ordem existentes foram preservados; medir latência
+e revisar a ordenação total da paginação separadamente com acesso autorizado.
 
 **`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
 noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
@@ -538,6 +578,11 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
   (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
   etapas nessa tabela
+- [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
+  máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
+  pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
+  Hoje quem cobre é o `espelho_rd_edge` (15 min). Corrigir no n8n: ler
+  `deals_sync_state.watermark` em vez de `now() − 60 min` (ver 22/09)
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
 - [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
@@ -546,7 +591,9 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
 - [x] ~~Linha do Tempo em branco até rodar o script das views~~ — RESOLVIDO em 16/09: views `vw_deal_timeline_eventos/_tarefas/_reunioes` aplicadas no Supabase de Expansão (migration `linha_do_tempo_views_bloco_a_e_b`). Junior optou por rodar os blocos A **e** B, então anotação de tarefa e resumo de reunião ficam legíveis por quem tiver a anon key — decisão consciente dele, registrada aqui porque amplia a pendência da anon key exposta
 - [ ] **Aba Linha do Tempo só aparece pro Administrador até rodar `docs/sql/2026-09-16-acesso-linha-do-tempo.sql`** no Supabase de Marketing — os demais papéis não têm a permissão `aba.linha-do-tempo`
-- [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09)
+- [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09; `DB_Reunioes_MeetRox` também pela Performance › Closer, 01/10)
+- [ ] **Closers gravam reunião de venda sem tipo de call no MeetRox** — em set/26 foram 52 sem tipo contra 86 tipadas (Jéssica 35, Douglas 15), muitas com título de venda ("Devolutiva Comitê", "Alinhamento Contrato", "Finalização"). Ficam fora da contagem R1–R5 do bloco "Reuniões no MeetRox"; o próprio bloco lista elas. Correção é de processo (classificar a call no MeetRox), não de código
+- [ ] **Closer novo some com o nome do MeetRox** em `vw_closer_reunioes` até ganhar uma linha no CTE `pessoa` da view (e-mail → nome do RD) ou e-mail em `nome_cargo_foto` — senão aparece como "Fulano Sobrenome Completo" e não casa com o filtro de Closer da barra
 - [ ] **`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia** — o insert de evento `'perda'` não tem `EXCEPTION WHEN unique_violation` pro índice `ux_deal_eventos_perda_por_dia` (só o `ON CONFLICT` do índice de timestamp exato). Se um deal for perdido, reaberto e perdido de novo no mesmo dia calendário, a segunda perda derruba a função inteira — visto 1x num backfill em 25/08. Raro, mas real
 - [ ] **Páginas de Marketing ainda não responsivas** — Visão Geral, Saúde da Marca, Meta & OKRs e S&OP herdaram o menu em gaveta e a barra do topo compacta (14/09), mas as grades internas seguem com colunas fixas e quebram no celular. São do Gabriel; aplicar o mesmo padrão `rs-*` da seção 7 quando ele quiser
 - [ ] **Chave `service_role` do Supabase de Expansão e token do RD circularam em texto plano** (JSONs de workflow do n8n, exportados pra debug em 25/08). `service_role` ignora RLS por completo — rotacionar as duas quando der
@@ -555,7 +602,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-10-02 — Motivo de perda no dashboard vem do EVENTO, não do deal
+### 2026-10-02 (2) — Motivo de perda no dashboard vem do EVENTO, não do deal
 
 Brunno reportou motivos errados na Análise de Perda depois da limpeza do
 catálogo (ver 22/09). O print mostrava o mesmo motivo em várias linhas:
@@ -600,6 +647,726 @@ antes de agrupar e exibir. O que aparecia cru eram os nomes `[NJ]` e
 nenhum cai em "não catalogado".
 
 Sem mudança de código nesta entrada: o fix foi 100% em dado do banco.
+### 2026-10-02 — Corrigir carregamento ao trocar filtros de data
+
+Autorização de Gabriel após diagnóstico local: corrigir o cliente, sem acesso
+nem mudança no banco. A trava `inFlight` de mídia descartava a busca nova na
+troca de recorte; CRM aceitava resposta antiga e silenciava rejeições, podendo
+manter loading indefinidamente. Os três hooks agora usam controle compartilhado
+por chave, cache curto, cancelamento e erro explícito (ver seção 7).
+
+Visão Geral deixa filtros utilizáveis durante a carga e separa período atual,
+comparação e histórico. Não exibe KPIs parciais nem deltas sem comparação
+concluída; erros aparecem por bloco e exportação aguarda sua fonte. Saúde da
+Marca só faz as sete consultas extras de Odonto Scale quando Oral Unic está
+aberta. Sem mudar fórmulas, fontes, datas, classificação de MQL, deduplicação,
+temática, vídeo ou conteúdo da S&OP; seus hooks compartilhados recebem o fix.
+
+Verificação local: build de produção, 602 testes (30 novos), lint sem erros
+(avisos preexistentes) e diff check. Teste isolado no navegador com React real,
+StrictMode e dados fictícios confirmou deduplicação, troca em voo, resposta
+atrasada ignorada e recuperação de falha. Prévia temporária removida.
+Não é validação autenticada nem medição do banco; merge/deploy dependem do PR.
+
+### 2026-10-01 (5) — Performance › Closer ganha "Reuniões no MeetRox" (R1 a R5)
+
+Pedido do Junior: ver na aba Closer os tipos de reunião que os Closers fazem
+(R1–R5), por Closer e por marca, puxando do MeetRox. O dado já estava no
+banco: o WF1 do projeto `meetrox-sync` (n8n, a cada 5 min) grava toda call em
+`DB_Reunioes_MeetRox`, com o tipo de call escolhido na gravação.
+
+**Os tipos** (`call_type_id` do MeetRox, com `scorecard_name` de reserva):
+R1 Diagnóstico (4554), R2 Apresentação Técnica e Financeira (4555), R3
+Geomarketing + Explicação do Comitê (4556), R4 Alinhamento COF (4557), R5
+Devolutiva do Comitê + Fechamento (4558). "Undefined" (4553) = sem tipo.
+
+**Banco:** view nova `vw_closer_reunioes` (só metadado: nada de transcrição,
+resumo ou scorecard; `DB_Reunioes_MeetRox` tem RLS só pra `authenticated` e o
+dash é `anon`). Três decisões dentro dela:
+- **Negócio** por `coalesce(id_deal, crm_deal_id)` (mesma regra da Linha do
+  Tempo) e marca/origem/fonte/SDR lidos de `vw_funil_vendas` — mesmas regras
+  das outras abas. Deal reciclado usa o ciclo em vigor na data da reunião.
+  Em set/26, 81 de 86 reuniões tipadas têm negócio no funil.
+- **Nome do Closer**: o MeetRox grava o nome completo ("Jessica Alves
+  Santos"); a view traduz por e-mail para o nome do RD ("Jéssica"), senão o
+  filtro de Closer da barra não casaria. Ver pendência.
+- **Sem tipo só de Closer**: SDR grava conversa com lead sem tipo (Vanessa,
+  Sarah, Thiago, Xayane — só "Undefined") e isso não é reunião de venda.
+
+Medido: 74 ms para a base toda (1.347 linhas), 2 requests.
+
+**Tela** (`ReunioesMeetroxSection`, entre "Conversões — fundo do funil" e
+Leadtime): 5 cards R1→R5 (quantidade, % do total, duração média, nota da IA,
+nº de closers), tabela tipo × Closer **ou** × marca (toggle) com mix R1→R5
+em barra empilhada, duração, nota IA e coluna "Sem tipo", e linha de total.
+Todo número abre popup com as reuniões (data, tipo, Closer, negócio com link
+pro RD e pra Linha do Tempo, marca, duração, nota, link da gravação). Cores:
+rampa ordinal de um tom só (teal do Closer, claro → escuro), validada com
+`validate_palette.js --ordinal` no tema claro.
+
+**Regras de filtro** (`filtrarReunioes`, testada):
+- Período pela **data da reunião** (Brasília). "Deals criados no período" não
+  se aplica.
+- **Closer = quem conduziu a reunião** (quem gravou), não o `nome_closer` do
+  negócio. SDR, Fonte e Sub-fonte pelo negócio.
+- Reunião **sem negócio no funil** entra só com todas as marcas marcadas
+  (Consolidado) e conta como Inbound — Prospecção Ativa não tem Closer (mesmo
+  fallback de `buildScopeFilter`). Na visão por marca vira a linha "Sem
+  negócio vinculado", sempre por último e sem posição.
+- **Deals únicos**: o mesmo negócio conta 1× por tipo no mês (some regravação
+  de call que caiu); reunião sem tipo ou sem negócio nunca é deduplicada.
+  **Passagens**: toda gravação conta.
+
+Conferido na tela contra SQL (set/26, Inbound, Consolidado, Passagens):
+Jéssica 28/6/2/2/1 · Douglas 24/8/3 · Bruna 11 · Aurélio 1 (R1/R2/R3/R4/R5),
+sem tipo 35/15/1/1, durações e notas idênticas. Por marca: Eletrovias
+25/5/2/1/1, Inpot 24/7/1, B2Case 10/1, Viva 0/1/2.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (552 testes, 9 novos
+em `reunioesCloser.test.ts`) + `oxlint` limpo, em worktree fora do OneDrive.
+**Visto renderizado** com dado real numa cópia local com rota sem login
+(removida, nunca no commit), em 1440×900 e 375×812.
+
+### 2026-10-01 (4) — Performance: tabelas de SDR/Closer contam pelos mesmos eventos dos cards
+
+Continuação da (3). Conferindo SDR por SDR depois do fix, ainda sobrava
+diferença: set/26 Thiago SQL card 23 × tabela 22, Vanessa 19 × 20; em ago/26,
+SAL do Thiago 23 × 21 e da Xayane 24 × 22. Não era mais o ciclo, era a
+**regra**: o card conta por evento (`countStageEvents`) e a tabela
+(`buildSdrRows`/`buildCloserRows`) pela data da etapa gravada na linha do
+deal. Duas diferenças:
+
+- **Trava de funil da SQL só no card.** A tabela contava qualquer
+  `data_agendamento_reuniao_sql`, inclusive agendamento fora do funil do
+  Closer (ex.: "Scale Partner - Manoel", Vanessa, 29/09; Nunzio e Ademir, os
+  artefatos de Prospecção Ativa de 27/08).
+- **Reentrada na etapa.** A linha guarda uma data por ciclo; o card conta o
+  deal de novo no mês em que ele volta à etapa (ex.: Fabiano Mundstein, SQL
+  24/08 e de novo 01/09 no Closer — tabela pôs em agosto, card nos dois).
+
+Fix: `buildSdrRows`/`buildCloserRows` ganharam parâmetro opcional
+`ContagemPorEvento` (eventos + modos + o MESMO `evOpts` dos cards). SQL/Diag/
+SAL (SDR) e Diag/SAL/COF (Closer) passam a sair de `eventsInStage`, creditados
+ao `nome_sdr`/`nome_closer` do ciclo do evento. MQL e vendas continuam pela
+linha (o card também). De graça, a tabela passou a seguir o toggle
+Passagens/Deals únicos, que antes ignorava. Com um SDR filtrado, card = linha.
+Sem filtro, a soma das linhas pode ficar abaixo do card só por negócio sem SDR
+ou com SDR fora do roster — nota da tela reescrita.
+
+Set/26 Inbound, card = tabela: Sarah 70/42/23, Xayane 25/24/16, Thiago
+23/14/10, Vanessa 19/6/1 (SQL/Diag/SAL). `sdrRowsHoje`/`closerRowsHoje` (anel
+"Hoje" do popup) seguem pela linha: os eventos só vêm carregados para o
+período selecionado.
+
+### 2026-10-01 (3) — Performance/SDR: cards e tabela divergiam com filtro de SDR
+
+Junior filtrou set/26, Inbound, SDR = Xayane: cards SQL 27 / Diag 25 / SAL 17
+com meta 246 / 146 / 92; tabela SQL 25 / Diag 24 / SAL 16 com meta 72. Duas
+causas independentes.
+
+**Contagem: o recorte do evento era por deal, não por ciclo.** Os cards contam
+eventos de `vw_funil_etapas_v2` cujo `id_deal` estivesse entre as linhas
+filtradas (`idsEscopo` = `Set(id_lead)`). SDR/Closer/Fonte são atributos do
+**ciclo**: 2 deals reciclados tinham um ciclo antigo da Xayane e o ciclo de
+set/26 da Sarah Padilha (Leonardo André Rosa: SQL+Diag+SAL; Jorge de Almeida
+Bastos: SQL) — os eventos do ciclo da Sarah entravam no card da Xayane. A
+tabela e o popup da etapa (`dealsInStage`, que já casava por `dealKey`) não
+contavam — por isso o popup listava 25 com o card dizendo 27. Fix:
+`noEscopoDoCiclo(scoped)` em `metrics.ts` casa por `id_lead + ciclo`, usado
+nos cards da Performance, no funil da Visão Macro, em `dealsInStage` e em
+`repeatedDealsInStage`. **Sem filtro de pessoa nada muda**: medido em Inbound
+desde jul/26, todo evento tem o ciclo dele em `vw_funil_vendas` (0 diferença
+por etapa/mês).
+
+**Meta: o card ignorava o filtro de pessoa.** Somava a meta do time por marca
+(`useMetasTimeResumo`); a tabela usa a meta da pessoa. Agora os cards leem
+`metaDoRecorte` (`src/lib/metaRecorte.ts`, testado): marcas selecionadas,
+estreitadas por `sdrs` no lado SDR (SQL/Diag/SAL) e por `closers` no lado
+Closer (COF/vendas/receita) — mesma linha de `DB_Metas_Performance` da tabela.
+Xayane set/26: 246/146/92 → 73/43/27. A coluna Meta SQL da tabela passou a
+arredondar pra cima (`nfCeil`), como o card (72,05 → 73 nos dois).
+
+`useMetasTimeResumo` ficou sem consumidor no app (só o teste dele) — não
+apagado nesta mudança. **Fora do escopo:** o card de Meta da Visão Macro (`useMetaResumo`)
+também ignora filtro de Closer.
+
+### 2026-10-01 — Corrida de Performance: ticket das faixas 2 e 3 sobe
+
+Pedido do Junior. Multiplicador de ticket da marca em `TICKET_FAIXAS`
+(`src/lib/corridaPerformance.ts`), fonte única do cálculo e da régua "Como a
+pontuação funciona" da Campanha de Metas:
+
+| Faixa | Marcas | Antes | Agora |
+|---|---|---|---|
+| até R$ 200 mil | B2Case · Eletrovias | 1,0× | 1,0× |
+| R$ 201 mil – 500 mil | Inpot · Lisô Laser | 1,25× | **1,5×** |
+| R$ 501 mil – 1 milhão | Oral Unic | 1,5× | **1,75×** |
+| acima de R$ 1 milhão | Viva | 2,0× | 2,0× |
+
+Vale retroativo pro mês inteiro (a pontuação é recalculada a cada carga, não
+é gravada). Testes de `corridaPerformance.test.ts` atualizados pros valores
+novos.
+
+### 2026-10-01 (2) — Configuração das Metas: peso digitado não reequilibra mais os outros
+
+O chefe do Junior tentou digitar os % de 3 SDRs e o sistema ia "consertando"
+os outros pra fechar 100% a cada tecla — só conseguiu pela barra. Agora:
+digitar ou usar a setinha muda **só aquela pessoa** (sai `ajustarPeso` da
+tela; a barra continua trocando peso entre os dois vizinhos e sempre fecha
+100%). Soma ≠ 100 → aviso vermelho com quanto passou/faltou
+(`textoSomaPesos`), em quem a pessoa mexeu por último e o % de cada um;
+campos e barra em vermelho (o que falta aparece tracejado, a barra não
+arrasta até fechar) e **"Próxima marca" travado**. Closer com peso fora da
+faixa de vendas inteiras (múltiplos de 100 ÷ vendas) vira pendência nova,
+com os nomes de quem está fora. Ambos bloqueiam a publicação. Verificado com
+3 SDRs: 33,33 → Thiago 60 (aviso "126,66% — 26,66 pontos acima", Thiago
+apontado) → Xayane 20 → Sarah 20 (fecha, libera).
+
+### 2026-10-01 — Campanha de Metas por mês; teste de outubro apagado
+
+**Teste de outubro validado e apagado.** Junior publicou uma V1 de teste de
+outubro pela Configuração das Metas. Conferido no banco antes de apagar: V1
+ativa (`origem = 'hub'`), virada na terça, 5 semanas, 7 marcas com taxa,
+conversões de setembro (`taxa_origem = 'mes_anterior'`) e time; Oral Unic
+(1 venda) com Oportunidade 3 / SAL 6 / Diagnóstico 9 / SQL 16 / Ligações 520
+— conta conferida etapa a etapa —, espelho em `DB_Metas_Performance` (Douglas
+1 venda/R$ 74.900/3 Oportunidades; Sarah SQL 16/Diag 9/SAL 6) e semana em
+`meta_pessoa_semana` (tudo na S2). Apagado a pedido dele, numa transação com
+as travas `*_imutavel` desligadas só durante o delete: versão, semanas,
+marcas, etapas, pessoas, semana por pessoa, `DB_Metas_Performance`,
+`meta_log` e `meta_mes` de outubro. Backup completo (100 linhas) em
+`_backup_meta_teste_out2026` (RLS ligado, sem policy). Setembro intacto.
+A meta real de outubro entra como V1.
+
+**Campanha de Metas deixou de ser só setembro.** Seletor de mês no título
+(setembro/2026 até o mês atual; abre no corrente). Tudo segue o mês:
+- **Voltas:** setembro mantém as 4 voltas que a campanha usou; de outubro em
+  diante, as semanas da versão ativa (`meta_semana`, com a virada escolhida
+  na Configuração das Metas); mês sem meta usa virada na terça
+  (`montarCampanha` em `constants/metasCampanhaF1.ts`).
+- **Meta da volta (Closer):** setembro pela forma da planilha; depois, pela
+  distribuição semanal das vendas (`meta_pessoa_semana`, `useSemanasCampanha`);
+  sem distribuição, rateio pelos dias. SDR sempre pelos dias.
+- **Pilotos = quem tem meta no mês** em `DB_Metas_Performance` (sem lista
+  fixa — `CLOSERS_ATIVOS`/`SDRS_ATIVOS` saíram). Perfil F1 (foto, cor,
+  escuderia) de quem já tinha fica em `src/lib/pilotos.ts`; piloto novo ganha
+  iniciais, cor estável e a foto de `nome_cargo_foto`. Efeito em setembro: a
+  Vanessa Daniel sai do Grid dos SDRs (não tinha meta no mês).
+- **Histórico:** os 6 meses antes do mês escolhido. **Metas por Marca** segue
+  o mês da página (saiu o seletor próprio). **Faixa do topo (GpStrip)** e
+  **Modo TV** seguem o mês corrente sozinhos.
+
+Verificado: build + 530 testes (`metasCampanhaF1.test.ts` reescrito,
+`pilotos.test.ts` novo) + oxlint; visto renderizado com dado real numa rota
+sem login (removida): setembro idêntico à produção (Bruna 217%, Douglas 207%,
+Jéssica 167%, Aurélio 113%, meta do time R$ 369.400 / 172%, Pole SDR Sarah
+113%, histórico mar–ago); outubro com 5 voltas (1–5 … 27–31 out) e aviso de
+meta não publicada; TV em outubro sem erros.
+
+### 2026-09-30 (6) — Configuração das Metas: toda meta por pessoa é número inteiro
+
+Junior: "tá ficando número quebrado, isso não existe" — SDR com SQL 12,1 e,
+pior, Closer com 1,6 venda. Ninguém faz meia reunião nem 0,6 venda.
+
+- **Pessoa no mês:** a meta da marca é repartida em inteiros pelo peso
+  (`repartirInteiro`, maiores restos — desempate pelo maior peso, depois pela
+  ordem). A soma das pessoas fecha a meta da marca. Vale pra todas as etapas
+  de SDR e Closer; faturamento do Closer = as vendas dele × ticket.
+- **Closer em faixas:** o peso do Closer só anda em múltiplos de 100 ÷ vendas
+  do mês (2 vendas → 0/50/100%; 5 → de 20 em 20%). Barra (`moverDivisa` com
+  `passo`), setinhas e `ajustarPeso(..., unidades)` encaixam; mudar as vendas
+  na Base ou abrir a marca reencaixa sozinho (`encaixarFaixas`). SDR segue com
+  peso livre (1%), mas as metas saem inteiras.
+- **Espelho:** `montarPublicacao` deixou de usar `gerarLinhasEspelho`
+  (rateio decimal) — `linhasEspelho` grava em `DB_Metas_Performance` os
+  inteiros de `metasPorPessoa`.
+- **Semanas:** metas da marca por semana em inteiros (`metasPorSemana`,
+  repartindo cada etapa pelas vendas das semanas) e por pessoa × semana em
+  inteiros que fecham as duas somas (`repartirMatriz`: a pessoa fecha a meta
+  dela no mês, a semana fecha a meta da marca).
+
+Verificado: build + 531 testes (4 novos) + oxlint; visto renderizado com o
+cenário do print (Oral Unic, 2 vendas, SDRs 39/24/12/25 → SQL 12/7/4/8 = 31;
+Closers 80/20 viram 100/0 ao abrir, setinha leva a 50/50 = 1 venda cada;
+semanas sem nenhum decimal, tabela por pessoa fecha no mês).
+
+### 2026-09-30 (5) — Configuração das Metas: semanas distribuem só as vendas
+
+Junior: "não faz sentido distribuir todas as metas por semana. Só devemos
+distribuir as metas de venda e as demais métricas vêm junto". Antes o passo
+Semanas pedia digitar, pessoa por pessoa, Ligações/SQL/Oportunidade/Vendas de
+cada semana.
+
+**Regra nova:** o gestor distribui só as **vendas da marca** pelas semanas.
+Cada etapa da semana = meta da etapa × (vendas da semana ÷ vendas do mês) —
+`metasDaSemana`; cada pessoa recebe a semana × peso (`distribuicaoDerivada`,
+que gera as linhas de `meta_pessoa_semana` na publicação, agora com todas as
+etapas da pessoa: SDR Ligações/SQL/Diagnóstico/SAL, Closer Oportunidade/Vendas).
+A semana continua **opcional**, mas **pela metade bloqueia a publicação**
+(`vendasDistribuidas`: `vazio`/`parcial`/`completo`/`excedido`/`sem_vendas`).
+O rascunho troca `distribuicaoSemanal` por `vendasPorSemana`; rascunho antigo
+no navegador abre sem distribuição; revisão de versão reconstrói as vendas por
+semana somando o Fechamento dos Closers.
+
+**Tela:** cada venda vira uma ficha na cor da marca, num monte "a distribuir";
+cada semana é uma coluna com ＋/− (o ＋ trava quando o monte acaba, clicar numa
+ficha a devolve), metas derivadas embaixo, "Proporcional aos dias" por marca
+e "Distribuir todas pelos dias", e a tabela por pessoa sob demanda.
+
+Verificado: build + 527 testes (4 novos) + oxlint; visto renderizado com dado
+real (Oral Unic 2 vendas em S2/S4 → 2,5 Oportunidade / 15,5 SQL / 520
+Ligações por semana; tabela por pessoa fecha no mês; distribuição pela metade
+bloqueia; "Distribuir todas" → 7/7; celular sem rolagem horizontal).
+
+### 2026-09-30 (4) — Configuração das Metas só oferece quem está ativo; cadastro de Closers corrigido
+
+Junior viu na tela de metas, como opção de Closer, gente que não está mais
+no time (Cristhian, Danilo, Giullia, Rômulo…) e não viu a Paula. Hoje os
+Closers ativos são **Douglas, Paula, Bruna e Jéssica**.
+
+**Causa:** `useRosterVendas` lê `nome_cargo_foto` filtrando só por cargo — a
+coluna `ativo` existia e nunca era lida. Além disso o cadastro estava
+defasado: Aurélio Briano e Giullia com `ativo = true`, e **Paula Marinheiro**
+(nome exato no RD: 67 deals como responsável, 6 já eleitos como Closer) sem
+linha nenhuma.
+
+**Código:** `MembroRoster` ganhou `ativo`. A lista **não** é filtrada na fonte,
+porque a aba Performance usa o roster pra validar nomes de meses passados
+(quem saiu tem que continuar aparecendo no histórico). Só a Configuração das
+Metas filtra: "Adicionar" mostra só ativos, e pessoa que veio do mês anterior
+mas está inativa ganha aviso vermelho no card ("remova e escolha quem
+assume") — caso do Aurélio na Oral Unic/Viva/Odonto Legacy de outubro.
+
+**Banco (Supabase de Expansão, `nome_cargo_foto`):** Aurélio Briano e Giullia
+→ `ativo = false`; inserida Paula Marinheiro (id 19, `Closer`, ativa, sem
+foto). `vw_deal_ciclo`/`vw_deal_eventos_ciclo` leem só `cargo` (nunca
+`ativo`); md5 de `nome_sdr`/`nome_closer` de `vw_deal_ciclo` inteira e dos 68
+ciclos onde a Paula é dona/responsável **idênticos antes e depois**. Efeito
+colateral bom: a Paula passa a ser reconhecida como Closer pela tabela de
+Closers da Performance (antes o nome dela não estava no roster).
+
+**Em aberto:** Vanessa Daniel segue `SDR/Closer` ativa e por isso aparece
+como opção nas duas funções. Mudar o cargo dela afeta a eleição de SDR/Closer
+(`handoff`, trava de cargo) — decisão do Junior.
+
+### 2026-09-30 (3) — Configuração das Metas: funil na ordem das vendas, setinhas e pesos que fecham 100%
+
+Ajustes pedidos pelo Junior depois do primeiro uso da tela nova:
+
+- **Funil começa nas vendas.** O editor da marca agora desenha Vendas no
+  topo (logo abaixo da Base do mês) e volta etapa por etapa: Oportunidade →
+  SAL → Diagnóstico → SQL → Ligações. Cada conector fica acima da etapa que ele
+  calcula. Barrinha em cada etapa mostra o tamanho relativo (o "formato" do
+  funil); some no celular.
+- **Setinhas em todo campo numérico** (`CampoNumero`): ▲▼ ao lado do campo e
+  seta do teclado, com `passo`/`min`/`max` — vendas de 1 em 1, taxa de
+  franquia de R$ 1.000, conversão de 1 ponto (máx. 100%), manual de 1 (Ligações
+  de 10), peso de 1. O texto do campo sempre acompanha o valor real.
+- **Pesos nunca saem de 100%.** `ajustarPeso` (mudar o peso de uma pessoa
+  redistribui o resto entre as outras da função, na proporção delas),
+  `moverDivisa` (barra arrastável: troca peso só entre os dois vizinhos, em
+  passos de 1%) e `normalizarPesos` (corrige rascunho antigo com soma errada,
+  botão "Corrigir para 100%"). Pessoa sozinha na função fica travada em 100%.
+  Adicionar pessoa redivide igual; remover reescala mantendo a proporção.
+- **Time da marca refeito:** barra colorida por função com divisórias
+  arrastáveis (mouse, toque e ←/→), cards por pessoa com foto do
+  `nome_cargo_foto`, peso com setinhas e metas da pessoa ao vivo, e chips
+  "+ nome" pra adicionar.
+- **"COF" vira "Oportunidade"** em toda a Configuração das Metas (rótulo de
+  `ROTULO_ETAPA`; a chave interna `'Oportunidade COF'` e o banco não mudam).
+  Outras abas (Performance, Campanha) continuam dizendo COF.
+
+Verificado: build + 523 testes (7 novos de pesos) + oxlint, e visto
+renderizado com dado real (Inpot outubro: arrastar 50/50 → 30/70, 3 SDRs →
+33,33/33,33/33,34, seta no peso mantém 100%; setinhas de vendas e ticket;
+celular sem rolagem horizontal).
+
+### 2026-09-30 (2) — Configuração das Metas: painel de marcas + funil reverso
+
+Junior pediu pra refazer o lançamento de metas (`/metas`, antes "Metas" /
+Hub de Metas), com três queixas: o nome, "Começar do zero" levar a uma aba
+Semanas sem próximo passo e Taxas em branco, e "Nova versão a partir desta"
+mostrar Taxas sem deixar mudar nada por marca.
+
+**Diagnóstico do fluxo antigo (7 passos):** "do zero" criava rascunho com
+**0 marcas** e nenhum passo permitia adicionar marca; a V1 de setembro foi
+**importada com tudo `fixo`**, e Taxas só listava etapas `derivado` → "volte
+ao Passo 3" em toda marca; Taxas (2) dependia do Funil (3); a sugestão "mês
+anterior" só lia taxa gravada (setembro não tem nenhuma); nada persistia antes
+de publicar; e a distribuição semanal (1º passo) não tem leitor no dashboard.
+
+**Fluxo novo** (spec `docs/superpowers/specs/2026-09-30-configuracao-metas-wizard-design.md`):
+tela inicial por mês (sem meta → "Configurar metas de {mês}" já parte do mês
+anterior; com versões → lista com Ativar / Criar revisão) e montagem em 3
+passos — **Marcas** (painel com status Não configurada / Em configuração /
+Configurada, derivado das pendências, + editor por marca), **Semanas**
+(manual como antes, com atalho "proporcional aos dias") e **Revisar e
+publicar** (marcas × etapas, prévia por pessoa, pendências com link).
+
+**Regras (decisões do Junior nesta sessão):**
+- Funil reverso **SQL → Diagnóstico → SAL → COF → Vendas**; Vendas + taxa de
+  franquia média são a base. **Ligações** fica fora da cadeia: conversão sobre
+  o SQL ou número fixo.
+- Cada etapa: conversão de referência · nova conversão · número manual (vira
+  ponto de partida pras de cima) · sem meta (leva junto as de cima até a
+  primeira manual).
+- **Inteiro pra cima, sem cascata:** cada etapa sobe do valor EXATO da de
+  baixo e só o resultado é arredondado (`ceil(x - 1e-9)`). Pessoa = meta da
+  marca × peso, sem arredondar (o dashboard já mostra pra cima).
+- **Referência:** mês novo usa a versão ativa do mês anterior — taxa gravada
+  se a etapa derivava da de baixo, senão a **implícita dos números**
+  (`exato(baixo)/exato(etapa)`; é o caso de toda a V1 de setembro, ex. Inpot
+  COF→Vendas 5/10,6 = 47,2%). Revisão usa a própria versão base; `fixo` de
+  versão `importado` volta como referência, de versão `hub` como manual.
+- Rascunho salvo **no navegador** (`localStorage['ws-config-metas:v1:<mes>']`).
+- Publicar exige todas as marcas do rascunho configuradas.
+
+**Onde mora:** toda a regra em `src/lib/configMetas.ts` (puro, 33 testes);
+rascunho em `src/lib/rascunhoMetas.ts`; telas em `src/components/metas/`
+(`PainelMarcas`, `EditorMarca`, `FunilReverso`, `TimeMarca`, `PassoSemanas`,
+`PassoRevisarPublicar`, `CampoNumero`); `PassoTaxas`/`PassoFunilMarca`/
+`PassoPessoas`/`PassoDistribuicaoSemanal` apagados. **Sem mudança de banco:**
+o rascunho vira o mesmo `ConfigEtapa[]` de antes (referência/nova →
+`derivado` da etapa de baixo com `taxa_origem` `mes_anterior`/`manual`;
+manual → `fixo`; sem meta → `desligado`) e o espelho sai dos valores
+arredondados pela mesma `gerarLinhasEspelho`. `metasEngine.ts` intacto.
+Menu e catálogo de permissões dizem "Configuração das Metas" (chave
+`aba.metas` mantida).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (516 testes, 36
+novos) + `oxlint` limpo, em worktree fora do OneDrive. **Visto renderizado
+com dado real** numa rota temporária sem login (removida antes do commit):
+outubro a partir de setembro, Inpot 6 vendas → COF 13 / SAL 34 / Diag 52 /
+SQL 81 / Ligações 1.870; SAL com nova conversão 40% → 32 (sem cascata);
+manual e sem meta em cascata; rascunho sobrevive a recarregar; semanas
+proporcionais fecham na meta; revisão da V1 de setembro reabre com 25 vendas
+e R$ 981.385 (idêntico à V1); em branco pergunta as marcas; 375 px sem
+rolagem horizontal. **Nenhuma versão publicada no teste** (versão não pode
+ser apagada) — o 1º lançamento real (outubro) é o teste de ponta a ponta da
+gravação.
+
+### 2026-09-30 — Odonto Legacy ganha Interesse Reunião e Conexão
+
+Junior criou no RD, no funil Odonto Legacy (`68b84341646c55001ed64e4f`),
+as etapas **Interesse Reunião** (`6abd312af18c3800295c6771`) depois de
+Contato Efetivo e **Conexão** (`6abd3149d43c010029ad60b2`) antes da Reunião
+Agendada, pro bot da marca mover o lead como já faz no funil SDR.
+
+**Banco:** as duas cadastradas em `rd_funis_etapas` (ordem 4 e 5; No Show
+em diante empurrados +2, `ordem` é só exibição). Sem isso
+`registrar_stage_history` gravaria os eventos sem nome, invisíveis (mesmo
+caso do Scale Partner, 21/09). Nenhum evento dessas etapas tinha chegado
+ainda, então não houve backfill. Os nomes batem exatamente com
+`etapa_canonica` (camada SDR), então nenhuma view mudou.
+
+**Dashboard:** `ETAPAS_AUSENTES_POR_MARCA['Odonto Scale']` ficou só com
+`'Comitê'` — as duas etapas voltam a aparecer com só Odonto Legacy
+selecionada (Visão Macro nos 3 modos e funil SDR da Performance).
+
+**Leitura:** antes de 30/09 as duas etapas ficam zeradas no histórico da
+marca; conversões envolvendo elas só comparam a partir daí. Deal que já
+estava em Contato Efetivo pula direto pra Reunião Agendada, então a
+conversão pode passar de 100% no mês de transição.
+
+### 2026-09-30 — Pop-ups de deal ganham "Data de criação" e "Data da última reativação"
+
+Pedido do Junior: as duas colunas em todos os pop-ups de deal de Vendas, sem
+quebra de linha. Entraram nos 4 (`StageDealsDrawer`/`StageDealsPanel` (que
+também serve o `MetaBreakdownDrawer` da Performance), `SimpleDealsDrawer`,
+`PerdaDealsDrawer`, `RepeatedDealsDrawer`), sempre logo antes de Leadtime. As
+células ficam num componente compartilhado, `CelulasDatasDeal` em
+`dealDrawerShared.tsx`, então os 4 não divergem.
+
+**Nenhuma mudança de banco.** As duas datas já vinham em `vw_funil_vendas` e no
+`COLS` do `useFunilVendas`:
+- **Data de criação** = `data_criacao_original`, a criação real do deal, que
+  não reseta em reciclagem. Preenchida em 7.808/7.808 linhas.
+- **Data da última reativação** = `data_criacao_negociacao` (início do ciclo),
+  **só quando `ciclo > 1`**. No ciclo 1 ela é a própria criação (difere de
+  `data_criacao_original` por milissegundos), então vira "—" = nunca
+  reativado. Medido: 87 linhas de ciclo 2+. Numa linha de ciclo antigo mostra
+  a reativação que abriu **aquele** ciclo, nunca uma posterior aos eventos da
+  própria linha (`dataUltimaReativacao`, testada).
+
+Drawers alargados pra caber as colunas (Simple 680→900px, Perda 760→980,
+Repetidos 860→980; Etapa já tinha 980). Todo `th`/`td` com `nowrap`, e o que
+passar da largura rola na horizontal.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (480 testes, 3 novos)
+em worktree fora do OneDrive. Popup de etapa **visto renderizado** com dado
+sintético numa página temporária (removida antes do commit): as 13 colunas
+ficam em uma linha só (todas as células com a mesma altura, 42px), com "—"
+no ciclo 1 e 06/08/2026 no ciclo 3.
+
+### 2026-09-29 — Repetidos falsos no modo Passagens; deals sem SDR
+
+Junior abriu no RD um deal (`6a9d7aa4eeed3c00017bea5c`, Inpot) que o funil
+mostrava como repetido em Pré-Contrato. No RD ele passou 1 vez. Pediu também
+pra achar o SDR de `6a9ade29b3f58200254ce47e` (Eletrovias), vazio no dash.
+
+**Repetidos falsos.** A Edge Function `espelhar-rd` chama
+`registrar_stage_history` (etapa pelo histórico do RD, sem marca/responsável)
+e depois `processar_deal_evento`, que grava a MESMA etapa de novo com data =
+`updated_at`. A função só pulava a etapa pra `api_sync`/`api_backfill*`, e
+`api_espelho_edge`/`api_espelho` tinham ficado de fora. Cada mudança de etapa
+sincronizada pela Edge Function virava 2 passagens (o `ON CONFLICT` não pega,
+os timestamps diferem de ms a minutos). No deal do print: SAL, COF, Comitê e
+Pré-Contrato em dobro. Deals únicos quase não mudam, porque a dedup é por
+deal/ciclo/mês. Passagens e "repetidos" estavam inflados.
+
+Fix: as duas origens entraram em `v_etapa_vem_do_historico`. Limpeza: **2.548
+linhas apagadas** em 2.008 deals (1,7 mil em setembro), backup em
+`_backup_etapa_duplicada_espelho_20260929`. Regra da duplicata: mudança de
+etapa de origem espelho com passagem anterior da mesma etapa, sem outra etapa,
+`deal_retomado` ou outra etapa no histórico do RD entre as duas, e com
+perda/ganho no meio só se a diferença for < 1 min. 4 linhas apagadas de
+início foram **restauradas**. Nelas a perda tinha o mesmo timestamp da
+passagem gêmea, e a linha era o único registro de uma reabertura real
+(3 ciclos 2/3 tinham sumido).
+
+**Deal sem SDR.** O deal nasceu com a Jéssica (indicação), foi pro Thiago no
+No Show em 15/09 e foi perdido por ele em 28/09. Enquanto estava aberto, a
+`posse_atual` dava Thiago, mas na perda o nome sumiu. Novos fallbacks em
+`vw_deal_ciclo` (regra na seção 4). Varredura desde agosto: 20 deals sem SDR.
+5 foram corrigidos (Thiago Henn → Thiago, Waldenice → Xayane, 3 Odonto Legacy
+→ Vanessa Daniel). Os outros 15 nunca tiveram SDR (nasceram com o Closer,
+"SDR Responsável" vazio no RD).
+
+**Efeito colateral conferido:** `6a8b3353…` (Prospecção Ativa) trocou SDR
+Vanessa → Sarah. A duplicata estava datada depois da redistribuição pra
+Vanessa. Sem ela, a regra `posse` amostra o dono no instante real da mudança
+de etapa, que era a Sarah.
+
+Checksum `vw_funil_vendas`: ganhos 61 e receita R$ 2.780.776,98 iguais, 0
+ciclos perdidos, sem SDR 154 → 149. Backups: `_backup_funil_pre_20260929`,
+`_backup_viewdefs` (`fn_processar_deal_evento_pre_espelho_20260929`,
+`vw_deal_ciclo_pre_sdr_final_20260929`). Script:
+`docs/sql/2026-09-29-etapa-duplicada-espelho-e-sdr-vazio.sql`.
+
+### 2026-09-28 (2) — Auditoria de cobertura de campanhas Meta + We Scale SOP atualizado
+
+Pedido do Junior: "confira as campanhas que estamos puxando no banco e o nome
+delas".
+
+**Achados e correções na Edge Function `ingest-meta-ads` (v6, Supabase
+Marketing):**
+
+1. **Conta ausente:** `1480293653136673` (We Scale - B2B / Beauty Connection /
+   Scale Partner B2B) nunca estava em `MARCA_MAP` — todas as campanhas dela
+   eram silenciosamente descartadas. Adicionada. O backfill retornou 0 linhas
+   para essa conta (sem dados históricos no Meta para o período), mas o Junior
+   confirmou R$2.627,57 de spend real (Beauty Connection / evento Lisô) —
+   gravado manualmente nas constantes.
+
+2. **Campanha IDA escapando:** `IDA_FUNDO_CONVERSOES_SULESUDESTE__SITEFORMS_AON`
+   é uma variante diferente da bloqueada `FORMS_AON`; adicionada a
+   `EXCLUDED_CAMPAIGNS`. Já havia 22 leads / R$188.65 históricos (09-09→09-10)
+   no banco — não foram removidos, apenas não reingeridos.
+
+3. **Contas documentadas também adicionadas ao `MARCA_MAP`:** `1923360421973366`
+   (Lisô B2B P - CA NOVA → Lisô Laser) e `1303764587731935` (Leonardo Pereira →
+   We Scale, já estava mapeada, confirmado).
+
+**Backfill completo** disparado via `trigger_ingest` com `time_range 01-28/09`:
+2.049 linhas upsertadas, sem erros.
+
+**`weScaleSop.ts` e `sop-weekly.html` atualizados** com valores confirmados pelo
+Junior (substituem os do backfill, que não capturou a conta Beauty Connection):
+- MTD set/26: **R$12.431 invest** · 68 leads · 49 MQL · **CP-MQL R$254**
+- Scale Partner: R$9.804 invest · 68 leads
+- Beauty Connection (evento Lisô): R$2.628 invest · 0 leads (conta `1480293653136673`,
+  sem campanhas ativas no Meta em set/26 mas com spend confirmado pelo Junior)
+- Gráfico semanal do HTML expandido de 2 para 4 semanas (S1:12, S2:15, S3:9, S4:13)
+
+Não verificado na tela — são só constantes hardcoded e HTML estático.
+
+### 2026-09-28 — Campanha de Metas: Corrida conta unidade vendida, não deal fechado
+
+Pedido do Junior: na aba Campanha de Metas, venda é unidade vendida, não
+deal fechado.
+
+**Onde contava deal:** só na **trilha Closer da Corrida de Performance**
+(página e Modo TV). `pontosCloser` (`corridaPerformance.ts`) somava 1 por
+venda ganha, então um deal de 2 franquias valia 1 no volume e nos pontos. Os
+cards dos closers, a Meta do time e Metas por Marca já somavam
+`quantidade_unidades`, e a mesma tela mostrava Jéssica com "5/6 un" no card e
+"3 vendas" na Corrida.
+
+**Fix:** `VendaUnidade` ganhou `unidades` (`saleUnits`, piso 1: venda ganha
+sem produto no RD conta 1) e `pontosCloser` abre cada venda em N unidades do
+placar. Volume, "Fonte 2 pts", ticket médio, velocidade e pontos passam a ser
+por unidade. `useCorridaPerformance` busca `quantidade_unidades`. Rótulos:
+"N unidades" no volume da trilha (página e placar da TV) e "N un" no pódio da
+TV, que antes dizia "N vendas" mas já contava unidade. `useMetasClosers` e
+`useRealizadoPorMarca` trocaram a cópia inline da regra por `saleUnits`, sem
+mudar número. `saleUnits` passou a aceitar `Pick<FunnelRow,
+'quantidade_unidades'>`.
+
+**Bônus de mesmo dia segue a régua escrita na tela** ("mais de 1 unidade no
+mesmo dia"): venda de 2 unidades ativa o ×1,5 nas duas, igual a 2 vendas de 1
+unidade no mesmo dia. Se o Junior quiser o bônus só pra 2+ vendas separadas
+no dia, a mudança fica toda em `pontosCloser`.
+
+**Impacto em set/26 (ciclo mensal):** Jéssica 3 → 5 unidades e 5,0 → 11 pts
+(passa de P2 a P1); Bruna 2 → 3 e 5,3 → 7,5; Aurélio (1) e Douglas (2) sem
+mudança, só têm deal de 1 unidade. Sem o bônus no deal de 2 unidades, Jéssica
+ficaria com 8 pts, e a ordem seria a mesma.
+
+Verificado: `npm run build` + `npx vitest run` (477 testes, 4 novos em
+`corridaPerformance.test.ts`) + `oxlint` limpo, em worktree fora do OneDrive.
+Consulta do hook conferida com a chave anon contra a base real, e **visto
+renderizado** com dado real numa rota temporária sem login (removida antes
+do commit): trilha Closer da página (volta 4 e mês inteiro) batendo com os
+cards de meta, e Modo TV em 1920×1080. PR #191.
+
+**Deploy não disparou no merge.** O GitHub registrou o merge do #191 mas não
+gerou o evento de push no `main`, e sem ele o `Deploy` nunca rodou (mesma
+conta e mesmo `gh pr merge` do #190, que disparou normal; status do GitHub
+"operational"). Como o `deploy.yml` só tem gatilho `push`, o deploy saiu no
+merge do PR seguinte (só docs). Se acontecer de novo: conferir com `gh api
+"repos/growth-wescale/Dashboard-We-Scale/actions/runs?head_sha=<sha>"` e
+soltar com um PR novo.
+
+### 2026-09-25 — Xayane fixada como SDR do deal Theodoro Rodrigues (override manual)
+
+Pedido do Junior: a Xayane é a SDR do deal `6ab52d24d078f6002a867ebd`
+(Theodoro Rodrigues, Inpot, Reunião Agendada SQL no Closer, criado em 24/09).
+O dashboard já mostrava Xayane, mas só pela fonte `campo_rd` (campo "SDR
+Responsável" = "Xay"), a mais fraca da cadeia: o dono do deal no RD é o
+Douglas desde a criação, sem nenhuma `troca_responsavel`, então nem `posse`
+nem `handoff` viam a Xayane. Se alguém apagasse ou mudasse o campo, ela
+sairia. Gravado `atribuicao_manual.sdr_override = 'Xayane'` (com `motivo`),
+que tem prioridade sobre todas as fontes. `REFRESH` da matview rodado.
+Closer segue Douglas. Nota: `sdr_fonte` continua `campo_rd` porque o
+override entra direto em `nome_sdr` e não muda esse rótulo.
+
+### 2026-09-23 — Funil Atual ficava horas atrás do RD: espelho reescrito (vazão, exclusões, CPU)
+
+Junior: o Funil Atual (espelho dos deals Em andamento) não batia com o RD —
+deal que já tinha trocado de etapa ou sido perdido seguia aparecendo.
+
+**O dashboard não tinha culpa.** `vw_funil_vendas` batia 100% com
+`deal_snapshot` (2.264 deals Em andamento, mesma etapa em todos). O atraso
+estava entre o RD e o espelho. Às 9h de 23/09 houve operação em massa no RD:
+~200 perdas e 40 exclusões, e às 10h ~185 trocas de responsável. O `wf_5`
+(n8n) processa no máximo 30 deals por rodada numa janela fixa de 60 min, e
+o que sobra fica pro `espelho_rd_edge`. Este corrigia ~36 deals por ciclo de
+15 min, e às vezes 0.
+
+**Causas no `espelhar-rd`, todas corrigidas (v11):**
+1. **Orçamento de tempo:** a varredura do RD leva 40-100s e o orçamento era
+   100s, então às vezes não sobrava tempo pra corrigir nada (14:00 de 23/09:
+   183 divergentes, 0 aplicados).
+2. **CPU:** Edge Function tem **2s de CPU por chamada**. A 1ª tentativa
+   (varredura + correções em paralelo na mesma chamada) morreu com `CPU Time
+   exceeded` depois de ~80 correções, com a trava presa (liberada à mão).
+   Agora são duas etapas: a **varredura** só compara e monta a fila, e as
+   correções vão em **lotes de 25**, cada lote numa chamada nova da própria
+   function (CPU zerada), que dispara o próximo com o resto da fila no corpo do
+   POST. Tudo em `EdgeRuntime.waitUntil`: o pg_net recebe 202 na hora. Log:
+   `sync_execucao.job = 'espelho_rd_edge'` (varredura) e
+   `'espelho_rd_edge_lote'` (cada lote).
+3. **Ordem:** a fila seguia a ordem da listagem do RD. Agora vai por
+   prioridade: ausente/status/exclusão → etapa/funil → marca → responsável →
+   payload.
+4. **Deal excluído no RD ficava "Em andamento" pra sempre.** Nenhum job
+   tratava exclusão: `deleted_at` só era preenchido por backfill manual
+   (17-18/09). Agora, **só com varredura completa** (nenhuma página com erro
+   e `deals_lidos ≥ total_rd`), todo deal do espelho que não voltou do RD é
+   conferido com `GET /deals/:id`, e **só um 404** chama
+   `registrar_deal_deletado`. Se o RD devolve o deal, ele é reaplicado. Deal
+   restaurado no RD tem o `deleted_at` limpo.
+5. **Trava:** se o `wf_5` estava com ela, o ciclo inteiro era pulado (17 de 80
+   ciclos em 24h). Agora tenta 6× com 8s de intervalo.
+6. **Limite do RD (429):** com os lotes encadeados sem pausa, o RD passou a
+   devolver 429 (o token é dividido com o `wf_5` e o n8n). Agora respeita o
+   `Retry-After` (ou espera crescente até 30s, 6 tentativas), cada lote dura no
+   mínimo 20s (~75 req/min), e deal que toma 429 volta pro fim da fila até 3×
+   em vez de virar falha. Página da varredura que falha por 429 deixa a
+   varredura incompleta, e aí a checagem de exclusão fica pro próximo ciclo
+   (de propósito).
+
+Também: `carregarSnapshot` paginava `deal_snapshot` **sem ORDER BY** (mesma
+armadilha da seção 7). Agora ordena por `id_deal`.
+
+**Efeito medido** no 1º ciclo com lotes (14:30 UTC): 93 divergentes corrigidos
+em ~40s (4 lotes). Antes eram ~36 por ciclo de 15 min. 2º ciclo (14:45, já
+com o controle de 429): varredura completa, 0 respostas 429, 44 divergentes
+corrigidos em 2 lotes, 0 falhas, e **31 deals excluídos no RD** confirmados
+por 404 e tirados do dashboard (Oral Unic 16, Viva 6, Lisô 4, sem marca 4,
+B2Case 1). Funil Atual Inbound: 2.264 → 2.183 Em andamento.
+
+**Varredura em fatias (v13, mesmo dia).** Às 12:15 BRT a varredura sozinha
+estourou os 2s de CPU (os logs já mostravam ~1,78s nas anteriores) e morreu
+com a trava presa. Não é questão de plano: o limite de CPU é o mesmo no Pro.
+Agora a varredura também é uma corrente: **coordenador** (o que o cron chama)
+divide o RD em fatias de até 3.000 deals (por funil, ou por etapa se o funil
+for maior — hoje o SDR), cada **fatia** lista a sua parte e compara só com as
+linhas do espelho daquela fatia, a etapa **final** confere exclusões e dispara
+os **lotes**. A varredura não pega mais a trava (só lê); só os lotes pegam.
+Se um elo morrer, a corrente para e o próximo ciclo recomeça, sem trava
+presa. O log da varredura continua 1 linha em `espelho_rd_edge`, escrita pela
+etapa final. 1º ciclo (12:30 BRT): 9.857 / 9.857 deals lidos em ~20
+chamadas, 0 erros, 0 respostas 429, nenhum `CPU Time exceeded`, 23 correções
+(21 deals recém-criados no RD) em ~3 min.
+
+**Repositório estava atrás da produção.** A v11 (tratamento de 429) foi
+publicada mas o arquivo commitado no PR #179 era a v10 — cópia feita antes da
+edição. A v13 versionada aqui junta tudo; repositório e produção voltam a ser
+o mesmo arquivo.
+
+**Plano do Supabase de Expansão:** estava FREE (wall clock de Edge Function
+150s, aviso "exceeding usage limits") e o Junior fez upgrade pra **Pro** no
+mesmo dia (wall clock 400s). Os prazos internos (`PRAZO_VARREDURA_MS` 125s,
+`PRAZO_LOTE_MS` 100s, v12) cabem nos dois e ficaram assim de propósito. O
+limite de CPU (2s por chamada), que é o que obriga os lotes, é igual nos dois
+planos. `max_escritas_por_execucao` foi pra 1000 (Junior rodou o UPDATE).
+
+`supabase/functions/espelhar-rd/index.ts` é a fonte. O modo diagnóstico
+`?fase=` saiu (a cópia `espelhar-rd-teste` segue existindo pra isso).
+
+### 2026-09-23 — Modo TV troca de visualização a cada 15s (era 30s)
+
+Pedido do Junior, depois de ver a tela rodando na TV do time: `TROCA_MODO_MS`
+de 30s → **15s**. Cada recorte (Volta / Mês) passa a aparecer 2x por minuto.
+Só a constante mudou — a barrinha de progresso do botão ativo lê o mesmo
+valor, então ela acompanha sozinha.
+
+### 2026-09-23 — Campanha de Metas: hero ganha "Pole position · SDR"
+
+Pedido do Junior: no cabeçalho escuro (GP We Scale), o card do Closer na
+frente sai um pouco da borda direita (`marginRight: clamp(0px, 4vw, 64px)`)
+e ganha ao lado um card do **SDR na frente**. Critério do SDR: % da meta de
+SQL na janela ativa (mesma meta rateada do Grid dos SDRs, `fatorMetaSdr`),
+desempate por SQL e depois por DIAG; sem nenhum SQL/DIAG mostra "sem dados".
+Texto: "X% da meta · N SQL · N DIAG". `PolePositionCard` virou genérico
+(título/iniciais/cor/nome/detalhe). `useMetasSDRs` subiu pra página e é
+repassado ao `SdrsSection` (1 consulta só). Segue a janela selecionada, igual
+ao card do Closer.
+
+### 2026-09-22 (3) — Eventos carregados sem filtro de data: troca de período instantânea
+
+Junior reportou duas queixas de performance: (1) "o dash está demorando muito
+para carregar" e (2) "quando filtro vários meses ele não carrega nunca".
+
+**Causa raiz: `useFunilEventos` filtrava datas no servidor e incluía
+`inicio:fim` na chave de cache.** A cada troca de período, a chave mudava e
+o cache era descartado, forçando rebusca de todos os ~19k eventos. Com
+multi-seleção distante (ex.: Jan + Set), a bounding box abrangia 9 meses e
+buscava praticamente a view inteira — ~7 páginas × 450ms = ~3s de espera. O
+funil ficava em branco durante esse tempo.
+
+**Fix: mesmo padrão de `useFunilVendas`.** A view é carregada uma vez por
+origem, sem filtro de data no servidor. Chave de cache virou
+`vw_funil_etapas_v2:{origem}` (estável). O recorte de período já era feito no
+cliente via `isInWindow`/`win` — continua funcionando sem mudança. Resultado:
+primeira carga ~1s (paralelo, igual antes), qualquer troca de período após isso
+é instantânea.
+
+Três arquivos: `useFunilEventos.ts` (remove `inicio`/`fim` do `Params` e da
+query), `FunilVendas.tsx` e `PerformanceVendas.tsx` (chamadas simplificadas).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (470 testes).
 
 ### 2026-09-22 (2) — Motivos de perda do RD: 463 cadastros viram 36
 
@@ -710,6 +1477,39 @@ Verificado: `npm run build` (tsc -b) + `npx vitest run` (16 testes em
 valor; bucket "Sem informação" ficando não-clicável de propósito) +
 `oxlint` limpo nos arquivos tocados, via `~/ws-dashboard-build`. App exige
 login — não visto renderizado.
+### 2026-09-22 (2) — `espelho_rd_edge` varre o RD por funil (fim do teto de 10 mil)
+
+A listagem do RD recusa página além de 10.000 resultados (`400 Result window is
+too large, must be less than or equal to 10000`, confirmado em `page=51`). O
+espelho listava o RD sem filtro, em 50 páginas × 200 — com a base em 9.846
+deals, faltavam ~150 para ele começar a perder parte do RD sem avisar (o
+`paginas_com_erro: [51..54]` que aparecia desde 16/09 era ele batendo no teto).
+
+`supabase/functions/espelhar-rd/index.ts` (agora versionado — só existia
+publicado): uma listagem por funil (`deal_pipeline_id`), maior hoje é o SDR
+com 4.567. Funil acima de 9.000 é quebrado por etapa (`deal_stage_id`). Um
+request sem filtro traz o total geral e o log ganha `checkpoint.cobertura`
+(`total_rd`, `soma_fatias`, `deals_lidos`) — deal fora de funil conhecido
+aparece como diferença, não some calado. `paginas_com_erro` volta a significar
+erro de verdade (e marca a execução como `partial`).
+
+Testado numa cópia só-leitura (`espelhar-rd-teste`, modo `?fase=`): 9.847 /
+9.847 / 9.847, 0 erros, varredura em 63s. Forçando a quebra por etapa (SDR e
+Prospecção Ativa) também 9.847 / 9.847. Soma dos 15 funis conferida contra o
+total do RD via `pg_net`.
+
+### 2026-09-22 — Supabase de Expansão pausado por falta de pagamento: auditoria de perda de dados
+
+Projeto fora das **06:58 às 09:20 BRT**. **Nenhum dado perdido.** Tudo
+gravado até a pausa sobreviveu. O risco era o que mudou no RD durante a
+queda, porque o `wf_5` usa janela fixa de `agora − 60 min` em vez do watermark
+gravado — na volta ele olhou só a partir de 08:20 BRT. Conferência contra o RD
+via `pg_net` (token não sai do Vault): 409 deals com `updated_at` ≥ 06:00 BRT,
+`deal_stage_histories` de cada um. 16 entradas de etapa durante a queda, todas
+no banco; 13 perdas, todas com evento; 4 deals criados na queda, absorvidos pelo
+`espelho_rd_edge` na volta. Nenhuma escrita corretiva necessária. Dados da
+conferência em `_recuperacao_pausa_20260922` (RLS ligado). Supabase de
+Marketing é outra conta e não foi afetado.
 
 ### 2026-09-21 (3) — Modo TV alterna sozinho entre Volta e Mês
 

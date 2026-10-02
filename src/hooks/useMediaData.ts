@@ -1,90 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useConsultaFiltrada } from './useConsultaFiltrada'
 import type { MediaDailyRaw, Marca, Canal } from '@/lib/types'
 
-interface Filters {
-  marca?: Marca
-  canal?: Canal
-  dataInicio?: string   // ISO date
-  dataFim?: string      // ISO date
-}
+interface Filters { marca?: Marca; canal?: Canal; dataInicio?: string; dataFim?: string; enabled?: boolean }
 
-interface UseMediaDataResult {
-  data: MediaDailyRaw[]
-  loading: boolean
-  error: string | null
-}
-
-const PAGE_SIZE = 1000
-
-export function useMediaData(filters: Filters = {}): UseMediaDataResult {
-  const [data, setData] = useState<MediaDailyRaw[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  // Skip poll se um fetch anterior (paginação de milhares de linhas) ainda
-  // está rodando — evita empilhar requests e alocar arrays em cima uns dos outros.
-  const inFlight = useRef(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchAll(showLoading = true) {
-      if (inFlight.current) return
-      inFlight.current = true
-      if (showLoading) setLoading(true)
-      setError(null)
-
-      const allRows: MediaDailyRaw[] = []
-      let page = 0
-
-      try {
-        while (true) {
-          const from = page * PAGE_SIZE
-          const to = from + PAGE_SIZE - 1
-
-          let q = supabase
-            .from('media_daily_raw')
-            .select('*')
-            .order('dia', { ascending: false })
-            .range(from, to)
-
-          if (filters.marca)      q = q.eq('marca', filters.marca)
-          if (filters.canal)      q = q.eq('canal', filters.canal)
-          if (filters.dataInicio) q = q.gte('dia', filters.dataInicio)
-          if (filters.dataFim)    q = q.lte('dia', filters.dataFim)
-
-          const { data: rows, error: err } = await q
-
-          if (cancelled) return
-          if (err) { setError(err.message); setLoading(false); return }
-
-          allRows.push(...((rows ?? []) as MediaDailyRaw[]))
-
-          if (!rows || rows.length < PAGE_SIZE) break
-          page++
-        }
-
-        if (!cancelled) {
-          setData(allRows)
-          setLoading(false)
-        }
-      } finally {
-        inFlight.current = false
-      }
+export function useMediaData({ marca, canal, dataInicio, dataFim, enabled = true }: Filters = {}) {
+  const fetch = useCallback(async (signal: AbortSignal) => {
+    const rows: MediaDailyRaw[] = []
+    for (let from = 0; ; from += 1000) {
+      if (signal.aborted) throw new Error('Consulta cancelada.')
+      let q = supabase.from('media_daily_raw').select('*').order('dia', { ascending: false }).range(from, from + 999).abortSignal(signal)
+      if (marca) q = q.eq('marca', marca)
+      if (canal) q = q.eq('canal', canal)
+      if (dataInicio) q = q.gte('dia', dataInicio)
+      if (dataFim) q = q.lte('dia', dataFim)
+      const { data, error } = await q
+      if (error) throw new Error(error.message)
+      rows.push(...((data ?? []) as MediaDailyRaw[]))
+      if (!data || data.length < 1000) return rows
     }
-
-    fetchAll()
-
-    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
-    window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 300_000)
-
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      window.removeEventListener('dashboard:refresh', handleRefresh)
-    }
-  }, [filters.marca, filters.canal, filters.dataInicio, filters.dataFim])
-
-  return { data, loading, error }
+  }, [marca, canal, dataInicio, dataFim])
+  return useConsultaFiltrada(JSON.stringify(['marketing:media', marca, canal, dataInicio, dataFim]), fetch, enabled)
 }

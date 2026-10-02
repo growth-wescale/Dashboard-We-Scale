@@ -1,0 +1,825 @@
+/**
+ * Configuração das Metas — modelo do rascunho e regras do funil reverso.
+ * Spec: docs/superpowers/specs/2026-09-30-configuracao-metas-wizard-design.md
+ *
+ * Puro (sem React nem Supabase): a tela monta um `RascunhoConfig`, este módulo
+ * calcula o funil de cada marca, diz o que falta e converte pro formato que
+ * `publicar_meta_versao` já grava (`ConfigEtapa[]` + linhas do espelho).
+ */
+import { BRAND_LIST } from '@/constants/brands'
+import {
+  gerarSemanas, resolverFunilMarca,
+  type ConfigEtapa, type DiaSemana, type EtapaMeta, type LinhaEspelho,
+  type PessoaComFuncao, type ResolucaoFunil, type Semana,
+} from '@/lib/metasEngine'
+import type { DistribuicaoSemanalItem, EstadoMes, EstadoMesMarca, VersaoMeta } from '@/hooks/useMetaMes'
+
+// ── Etapas ───────────────────────────────────────────────────────────────
+
+/** Funil de cima pra baixo, na ordem em que a tela desenha. Vendas (Fechamento) é a âncora. */
+export const ETAPAS_FUNIL = ['Reunião Agendada SQL', 'Reunião Realizada', 'SAL', 'Oportunidade COF', 'Fechamento'] as const
+export type EtapaFunil = typeof ETAPAS_FUNIL[number]
+
+/** Etapas que o gestor configura, na ordem em que o cálculo sobe (de baixo pra
+ *  cima). Ligações fica fora da cadeia, pendurada no SQL. */
+export const ETAPAS_CONFIGURAVEIS = ['Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações'] as const
+export type EtapaConfiguravel = typeof ETAPAS_CONFIGURAVEIS[number]
+
+export type EtapaMetaConfig = EtapaFunil | 'Ligações'
+
+export const ROTULO_ETAPA: Record<EtapaMetaConfig, string> = {
+  'Ligações': 'Ligações',
+  'Reunião Agendada SQL': 'SQL',
+  'Reunião Realizada': 'Diagnóstico',
+  SAL: 'SAL',
+  'Oportunidade COF': 'Oportunidade',
+  Fechamento: 'Vendas',
+}
+
+/** A conversão de uma etapa é sempre dela pra de baixo: taxa = valor(baixo) ÷ valor(etapa). */
+export const ETAPA_ABAIXO: Record<EtapaConfiguravel, EtapaFunil> = {
+  'Ligações': 'Reunião Agendada SQL',
+  'Reunião Agendada SQL': 'Reunião Realizada',
+  'Reunião Realizada': 'SAL',
+  SAL: 'Oportunidade COF',
+  'Oportunidade COF': 'Fechamento',
+}
+
+/** Quem leva a meta de cada etapa — mesma partição de `gerarLinhasEspelho`. */
+export const ETAPAS_SDR: readonly EtapaMetaConfig[] = ['Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
+export const ETAPAS_CLOSER: readonly EtapaMetaConfig[] = ['Oportunidade COF', 'Fechamento']
+
+export function funcaoDaEtapaSemanal(etapa: EtapaMeta): 'SDR' | 'Closer' {
+  return etapa === 'Oportunidade COF' || etapa === 'Fechamento' ? 'Closer' : 'SDR'
+}
+
+// ── Modelo ───────────────────────────────────────────────────────────────
+
+export type ModoEtapaConfig =
+  | { tipo: 'referencia' }
+  | { tipo: 'conversao'; taxa: number | null }
+  | { tipo: 'manual'; valor: number | null }
+  | { tipo: 'sem_meta' }
+
+/** O que a marca tinha na versão de onde o rascunho partiu (mês anterior ou versão base). */
+export interface ReferenciaMarca {
+  /** 'setembro', 'V1'… — só rótulo pra tela. */
+  rotulo: string
+  vendas: number | null
+  ticketMedio: number | null
+  /** Conversão etapa → etapa de baixo. */
+  taxas: Partial<Record<EtapaConfiguravel, number>>
+  /** Meta de cada etapa na referência, já arredondada. */
+  valores: Partial<Record<EtapaMetaConfig, number>>
+}
+
+export interface MarcaConfig {
+  marca: string
+  vendas: number | null
+  ticketMedio: number | null
+  etapas: Record<EtapaConfiguravel, ModoEtapaConfig>
+  pessoas: PessoaComFuncao[]
+  referencia: ReferenciaMarca | null
+}
+
+export type OrigemRascunho =
+  | { tipo: 'mes_anterior'; mes: string; rotulo: string }
+  | { tipo: 'versao'; versaoId: number; numero: number; rotulo: string }
+  | { tipo: 'branco' }
+
+/** Quantas vendas da marca caem em cada semana — a única coisa distribuída à
+ *  mão. As outras etapas da semana vêm na mesma proporção (`metasPorSemana`). */
+export interface VendaSemana {
+  marca: string
+  semanaNumero: number
+  valor: number
+}
+
+export interface RascunhoConfig {
+  mesReferencia: string
+  origem: OrigemRascunho
+  diaViradaSemana: DiaSemana
+  semanas: Semana[]
+  marcas: MarcaConfig[]
+  vendasPorSemana: VendaSemana[]
+  atualizadoEm: string
+}
+
+/** Meta inteira pra cima. O -1e-9 evita que 28,000000000000004 vire 29. */
+export function arredondarMeta(x: number): number {
+  return Math.max(0, Math.ceil(x - 1e-9))
+}
+
+export function mesAnterior(mes: string): string {
+  const [ano, m] = mes.split('-').map(Number)
+  const d = new Date(ano, m - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+// ── Referência e rascunhos ───────────────────────────────────────────────
+
+/**
+ * Lê uma versão publicada como referência. A taxa de cada etapa é a gravada,
+ * quando a etapa derivava da de baixo; senão, a implícita dos valores exatos
+ * (`exato(baixo) / exato(etapa)`) — é o caso de toda a V1 de setembro, que foi
+ * importada com números fixos.
+ */
+export function referenciaDeVersao(estado: EstadoMesMarca, rotulo: string): ReferenciaMarca {
+  const exato = resolverFunilMarca(estado.etapas, estado.ticketMedio).valores
+  const porEtapa = new Map(estado.etapas.map(e => [e.etapa, e]))
+  const taxas: Partial<Record<EtapaConfiguravel, number>> = {}
+  for (const x of ETAPAS_CONFIGURAVEIS) {
+    const abaixo = ETAPA_ABAIXO[x]
+    const cfg = porEtapa.get(x)
+    if (cfg?.modo === 'derivado' && cfg.etapaOrigem === abaixo && cfg.taxa != null && cfg.taxa > 0) {
+      taxas[x] = cfg.taxa
+      continue
+    }
+    const vx = exato[x]
+    const vb = exato[abaixo]
+    if (vx != null && vx > 0 && vb != null && vb > 0) taxas[x] = vb / vx
+  }
+  const valores: Partial<Record<EtapaMetaConfig, number>> = {}
+  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+    const v = exato[e]
+    if (v != null) valores[e] = arredondarMeta(v)
+  }
+  return {
+    rotulo,
+    vendas: exato['Fechamento'] ?? null,
+    ticketMedio: estado.ticketMedio > 0 ? estado.ticketMedio : null,
+    taxas,
+    valores,
+  }
+}
+
+function etapasPadrao(fn: (x: EtapaConfiguravel) => ModoEtapaConfig): Record<EtapaConfiguravel, ModoEtapaConfig> {
+  return Object.fromEntries(ETAPAS_CONFIGURAVEIS.map(x => [x, fn(x)])) as Record<EtapaConfiguravel, ModoEtapaConfig>
+}
+
+/** Marca de um mês novo a partir do mês anterior: tudo preenchido menos as vendas. */
+export function marcaDoMesAnterior(estado: EstadoMesMarca, rotulo: string): MarcaConfig {
+  const referencia = referenciaDeVersao(estado, rotulo)
+  return {
+    marca: estado.marca,
+    vendas: null,
+    ticketMedio: referencia.ticketMedio,
+    etapas: etapasPadrao(x => {
+      if (referencia.taxas[x] != null) return { tipo: 'referencia' }
+      const v = referencia.valores[x]
+      return v != null && v > 0 ? { tipo: 'manual', valor: v } : { tipo: 'sem_meta' }
+    }),
+    pessoas: estado.pessoas.map(p => ({ ...p })),
+    referencia,
+  }
+}
+
+/**
+ * Marca de uma revisão (V2 a partir de V{k}). Etapa fixa de versão montada no
+ * Hub volta como manual (foi escolha do gestor); de versão importada, como
+ * referência (o fixo era só o jeito de importar a planilha).
+ */
+export function marcaDeVersao(estado: EstadoMesMarca, rotulo: string, importada: boolean): MarcaConfig {
+  const referencia = referenciaDeVersao(estado, rotulo)
+  const porEtapa = new Map(estado.etapas.map(e => [e.etapa, e]))
+  return {
+    marca: estado.marca,
+    vendas: referencia.vendas,
+    ticketMedio: referencia.ticketMedio,
+    etapas: etapasPadrao(x => {
+      const cfg = porEtapa.get(x)
+      if (!cfg || cfg.modo === 'desligado') return { tipo: 'sem_meta' }
+      if (cfg.modo === 'derivado' || importada) {
+        if (referencia.taxas[x] != null) return { tipo: 'referencia' }
+        const v = referencia.valores[x]
+        return v != null ? { tipo: 'manual', valor: v } : { tipo: 'sem_meta' }
+      }
+      return { tipo: 'manual', valor: cfg.valorFixo ?? null }
+    }),
+    pessoas: estado.pessoas.map(p => ({ ...p })),
+    referencia,
+  }
+}
+
+export function marcaEmBranco(marca: string): MarcaConfig {
+  return {
+    marca,
+    vendas: null,
+    ticketMedio: null,
+    etapas: etapasPadrao(() => ({ tipo: 'conversao', taxa: null })),
+    pessoas: [],
+    referencia: null,
+  }
+}
+
+const ORDEM_MARCA = new Map(BRAND_LIST.flatMap((b, i) => (b.marca ? [[b.marca as string, i] as const] : [])))
+
+export function ordenarMarcas<T extends { marca: string }>(lista: T[]): T[] {
+  return [...lista].sort((a, b) =>
+    (ORDEM_MARCA.get(a.marca) ?? 99) - (ORDEM_MARCA.get(b.marca) ?? 99) || a.marca.localeCompare(b.marca, 'pt-BR'))
+}
+
+export function marcasDisponiveis(r: RascunhoConfig): string[] {
+  const presentes = new Set(r.marcas.map(m => m.marca))
+  return BRAND_LIST.flatMap(b => (b.marca && !presentes.has(b.marca) ? [b.marca as string] : []))
+}
+
+export function rascunhoDoMesAnterior(mesReferencia: string, anterior: EstadoMes, rotulo: string, agora = new Date()): RascunhoConfig {
+  return {
+    mesReferencia,
+    origem: { tipo: 'mes_anterior', mes: mesAnterior(mesReferencia), rotulo },
+    diaViradaSemana: anterior.diaViradaSemana,
+    semanas: gerarSemanas(mesReferencia, anterior.diaViradaSemana),
+    marcas: ordenarMarcas(anterior.marcas.map(m => marcaDoMesAnterior(m, rotulo))),
+    vendasPorSemana: [],
+    atualizadoEm: agora.toISOString(),
+  }
+}
+
+export function rascunhoDeVersao(
+  mesReferencia: string,
+  versao: Pick<VersaoMeta, 'id' | 'numero' | 'rotulo' | 'origem'>,
+  estado: EstadoMes,
+  agora = new Date(),
+): RascunhoConfig {
+  const rotulo = `V${versao.numero}`
+  return {
+    mesReferencia,
+    origem: { tipo: 'versao', versaoId: versao.id, numero: versao.numero, rotulo: versao.rotulo },
+    diaViradaSemana: estado.diaViradaSemana,
+    semanas: estado.semanas,
+    marcas: ordenarMarcas(estado.marcas.map(m => marcaDeVersao(m, rotulo, versao.origem === 'importado'))),
+    vendasPorSemana: vendasDaDistribuicao(estado.distribuicaoSemanal),
+    atualizadoEm: agora.toISOString(),
+  }
+}
+
+export function rascunhoEmBranco(mesReferencia: string, marcas: string[], agora = new Date()): RascunhoConfig {
+  return {
+    mesReferencia,
+    origem: { tipo: 'branco' },
+    diaViradaSemana: 'terca',
+    semanas: gerarSemanas(mesReferencia, 'terca'),
+    marcas: ordenarMarcas(marcas.map(marcaEmBranco)),
+    vendasPorSemana: [],
+    atualizadoEm: agora.toISOString(),
+  }
+}
+
+// ── Cálculo do funil ─────────────────────────────────────────────────────
+
+export type OrigemValor = 'ancora' | 'referencia' | 'conversao' | 'manual' | 'sem_meta'
+
+export interface EtapaCalculada {
+  etapa: EtapaMetaConfig
+  exato: number | null
+  meta: number | null
+  /** Conversão etapa → de baixo usada no cálculo (implícita, se manual). */
+  taxa: number | null
+  origem: OrigemValor
+  /** Nova conversão diferente da de referência. */
+  alterada: boolean
+  problema: string | null
+}
+
+export interface FunilCalculado {
+  etapas: Record<EtapaMetaConfig, EtapaCalculada>
+  faturamento: number | null
+}
+
+/**
+ * Resolve o funil de baixo pra cima. Cada etapa parte do valor EXATO da de
+ * baixo e só o resultado é arredondado (sem cascata). Etapa cuja de baixo
+ * ainda não tem valor (vendas em branco, conversão faltando) fica sem valor e
+ * sem reclamar — o problema já está apontado na etapa de baixo.
+ */
+export function calcularFunil(m: MarcaConfig): FunilCalculado {
+  const etapas = {} as Record<EtapaMetaConfig, EtapaCalculada>
+  etapas.Fechamento = {
+    etapa: 'Fechamento', exato: m.vendas, meta: m.vendas, taxa: null,
+    origem: 'ancora', alterada: false, problema: null,
+  }
+
+  for (const x of ETAPAS_CONFIGURAVEIS) {
+    const modo = m.etapas[x]
+    const abaixo = etapas[ETAPA_ABAIXO[x]]
+    const refTaxa = m.referencia?.taxas[x] ?? null
+    let exato: number | null = null
+    let taxa: number | null = null
+    let problema: string | null = null
+    let alterada = false
+    let origem: OrigemValor = 'sem_meta'
+
+    if (modo.tipo === 'manual') {
+      origem = 'manual'
+      if (modo.valor == null || !(modo.valor >= 0)) {
+        problema = `Informe o número de ${ROTULO_ETAPA[x]}`
+      } else {
+        exato = modo.valor
+        if (abaixo.exato != null && modo.valor > 0) taxa = abaixo.exato / modo.valor
+      }
+    } else if (modo.tipo === 'referencia' || modo.tipo === 'conversao') {
+      origem = modo.tipo
+      taxa = modo.tipo === 'referencia' ? refTaxa : modo.taxa
+      if (modo.tipo === 'conversao') {
+        alterada = refTaxa == null || taxa == null || Math.abs(taxa - refTaxa) > 0.0005
+      }
+      if (taxa == null || !(taxa > 0)) {
+        problema = modo.tipo === 'referencia'
+          ? `${ROTULO_ETAPA[x]} não tem conversão de referência — informe uma nova`
+          : `Informe a conversão ${ROTULO_ETAPA[x]} → ${ROTULO_ETAPA[abaixo.etapa]}`
+        taxa = null
+      } else if (abaixo.origem === 'sem_meta') {
+        problema = `${ROTULO_ETAPA[abaixo.etapa]} está sem meta — informe ${ROTULO_ETAPA[x]} como número manual ou marque sem meta`
+      } else if (abaixo.exato != null) {
+        exato = abaixo.exato / taxa
+      }
+    }
+
+    etapas[x] = {
+      etapa: x, exato, meta: exato != null ? arredondarMeta(exato) : null,
+      taxa, origem, alterada, problema,
+    }
+  }
+
+  const faturamento = m.vendas != null && m.ticketMedio != null ? m.vendas * m.ticketMedio : null
+  return { etapas, faturamento }
+}
+
+/** Troca o modo de uma etapa. "Sem meta" leva junto as de cima até a primeira manual. */
+export function definirModoEtapa(m: MarcaConfig, etapa: EtapaConfiguravel, modo: ModoEtapaConfig): MarcaConfig {
+  const etapas = { ...m.etapas, [etapa]: modo }
+  if (modo.tipo === 'sem_meta') {
+    for (const acima of ETAPAS_CONFIGURAVEIS.slice(ETAPAS_CONFIGURAVEIS.indexOf(etapa) + 1)) {
+      if (etapas[acima].tipo === 'manual') break
+      etapas[acima] = { tipo: 'sem_meta' }
+    }
+  }
+  return { ...m, etapas }
+}
+
+// ── Pendências e status ──────────────────────────────────────────────────
+
+export interface Pendencia {
+  secao: 'base' | 'funil' | 'time'
+  texto: string
+}
+
+export type StatusMarca = 'nao_configurada' | 'em_configuracao' | 'configurada'
+
+function fmtPeso(n: number): string {
+  return (Math.round(n * 100) / 100).toLocaleString('pt-BR')
+}
+
+/** "Os pesos dos SDRs somam 110% — 10 pontos acima de 100%" / "… faltam 10 pontos pra 100%". */
+export function textoSomaPesos(grupo: string, soma: number): string {
+  const dif = Math.abs(soma - 100)
+  return soma > 100
+    ? `Os pesos dos ${grupo} somam ${fmtPeso(soma)}% — ${fmtPeso(dif)} ${dif === 1 ? 'ponto' : 'pontos'} acima de 100%`
+    : `Os pesos dos ${grupo} somam ${fmtPeso(soma)}% — ${dif === 1 ? 'falta' : 'faltam'} ${fmtPeso(dif)} ${dif === 1 ? 'ponto' : 'pontos'} pra 100%`
+}
+
+/** Passo dos pesos de Closer (100 ÷ vendas), ou null sem vendas. */
+export function faixaCloser(vendas: number | null): number | null {
+  return vendas != null && vendas > 0 ? 100 / Math.round(vendas) : null
+}
+
+export function pesoNaFaixa(peso: number, faixa: number): boolean {
+  const k = peso / faixa
+  return Math.abs(k - Math.round(k)) < 0.001
+}
+
+export function pendenciasMarca(m: MarcaConfig, funil: FunilCalculado = calcularFunil(m)): Pendencia[] {
+  const p: Pendencia[] = []
+  if (m.vendas == null) p.push({ secao: 'base', texto: 'Informe as vendas previstas do mês' })
+  if (m.ticketMedio == null || !(m.ticketMedio > 0)) p.push({ secao: 'base', texto: 'Informe a taxa de franquia média' })
+
+  for (const x of [...ETAPAS_CONFIGURAVEIS].reverse()) {
+    const problema = funil.etapas[x].problema
+    if (problema) p.push({ secao: 'funil', texto: problema })
+  }
+
+  const sdrs = m.pessoas.filter(x => x.funcao === 'SDR')
+  const closers = m.pessoas.filter(x => x.funcao === 'Closer')
+  const sdrComMeta = ETAPAS_SDR.some(e => funil.etapas[e].origem !== 'sem_meta')
+  if (closers.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um Closer' })
+  if (sdrComMeta && sdrs.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um SDR — ou marque as etapas de SDR como sem meta' })
+  const somaSdr = sdrs.reduce((s, x) => s + x.peso, 0)
+  if (sdrs.length > 0 && Math.abs(somaSdr - 100) > 0.01) p.push({ secao: 'time', texto: textoSomaPesos('SDRs', somaSdr) })
+  const somaCloser = closers.reduce((s, x) => s + x.peso, 0)
+  if (closers.length > 0 && Math.abs(somaCloser - 100) > 0.01) p.push({ secao: 'time', texto: textoSomaPesos('Closers', somaCloser) })
+  // Closer leva vendas inteiras: com N vendas, o peso anda em múltiplos de 100/N.
+  const faixa = faixaCloser(m.vendas)
+  if (faixa && closers.some(x => !pesoNaFaixa(x.peso, faixa))) {
+    p.push({ secao: 'time', texto: `Com ${m.vendas} ${m.vendas === 1 ? 'venda' : 'vendas'}, os pesos dos Closers precisam ser múltiplos de ${fmtPeso(faixa)}%` })
+  }
+  return p
+}
+
+export function statusMarca(m: MarcaConfig, pendencias: Pendencia[] = pendenciasMarca(m)): StatusMarca {
+  if (m.vendas == null) return 'nao_configurada'
+  return pendencias.length > 0 ? 'em_configuracao' : 'configurada'
+}
+
+// ── Pessoas ──────────────────────────────────────────────────────────────
+
+/** 100% repartido igualmente entre as pessoas da função; a última fecha a soma. */
+export function dividirIgualmente(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer'): PessoaComFuncao[] {
+  const n = pessoas.filter(p => p.funcao === funcao).length
+  if (n === 0) return pessoas
+  const base = Math.floor((100 / n) * 100) / 100
+  const ultima = Math.round((100 - base * (n - 1)) * 100) / 100
+  let i = 0
+  return pessoas.map(p => {
+    if (p.funcao !== funcao) return p
+    i += 1
+    return { ...p, peso: i === n ? ultima : base }
+  })
+}
+
+const arred2 = (n: number) => Math.round(n * 100) / 100
+
+/** Troca os pesos das pessoas da função, na ordem em que aparecem. */
+function aplicarPesos(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', pesos: number[]): PessoaComFuncao[] {
+  let i = 0
+  return pessoas.map(p => (p.funcao === funcao ? { ...p, peso: pesos[i++] } : p))
+}
+
+/** Arredonda a 2 casas e joga a sobra do arredondamento no índice `fecha`, pra somar 100 exato. */
+function fecharEm100(pesos: number[], fecha: number): number[] {
+  const r = pesos.map(arred2)
+  const sobra = arred2(100 - r.reduce((a, b) => a + b, 0))
+  if (sobra !== 0 && fecha >= 0) r[fecha] = Math.max(0, arred2(r[fecha] + sobra))
+  return r
+}
+
+/**
+ * Reparte um total inteiro em partes inteiras proporcionais aos pesos
+ * (maiores restos: cada um leva o piso, e a sobra vai pra quem tem a maior
+ * parte quebrada — desempate pelo maior peso, depois pela ordem). A soma
+ * sempre fecha o total. Pesos todos zero = partes iguais.
+ */
+export function repartirInteiro(total: number, pesos: number[]): number[] {
+  const t = Math.max(0, Math.round(total))
+  if (pesos.length === 0) return []
+  const base = pesos.some(x => x > 0) ? pesos.map(x => Math.max(0, x)) : pesos.map(() => 1)
+  const soma = base.reduce((a, b) => a + b, 0)
+  const brutos = base.map(x => (t * x) / soma)
+  const r = brutos.map(b => Math.floor(b + 1e-9))
+  let resto = t - r.reduce((a, b) => a + b, 0)
+  const ordem = brutos
+    .map((b, i) => ({ i, frac: b - Math.floor(b + 1e-9), peso: base[i] }))
+    .sort((a, b) => b.frac - a.frac || b.peso - a.peso || a.i - b.i)
+  for (let k = 0; resto > 0; k = (k + 1) % ordem.length) {
+    r[ordem[k].i] += 1
+    resto -= 1
+  }
+  return r
+}
+
+/**
+ * Encaixa os pesos da função em faixas que dão `unidades` inteiras por pessoa
+ * (Closer: vendas — com 2 vendas as faixas são 0/50/100%). Sem unidades,
+ * devolve igual.
+ */
+export function encaixarFaixas(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', unidades: number | null): PessoaComFuncao[] {
+  const alvo = pessoas.filter(p => p.funcao === funcao)
+  if (!unidades || unidades <= 0 || alvo.length === 0) return pessoas
+  const partes = repartirInteiro(unidades, alvo.map(p => p.peso))
+  return aplicarPesos(pessoas, funcao, fecharEm100(partes.map(k => (k * 100) / unidades), alvo.length - 1))
+}
+
+/**
+ * Muda o peso de UMA pessoa e redistribui o resto (100 − novo) entre as
+ * outras da mesma função, na proporção que elas já tinham — a soma nunca sai
+ * de 100%. Pessoa sozinha na função fica sempre com 100%. Com `unidades`
+ * (Closer: vendas do mês), o peso anda em faixas de 100/unidades e cada um
+ * fica com vendas inteiras.
+ */
+export function ajustarPeso(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer', nome: string, novoPeso: number, unidades?: number | null): PessoaComFuncao[] {
+  const alvo = pessoas.filter(p => p.funcao === funcao)
+  if (alvo.length <= 1) return aplicarPesos(pessoas, funcao, alvo.map(() => 100))
+  const ultimoOutro = alvo.reduce((ult, p, i) => (p.nome !== nome ? i : ult), -1)
+  if (unidades && unidades > 0) {
+    const k = Math.min(unidades, Math.max(0, Math.round((novoPeso / 100) * unidades)))
+    const outros = alvo.filter(p => p.nome !== nome)
+    const partes = repartirInteiro(unidades - k, outros.map(p => p.peso))
+    let j = 0
+    const pesos = alvo.map(p => ((p.nome === nome ? k : partes[j++]) * 100) / unidades)
+    return aplicarPesos(pessoas, funcao, fecharEm100(pesos, ultimoOutro))
+  }
+  const v = arred2(Math.min(100, Math.max(0, novoPeso)))
+  const somaOutros = alvo.filter(p => p.nome !== nome).reduce((s, p) => s + p.peso, 0)
+  const nOutros = alvo.length - 1
+  const pesos = alvo.map(p => {
+    if (p.nome === nome) return v
+    return somaOutros > 0 ? ((100 - v) * p.peso) / somaOutros : (100 - v) / nOutros
+  })
+  return aplicarPesos(pessoas, funcao, fecharEm100(pesos, ultimoOutro))
+}
+
+/**
+ * Arrasta a divisa entre as pessoas `i` e `i + 1` da barra de pesos até a
+ * posição acumulada `posicao` (0–100), encaixando em múltiplos de `passo`
+ * (1% por padrão; Closer usa 100/vendas). Só esses dois vizinhos mudam, e a
+ * divisa não atravessa as vizinhas.
+ */
+export function moverDivisa(pesos: number[], i: number, posicao: number, passo = 1): number[] {
+  const inicio = pesos.slice(0, i).reduce((a, b) => a + b, 0)
+  const fim = inicio + pesos[i] + pesos[i + 1]
+  const p = Math.min(fim, Math.max(inicio, Math.round(posicao / passo) * passo))
+  const r = [...pesos]
+  r[i] = arred2(p - inicio)
+  r[i + 1] = arred2(fim - p)
+  return r
+}
+
+/** Reescala os pesos da função pra somarem 100 mantendo a proporção (tudo zero → partes iguais). */
+export function normalizarPesos(pessoas: PessoaComFuncao[], funcao: 'SDR' | 'Closer'): PessoaComFuncao[] {
+  const alvo = pessoas.filter(p => p.funcao === funcao)
+  if (alvo.length === 0) return pessoas
+  const soma = alvo.reduce((s, p) => s + p.peso, 0)
+  const pesos = alvo.map(p => (soma > 0 ? (100 * p.peso) / soma : 100 / alvo.length))
+  return aplicarPesos(pessoas, funcao, fecharEm100(pesos, alvo.length - 1))
+}
+
+export interface MetaPessoa {
+  nome: string
+  funcao: 'SDR' | 'Closer'
+  peso: number
+  valores: Partial<Record<EtapaMetaConfig, number>>
+  faturamento: number | null
+}
+
+/**
+ * Meta de cada pessoa: a meta da marca repartida em inteiros pelo peso
+ * (`repartirInteiro`) — nunca meia reunião nem 1,6 venda. A soma das pessoas
+ * fecha a meta da marca. Faturamento do Closer = as vendas dele × ticket.
+ */
+export function metasPorPessoa(m: MarcaConfig, funil: FunilCalculado = calcularFunil(m)): MetaPessoa[] {
+  const porChave = new Map<string, MetaPessoa>()
+  const chave = (p: PessoaComFuncao) => `${p.funcao}|${p.nome}`
+  for (const p of m.pessoas) porChave.set(chave(p), { nome: p.nome, funcao: p.funcao, peso: p.peso, valores: {}, faturamento: null })
+  for (const funcao of ['SDR', 'Closer'] as const) {
+    const grupo = m.pessoas.filter(p => p.funcao === funcao)
+    if (grupo.length === 0) continue
+    for (const e of funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
+      const meta = funil.etapas[e].meta
+      if (meta == null) continue
+      const partes = repartirInteiro(meta, grupo.map(p => p.peso))
+      grupo.forEach((p, i) => { porChave.get(chave(p))!.valores[e] = partes[i] })
+    }
+    if (funcao === 'Closer' && funil.faturamento != null && m.ticketMedio != null) {
+      for (const p of grupo) {
+        const mp = porChave.get(chave(p))!
+        mp.faturamento = (mp.valores.Fechamento ?? 0) * m.ticketMedio
+      }
+    }
+  }
+  return [...porChave.values()]
+}
+
+// ── Persistência ─────────────────────────────────────────────────────────
+
+/** Rascunho → formato de `meta_marca_etapa` (spec §5). */
+export function paraConfigEtapas(m: MarcaConfig): ConfigEtapa[] {
+  const cfgs: ConfigEtapa[] = [{ etapa: 'Fechamento', modo: 'fixo', valorFixo: m.vendas ?? 0 }]
+  for (const x of ETAPAS_CONFIGURAVEIS) {
+    const modo = m.etapas[x]
+    const etapaOrigem = ETAPA_ABAIXO[x]
+    if (modo.tipo === 'referencia' && m.referencia?.taxas[x] != null) {
+      cfgs.push({ etapa: x, modo: 'derivado', etapaOrigem, taxa: m.referencia.taxas[x], taxaOrigem: 'mes_anterior' })
+    } else if (modo.tipo === 'conversao' && modo.taxa != null) {
+      cfgs.push({ etapa: x, modo: 'derivado', etapaOrigem, taxa: modo.taxa, taxaOrigem: 'manual' })
+    } else if (modo.tipo === 'manual' && modo.valor != null) {
+      cfgs.push({ etapa: x, modo: 'fixo', valorFixo: modo.valor })
+    } else {
+      cfgs.push({ etapa: x, modo: 'desligado' })
+    }
+  }
+  return cfgs
+}
+
+/** Metas arredondadas no formato que `gerarLinhasEspelho` consome. */
+export function resolucaoArredondada(m: MarcaConfig, funil: FunilCalculado = calcularFunil(m)): ResolucaoFunil {
+  const valores: Partial<Record<EtapaMeta, number>> = {}
+  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+    const meta = funil.etapas[e].meta
+    if (meta != null) valores[e] = meta
+  }
+  return { valores, faturamento: funil.faturamento, erros: [] }
+}
+
+export interface Publicacao {
+  marcas: EstadoMesMarca[]
+  linhasEspelho: LinhaEspelho[]
+  distribuicaoSemanal: DistribuicaoSemanalItem[]
+}
+
+/**
+ * Linhas de `DB_Metas_Performance` (o que o dashboard lê) com as metas
+ * inteiras por pessoa. Mesma partição de `gerarLinhasEspelho`: SDR leva SQL
+ * (= agendamento), Diagnóstico e SAL; Closer leva Oportunidade, vendas e
+ * faturamento.
+ */
+export function linhasEspelho(r: RascunhoConfig): LinhaEspelho[] {
+  const linhas: LinhaEspelho[] = []
+  for (const m of r.marcas) {
+    const pessoas = metasPorPessoa(m)
+    for (const funcao of ['SDR', 'Closer'] as const) {
+      for (const p of pessoas.filter(x => x.funcao === funcao)) {
+        const v = p.valores
+        linhas.push({
+          mes_referencia: r.mesReferencia,
+          marca: m.marca,
+          nome_colaborador: p.nome,
+          funcao,
+          meta_sql: funcao === 'SDR' ? v['Reunião Agendada SQL'] ?? null : null,
+          meta_agendamento: funcao === 'SDR' ? v['Reunião Agendada SQL'] ?? null : null,
+          meta_reuniao_realizada: funcao === 'SDR' ? v['Reunião Realizada'] ?? null : null,
+          meta_volume_sal: funcao === 'SDR' && v.SAL != null ? String(v.SAL) : null,
+          meta_cof: funcao === 'Closer' ? v['Oportunidade COF'] ?? null : null,
+          meta_financeira: funcao === 'Closer' ? p.faturamento : null,
+          meta_qtd_vendas: funcao === 'Closer' ? v.Fechamento ?? null : null,
+        })
+      }
+    }
+  }
+  return linhas
+}
+
+export function montarPublicacao(r: RascunhoConfig): Publicacao {
+  return {
+    marcas: r.marcas.map(m => ({ marca: m.marca, ticketMedio: m.ticketMedio ?? 0, etapas: paraConfigEtapas(m), pessoas: m.pessoas })),
+    linhasEspelho: linhasEspelho(r),
+    distribuicaoSemanal: distribuicaoDerivada(r),
+  }
+}
+
+// ── Semanas ──────────────────────────────────────────────────────────────
+
+export function diasDaSemana(s: Semana): number {
+  const [a1, m1, d1] = s.inicio.split('-').map(Number)
+  const [a2, m2, d2] = s.fim.split('-').map(Number)
+  return Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86_400_000) + 1
+}
+
+/** Reparte o total (arredondado pra cima) pelos dias de cada semana, em inteiros que somam o total. */
+export function distribuirProporcional(total: number, semanas: Semana[]): number[] {
+  return repartirInteiro(arredondarMeta(total), semanas.map(diasDaSemana))
+}
+
+/** Vendas por semana de uma versão publicada: soma a etapa Fechamento dos Closers. */
+function vendasDaDistribuicao(itens: DistribuicaoSemanalItem[]): VendaSemana[] {
+  const porChave = new Map<string, VendaSemana>()
+  for (const d of itens) {
+    if (d.etapa !== 'Fechamento') continue
+    const chave = `${d.marca}|${d.semanaNumero}`
+    const atual = porChave.get(chave) ?? { marca: d.marca, semanaNumero: d.semanaNumero, valor: 0 }
+    atual.valor = arred2(atual.valor + d.valor)
+    porChave.set(chave, atual)
+  }
+  return [...porChave.values()].sort((a, b) => a.marca.localeCompare(b.marca) || a.semanaNumero - b.semanaNumero)
+}
+
+export type SituacaoSemanas = 'sem_vendas' | 'vazio' | 'parcial' | 'completo' | 'excedido'
+
+/** Como está a distribuição das vendas da marca pelas semanas do rascunho. */
+export function vendasDistribuidas(r: RascunhoConfig, marca: string): {
+  porSemana: number[]
+  distribuido: number
+  total: number
+  situacao: SituacaoSemanas
+} {
+  const m = r.marcas.find(x => x.marca === marca)
+  const total = m?.vendas ?? 0
+  const porSemana = r.semanas.map(s => r.vendasPorSemana.find(v => v.marca === marca && v.semanaNumero === s.numero)?.valor ?? 0)
+  const distribuido = arred2(porSemana.reduce((a, b) => a + b, 0))
+  let situacao: SituacaoSemanas
+  if (!(total > 0)) situacao = 'sem_vendas'
+  else if (distribuido === 0) situacao = 'vazio'
+  else if (distribuido < total) situacao = 'parcial'
+  else if (distribuido > total) situacao = 'excedido'
+  else situacao = 'completo'
+  return { porSemana, distribuido, total, situacao }
+}
+
+/**
+ * Metas da marca em cada semana, em inteiros: cada etapa repartida pelas
+ * vendas das semanas (`repartirInteiro`), fechando a meta do mês. Vendas da
+ * semana = o que o gestor distribuiu. Sem vendas distribuídas, tudo vazio.
+ */
+export function metasPorSemana(r: RascunhoConfig, marca: string, funil?: FunilCalculado): Array<Partial<Record<EtapaMetaConfig, number>>> {
+  const m = r.marcas.find(x => x.marca === marca)
+  const { porSemana, distribuido } = vendasDistribuidas(r, marca)
+  if (!m || distribuido <= 0) return r.semanas.map(() => ({}))
+  const f = funil ?? calcularFunil(m)
+  const semanas = r.semanas.map((): Partial<Record<EtapaMetaConfig, number>> => ({}))
+  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+    const meta = f.etapas[e].meta
+    if (meta == null) continue
+    const partes = e === 'Fechamento' ? porSemana : repartirInteiro(meta, porSemana)
+    partes.forEach((v, i) => { semanas[i][e] = v })
+  }
+  return semanas
+}
+
+/**
+ * Reparte inteiros numa grade pessoa × semana fechando as duas somas: cada
+ * pessoa soma a cota dela (`cotas`) e cada semana soma o total dela
+ * (`totais`). Semana a semana, cada pessoa mira a parte proporcional do que
+ * ainda falta pra ela; a sobra vai pra maior parte quebrada, sem passar da
+ * cota. A última semana fecha sozinha.
+ */
+export function repartirMatriz(cotas: number[], totais: number[]): number[][] {
+  const restante = [...cotas]
+  const m = cotas.map(() => totais.map(() => 0))
+  totais.forEach((totalSemana, w) => {
+    const somaRestante = restante.reduce((a, b) => a + b, 0)
+    const alvo = Math.min(totalSemana, somaRestante)
+    if (alvo <= 0) return
+    const brutos = restante.map(x => (x * alvo) / somaRestante)
+    const alloc = brutos.map((b, p) => Math.min(restante[p], Math.floor(b + 1e-9)))
+    let sobra = alvo - alloc.reduce((a, b) => a + b, 0)
+    const ordem = brutos.map((b, p) => ({ p, frac: b - Math.floor(b + 1e-9) })).sort((a, b) => b.frac - a.frac || restante[b.p] - restante[a.p] || a.p - b.p)
+    while (sobra > 0) {
+      let deu = false
+      for (const { p } of ordem) {
+        if (sobra <= 0) break
+        if (alloc[p] < restante[p]) { alloc[p] += 1; sobra -= 1; deu = true }
+      }
+      if (!deu) break
+    }
+    alloc.forEach((v, p) => { m[p][w] = v; restante[p] -= v })
+  })
+  return m
+}
+
+export interface MetaPessoaSemana {
+  nome: string
+  funcao: 'SDR' | 'Closer'
+  porSemana: Array<Partial<Record<EtapaMetaConfig, number>>>
+}
+
+/** Meta de cada pessoa em cada semana, em inteiros que fecham a meta dela no mês e a da marca na semana. */
+export function metasPessoaSemana(r: RascunhoConfig, marca: string): MetaPessoaSemana[] {
+  const m = r.marcas.find(x => x.marca === marca)
+  if (!m) return []
+  const funil = calcularFunil(m)
+  const pessoas = metasPorPessoa(m, funil)
+  const semanas = metasPorSemana(r, marca, funil)
+  const out: MetaPessoaSemana[] = pessoas.map(p => ({ nome: p.nome, funcao: p.funcao, porSemana: r.semanas.map(() => ({})) }))
+  for (const funcao of ['SDR', 'Closer'] as const) {
+    const idx = pessoas.map((p, i) => (p.funcao === funcao ? i : -1)).filter(i => i >= 0)
+    if (idx.length === 0) continue
+    for (const e of funcao === 'SDR' ? ETAPAS_SDR : ETAPAS_CLOSER) {
+      if (funil.etapas[e].meta == null) continue
+      const cotas = idx.map(i => pessoas[i].valores[e] ?? 0)
+      const totais = semanas.map(s => s[e] ?? 0)
+      const grade = repartirMatriz(cotas, totais)
+      idx.forEach((i, k) => grade[k].forEach((v, w) => { out[i].porSemana[w][e] = v }))
+    }
+  }
+  return out
+}
+
+/** Linhas de `meta_pessoa_semana` — só de marca com as vendas distribuídas por completo. */
+export function distribuicaoDerivada(r: RascunhoConfig): DistribuicaoSemanalItem[] {
+  const itens: DistribuicaoSemanalItem[] = []
+  for (const m of r.marcas) {
+    if (vendasDistribuidas(r, m.marca).situacao !== 'completo') continue
+    for (const p of metasPessoaSemana(r, m.marca)) {
+      p.porSemana.forEach((valores, w) => {
+        for (const [etapa, valor] of Object.entries(valores) as [EtapaMetaConfig, number][]) {
+          if (valor > 0) itens.push({ marca: m.marca, nomePessoa: p.nome, semanaNumero: r.semanas[w].numero, etapa, valor })
+        }
+      })
+    }
+  }
+  return itens
+}
+
+/** Vendas da marca repartidas pelos dias de cada semana (inteiros que fecham o mês). Outras marcas intactas. */
+export function distribuirVendasProporcional(r: RascunhoConfig, marca: string): VendaSemana[] {
+  const total = r.marcas.find(m => m.marca === marca)?.vendas ?? 0
+  const valores = distribuirProporcional(total, r.semanas)
+  return [
+    ...r.vendasPorSemana.filter(v => v.marca !== marca),
+    ...r.semanas.flatMap((s, i) => (valores[i] > 0 ? [{ marca, semanaNumero: s.numero, valor: valores[i] }] : [])),
+  ]
+}
+
+// ── Resumo ───────────────────────────────────────────────────────────────
+
+export function resumoRascunho(r: RascunhoConfig): { vendas: number; faturamento: number; prontas: number; total: number } {
+  let vendas = 0
+  let faturamento = 0
+  let prontas = 0
+  for (const m of r.marcas) {
+    const funil = calcularFunil(m)
+    vendas += m.vendas ?? 0
+    faturamento += funil.faturamento ?? 0
+    if (statusMarca(m, pendenciasMarca(m, funil)) === 'configurada') prontas += 1
+  }
+  return { vendas, faturamento, prontas, total: r.marcas.length }
+}

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
-import { SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
-import { CLOSERS_ATIVOS } from '@/hooks/useMetasClosers'
 import { emJanelas, janelasKey, type Janela } from '@/constants/metasCampanhaF1'
+import { saleUnits } from '@/lib/metrics'
 import {
   pontosSdr,
   pontosCloser,
@@ -24,7 +23,8 @@ import {
  * Três recortes do mês:
  *   - RR realizada  (`data_reuniao_realizada`)         → trilha SDR + realizado RR
  *   - SQL agendado  (`data_agendamento_reuniao_sql`)   → realizado SQL do SDR
- *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer
+ *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer, por
+ *     unidade vendida (`quantidade_unidades` via `saleUnits`, não 1 por deal)
  *
  * `janelas` (opcional) recorta os 3 conjuntos para a união desses intervalos
  * de data — usado pelo seletor de voltas. A query sempre traz o mês inteiro;
@@ -38,10 +38,15 @@ function normalizeNome(s: string): string {
   return s.trim().toLowerCase()
 }
 
-const SDR_LOOKUP = new Map(SDRS_ATIVOS.map(s => [normalizeNome(s.nome), s.nome]))
-const CLOSER_LOOKUP = new Map(CLOSERS_ATIVOS.map(c => [normalizeNome(c.nome), c.nome]))
-const SDR_NOMES = SDRS_ATIVOS.map(s => s.nome)
-const CLOSER_NOMES = CLOSERS_ATIVOS.map(c => c.nome)
+/** Pilotos do mês (quem tem meta) — vêm de `useMetasSDRs`/`useMetasClosers`. */
+export interface PilotosCorrida {
+  sdr: readonly string[]
+  closer: readonly string[]
+}
+
+function lookup(nomes: readonly string[]): Map<string, string> {
+  return new Map(nomes.map(n => [normalizeNome(n), n]))
+}
 
 function ultimoDiaMes(mesRef: string): string {
   const d = new Date(mesRef + 'T00:00:00')
@@ -68,6 +73,7 @@ interface RawVenda {
   nome_closer: string | null
   fonte_macro: string | null
   marca: string | null
+  quantidade_unidades: number | null
   data_reuniao_realizada: string | null
   data_venda: string | null
 }
@@ -95,7 +101,7 @@ async function fetchSqls(inicio: string, fimTs: string): Promise<RawSql[]> {
 async function fetchVendas(inicio: string, fimTs: string): Promise<RawVenda[]> {
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('nome_closer, fonte_macro, marca, data_reuniao_realizada, data_venda')
+    .select('nome_closer, fonte_macro, marca, quantidade_unidades, data_reuniao_realizada, data_venda')
     .eq('status_atual', 'Ganho')
     .gte('data_venda', inicio)
     .lte('data_venda', fimTs)
@@ -120,9 +126,11 @@ export interface UseCorridaPerformanceResult {
 function agregarRealizadoSdr(
   rrs: RawRr[],
   sqls: RawSql[],
+  nomesSdr: readonly string[],
   janelas?: readonly Janela[],
 ): Map<string, SdrRealizado> {
-  const map = new Map<string, SdrRealizado>(SDR_NOMES.map(n => [n, { sql: 0, rr: 0 }]))
+  const SDR_LOOKUP = lookup(nomesSdr)
+  const map = new Map<string, SdrRealizado>(nomesSdr.map(n => [n, { sql: 0, rr: 0 }]))
   for (const r of sqls) {
     if (!emJanelas(r.data_agendamento_reuniao_sql, janelas)) continue
     const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
@@ -136,7 +144,7 @@ function agregarRealizadoSdr(
   return map
 }
 
-export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[]): UseCorridaPerformanceResult {
+export function useCorridaPerformance(mesRef: string, pilotos: PilotosCorrida, janelas?: readonly Janela[]): UseCorridaPerformanceResult {
   const [rrs, setRrs] = useState<RawRr[]>([])
   const [sqls, setSqls] = useState<RawSql[]>([])
   const [vendas, setVendas] = useState<RawVenda[]>([])
@@ -177,8 +185,11 @@ export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[
   }, [fetchAll])
 
   const jKey = janelasKey(janelas)
+  const sdrKey = pilotos.sdr.join('|')
+  const closerKey = pilotos.closer.join('|')
 
   const sdrTrilha = useMemo(() => {
+    const SDR_LOOKUP = lookup(pilotos.sdr)
     const unidades: RrUnidade[] = rrs
       .map(r => {
         const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
@@ -194,11 +205,12 @@ export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[
         }
       })
       .filter((u): u is RrUnidade => u !== null)
-    return pontosSdr(unidades, SDR_NOMES)
+    return pontosSdr(unidades, [...pilotos.sdr])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rrs, jKey])
+  }, [rrs, jKey, sdrKey])
 
   const closerTrilha = useMemo(() => {
+    const CLOSER_LOOKUP = lookup(pilotos.closer)
     const unidades: VendaUnidade[] = vendas
       .map(v => {
         const nome = CLOSER_LOOKUP.get(normalizeNome(v.nome_closer ?? ''))
@@ -210,17 +222,18 @@ export function useCorridaPerformance(mesRef: string, janelas?: readonly Janela[
           marca: v.marca,
           dataRr: v.data_reuniao_realizada,
           dataVenda: v.data_venda,
+          unidades: saleUnits(v),
         }
       })
       .filter((u): u is VendaUnidade => u !== null)
-    return pontosCloser(unidades, CLOSER_NOMES)
+    return pontosCloser(unidades, [...pilotos.closer])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendas, jKey])
+  }, [vendas, jKey, closerKey])
 
   const sdrRealizado = useMemo(
-    () => agregarRealizadoSdr(rrs, sqls, janelas),
+    () => agregarRealizadoSdr(rrs, sqls, pilotos.sdr, janelas),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rrs, sqls, jKey],
+    [rrs, sqls, jKey, sdrKey],
   )
 
   return { sdrTrilha, closerTrilha, sdrRealizado, loading, error }

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useMetasClosers, CLOSERS_ATIVOS, type CloserMeta } from '@/hooks/useMetasClosers'
-import { useMetasSDRs, SDRS_ATIVOS } from '@/hooks/useMetasSDRs'
+import { Link, useNavigate } from 'react-router-dom'
+import { useMetasClosers, type CloserMeta } from '@/hooks/useMetasClosers'
+import { useMetasSDRs } from '@/hooks/useMetasSDRs'
+import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
 import { useCorridaPerformance } from '@/hooks/useCorridaPerformance'
 import type { LinhaTrilha } from '@/lib/corridaPerformance'
 import {
-  VOLTAS_F1,
+  mesAtualCampanha,
+  montarCampanha,
   janelasDasVoltas,
   pctDecorridoJanela,
   fatorMetaCloser,
@@ -14,14 +16,16 @@ import {
   voltaDoDia,
 } from '@/constants/metasCampanhaF1'
 import { money, pct, nfCeil } from '@/lib/format'
+import { duelosOctogono, rankingOctogono } from '@/lib/octogono'
 
 /**
- * Campanha de Metas em modo TV (`/gp-setembro/tv`) — tela do time.
+ * Campanha de Metas em modo TV (`/gp-setembro/tv`) — tela do time, sempre no
+ * mês corrente da campanha (vira sozinha na troca de mês).
  *
  * Tela única 16:9, sem menu e sem rolagem, só com o essencial da corrida:
  * meta do time no mês, closers e SDRs na volta atual e a pontuação da
  * Corrida de Performance. Tudo em `vh` pra escalar em qualquer TV. Não tem
- * filtro: a tela alterna sozinha a cada 30s entre a VOLTA atual (dados e metas
+ * filtro: a tela alterna sozinha a cada 15s entre a VOLTA atual (dados e metas
  * só da volta, que vira sozinha na troca de semana) e o MÊS (tudo acumulado).
  * Os dois recortes ficam carregados ao mesmo tempo, então a troca é instantânea.
  *
@@ -29,12 +33,9 @@ import { money, pct, nfCeil } from '@/lib/format'
  * hora em hora pra pegar deploy novo sem ninguém mexer na TV.
  */
 
-const MES_ATIVO = '2026-09-01'
-const MES_LABEL = 'Setembro 2026'
-const DIAS_MES = 30
 const RECARREGA_PAGINA_MS = 60 * 60 * 1000
-/** Tempo em cada modo (volta ↔ mês). 30s dá pra ler a tela inteira sem cansar. */
-const TROCA_MODO_MS = 30_000
+/** Tempo em cada modo (volta ↔ mês). 15s: cada recorte aparece 2x por minuto. */
+const TROCA_MODO_MS = 15_000
 
 type Modo = 'volta' | 'mes'
 
@@ -43,7 +44,7 @@ const PAINEL = 'rgba(255,255,255,0.045)'
 const BORDA = 'rgba(255,255,255,0.08)'
 const TEXTO_2 = 'rgba(255,255,255,0.62)'
 const TEXTO_3 = 'rgba(255,255,255,0.42)'
-const VERMELHO = '#E10600'
+const VERMELHO = '#D4AF37'
 
 const vh = (n: number) => `${n}vh`
 
@@ -73,12 +74,16 @@ function useAgora(): Date {
 }
 
 export function CampanhaMetasTv() {
+  const navigate = useNavigate()
   const agora = useAgora()
-  const dia = diaDaCampanha(agora)
-  const volta = voltaDoDia(dia)
-  const voltaDef = VOLTAS_F1[volta - 1]
+  const mes = mesAtualCampanha(agora)
+  const { semanas, fracoesCloser } = useSemanasCampanha(mes)
+  const campanha = useMemo(() => montarCampanha(mes, semanas), [mes, semanas])
+  const dia = diaDaCampanha(campanha, agora)
+  const volta = voltaDoDia(campanha, dia)
+  const voltaDef = campanha.voltas[volta - 1]
   const voltasSel = useMemo(() => [volta], [volta])
-  const janelas = useMemo(() => janelasDasVoltas(voltasSel), [voltasSel])
+  const janelas = useMemo(() => janelasDasVoltas(campanha, voltasSel), [campanha, voltasSel])
 
   useEffect(() => {
     const t = setTimeout(() => window.location.reload(), RECARREGA_PAGINA_MS)
@@ -88,24 +93,32 @@ export function CampanhaMetasTv() {
   // Alterna volta ↔ mês. `rodada` reinicia o cronômetro quando alguém clica num botão.
   const [modo, setModo] = useState<Modo>('volta')
   const [rodada, setRodada] = useState(0)
+  const [pausado, setPausado] = useState(false)
   useEffect(() => {
+    if (pausado) return
     const t = setTimeout(() => setModo(m => (m === 'volta' ? 'mes' : 'volta')), TROCA_MODO_MS)
     return () => clearTimeout(t)
-  }, [modo, rodada])
+  }, [modo, rodada, pausado])
+  useEffect(() => {
+    const sairNoEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') navigate('/gp-setembro') }
+    window.addEventListener('keydown', sairNoEscape)
+    return () => window.removeEventListener('keydown', sairNoEscape)
+  }, [navigate])
   const escolherModo = (m: Modo) => { setModo(m); setRodada(r => r + 1) }
   const ehMes = modo === 'mes'
 
   // Os dois recortes carregados juntos: a troca não espera consulta.
-  const { closers: closersMes, loading: loadingMes } = useMetasClosers(MES_ATIVO)
-  const { closers: closersVoltaRaw, loading: loadingVolta } = useMetasClosers(MES_ATIVO, janelas)
-  const { sdrs, loading: loadingSdrs } = useMetasSDRs(MES_ATIVO)
-  const corridaVolta = useCorridaPerformance(MES_ATIVO, janelas)
-  const corridaMes = useCorridaPerformance(MES_ATIVO)
+  const { closers: closersMes, loading: loadingMes } = useMetasClosers(mes)
+  const { closers: closersVoltaRaw, loading: loadingVolta } = useMetasClosers(mes, janelas)
+  const { sdrs, loading: loadingSdrs } = useMetasSDRs(mes)
+  const pilotos = useMemo(() => ({ sdr: sdrs.map(s => s.nome), closer: closersMes.map(c => c.nome) }), [sdrs, closersMes])
+  const corridaVolta = useCorridaPerformance(mes, pilotos, janelas)
+  const corridaMes = useCorridaPerformance(mes, pilotos)
 
   // Na volta, a meta mensal é escalada pra volta (mesma regra da página da campanha).
   const closersVolta = useMemo(() =>
     closersVoltaRaw.map(c => {
-      const f = fatorMetaCloser(c.nome, voltasSel)
+      const f = fatorMetaCloser(campanha, c.nome, voltasSel, fracoesCloser)
       const metaFinanceira = c.metaFinanceira * f
       return {
         ...c,
@@ -114,7 +127,7 @@ export function CampanhaMetasTv() {
         pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
       }
     }),
-  [closersVoltaRaw, voltasSel])
+  [closersVoltaRaw, voltasSel, campanha, fracoesCloser])
 
   const closers = ehMes ? closersMes : closersVolta
   const loadingClosers = ehMes ? loadingMes : loadingVolta
@@ -135,14 +148,16 @@ export function CampanhaMetasTv() {
     { metaFin: 0, metaQtd: 0, realFin: 0, realQtd: 0 },
   ), [closers])
 
-  const fatorSdr = ehMes ? 1 : fatorMetaSdr(voltasSel)
-  const rotuloPeriodo = ehMes ? 'Mês de Setembro' : (voltaDef?.label ?? '')
-  const deQue = ehMes ? 'do mês' : 'da volta'
+  const fatorSdr = ehMes ? 1 : fatorMetaSdr(campanha, voltasSel)
+  const rotuloPeriodo = ehMes ? `Mês de ${campanha.nomeMes}` : (voltaDef?.label ?? '').replace('Volta', 'Round')
+  const deQue = ehMes ? 'do mês' : 'do round'
+  const duelos = useMemo(() => duelosOctogono(rankingOctogono(closers, sdrs, corrida.sdrRealizado, fatorSdr)), [closers, sdrs, corrida.sdrRealizado, fatorSdr])
 
   return (
-    <div style={{
+    <div className="oct-tv-page" style={{
       position: 'fixed', inset: 0, overflow: 'hidden', background: BG, color: '#fff',
-      backgroundImage: 'radial-gradient(ellipse at 15% 0%, rgba(225,6,0,0.16), transparent 55%), radial-gradient(ellipse at 100% 100%, rgba(0,210,190,0.08), transparent 50%)',
+      backgroundImage: "linear-gradient(rgba(5,5,7,.94),rgba(5,5,7,.96)),url('/assets/octogono-arena.png')",
+      backgroundSize: 'cover', backgroundPosition: 'center',
       fontFamily: 'var(--font-body)',
       display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr)', gap: vh(2),
       padding: `${vh(2.6)} ${vh(3.6)}`,
@@ -155,24 +170,40 @@ export function CampanhaMetasTv() {
       <Cabecalho
         volta={volta}
         voltaLabel={voltaDef?.label ?? ''}
+        totalVoltas={campanha.voltas.length}
+        rotuloMes={campanha.rotulo}
+        nomeMes={campanha.nomeMes}
+        diasMes={campanha.diasMes}
         dia={dia}
         agora={agora}
         modo={modo}
         rodada={rodada}
         onModo={escolherModo}
+        pausado={pausado}
+        onPausar={() => { if (pausado) setRodada(r => r + 1); setPausado(v => !v) }}
       />
 
       <div key={modo} style={{
-        display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', gap: vh(2), minHeight: 0,
+        display: 'grid', gridTemplateRows: 'auto auto minmax(0, 1fr) auto', gap: vh(1.5), minHeight: 0,
         animation: 'tvEntra 500ms ease-out',
       }}>
         <MetaTime
           loading={loadingClosers}
           {...time}
           titulo={rotuloPeriodo}
-          fimLabel={ehMes ? 'bandeirada · 30 set' : `fim da volta · ${voltaDef?.diaFim ?? ''} set`}
-          pctEsperado={ehMes ? pctDecorridoJanela('mensal', [], dia) : pctDecorridoJanela('semanal', voltasSel, dia)}
+          fimLabel={ehMes ? `fim do mês · ${campanha.diasMes} ${campanha.abrev}` : `fim do round · ${voltaDef?.diaFim ?? ''} ${campanha.abrev}`}
+          pctEsperado={ehMes ? pctDecorridoJanela(campanha, 'mensal', [], dia) : pctDecorridoJanela(campanha, 'semanal', voltasSel, dia)}
         />
+
+        <div className="oct-tv-duels" aria-label="Confrontos entre vendedores">
+          {(['Closer', 'SDR'] as const).map(cargo => {
+            const duelo = duelos.find(d => d.cargo === cargo)
+            return <div key={cargo}><small>{cargo === 'Closer' ? 'CLOSERS' : 'SDRS'} · EVENTO PRINCIPAL</small>
+              <strong>{duelo ? `${duelo.a.nome}  ×  ${duelo.b.nome}` : 'Aguardando dois competidores com meta'}</strong>
+              {duelo && <span>{Math.round(duelo.a.pct)}%  ·  {Math.round(duelo.b.pct)}%</span>}
+            </div>
+          })}
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1.35fr 1fr', gap: vh(2), minHeight: 0 }}>
           <Painel titulo="Closers" sub={`${rotuloPeriodo} · % da meta ${deQue}`}>
@@ -180,8 +211,13 @@ export function CampanhaMetasTv() {
           </Painel>
           <Painel titulo="SDRs" sub={`${rotuloPeriodo} · realizado / meta ${deQue}`}>
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', gap: vh(1) }}>
-              {SDRS_ATIVOS.map(s => {
-                const meta = sdrs.find(m => m.nome === s.nome)
+              {!loadingSdrs && sdrs.length === 0 && (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXTO_3, fontSize: vh(2) }}>
+                  Metas do mês ainda não publicadas
+                </div>
+              )}
+              {sdrs.map(s => {
+                const meta = s
                 const real = corrida.sdrRealizado.get(s.nome)
                 return (
                   <SdrLinha
@@ -203,8 +239,8 @@ export function CampanhaMetasTv() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: vh(2) }}>
-          <Placar titulo="Corrida de Performance · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={SDRS_ATIVOS} loading={corrida.loading} />
-          <Placar titulo="Corrida de Performance · Trilha Closer" periodo={deQue} unidade="vendas" linhas={corrida.closerTrilha} visual={CLOSERS_ATIVOS} loading={corrida.loading} />
+          <Placar titulo="Pontuação · Trilha SDR" periodo={deQue} unidade="RR" linhas={corrida.sdrTrilha} visual={sdrs} loading={corrida.loading} />
+          <Placar titulo="Pontuação · Trilha Closer" periodo={deQue} unidade="unidades" linhas={corrida.closerTrilha} visual={closersMes} loading={corrida.loading} />
         </div>
       </div>
     </div>
@@ -213,34 +249,38 @@ export function CampanhaMetasTv() {
 
 /* ── Cabeçalho ──────────────────────────────────────────────────────────── */
 
-function Cabecalho({ volta, voltaLabel, dia, agora, modo, rodada, onModo }: {
-  volta: number; voltaLabel: string; dia: number; agora: Date
-  modo: Modo; rodada: number; onModo: (m: Modo) => void
+function Cabecalho({ volta, totalVoltas, voltaLabel, rotuloMes, nomeMes, diasMes, dia, agora, modo, rodada, onModo, pausado, onPausar }: {
+  volta: number; totalVoltas: number; voltaLabel: string; rotuloMes: string; nomeMes: string; diasMes: number; dia: number; agora: Date
+  modo: Modo; rodada: number; onModo: (m: Modo) => void; pausado: boolean; onPausar: () => void
 }) {
   const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  const restantes = Math.max(0, DIAS_MES - dia)
+  const restantes = Math.max(0, diasMes - dia)
   return (
     <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: vh(3) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: vh(1.8) }}>
         <div style={{ width: vh(0.7), height: vh(6.5), background: VERMELHO, borderRadius: 2 }} />
         <div>
           <Link to="/gp-setembro" style={{ textDecoration: 'none', color: VERMELHO, fontSize: vh(1.5), fontWeight: 600, letterSpacing: '.18em', textTransform: 'uppercase' }}>
-            Fórmula 1 · {MES_LABEL}
+            Octógono We Scale · {rotuloMes}
           </Link>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: vh(4.6), fontWeight: 500, lineHeight: 1 }}>
-            GP We Scale
+            Arena de Performance
           </div>
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: vh(1.2) }}>
-        <ModoBotao ativo={modo === 'volta'} rodada={rodada} onClick={() => onModo('volta')}>
-          Volta {volta} de 4 · {voltaLabel.split('·')[1]?.trim()}
+        <ModoBotao ativo={modo === 'volta'} rodada={rodada} pausado={pausado} onClick={() => onModo('volta')}>
+          Round {volta} de {totalVoltas} · {voltaLabel.split('·')[1]?.trim()}
         </ModoBotao>
-        <ModoBotao ativo={modo === 'mes'} rodada={rodada} onClick={() => onModo('mes')}>
-          Mês de Setembro
+        <ModoBotao ativo={modo === 'mes'} rodada={rodada} pausado={pausado} onClick={() => onModo('mes')}>
+          Mês de {nomeMes}
         </ModoBotao>
-        <Chip>{restantes === 0 ? 'Bandeirada!' : `${restantes} ${restantes === 1 ? 'dia' : 'dias'} para a bandeirada`}</Chip>
+        <button type="button" onClick={onPausar} aria-pressed={pausado} style={{ border: `1px solid ${BORDA}`, borderRadius: 999, background: pausado ? VERMELHO : PAINEL, color: pausado ? '#0B0B0D' : '#fff', cursor: 'pointer', padding: `${vh(.9)} ${vh(1.5)}`, fontSize: vh(1.45), fontWeight: 700 }}>
+          {pausado ? '▶ Retomar' : 'Ⅱ Pausar'}
+        </button>
+        <Link to="/gp-setembro" title="Sair do modo TV (Esc)" style={{ color: TEXTO_2, fontSize: vh(1.45), textDecoration: 'none', whiteSpace: 'nowrap' }}>Sair · Esc</Link>
+        <Chip>{restantes === 0 ? 'Round encerrado' : `${restantes} ${restantes === 1 ? 'dia' : 'dias'} para o encerramento`}</Chip>
         <div style={{ marginLeft: vh(1.5), textAlign: 'right' }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: vh(4), fontWeight: 500, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{hora}</div>
           <div style={{ fontSize: vh(1.3), color: TEXTO_3, marginTop: vh(0.4) }}>atualiza a cada 5 min</div>
@@ -250,15 +290,15 @@ function Cabecalho({ volta, voltaLabel, dia, agora, modo, rodada, onModo }: {
   )
 }
 
-/** Botão de modo: o ativo fica vermelho, com uma barrinha que enche até a próxima troca. */
-function ModoBotao({ ativo, rodada, onClick, children }: {
-  ativo: boolean; rodada: number; onClick: () => void; children: React.ReactNode
+/** Botão de modo: o ativo fica dourado, com uma barrinha até a próxima troca. */
+function ModoBotao({ ativo, rodada, pausado, onClick, children }: {
+  ativo: boolean; rodada: number; pausado: boolean; onClick: () => void; children: React.ReactNode
 }) {
   return (
     <button onClick={onClick} style={{
       position: 'relative', overflow: 'hidden', cursor: 'pointer', whiteSpace: 'nowrap',
       padding: `${vh(1)} ${vh(2)}`, borderRadius: 999, fontSize: vh(1.9), fontWeight: 500,
-      fontFamily: 'inherit', color: ativo ? '#fff' : TEXTO_2,
+      fontFamily: 'inherit', color: ativo ? '#0B0B0D' : TEXTO_2,
       background: ativo ? VERMELHO : 'rgba(255,255,255,0.07)',
       border: `1px solid ${ativo ? VERMELHO : BORDA}`,
       transition: 'background 300ms ease, color 300ms ease',
@@ -269,6 +309,7 @@ function ModoBotao({ ativo, rodada, onClick, children }: {
           position: 'absolute', left: 0, bottom: 0, height: vh(0.45),
           background: 'rgba(255,255,255,0.75)',
           animation: `tvProgresso ${TROCA_MODO_MS}ms linear forwards`,
+          animationPlayState: pausado ? 'paused' : 'running',
         }} />
       )}
     </button>
@@ -320,7 +361,7 @@ function MetaTime({ loading, realFin, metaFin, realQtd, metaQtd, pctEsperado, ti
         <div style={{ position: 'relative', height: vh(2.2), background: 'rgba(255,255,255,0.08)', borderRadius: 999 }}>
           <div style={{
             width: `${Math.min(100, pctReal)}%`, height: '100%', borderRadius: 999,
-            background: `linear-gradient(90deg, #7a0300, ${VERMELHO})`, transition: 'width 600ms ease',
+            background: `linear-gradient(90deg, #866515, ${VERMELHO})`, transition: 'width 600ms ease',
           }} />
           <div title="ritmo esperado" style={{
             position: 'absolute', top: `-${vh(0.8)}`, bottom: `-${vh(0.8)}`, left: `${Math.min(100, pctEsperado)}%`,
@@ -393,6 +434,13 @@ function Avatar({ foto, iniciais, cor, tamanho }: { foto?: string; iniciais: str
 /* ── Closers: pódio com barra realizado × meta da volta ─────────────────── */
 
 function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: boolean }) {
+  if (!loading && ranking.length === 0) {
+    return (
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: TEXTO_3, fontSize: vh(2) }}>
+        Metas do mês ainda não publicadas
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, ranking.length)}, 1fr)`, gap: vh(2), height: '100%' }}>
       {ranking.map((c, i) => {
@@ -408,7 +456,7 @@ function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: bo
                 position: 'absolute', bottom: `-${vh(0.6)}`, left: '50%', transform: 'translateX(-50%)',
                 background: lider ? VERMELHO : '#26262f', border: `1px solid ${BORDA}`,
                 padding: `${vh(0.2)} ${vh(1)}`, borderRadius: 999, fontSize: vh(1.4), fontWeight: 700,
-              }}>P{i + 1}</span>
+              }}>#{i + 1}</span>
             </div>
             <div style={{ marginTop: vh(1.3), fontSize: vh(2), fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>
               {primeiroNome(c.nome)}
@@ -417,7 +465,7 @@ function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: bo
               {loading ? '—' : temMeta ? pct(c.pctAtingimento, 0) : '—'}
             </div>
             <div style={{ fontSize: vh(1.6), color: TEXTO_2, textAlign: 'center', whiteSpace: 'nowrap' }}>
-              {moneyCompact(c.realizado)} · {c.realizadoQtd} {c.realizadoQtd === 1 ? 'venda' : 'vendas'}
+              {moneyCompact(c.realizado)} · {c.realizadoQtd} un
             </div>
 
             <div style={{
@@ -482,7 +530,7 @@ function MiniBarra({ rotulo, valor, meta, cor, loading }: { rotulo: string; valo
 function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
   titulo: string
   periodo: string
-  unidade: 'RR' | 'vendas'
+  unidade: 'RR' | 'unidades'
   linhas: LinhaTrilha[]
   visual: ReadonlyArray<{ nome: string; iniciais: string; cor: string; foto?: string }>
   loading: boolean
@@ -504,14 +552,14 @@ function Placar({ titulo, periodo, unidade, linhas, visual, loading }: {
               <div style={{ width: vh(0.5), alignSelf: 'stretch', background: p.cor, borderRadius: 2, flexShrink: 0 }} />
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: vh(1.8), fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <span style={{ fontSize: vh(1.4), fontWeight: 700, color: i === 0 && pontos > 0 ? VERMELHO : TEXTO_3, marginRight: vh(0.7) }}>P{i + 1}</span>
+                  <span style={{ fontSize: vh(1.4), fontWeight: 700, color: i === 0 && pontos > 0 ? VERMELHO : TEXTO_3, marginRight: vh(0.7) }}>#{i + 1}</span>
                   {primeiroNome(p.nome)}
                 </div>
                 <div style={{ marginTop: vh(0.5), height: vh(0.6), background: 'rgba(255,255,255,0.08)', borderRadius: 999, overflow: 'hidden' }}>
                   <div style={{ width: `${(pontos / max) * 100}%`, height: '100%', background: p.cor, transition: 'width 600ms ease' }} />
                 </div>
                 <div style={{ marginTop: vh(0.4), fontSize: vh(1.3), color: TEXTO_3 }}>
-                  {vol} {unidade === 'RR' ? 'RR' : vol === 1 ? 'venda' : 'vendas'}
+                  {vol} {unidade === 'RR' ? 'RR' : vol === 1 ? 'unidade' : 'unidades'}
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { History } from 'lucide-react'
 import { toLocalDate, fmtBR } from '@/lib/dateUtils'
 import { nf } from '@/lib/format'
+import type { FunnelRow } from '@/lib/funnelTypes'
 
 export function fmtData(value: string | null): string {
   const iso = toLocalDate(value)
@@ -60,6 +61,34 @@ export function leadtimeDias(
   if (Number.isNaN(t1)) return null
   const dias = (t1 - t0) / 86_400_000
   return dias >= 0 ? dias : null
+}
+
+/**
+ * Data da última reativação do deal NA LINHA exibida. `vw_funil_vendas` tem
+ * uma linha por ciclo, e `data_criacao_negociacao` é o início do ciclo: no
+ * ciclo 1 é a própria criação; do ciclo 2 em diante é o momento em que o deal
+ * perdido foi reaberto. Por isso só vale com `ciclo > 1` — senão `null` ("—",
+ * nunca foi reativado). Na linha do ciclo atual é a última reativação do deal;
+ * numa linha de ciclo antigo é a reativação que abriu aquele ciclo (nunca uma
+ * data posterior aos eventos da própria linha).
+ */
+export function dataUltimaReativacao(
+  row: Pick<FunnelRow, 'ciclo' | 'data_criacao_negociacao'>,
+): string | null {
+  return row.ciclo > 1 ? (row.data_criacao_negociacao ?? null) : null
+}
+
+/** Colunas de data de criação e última reativação, iguais em todos os pop-ups. */
+export const COLS_DATAS_DEAL = ['Data de criação', 'Data da última reativação'] as const
+
+export function CelulasDatasDeal({ row }: { row: Pick<FunnelRow, 'ciclo' | 'data_criacao_negociacao' | 'data_criacao_original'> }) {
+  const td = { padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' } as const
+  return (
+    <>
+      <td style={td}>{fmtData(row.data_criacao_original ?? null)}</td>
+      <td style={td}>{fmtData(dataUltimaReativacao(row))}</td>
+    </>
+  )
 }
 
 export function cell(value: string | null | undefined): string {

@@ -9,6 +9,7 @@ import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
 import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { TrapFunnel } from '@/components/ui/TrapFunnel'
+import { ReunioesMeetroxSection } from '@/components/ui/ReunioesMeetroxSection'
 import type { FunnelStage } from '@/components/ui/TrapFunnel'
 import { SCard } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
@@ -16,8 +17,10 @@ import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
-import { useMetasTimeResumo } from '@/hooks/useMetasTimeResumo'
+import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
+import { useReunioesCloser } from '@/hooks/useReunioesCloser'
+import { filtrarReunioes } from '@/lib/reunioesCloser'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
 import type { SdrRow, CloserRow } from '@/lib/performanceRows'
 import { buildPersonMetaRows, buildPersonSimplesRows, buildPersonPeriodoRows, fracaoMetaMensal } from '@/lib/metaBreakdown'
@@ -25,7 +28,7 @@ import type { PessoasBreakdown } from '@/components/ui/MetaBreakdownDrawer'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, sumRevenue, toWindow,
+  buildScopeFilter, cohortKeys, countStage, countStageEvents, countSales, noEscopoDoCiclo, sumRevenue, toWindow,
   rowsInStage, rowsInLoss, dealsInStage, mqlWord, stageLabel, etapasDaMarca,
 } from '@/lib/metrics'
 import type { StageKey, StageDeal } from '@/lib/metrics'
@@ -245,7 +248,7 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sql)}</span>
             <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.sal)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaSql > 0 ? nf(r.metaSql) : '—'}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaSql > 0 ? nfCeil(r.metaSql) : '—'}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaSql > 0 ? pct(r.pctAting) : '—'}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.mqlToSql)}</span>
           </div>
@@ -392,14 +395,9 @@ export function PerformanceVendas() {
   // Sempre carrega o recorte inteiro da origem — marca filtrada no cliente
   // (via `scope`), igual Fonte/SDR. Ver comentário em FunilVendas.
   const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
-  const { data: eventos } = useFunilEventos({
-    enabled: true,
-    origem,
-    inicio: range.start,
-    // No modo safra o evento pode ser posterior à janela do MQL.
-    fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
-  })
+  const { data: eventos } = useFunilEventos({ enabled: true, origem })
   const { data: roster } = useRosterVendas()
+  const { data: reunioesBase, loading: reunioesLoading, error: reunioesError } = useReunioesCloser()
 
   const scope = useMemo(
     () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
@@ -411,7 +409,17 @@ export function PerformanceVendas() {
     () => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))),
     [ranges],
   )
-  const idsEscopo = useMemo(() => new Set(scoped.map(r => String(r.id_lead))), [scoped])
+  const noEscopo = useMemo(() => noEscopoDoCiclo(scoped), [scoped])
+
+  // Reuniões do MeetRox (aba Closer): pela data da reunião, com os mesmos
+  // filtros da barra — Closer = quem conduziu; marca/fonte/SDR do negócio.
+  const reunioes = useMemo(
+    () => filtrarReunioes(reunioesBase, {
+      origem, marcas: marcasParaEscopo, consolidado: todasSelecionadas,
+      fontes, subFontes, sdrs, closers, win, eventSource: viewModes.eventSource,
+    }),
+    [reunioesBase, origem, marcasParaEscopo, todasSelecionadas, fontes, subFontes, sdrs, closers, win, viewModes.eventSource],
+  )
   const safra = useMemo(
     () => (viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null),
     [scoped, win, viewModes.funnelView],
@@ -431,8 +439,14 @@ export function PerformanceVendas() {
 
   // ── Contagens por evento (strips) ──────────────────────────────────────────
   const evOpts = useMemo(
-    () => ({ cohortIds: safra, extra: (e: { id_deal: unknown }) => idsEscopo.has(String(e.id_deal)) }),
-    [safra, idsEscopo],
+    () => ({ cohortIds: safra, extra: noEscopo }),
+    [safra, noEscopo],
+  )
+
+  // Tabelas por pessoa contam pelos mesmos eventos dos cards.
+  const contagem = useMemo(
+    () => ({ eventos, modes: viewModes, opts: evOpts }),
+    [eventos, viewModes, evOpts],
   )
 
   const strip = useMemo(() => ({
@@ -453,22 +467,21 @@ export function PerformanceVendas() {
   const mesUnico = periodMode === 'mes' && periodValues.length === 1 ? periodValues[0] : null
   const fimJanela = ranges[0]?.end ?? range.end
 
-  const { porMarca: metaTime, error: metaTimeError } = useMetasTimeResumo({ mesesKeys: mesUnico ? [mesUnico] : [] })
-  const metaTimeSel = useMemo(() => {
-    const acc = { metaSql: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 0, metaQtdVendas: 0, metaSal: 0 }
-    for (const b of marcasSelecionadas) {
-      const m = b.marca ? metaTime.get(b.marca) : undefined
-      if (!m) continue
-      acc.metaSql += m.metaSql; acc.metaReuniao += m.metaReuniao; acc.metaCof += m.metaCof
-      acc.metaFinanceira += m.metaFinanceira; acc.metaQtdVendas += m.metaQtdVendas; acc.metaSal += m.metaSal
-    }
-    return acc
-  }, [marcasSelecionadas, metaTime])
-
-  // Metas por pessoa (para a coluna % das tabelas).
+  // Metas por pessoa (para a coluna % das tabelas e para os cards).
   const { data: metasPessoa, rows: metasRows, error: metasError } = useMetasPerformance({
     mesKey: mesUnico ?? range.start.slice(0, 7),
   })
+
+  // Meta dos cards: marcas selecionadas, estreitada pelo filtro de SDR/Closer —
+  // mesma base da coluna Meta da tabela, então os dois nunca divergem.
+  const metaTimeSel = useMemo(
+    () => metaDoRecorte(metasRows, {
+      marcas: marcasSelecionadas.flatMap(b => (b.marca ? [b.marca as string] : [])),
+      sdrs,
+      closers,
+    }),
+    [metasRows, marcasSelecionadas, sdrs, closers],
+  )
 
   // Meta de conversão do recorte (marca × pessoa), derivada das metas de volume
   // do mês. Fora de um mês único ela não existe — mesma regra dos cards de meta
@@ -485,12 +498,12 @@ export function PerformanceVendas() {
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
   // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".
   const sdrRows: SdrRow[] = useMemo(
-    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster),
-    [scoped, win, mesUnico, metasPessoa, roster],
+    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster, contagem),
+    [scoped, win, mesUnico, metasPessoa, roster, contagem],
   )
   const closerRows: CloserRow[] = useMemo(
-    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode),
-    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode],
+    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode, contagem),
+    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode, contagem],
   )
   // Sufixo dos rótulos de venda quando o toggle está em Unidades — mesmo padrão da Visão Macro.
   const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
@@ -751,7 +764,7 @@ export function PerformanceVendas() {
           sdrsDisponiveis={opcoes.sdrs}
           closersDisponiveis={opcoes.closers}
         />
-        <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
+        <QueryErrorBanner errors={[rowsError, metasError, reunioesError]} scope="Performance" />
         <FiltrosObrigatoriosAviso faltando={faltandoObrigatorio} />
       </div>
     )
@@ -785,7 +798,7 @@ export function PerformanceVendas() {
         closersDisponiveis={opcoes.closers}
       />
 
-      <QueryErrorBanner errors={[rowsError, metasError, metaTimeError]} scope="Performance" />
+      <QueryErrorBanner errors={[rowsError, metasError, reunioesError]} scope="Performance" />
 
       <TabsBar current={tab} onChange={setTab} />
 
@@ -813,7 +826,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Os cards usam a mesma contagem por evento da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela abaixo soma pelo SDR atribuído ao negócio — negócios sem responsável não entram nela, então uma pequena diferença é esperada.
+            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR fora da equipe atual, não entra nela, então a soma das linhas pode ficar abaixo do card. Com um SDR filtrado, os dois batem.
           </p>
 
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
@@ -888,6 +901,9 @@ export function PerformanceVendas() {
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} nota={notaConversao} />
           </div>
 
+          <ReunioesMeetroxSection reunioes={reunioes} loading={reunioesLoading} origem={origem}
+            subtitulo={`${scopeLabel} · ${subtitlePeriodo}`} accent={CLOSER_ACCENT} />
+
           <div style={{ marginTop: 32 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 20, color: 'var(--ws-text-primary)' }}>
@@ -917,7 +933,7 @@ export function PerformanceVendas() {
       )}
 
       <div style={{ marginTop: 40, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center' }}>
-        {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>
+        {scopeLabel} · {subtitlePeriodo} · Fonte: <code>vw_funil_vendas</code> + <code>vw_funil_etapas_v2</code> + <code>DB_Metas_Performance</code>{tab === 'closer' && <> + <code>vw_closer_reunioes</code> (MeetRox)</>}
       </div>
 
       <StageDealsDrawer

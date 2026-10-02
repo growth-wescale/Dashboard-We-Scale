@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Flag, Play, Menu, Users } from 'lucide-react'
+import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Swords, Play, Menu, Users } from 'lucide-react'
 import { Sidebar, type SidebarItem } from '@/components/ui/Sidebar'
 import { AiChat } from '@/components/AiChat'
 import { supabase } from '@/lib/supabase'
@@ -8,9 +8,10 @@ import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { PERM_GERENCIAR_USUARIOS, ROTA_ACESSOS, permissaoDaRota } from '@/lib/permissoes'
-import { GpIntro } from '@/components/gp/GpIntro'
-import { GpStrip } from '@/components/gp/GpStrip'
-import { SennaCard } from '@/components/gp/SennaCard'
+import { OctagonIntro } from '@/components/octogono/OctagonIntro'
+import { OctagonStrip } from '@/components/octogono/OctagonStrip'
+import { PoatanCard } from '@/components/octogono/PoatanCard'
+import { OctagonPageBanner } from '@/components/octogono/OctagonPageBanner'
 import { useMediaQuery, MQ_COMPACTO } from '@/hooks/useMediaQuery'
 
 // ── Context ────────────────────────────────────────────────────────────────
@@ -27,6 +28,9 @@ export const MarcaContext = createContext<MarcaContextType>({
 export function useMarcaSelecionada() {
   return useContext(MarcaContext)
 }
+
+const OctThemeContext = createContext(false)
+export function useOctTheme() { return useContext(OctThemeContext) }
 
 // ── Nav items ──────────────────────────────────────────────────────────────
 const BRANDS_SUB = [
@@ -48,7 +52,7 @@ const VENDAS_SUB = [
   { key: 'linha-do-tempo',      label: 'Linha do Tempo' },
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
-  { key: 'metas',               label: 'Metas' },
+  { key: 'metas',               label: 'Configuração das Metas' },
 ]
 
 const NAV_ITEMS = [
@@ -149,6 +153,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [compacto, gavetaAberta])
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
+  // A S&OP desmonta a abertura, mas não deve apagar o registro de exibição.
+  const [introShown, setIntroShown] = useState(false)
+  const markIntroShown = useCallback(() => setIntroShown(true), [])
 
   // Menu segue o controle de acessos: some o que o papel não libera. Pessoa
   // limitada a marcas vê só os sub-itens delas em Saúde da Marca.
@@ -192,6 +199,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const activeKey = getActiveKey(location.pathname)
   const isSaude = activeKey === 'saude'
   const isVendas = activeKey === 'vendas'
+  const octAtivo = gpAtivo && activeKey !== 'sop'
 
   function handleNav(key: string) {
     setGavetaAberta(false)
@@ -228,7 +236,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const footer = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {gpAtivo && <SennaCard />}
+      {octAtivo && <PoatanCard />}
       <button
         onClick={handleSignOut}
         style={{
@@ -258,8 +266,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <MarcaContext.Provider value={{ activeBrand, setActiveBrand }}>
+    <OctThemeContext.Provider value={octAtivo}>
       <div
         style={{ minHeight: '100vh', background: 'var(--ws-bg)', display: 'flex' }}
+        data-oct-theme={octAtivo ? 'true' : undefined}
         {...(isSaude ? { 'data-brand': activeBrand } : {})}
       >
         <Sidebar
@@ -338,17 +348,17 @@ export function AppLayout({ children }: AppLayoutProps) {
             </button>
             <button
               onClick={toggleGp}
-              className="gp-toggle-btn"
+              className="oct-toggle-btn"
               data-active={gpAtivo}
-              title={gpAtivo ? 'Modo GP ativo · clique para desativar' : 'Ativar Modo GP · Fórmula 1'}
+              title={gpAtivo ? 'Modo Octógono ativo · clique para desativar' : 'Ativar Modo Octógono'}
               aria-pressed={gpAtivo}
             >
-              <Flag size={17} />
+              <Swords size={17} />
             </button>
-            {gpAtivo && (
+            {octAtivo && (
               <button
                 onClick={replayIntro}
-                title="Rever abertura GP"
+                title="Rever abertura do Octógono"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ws-text-secondary)', display: 'flex', alignItems: 'center', padding: 4, borderRadius: 8 }}
               >
                 <Play size={16} />
@@ -376,7 +386,8 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </header>
 
-          {gpAtivo && !location.pathname.startsWith('/gp-setembro') && <GpStrip />}
+          {octAtivo && pode('aba.campanha-metas') && !location.pathname.startsWith('/gp-setembro') && <OctagonStrip />}
+          {octAtivo && <OctagonPageBanner pathname={location.pathname} />}
           <main style={{ flex: 1, minWidth: 0 }}>
             {children}
           </main>
@@ -384,8 +395,9 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Assistente flutuante só nas abas de Marketing — fora das abas de Vendas (Junior) */}
         {!isVendas && pode('acao.assistente-ia') && <AiChat />}
-        {gpAtivo && <GpIntro />}
+        {octAtivo && <OctagonIntro autoOpen={!introShown} onOpen={markIntroShown} />}
       </div>
+    </OctThemeContext.Provider>
     </MarcaContext.Provider>
   )
 }

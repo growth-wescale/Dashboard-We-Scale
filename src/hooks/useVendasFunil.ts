@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useConsultaFiltrada } from './useConsultaFiltrada'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 
 export interface VwMarketingFunil {
@@ -32,6 +33,7 @@ export interface VwMarketingFunil {
 }
 
 interface Filters {
+  enabled?: boolean
   marca?: string
   dataInicio?: string
   dataFim?: string
@@ -45,11 +47,12 @@ interface UseVendasFunilResult {
 
 const PAGE_SIZE = 1000
 
-async function fetchVendasRows(filters: Filters): Promise<{ rows: VwMarketingFunil[]; error: string | null }> {
+async function fetchVendasRows(filters: Filters, signal: AbortSignal): Promise<VwMarketingFunil[]> {
   const allRows: VwMarketingFunil[] = []
   let page = 0
 
   while (true) {
+    if (signal.aborted) throw new Error('Consulta cancelada.')
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
 
@@ -58,6 +61,7 @@ async function fetchVendasRows(filters: Filters): Promise<{ rows: VwMarketingFun
       .select('*')
       .order('data_criacao_negociacao', { ascending: false })
       .range(from, to)
+      .abortSignal(signal)
 
     // Allowlist rigoroso alinhado ao app de referência (P7)
     // Filtro de funil só se marca não é Odonto Scale (que já sobrepõe abaixo)
@@ -79,46 +83,18 @@ async function fetchVendasRows(filters: Filters): Promise<{ rows: VwMarketingFun
     if (filters.dataFim) q = q.lte('data_criacao_negociacao', filters.dataFim + 'T23:59:59')
 
     const { data: rows, error: err } = await q
-    if (err) return { rows: [], error: err.message }
+    if (err) throw new Error(err.message)
 
     allRows.push(...((rows ?? []) as VwMarketingFunil[]))
     if (!rows || rows.length < PAGE_SIZE) break
     page++
   }
 
-  return { rows: allRows, error: null }
+  return allRows
 }
 
 export function useVendasFunil(filters: Filters = {}): UseVendasFunilResult {
-  const [data, setData] = useState<VwMarketingFunil[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchAll = useCallback(async (showLoading = true) => {
-    if (showLoading) setLoading(true)
-    setError(null)
-    const { rows, error: err } = await fetchVendasRows(filters)
-    if (err) { setError(err); setLoading(false); return }
-    setData(rows)
-    setLoading(false)
-  }, [filters.marca, filters.dataInicio, filters.dataFim]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    let cancelled = false
-
-    // Single source of truth — fetchAll com showLoading no primeiro fetch, silent nos demais
-    fetchAll(true).catch(() => {})
-
-    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
-    window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 300_000)
-
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      window.removeEventListener('dashboard:refresh', handleRefresh)
-    }
-  }, [fetchAll])
-
-  return { data, loading, error }
+  const { marca, dataInicio, dataFim, enabled = true } = filters
+  const fetch = useCallback((signal: AbortSignal) => fetchVendasRows({ marca, dataInicio, dataFim }, signal), [marca, dataInicio, dataFim])
+  return useConsultaFiltrada(JSON.stringify(['expansao:marketing_funil', marca, dataInicio, dataFim]), fetch, enabled)
 }

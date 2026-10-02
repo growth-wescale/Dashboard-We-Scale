@@ -27,7 +27,7 @@ import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   STAGE_ORDER, buildScopeFilter, etapasDaMarca, cohortKeys, countSales, countStage,
   mqlWord, stageLabel,
-  countStageEvents, dealsInStage, groupRepeatedDeals, isSale, repeatedDealsInStage,
+  countStageEvents, dealsInStage, groupRepeatedDeals, isSale, noEscopoDoCiclo, repeatedDealsInStage,
   rowsInLoss, rowsInStage, sumRevenue, toWindow,
 } from '@/lib/metrics'
 import type { RepeatedDealGroup, StageDeal, StageKey } from '@/lib/metrics'
@@ -399,15 +399,9 @@ export function FunilVendas() {
   // únicos" vinha da tabela plana e "Passagens" dos eventos — bases diferentes,
   // e Passagens chegava a aparecer MENOR que Únicos, o que é impossível.
   // Sem filtro de marca no servidor: a coluna `marca` da view de eventos é
-  // nula em boa parte da base. O recorte por marca sai de `idsEscopo` (deals
+  // nula em boa parte da base. O recorte por marca sai de `noEscopoDoCiclo` (deals
   // de `vw_funil_vendas`, já filtrados) — ver useFunilEventos.
-  const { data: eventos } = useFunilEventos({
-    enabled: true,
-    origem,
-    inicio: range.start,
-    // No modo safra o evento pode ser posterior à janela do MQL.
-    fim: viewModes.funnelView === 'cohort' ? undefined : range.end,
-  })
+  const { data: eventos } = useFunilEventos({ enabled: true, origem })
 
   // ── Escopo e janelas ────────────────────────────────────────────────────────
   // Marca é sempre filtrada aqui no cliente (a busca traz o recorte inteiro
@@ -495,7 +489,7 @@ export function FunilVendas() {
   const funnel = useMemo<FunnelStage[]>(() => {
     if (modo !== 'performance') return []
     const safra = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null
-    const idsEscopo = new Set(scoped.map(r => String(r.id_lead)))
+    const noEscopo = noEscopoDoCiclo(scoped)
 
     return etapasFunil.map(s => ({
       key: s,
@@ -507,7 +501,7 @@ export function FunilVendas() {
         ? countSales(scoped, win, viewModes)
         : countStageEvents(eventos, s, win, viewModes, {
             cohortIds: safra,
-            extra: e => idsEscopo.has(String(e.id_deal)),
+            extra: noEscopo,
           }),
     }))
   }, [modo, scoped, eventos, win, viewModes, origem, etapasFunil])

@@ -7,7 +7,9 @@ import { toLocalDate } from '@/lib/dateUtils'
  *
  *   PONTOS = Σ  (pontos de volume da unidade)  ×  multiplicador de velocidade(tempo daquela unidade)
  *
- * "unidade" = 1 RR realizada (trilha SDR) ou 1 venda fechada (trilha Closer).
+ * "unidade" = 1 RR realizada (trilha SDR) ou 1 unidade de franquia vendida
+ * (trilha Closer). Venda de 2 unidades conta 2, não 1 deal: a campanha mede
+ * unidade vendida (decisão do Junior, 28/09), igual aos cards de meta.
  * O multiplicador é aplicado POR UNIDADE, nunca sobre a média do período —
  * senão uma venda rápida disfarça várias travadas atrás dela.
  *
@@ -122,8 +124,8 @@ export interface TicketFaixa extends TicketTier {
 
 export const TICKET_FAIXAS: readonly TicketFaixa[] = [
   { tier: 1, mult: 1.0, label: 'até R$ 200 mil', marcas: ['B2Case', 'Eletrovias'] },
-  { tier: 2, mult: 1.25, label: 'R$ 201 mil – 500 mil', marcas: ['Inpot', 'Lisô Laser'] },
-  { tier: 3, mult: 1.5, label: 'R$ 501 mil – 1 milhão', marcas: ['Oral Unic'] },
+  { tier: 2, mult: 1.5, label: 'R$ 201 mil – 500 mil', marcas: ['Inpot', 'Lisô Laser'] },
+  { tier: 3, mult: 1.75, label: 'R$ 501 mil – 1 milhão', marcas: ['Oral Unic'] },
   { tier: 4, mult: 2.0, label: 'acima de R$ 1 milhão', marcas: ['Viva'] },
 ]
 
@@ -191,20 +193,21 @@ export interface RrUnidade {
   dataRr: string // data_reuniao_realizada (já filtrada no mês)
 }
 
-/** 1 venda fechada no mês (trilha Closer). */
+/** 1 venda (deal ganho) no mês (trilha Closer) — pontua por unidade de franquia vendida nela. */
 export interface VendaUnidade {
   nome: string // nome_closer canônico
   fonte: string | null // fonte_macro
   marca: string | null // marca do deal
   dataRr: string | null // data_reuniao_realizada
   dataVenda: string // data_venda (já filtrada no mês)
+  unidades: number // franquias vendidas no deal (`saleUnits`: sem produto conta 1)
 }
 
 /* ── Saída ──────────────────────────────────────────────────────────────── */
 
 export interface LinhaTrilha {
   nome: string
-  /** nº de RR / vendas no mês. */
+  /** nº de RR (SDR) ou de unidades vendidas (Closer) no mês. */
   volume: number
   /** quantas dessas unidades vieram de fonte que pesa 2 pts. */
   volume2pts: number
@@ -300,17 +303,32 @@ export function pontosSdr(rrs: RrUnidade[], nomes: string[]): LinhaTrilha[] {
   )
 }
 
-/** Pontos da trilha Closer por pessoa. `nomes` fixa a ordem e garante linha (zerada) pra quem não vendeu. */
+/** Quantas unidades a venda vale no placar: inteiro ≥ 1 — venda nunca some nem vale menos que 1. */
+function unidadesDaVenda(v: VendaUnidade): number {
+  const q = Math.round(v.unidades)
+  return Number.isFinite(q) && q > 0 ? q : 1
+}
+
+/**
+ * Pontos da trilha Closer por pessoa. Cada unidade vendida entra como uma
+ * unidade do placar (venda de 2 unidades = 2 no volume, nos pontos e no bônus
+ * de "mais de 1 unidade no mesmo dia"). `nomes` fixa a ordem e garante linha
+ * (zerada) pra quem não vendeu.
+ */
 export function pontosCloser(vendas: VendaUnidade[], nomes: string[]): LinhaTrilha[] {
   return agrega(
     nomes,
-    vendas.map(v => ({
-      nome: v.nome,
-      fonte: v.fonte,
-      marca: v.marca,
-      leadtime: difDias(v.dataRr, v.dataVenda),
-      diaBonus: toLocalDate(v.dataVenda),
-    })),
+    vendas.flatMap(v => {
+      const leadtime = difDias(v.dataRr, v.dataVenda)
+      const diaBonus = toLocalDate(v.dataVenda)
+      return Array.from({ length: unidadesDaVenda(v) }, () => ({
+        nome: v.nome,
+        fonte: v.fonte,
+        marca: v.marca,
+        leadtime,
+        diaBonus,
+      }))
+    }),
     CLOSER_SPEED_TIERS,
   )
 }

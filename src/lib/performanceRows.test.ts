@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
-import { toWindow } from '@/lib/metrics'
+import { DEFAULT_VIEW_MODES, toWindow, type FunnelEventRow } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { MembroRoster } from '@/hooks/useRosterVendas'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
@@ -8,15 +8,15 @@ import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 const win = toWindow(null, null, [{ from: '2026-08-01', to: '2026-08-31' }])
 
 const roster: MembroRoster[] = [
-  { nome: 'Xayane', cargo: 'SDR', foto: null },
-  { nome: 'Douglas', cargo: 'Closer', foto: null },
+  { nome: 'Xayane', cargo: 'SDR', foto: null, ativo: true },
+  { nome: 'Douglas', cargo: 'Closer', foto: null, ativo: true },
 ]
 
 const rosterMulti: MembroRoster[] = [
-  { nome: 'Xayane', cargo: 'SDR', foto: null },
-  { nome: 'Thiago', cargo: 'SDR', foto: null },
-  { nome: 'Douglas', cargo: 'Closer', foto: null },
-  { nome: 'Aurélio', cargo: 'Closer', foto: null },
+  { nome: 'Xayane', cargo: 'SDR', foto: null, ativo: true },
+  { nome: 'Thiago', cargo: 'SDR', foto: null, ativo: true },
+  { nome: 'Douglas', cargo: 'Closer', foto: null, ativo: true },
+  { nome: 'Aurélio', cargo: 'Closer', foto: null, ativo: true },
 ]
 
 const metasSdr: MetaAgregada[] = [
@@ -149,5 +149,43 @@ describe('buildCloserRows', () => {
   it('sem salesMode conta negócios (compatível com chamadas antigas)', () => {
     const rows = [r({ nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-15', quantidade_unidades: 3 })]
     expect(buildCloserRows(rows, win, [], roster)[0].ganhos).toBe(1)
+  })
+})
+
+describe('contagem por evento (igual aos cards)', () => {
+  const ev = (p: Partial<FunnelEventRow>): FunnelEventRow => ({
+    id_deal: 'x', ciclo: 1, dia: '2026-08-10', etapa_canonica: 'Reunião Agendada SQL',
+    id_etapa: '69b1badfe1def700137f1b89', nome_funil: 'Closer', rn_deal_etapa_mes: 1, ...p,
+  })
+  const modes = DEFAULT_VIEW_MODES
+
+  it('SQL fora do funil do Closer não conta, mesmo com data na linha', () => {
+    const rows = [r({ id_lead: 'a', nome_sdr: 'Xayane', data_agendamento_reuniao_sql: '2026-08-10' })]
+    const eventos = [ev({ id_deal: 'a', id_etapa: 'etapa-do-sdr', nome_funil: 'SDR' })]
+    expect(buildSdrRows(rows, win, [], roster)[0].sql).toBe(1) // regra antiga
+    expect(buildSdrRows(rows, win, [], roster, { eventos, modes })[0].sql).toBe(0)
+  })
+
+  it('reentrada na etapa no mês conta, mesmo com a data da linha em outro mês', () => {
+    const rows = [r({ id_lead: 'a', nome_sdr: 'Xayane', data_agendamento_reuniao_sql: '2026-07-24' })]
+    const eventos = [ev({ id_deal: 'a', dia: '2026-08-03' })]
+    expect(buildSdrRows(rows, win, [], roster, { eventos, modes })[0].sql).toBe(1)
+  })
+
+  it('evento é creditado ao SDR do ciclo dele', () => {
+    const rows = [
+      r({ id_lead: 'a', ciclo: 1, nome_sdr: 'Xayane' }),
+      r({ id_lead: 'a', ciclo: 2, nome_sdr: 'Thiago' }),
+    ]
+    const eventos = [ev({ id_deal: 'a', ciclo: 2 })]
+    const out = buildSdrRows(rows, win, [], rosterMulti, { eventos, modes })
+    expect(out.find(x => x.nome === 'Thiago')?.sql).toBe(1)
+    expect(out.find(x => x.nome === 'Xayane')?.sql).toBe(0)
+  })
+
+  it('Closer: COF/SAL/Diag pelos eventos do ciclo', () => {
+    const rows = [r({ id_lead: 'a', nome_closer: 'Douglas', data_oportunidade: '2026-07-01' })]
+    const eventos = [ev({ id_deal: 'a', etapa_canonica: 'Oportunidade COF', id_etapa: 'qualquer' })]
+    expect(buildCloserRows(rows, win, [], roster, 'deals', { eventos, modes })[0].cof).toBe(1)
   })
 })

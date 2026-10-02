@@ -153,6 +153,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [compacto, gavetaAberta])
   const [syncing, setSyncing] = useState(false)
   const { gpAtivo, toggleGp, replayIntro } = useGpMode()
+  // A S&OP desmonta a abertura, mas não deve apagar o registro de exibição.
+  const [introShown, setIntroShown] = useState(false)
+  const markIntroShown = useCallback(() => setIntroShown(true), [])
 
   // Menu segue o controle de acessos: some o que o papel não libera. Pessoa
   // limitada a marcas vê só os sub-itens delas em Saúde da Marca.
@@ -392,7 +395,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Assistente flutuante só nas abas de Marketing — fora das abas de Vendas (Junior) */}
         {!isVendas && pode('acao.assistente-ia') && <AiChat />}
-        {octAtivo && <OctagonIntro />}
+        {octAtivo && <OctagonIntro autoOpen={!introShown} onOpen={markIntroShown} />}
       </div>
     </OctThemeContext.Provider>
     </MarcaContext.Provider>

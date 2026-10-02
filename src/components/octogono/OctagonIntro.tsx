@@ -8,9 +8,14 @@ function readPreference(key: string, value: string): boolean {
   try { return localStorage.getItem(key) === value } catch { return false }
 }
 
-/** Abertura em vídeo do protótipo aprovado, usando o MP4 original fornecido. */
-export function OctagonIntro() {
-  const [open, setOpen] = useState(() => !readPreference(INTRO_KEY, 'off'))
+interface OctagonIntroProps {
+  autoOpen?: boolean
+  onOpen?: () => void
+}
+
+/** Abertura em vídeo; o layout guarda a exibição ao navegar pela S&OP. */
+export function OctagonIntro({ autoOpen = true, onOpen }: OctagonIntroProps) {
+  const [open, setOpen] = useState(() => autoOpen && !readPreference(INTRO_KEY, 'off'))
   const [out, setOut] = useState(false)
   const [go, setGo] = useState(false)
   const [sound, setSound] = useState(() => readPreference(SOM_KEY, 'on'))
@@ -23,6 +28,10 @@ export function OctagonIntro() {
     setOut(true)
     window.setTimeout(() => setOpen(false), 520)
   }, [])
+
+  useEffect(() => {
+    if (open) onOpen?.()
+  }, [open, onOpen])
 
   useEffect(() => {
     const replay = () => { setOut(false); setGo(false); setOpen(true); setRun(r => r + 1) }

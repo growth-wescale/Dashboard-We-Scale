@@ -53,3 +53,27 @@ describe('catálogo unificado de 22/09/2026', () => {
     }
   })
 })
+
+describe('lista fixa de 02/10/2026', () => {
+  it('classifica os 32 motivos sem o prefixo [NOVO]', () => {
+    expect(classificarMotivo('Fim da cadência sem resposta')).toBe('processo')
+    expect(classificarMotivo('Não chegou ao decisor')).toBe('processo')
+    expect(classificarMotivo('Desmarcou antes da reunião')).toBe('processo')
+    expect(classificarMotivo('Não era MQL')).toBe('processo')
+    expect(classificarMotivo('Fora do perfil (ICP)')).toBe('mercado')
+    expect(classificarMotivo('Sem interesse')).toBe('mercado')
+    expect(classificarMotivo('Buscava outro modelo de negócio')).toBe('mercado')
+    expect(classificarMotivo('Sem Budget - até R$ 200 mil')).toBe('mercado')
+    expect(classificarMotivo('Sem liquidez no momento')).toBe('mercado')
+    expect(classificarMotivo('Optou por outra franqueadora')).toBe('mercado')
+    expect(classificarMotivo('Reprovado na análise da franqueadora')).toBe('mercado')
+    expect(classificarMotivo('Registro de teste')).toBe('ignorar')
+    expect(classificarMotivo('Base migrada de outro CRM')).toBe('ignorar')
+  })
+
+  it('ainda reconhece os nomes anteriores, caso algum evento escape', () => {
+    expect(classificarMotivo('[NOVO] Atingiu o fim da cadência')).toBe('processo')
+    expect(classificarMotivo('Sem contato apos cadencia SDR')).toBe('processo')
+    expect(classificarMotivo('[NOVO] Sem perfil (fora do ICP)')).toBe('mercado')
+  })
+})

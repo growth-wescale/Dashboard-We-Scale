@@ -613,8 +613,9 @@ meta, com realizado como desempate. Métricas, metas, rounds, abertura, S&OP e
 demais páginas não foram alterados.
 
 Branch `codex/disputa-todos-contra-todos`, baseada na `main` em `024601d`.
-Build, lint dos arquivos alterados, 607 testes e diff check passaram. PR e QA
-visual autenticado pendentes.
+Commit `62473b5`, [PR #222](https://github.com/growth-wescale/Dashboard-We-Scale/pull/222),
+com os dois checks aprovados. Build, lint, 607 testes e diff check passaram.
+Merge/deploy e QA visual autenticado pendentes.
 
 ### 2026-10-02 (6) — Top 5 criativos por marca arquivados
 

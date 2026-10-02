@@ -79,7 +79,6 @@ export function OctagonIntro() {
     <div className="ufv-stage">
       <video ref={videoRef} src="/assets/octogono-intro.mp4" playsInline preload="auto" muted
         onPlaying={() => setGo(true)} onError={() => setGo(true)} />
-      <div className="ufv-logo-cover" aria-hidden="true">WE SCALE · OCTÓGONO · WE SCALE</div>
       <div className="ufv-mat" aria-hidden="true">
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: Math.round(stageW * .056), lineHeight: 1, color: '#141416', whiteSpace: 'nowrap', letterSpacing: '-.01em' }}>WE SCALE</div>
         <div style={{ marginTop: Math.round(stageW * .006), fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: Math.max(9, Math.round(stageW * .011)), letterSpacing: '.45em', color: '#7A5E14' }}>OCTÓGONO</div>

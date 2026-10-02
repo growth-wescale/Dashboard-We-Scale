@@ -1,79 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useConsultaFiltrada } from './useConsultaFiltrada'
 import type { Lead, Marca } from '@/lib/types'
 
-interface Filters {
-  marca?: Marca
-  dataInicio?: string   // ISO date
-  dataFim?: string
-}
+interface Filters { marca?: Marca; dataInicio?: string; dataFim?: string; enabled?: boolean }
 
-interface UseLeadsResult {
-  data: Lead[]
-  loading: boolean
-  error: string | null
-}
-
-const PAGE_SIZE = 1000
-
-export function useLeads(filters: Filters = {}): UseLeadsResult {
-  const [data, setData] = useState<Lead[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchAll(showLoading = true) {
-      if (showLoading) setLoading(true)
-      setError(null)
-
-      const allRows: Lead[] = []
-      let page = 0
-
-      while (true) {
-        const from = page * PAGE_SIZE
-        const to = from + PAGE_SIZE - 1
-
-        let q = supabase
-          .from('leads')
-          .select('*')
-          .order('dia', { ascending: false })
-          .range(from, to)
-
-        if (filters.marca)      q = q.eq('marca', filters.marca)
-        if (filters.dataInicio) q = q.gte('dia', filters.dataInicio)
-        if (filters.dataFim)    q = q.lte('dia', filters.dataFim)
-
-        const { data: rows, error: err } = await q
-
-        if (cancelled) return
-        if (err) { setError(err.message); setLoading(false); return }
-
-        allRows.push(...((rows ?? []) as Lead[]))
-
-        if (!rows || rows.length < PAGE_SIZE) break
-        page++
-      }
-
-      if (!cancelled) {
-        setData(allRows)
-        setLoading(false)
-      }
+export function useLeads({ marca, dataInicio, dataFim, enabled = true }: Filters = {}) {
+  const fetch = useCallback(async (signal: AbortSignal) => {
+    const rows: Lead[] = []
+    for (let from = 0; ; from += 1000) {
+      if (signal.aborted) throw new Error('Consulta cancelada.')
+      let q = supabase.from('leads').select('*').order('dia', { ascending: false }).range(from, from + 999).abortSignal(signal)
+      if (marca) q = q.eq('marca', marca)
+      if (dataInicio) q = q.gte('dia', dataInicio)
+      if (dataFim) q = q.lte('dia', dataFim)
+      const { data, error } = await q
+      if (error) throw new Error(error.message)
+      rows.push(...((data ?? []) as Lead[]))
+      if (!data || data.length < 1000) return rows
     }
-
-    fetchAll()
-
-    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
-    window.addEventListener('dashboard:refresh', handleRefresh)
-    const timer = setInterval(() => { if (!cancelled) fetchAll(false) }, 300_000)
-
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-      window.removeEventListener('dashboard:refresh', handleRefresh)
-    }
-  }, [filters.marca, filters.dataInicio, filters.dataFim])
-
-  return { data, loading, error }
+  }, [marca, dataInicio, dataFim])
+  return useConsultaFiltrada(JSON.stringify(['marketing:leads', marca, dataInicio, dataFim]), fetch, enabled)
 }

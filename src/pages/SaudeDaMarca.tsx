@@ -1834,13 +1834,13 @@ export function SaudeDaMarca() {
 
   // Dados adicionais Odonto Scale — usados pela sub-view Odonto Legacy do Oral Unic
   // (leads/CRM continuam sob marca 'Odonto Scale' no banco de vendas; mídia histórica também)
-  const { data: osLeadsRaw }        = useLeads({ marca: 'Odonto Scale', dataInicio, dataFim })
-  const { data: osLeadsCompareRaw } = useLeads({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim })
-  const { data: osCrmRaw }          = useVendasFunil({ marca: 'Odonto Scale', dataInicio, dataFim })
-  const { data: osCrmAllRaw }       = useVendasFunil({ marca: 'Odonto Scale' })
-  const { data: osCrmCompareRaw }   = useVendasFunil({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim })
-  const { data: osMediaRaw }        = useMediaData({ marca: 'Odonto Scale', dataInicio, dataFim })
-  const { data: osMediaCompareRaw } = useMediaData({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim })
+  const { data: osLeadsRaw }        = useLeads({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
+  const { data: osLeadsCompareRaw } = useLeads({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim, enabled: isOralUnic })
+  const { data: osCrmRaw }          = useVendasFunil({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
+  const { data: osCrmAllRaw }       = useVendasFunil({ marca: 'Odonto Scale', enabled: isOralUnic })
+  const { data: osCrmCompareRaw }   = useVendasFunil({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim, enabled: isOralUnic })
+  const { data: osMediaRaw }        = useMediaData({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
+  const { data: osMediaCompareRaw } = useMediaData({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim, enabled: isOralUnic })
 
   const isOdontoLegacy = isOralUnic && ouSubView === 'odonto_legacy'
 

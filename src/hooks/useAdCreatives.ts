@@ -1,76 +1,136 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-/**
- * Cache de metadata dos anúncios Meta Ads.
- *
- * Fonte: tabela `ad_creatives` no Supabase Marketing, populada pela Edge
- * Function `ingest-meta-creatives` (roda diariamente por pg_cron).
- * A function chama a Graph API v22.0 em `/act_<id>/ads?fields=id,name,
- * creative{effective_object_story_id}` de todas as 8 contas Meta e monta
- * `post_url = https://www.facebook.com/<page_id>/posts/<post_id>`.
- *
- * Substitui o mapa manual em `src/lib/creativeAssets.ts` (que ficava
- * defasado — Oral Unic estava com só 2% de cobertura antes disso).
- *
- * Retorna Map<nome_do_anuncio, post_url> pra lookup O(1) por nome.
- * Anúncios sem `post_url` (ex.: Google Ads / RSA) ficam de fora do map —
- * o consumidor testa `map.get(name)` e cai em fallback se undefined.
- */
+const BUCKET = 'ad-creative-media'
+const SIGNED_URL_TTL_SECONDS = 60 * 60
+const QUERY_CHUNK = 100
+
+export interface AdCreativePreview {
+  adId: string
+  adName: string
+  postUrl: string | null
+  mediaType: 'image' | 'video' | null
+  mediaPath: string | null
+  thumbnailPath: string | null
+  mediaUrl: string | null
+  thumbnailUrl: string | null
+}
 
 interface RawRow {
+  ad_id: string
   ad_name: string
   post_url: string | null
+  preview_media_type: string | null
+  preview_storage_path: string | null
+  preview_thumbnail_path: string | null
 }
 
 export interface UseAdCreativesResult {
-  urlByName: Map<string, string>
+  previewByName: Map<string, AdCreativePreview>
   loading: boolean
   error: string | null
 }
 
-export function useAdCreatives(): UseAdCreativesResult {
-  const [urlByName, setUrlByName] = useState<Map<string, string>>(new Map())
-  const [loading, setLoading] = useState(true)
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let i = 0; i < values.length; i += size) result.push(values.slice(i, i + size))
+  return result
+}
+
+function normalizeMediaType(value: string | null): 'image' | 'video' | null {
+  if (value === 'image' || value === 'video') return value
+  return null
+}
+
+/**
+ * Metadados e URLs temporárias dos criativos usados no recorte atual.
+ *
+ * Os arquivos ficam em bucket privado. O navegador assina somente os caminhos
+ * necessários para os anúncios visíveis, portanto o vídeo não depende de login
+ * no Facebook e também não ganha uma URL pública permanente.
+ */
+export function useAdCreatives(adNames: string[]): UseAdCreativesResult {
+  const [previewByName, setPreviewByName] = useState<Map<string, AdCreativePreview>>(new Map())
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const namesKey = useMemo(
+    () => [...new Set(adNames.filter(Boolean))].sort((a, b) => a.localeCompare(b)).join('\u0000'),
+    [adNames],
+  )
+
   const fetchAll = useCallback(async (showLoading = true) => {
+    const names = namesKey ? namesKey.split('\u0000') : []
+    if (names.length === 0) {
+      setPreviewByName(new Map())
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     if (showLoading) setLoading(true)
     setError(null)
 
-    // Paginação — Postgres API por padrão limita 1000 linhas; a tabela tem ~2.4k
-    const all: RawRow[] = []
-    const PAGE = 1000
-    for (let page = 0; ; page++) {
-      const { data, error: err } = await supabase
+    const rows: RawRow[] = []
+    for (const group of chunks(names, QUERY_CHUNK)) {
+      const { data, error: queryError } = await supabase
         .from('ad_creatives')
-        .select('ad_name, post_url')
-        .not('post_url', 'is', null)
-        .range(page * PAGE, page * PAGE + PAGE - 1)
-      if (err) { setError(err.message); setLoading(false); return }
-      const rows = (data ?? []) as RawRow[]
-      all.push(...rows)
-      if (rows.length < PAGE) break
+        .select('ad_id, ad_name, post_url, preview_media_type, preview_storage_path, preview_thumbnail_path')
+        .in('ad_name', group)
+      if (queryError) {
+        setError(queryError.message)
+        setLoading(false)
+        return
+      }
+      rows.push(...((data ?? []) as RawRow[]))
     }
 
-    // Dedup: se mesmo nome em múltiplos ads (comum quando anúncio é duplicado),
-    // fica o último — não faz diferença muita pra usuário, todos apontam pro mesmo post
-    const map = new Map<string, string>()
-    for (const r of all) {
-      if (r.ad_name && r.post_url) map.set(r.ad_name, r.post_url)
+    const paths = [...new Set(rows.flatMap(row => [row.preview_storage_path, row.preview_thumbnail_path]).filter((path): path is string => Boolean(path)))]
+    const signedByPath = new Map<string, string>()
+    for (const group of chunks(paths, QUERY_CHUNK)) {
+      const { data, error: signError } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrls(group, SIGNED_URL_TTL_SECONDS)
+      if (signError) {
+        setError(signError.message)
+        setLoading(false)
+        return
+      }
+      for (const item of data ?? []) {
+        if (item.path && item.signedUrl) signedByPath.set(item.path, item.signedUrl)
+      }
     }
-    setUrlByName(map)
+
+    // Um nome pode existir em anúncios duplicados. Preferimos a linha que já
+    // possui mídia interna; na ausência dela, preservamos o post_url da Meta.
+    const map = new Map<string, AdCreativePreview>()
+    for (const row of rows) {
+      if (!row.ad_name) continue
+      const preview: AdCreativePreview = {
+        adId: row.ad_id,
+        adName: row.ad_name,
+        postUrl: row.post_url,
+        mediaType: normalizeMediaType(row.preview_media_type),
+        mediaPath: row.preview_storage_path,
+        thumbnailPath: row.preview_thumbnail_path,
+        mediaUrl: row.preview_storage_path ? signedByPath.get(row.preview_storage_path) ?? null : null,
+        thumbnailUrl: row.preview_thumbnail_path ? signedByPath.get(row.preview_thumbnail_path) ?? null : null,
+      }
+      const current = map.get(row.ad_name)
+      if (!current || (!current.mediaUrl && preview.mediaUrl)) map.set(row.ad_name, preview)
+    }
+
+    setPreviewByName(map)
     setLoading(false)
-  }, [])
+  }, [namesKey])
 
   useEffect(() => {
-    let cancelled = false
-    fetchAll(true).catch(() => {})
-    const handleRefresh = () => { if (!cancelled) fetchAll(false) }
+    let active = true
+    void fetchAll(true)
+    const handleRefresh = () => { if (active) void fetchAll(false) }
     window.addEventListener('dashboard:refresh', handleRefresh)
-    return () => { cancelled = true; window.removeEventListener('dashboard:refresh', handleRefresh) }
+    return () => { active = false; window.removeEventListener('dashboard:refresh', handleRefresh) }
   }, [fetchAll])
 
-  const stable = useMemo(() => urlByName, [urlByName])
-  return { urlByName: stable, loading, error }
+  return { previewByName, loading, error }
 }

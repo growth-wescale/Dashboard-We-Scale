@@ -528,6 +528,16 @@ fantasmas.
 cliente. curl abre TLS por request e distorce — medir com Node `fetch`
 (keep-alive), que se comporta como o browser.
 
+**Carregamento filtrado de Marketing (02/10/2026).** `useMediaData`, `useLeads`
+e `useVendasFunil` compartilham `useConsultaFiltrada` + `consultaFiltrada.ts`:
+cache em memória de 60s por fonte/filtros, deduplicação em voo, cancelamento
+quando não há consumidores, descarte de respostas antigas e timeout de 60s
+por carga paginada. Refresh manual/polling de 5min forçam revalidação; logout
+ou troca de usuário limpa o cache. `enabled: false` impede consultas extras.
+Não confundir com os hooks novos de Vendas (`useFunilVendas`/`useFunilEventos`).
+As fontes, filtros SQL e ordem existentes foram preservados; medir latência
+e revisar a ordenação total da paginação separadamente com acesso autorizado.
+
 **`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
 noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
 Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
@@ -591,6 +601,27 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-02 — Corrigir carregamento ao trocar filtros de data
+
+Autorização de Gabriel após diagnóstico local: corrigir o cliente, sem acesso
+nem mudança no banco. A trava `inFlight` de mídia descartava a busca nova na
+troca de recorte; CRM aceitava resposta antiga e silenciava rejeições, podendo
+manter loading indefinidamente. Os três hooks agora usam controle compartilhado
+por chave, cache curto, cancelamento e erro explícito (ver seção 7).
+
+Visão Geral deixa filtros utilizáveis durante a carga e separa período atual,
+comparação e histórico. Não exibe KPIs parciais nem deltas sem comparação
+concluída; erros aparecem por bloco e exportação aguarda sua fonte. Saúde da
+Marca só faz as sete consultas extras de Odonto Scale quando Oral Unic está
+aberta. Sem mudar fórmulas, fontes, datas, classificação de MQL, deduplicação,
+temática, vídeo ou conteúdo da S&OP; seus hooks compartilhados recebem o fix.
+
+Verificação local: build de produção, 602 testes (30 novos), lint sem erros
+(avisos preexistentes) e diff check. Teste isolado no navegador com React real,
+StrictMode e dados fictícios confirmou deduplicação, troca em voo, resposta
+atrasada ignorada e recuperação de falha. Prévia temporária removida.
+Não é validação autenticada nem medição do banco; merge/deploy dependem do PR.
 
 ### 2026-10-01 (5) — Performance › Closer ganha "Reuniões no MeetRox" (R1 a R5)
 

@@ -21,6 +21,7 @@ import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { isComunidadeRow, filterMediaByMarcas, filterMediaByMarca } from '@/lib/visaoGeralMedia'
 import { getMetaVendas } from '@/constants/metasVendas'
 import { MqlVolumeChart } from '@/components/ui/MqlVolumeChart'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { MultiSelect } from '@/components/ui/MultiSelect'
@@ -257,7 +258,7 @@ function Segmented({ options, value, onChange, size = 'md' }: {
 }
 
 // ─── KPI Strip ────────────────────────────────────────────────────────────────
-function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, onMqlClick }: { scope: Scope; compareScope: Scope; compareLabel: string; compareEnabled: boolean; onMqlClick?: () => void }) {
+function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, compareReady, onMqlClick }: { scope: Scope; compareScope: Scope; compareLabel: string; compareEnabled: boolean; compareReady: boolean; onMqlClick?: () => void }) {
   const d = {
     invest: computeDeltaPct(scope.invest, compareScope.invest),
     mql:    computeDeltaPct(scope.mql,    compareScope.mql),
@@ -266,7 +267,7 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, onMqlClic
     cpsql:  computeDeltaPct(scope.cpsql,  compareScope.cpsql),
     conv:   computeDeltaPct(scope.conv,   compareScope.conv),
   }
-  const showAll = compareEnabled
+  const showAll = compareEnabled && compareReady
   const small = { '--fs-metric': '28px' } as CSSProperties
   const invest: CSSProperties = {
     ...small,
@@ -276,7 +277,7 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, onMqlClic
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24 }}>
       <MetricCard style={invest} label="Investimento no período" value={money(scope.invest)} delta={showAll ? d.invest : null} deltaLabel={showAll ? compareLabel : undefined} />
-      <MetricCard style={small}  label="MQLs"                   value={nf(scope.mql)}       delta={d.mql}                       deltaLabel={compareLabel} onClick={onMqlClick} />
+      <MetricCard style={small}  label="MQLs"                   value={nf(scope.mql)}       delta={compareReady ? d.mql : null} deltaLabel={compareLabel} onClick={onMqlClick} />
       <MetricCard style={small}  label="SQLs"                   value={nf(scope.sql)}       delta={showAll ? d.sql : null}      deltaLabel={showAll ? compareLabel : undefined} description={scope.sqlPerdido > 0 ? <span style={{ color:'var(--status-risco)', opacity:0.85 }}>{nf(scope.sqlPerdido)} perdidos</span> : undefined} />
       <MetricCard style={small}  label="CP-MQL médio"           value={money(scope.cpmql)}  delta={showAll ? d.cpmql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small}  label="CP-SQL médio"           value={money(scope.cpsql)}  delta={showAll ? d.cpsql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
@@ -807,15 +808,15 @@ export function VisaoGeral() {
   const prev3Dates = useMemo(() => getPrevNthMtdDates(range.start, 3, days), [range.start, days])
 
   const { data: mediaCur,   loading: l1, error: mediaError } = useMediaData({ dataInicio: range.start,     dataFim: range.end })
-  const { data: mediaPrev,  loading: l2 } = useMediaData({ dataInicio: prevDates.start,  dataFim: prevDates.end })
-  const { data: mediaPrev2, loading: l3 } = useMediaData({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
-  const { data: mediaPrev3, loading: l4 } = useMediaData({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
-  const { data: mediaCompareRaw } = useMediaData({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
-  const { data: rawCrmCur,   loading: l5 } = useVendasFunil({ dataInicio: range.start,      dataFim: range.end })
-  const { data: rawCrmPrev,  loading: l6 } = useVendasFunil({ dataInicio: prevDates.start,  dataFim: prevDates.end })
-  const { data: rawCrmPrev2, loading: l7 } = useVendasFunil({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
-  const { data: rawCrmPrev3, loading: l8 } = useVendasFunil({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
-  const { data: rawCrmCompare } = useVendasFunil({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
+  const { data: mediaPrev,  loading: l2, error: e2 } = useMediaData({ dataInicio: prevDates.start,  dataFim: prevDates.end })
+  const { data: mediaPrev2, loading: l3, error: e3 } = useMediaData({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
+  const { data: mediaPrev3, loading: l4, error: e4 } = useMediaData({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
+  const { data: mediaCompareRaw, loading: lc1, error: ec1 } = useMediaData({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
+  const { data: rawCrmCur,   loading: l5, error: crmError } = useVendasFunil({ dataInicio: range.start,      dataFim: range.end })
+  const { data: rawCrmPrev,  loading: l6, error: e6 } = useVendasFunil({ dataInicio: prevDates.start,  dataFim: prevDates.end })
+  const { data: rawCrmPrev2, loading: l7, error: e7 } = useVendasFunil({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
+  const { data: rawCrmPrev3, loading: l8, error: e8 } = useVendasFunil({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
+  const { data: rawCrmCompare, loading: lc2, error: ec2 } = useVendasFunil({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
   // applyFonte tem que ser useCallback pra memoização dos 5 useMemo abaixo funcionar corretamente.
   const applyFonte = useCallback(
     (rows: typeof rawCrmCur) => filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -827,13 +828,17 @@ export function VisaoGeral() {
   const crmPrev3   = useMemo(() => applyFonte(rawCrmPrev3),   [rawCrmPrev3,   applyFonte])
   const crmCompare = useMemo(() => applyFonte(rawCrmCompare), [rawCrmCompare, applyFonte])
   const { data: leadsCur,   loading: l9, error: leadsError } = useLeads({ dataInicio: range.start,      dataFim: range.end })
-  const { data: leadsPrev,  loading: l10 } = useLeads({ dataInicio: prevDates.start,  dataFim: prevDates.end })
-  const { data: leadsPrev2, loading: l11 } = useLeads({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
-  const { data: leadsPrev3, loading: l12 } = useLeads({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
-  const { data: leadsCompare } = useLeads({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
+  const { data: leadsPrev,  loading: l10, error: e10 } = useLeads({ dataInicio: prevDates.start,  dataFim: prevDates.end })
+  const { data: leadsPrev2, loading: l11, error: e11 } = useLeads({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
+  const { data: leadsPrev3, loading: l12, error: e12 } = useLeads({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
+  const { data: leadsCompare, loading: lc3, error: ec3 } = useLeads({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
   const { data: metas } = useMetas({ mes: initDates.mes })
 
-  const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9 || l10 || l11 || l12
+  const loading = l1 || l5 || l9
+  const currentError = mediaError || crmError || leadsError
+  const historyLoading = loading || l2 || l3 || l4 || l6 || l7 || l8 || l10 || l11 || l12
+  const historyErrors = [e2, e3, e4, e6, e7, e8, e10, e11, e12]
+  const compareReady = !lc1 && !lc2 && !lc3 && !ec1 && !ec2 && !ec3
 
   const [mqlDrawerOpen, setMqlDrawerOpen] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
@@ -849,6 +854,7 @@ export function VisaoGeral() {
   }, [exportMenuOpen])
 
   function handleExportLeads() {
+    if (l9 || leadsError) return
     const set = new Set<string>(marcasSelecionadas)
     const filtroMarca = (m: string | null) => isConsolidado || (!!m && set.has(m))
     const rows = leadsCur
@@ -867,6 +873,7 @@ export function VisaoGeral() {
   }
 
   function handleExportMedia() {
+    if (l1 || mediaError) return
     const rows = (isConsolidado ? mediaCur.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(mediaCur, marcasSelecionadas))
       .filter(r => VALID_MARCAS.has(r.marca)) as unknown as Record<string, unknown>[]
     downloadCsv(`midia_${scopeLabel}_${range.start}_${range.end}.csv`, rows, MEDIA_COLS)
@@ -920,7 +927,7 @@ export function VisaoGeral() {
   return (
     <>
     <OctagonOverview enabled={octAtivo} />
-    <div {...rootProps} style={{ padding: 'var(--container-pad)', opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
+    <div {...rootProps} style={{ padding: 'var(--container-pad)' }}>
       <PageTop
         title="Visão Geral"
         subtitle={`${scopeLabel} · ${curLabel}`}
@@ -947,7 +954,7 @@ export function VisaoGeral() {
               onChange={setCompareState}
             />
             <div ref={exportRef} style={{ position: 'relative' }}>
-              <Button variant="secondary" size="md" iconLeft={<Download size={16} />} onClick={() => setExportMenuOpen(o => !o)}>
+              <Button variant="secondary" size="md" disabled={l1 || l9 || !!mediaError || !!leadsError} iconLeft={<Download size={16} />} onClick={() => setExportMenuOpen(o => !o)}>
                 Exportar
               </Button>
               {exportMenuOpen && (
@@ -979,19 +986,26 @@ export function VisaoGeral() {
         }
       />
 
-      <KpiStrip scope={scope} compareScope={compareScope} compareLabel={compareLabel} compareEnabled={compareState.enabled} onMqlClick={() => setMqlDrawerOpen(true)} />
+      <QueryErrorBanner errors={[mediaError, leadsError, crmError]} scope="período selecionado" />
+      <QueryErrorBanner errors={[ec1, ec2, ec3]} scope="comparação" />
+      {loading ? <p role="status" style={{ padding: '20px 0' }}>Carregando o período selecionado…</p>
+        : !currentError && <KpiStrip scope={scope} compareScope={compareScope} compareLabel={compareLabel} compareEnabled={compareState.enabled} compareReady={compareReady} onMqlClick={() => setMqlDrawerOpen(true)} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 24, marginBottom: 24, alignItems: 'start' }}>
-        <StatusTable
+        {!loading && !currentError && <StatusTable
           brands={marcasPermitidas ? brands.filter(b => marcasPermitidas.includes(b.key)) : brands}
           selectedKeys={brandKeysSelecionadas}
           onToggle={(k) => setBrandKeys(prev => prev.includes(k) ? prev.filter(x => x !== k) : [...prev, k])}
           periodLabel={curLabel}
-        />
-        <MtdChart groups={mtdGroups} scopeLabel={scopeLabel} days={days} />
+        />}
+        <div>
+          <QueryErrorBanner errors={historyErrors} scope="histórico mensal" />
+          {historyLoading ? <p role="status">Carregando o histórico mensal…</p>
+            : !currentError && !historyErrors.some(Boolean) && <MtdChart groups={mtdGroups} scopeLabel={scopeLabel} days={days} />}
+        </div>
       </div>
 
-      <WaterfallFunnel scope={scope} scopeLabel={scopeLabel} />
+      {!loading && !currentError && <WaterfallFunnel scope={scope} scopeLabel={scopeLabel} />}
 
       <MqlVolumeChart
         // Trocar a marca da página devolve o gráfico ao acompanhamento dela.
@@ -1002,7 +1016,7 @@ export function VisaoGeral() {
       />
     </div>
 
-    <MqlDrawer open={mqlDrawerOpen} onClose={() => setMqlDrawerOpen(false)} leads={mqlLeads} />
+    <MqlDrawer open={mqlDrawerOpen && !l9 && !leadsError} onClose={() => setMqlDrawerOpen(false)} leads={mqlLeads} />
     </>
   )
 }

@@ -28,9 +28,12 @@ import {
 // seção sempre teve — sem Odonto Scale, que não é franquia).
 const MARCAS_FRANQUIA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 'Eletrovias'] as const
 import { money, pct, nf, nfCeil } from '@/lib/format'
+import { OctagonFightCard } from '@/components/octogono/OctagonArena'
+import { rankingOctogono } from '@/lib/octogono'
 
 const POOL_PREMIOS = 12000
 type Ciclo = 'semanal' | 'mensal'
+const roundLabel = (text: string) => text.replace(/\bVolta\b/g, 'Round').replace(/\bvolta\b/g, 'round')
 
 const MARCA_COR: Record<string, string> = {
   'Oral Unic':  '#7F0C72',
@@ -88,15 +91,15 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
   )
   const rotuloJanela = janelaLabel(campanha, ciclo, voltasSel)
   const notaJanela = ciclo === 'semanal'
-    ? (mes === '2026-09-01' ? 'meta da(s) volta(s) pela forma da planilha' : fracoesCloser ? 'meta da(s) volta(s) pela distribuição semanal das vendas' : 'meta da(s) volta(s) rateada pelos dias')
+    ? (mes === '2026-09-01' ? 'meta do(s) round(s) conforme a planilha' : fracoesCloser ? 'meta do(s) round(s) pela distribuição semanal das vendas' : 'meta do(s) round(s) rateada pelos dias')
     : undefined
 
-  const { closers: closersRaw, loading: loadingClosers, metasCadastradas } = useMetasClosers(mes, janelas)
+  const { closers: closersRaw, loading: loadingClosers, error: erroClosers, metasCadastradas } = useMetasClosers(mes, janelas)
   const metasSdr = useMetasSDRs(mes)
   const nomesCloser = useMemo(() => closersRaw.map(c => c.nome), [closersRaw])
   const pilotos = useMemo(() => ({ sdr: metasSdr.sdrs.map(s => s.nome), closer: nomesCloser }), [metasSdr.sdrs, nomesCloser])
   const { historico, meses: mesesHistorico, loading: loadingHist } = useHistoricoAtingimento(mes, nomesCloser)
-  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida } = useCorridaPerformance(mes, pilotos, janelas)
+  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida, error: erroCorrida } = useCorridaPerformance(mes, pilotos, janelas)
   const visualCloser = useMemo(() => new Map(closersRaw.map(c => [c.nome, { iniciais: c.iniciais, cor: c.cor }])), [closersRaw])
   const visualSdr = useMemo(() => new Map(metasSdr.sdrs.map(s => [s.nome, { iniciais: s.iniciais, cor: s.cor }])), [metasSdr.sdrs])
 
@@ -156,11 +159,16 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
     return top && (top.sql > 0 || top.rr > 0) ? top : null
   }, [metasSdr.sdrs, sdrRealizado, metaFatorSdr])
 
+  const rankingsOctogono = useMemo(
+    () => rankingOctogono(closers, metasSdr.sdrs, sdrRealizado, metaFatorSdr),
+    [closers, metasSdr.sdrs, sdrRealizado, metaFatorSdr],
+  )
+
   return (
-    <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: '#faf9f5', minHeight: 'calc(100vh - 56px)' }}>
+    <div className="oct-campaign" style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', background: '#F3F0E8', minHeight: 'calc(100vh - 56px)' }}>
       <PageTop
         title="Campanha de Metas"
-        subtitle={`Plataforma de metas e incentivos · temática do mês: Fórmula 1 · dia ${dia}/${campanha.diasMes}`}
+        subtitle={`Arena de metas e incentivos · ${campanha.rotulo} · dia ${dia}/${campanha.diasMes}`}
         titleAside={
           <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
             <SeletorMesCampanha mes={mes} onMes={onMes} />
@@ -180,7 +188,7 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
           background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E', fontSize: 13,
         }}>
           ⚠️ <b>Metas de {campanha.nomeMes.toLowerCase()} ainda não publicadas na Configuração das Metas.</b>{' '}
-          Ranking, cards de piloto e meta do time aparecem zerados até o time cadastrar.
+          Ranking, cards do time e meta coletiva aparecem zerados até o time cadastrar.
         </div>
       )}
 
@@ -193,6 +201,10 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
         voltasSel={voltasSel}
         toggleVolta={toggleVolta}
       />
+
+      <OctagonFightCard rankings={rankingsOctogono} mes={campanha.rotulo}
+        loading={loadingClosers || metasSdr.loading || loadingCorrida}
+        error={erroClosers || metasSdr.error || erroCorrida} />
 
       <div className="rs-split" style={{ '--rs-split': 'minmax(260px, 320px) minmax(0, 1fr)', '--rs-gap': '20px', marginTop: 20 } as React.CSSProperties}>
         <ClassificacaoCard ranking={ranking} voltaLabel={rotuloJanela} />
@@ -233,13 +245,9 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
   )
 }
 
-/* ── Hero F1 ────────────────────────────────────────────────────────────── */
+/* ── Hero Octógono ──────────────────────────────────────────────────────── */
 
-const CHECKERED_BG =
-  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'>" +
-  "<rect width='8' height='8' fill='%23ffffff' fill-opacity='0.05'/>" +
-  "<rect x='8' y='8' width='8' height='8' fill='%23ffffff' fill-opacity='0.05'/>" +
-  "</svg>\")"
+const CAGE_BG = 'repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 1px, transparent 1px 22px), repeating-linear-gradient(-45deg, rgba(255,255,255,.04) 0 1px, transparent 1px 22px)'
 
 interface PoleSdr {
   sdr: SdrMeta
@@ -258,33 +266,33 @@ function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, pole, poleSd
 }) {
   return (
     <div style={{
-      position: 'relative', background: '#141419', borderRadius: 16, overflow: 'hidden',
+      position: 'relative', background: "#0B0B0D url('/assets/octogono-arena.png') center 42% / cover", borderRadius: 18, overflow: 'hidden',
       padding: 'clamp(20px, 5vw, 28px) clamp(18px, 5vw, 32px)', marginBottom: 20,
       display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 24, alignItems: 'center',
     }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: '#E10600' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,rgba(6,6,8,.98),rgba(6,6,8,.79) 64%,rgba(6,6,8,.63))' }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: '#D4AF37' }} />
       <div style={{
-        position: 'absolute', top: 0, right: 0, bottom: 0, width: '55%',
-        backgroundImage: CHECKERED_BG,
-        maskImage: 'linear-gradient(to right, transparent 0%, black 30%)',
-        WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 30%)',
+        position: 'absolute', top: 0, right: 0, bottom: 0, width: '45%',
+        backgroundImage: CAGE_BG, opacity: .7,
+        maskImage: 'linear-gradient(to right, transparent, black 55%)',
         pointerEvents: 'none',
       }} />
 
       <div style={{ position: 'relative', zIndex: 1, flex: '1 1 280px', minWidth: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#E10600', letterSpacing: 1.5, textTransform: 'uppercase' }}>
-          Fórmula 1 · {rotuloMes}
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#D4AF37', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+          Octógono We Scale · {rotuloMes}
         </div>
-        <h1 style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 8vw, 42px)', fontWeight: 500, color: '#fff', lineHeight: 1.05 }}>
-          GP We Scale
+        <h1 style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', fontSize: 'clamp(30px, 8vw, 42px)', fontWeight: 600, color: '#fff', lineHeight: 1.05, textTransform: 'uppercase' }}>
+          O octógono é do time.
         </h1>
         <div style={{ marginTop: 6, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>
-          Cada semana é uma volta. Cada venda, uma ultrapassagem.
+          Cada semana é um round. Cada resultado aproxima o time da meta.
         </div>
 
         <div style={{ marginTop: 18, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <HeroChip dot="#E10600">Volta {volta} de {totalVoltas}</HeroChip>
-          <HeroChip>{diasRestantes} dias para a bandeirada</HeroChip>
+          <HeroChip dot="#D4AF37">Round {volta} de {totalVoltas}</HeroChip>
+          <HeroChip>{diasRestantes} dias para o encerramento</HeroChip>
           <HeroChip>Pool de prêmios · {moneyCompact(POOL_PREMIOS)}</HeroChip>
         </div>
       </div>
@@ -295,14 +303,14 @@ function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, pole, poleSd
         marginRight: 'clamp(0px, 4vw, 64px)',
       }}>
         <PolePositionCard
-          titulo="Pole position · Closer"
+          titulo="Cinturão · Closer"
           iniciais={pole?.iniciais}
           cor={pole?.cor}
           nome={pole?.nome}
           detalhe={pole ? `${pct(pole.pctAtingimento, 0)} da meta · ${money(pole.realizado)}` : null}
         />
         <PolePositionCard
-          titulo="Pole position · SDR"
+          titulo="Cinturão · SDR"
           iniciais={poleSdr?.sdr.iniciais}
           cor={poleSdr?.sdr.cor}
           nome={poleSdr?.sdr.nome}
@@ -399,7 +407,7 @@ function CicloVoltas({
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {semanal && (
           <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>
-            voltas · marque várias para o acumulado
+            rounds · marque vários para o acumulado
           </span>
         )}
         {voltas.map(v => {
@@ -414,7 +422,7 @@ function CicloVoltas({
               fontSize: 12, fontWeight: ativo ? 500 : 400,
               cursor: semanal ? 'pointer' : 'not-allowed',
             }}>
-              {v.label}
+              {roundLabel(v.label)}
             </button>
           )
         })}
@@ -428,17 +436,17 @@ function CicloVoltas({
 function ClassificacaoCard({ ranking, voltaLabel }: { ranking: CloserMeta[]; voltaLabel: string }) {
   return (
     <div style={{
-      background: '#141419', borderRadius: 16, padding: '20px 0',
+      background: '#0B0B0D', borderRadius: 16, padding: '20px 0',
       color: '#fff', height: 'fit-content',
     }}>
       <div style={{ padding: '0 20px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 8, height: 8, background: '#E10600' }} />
+          <div style={{ width: 8, height: 8, background: '#D4AF37' }} />
           <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase' }}>
             Classificação
           </span>
         </div>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{voltaLabel}</span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{roundLabel(voltaLabel)}</span>
       </div>
 
       {ranking.map((c, i) => {
@@ -449,7 +457,7 @@ function ClassificacaoCard({ ranking, voltaLabel }: { ranking: CloserMeta[]; vol
             gap: 12, padding: '12px 20px', alignItems: 'center',
             borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.05)',
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>P{pos}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#D4AF37' }}>#{pos}</div>
             <div style={{ width: 4, height: 40, background: c.cor, borderRadius: 2 }} />
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -499,7 +507,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
-            Meta do time · {rotuloJanela}
+            Meta do time · {roundLabel(rotuloJanela)}
           </h2>
           <div style={{ fontSize: 13, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
             Soma das metas individuais dos closers{notaJanela ? ` · ${notaJanela}` : ''}
@@ -529,7 +537,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
 
       <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px 12px', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
         <span>ritmo esperado · {pct(pctEsperado, 0)} do período</span>
-        <span>bandeirada · 30 · set</span>
+        <span>janela · {roundLabel(rotuloJanela)}</span>
       </div>
     </div>
   )
@@ -631,7 +639,7 @@ function RegraFonteTicketCard() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 8, height: 8, background: '#E10600' }} />
+          <span style={{ width: 8, height: 8, background: '#D4AF37' }} />
           <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>
             Como a pontuação funciona
           </span>
@@ -773,7 +781,7 @@ function TrilhaCard({
       padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 8, height: 8, background: '#E10600' }} />
+          <span style={{ width: 8, height: 8, background: '#D4AF37' }} />
         <span style={{ fontSize: 14, fontWeight: 600 }}>{regra.titulo}</span>
       </div>
 
@@ -917,7 +925,7 @@ function PilotoCard({
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>{closer.nome}</div>
             <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-              P{posicao} na classificação
+              #{posicao} na classificação
             </div>
           </div>
           <span style={{
@@ -960,7 +968,7 @@ function PilotoCard({
 }
 
 /** Renderiza foto real do vendedor quando `foto` existe; fallback pras iniciais
- *  em círculo colorido sobre fundo carbono + bandeirada. Usado por PilotoCard
+ *  em círculo colorido sobre textura de arena. Usado por PilotoCard
  *  (closers) e SdrCard (SDRs). */
 function VendedorFoto({
   foto, iniciais, cor, nome, escuderia, altura = 200,
@@ -1010,13 +1018,13 @@ function VendedorFoto({
     )
   }
 
-  // Fallback: iniciais coloridas sobre fundo carbono + bandeirada
+  // Fallback: iniciais coloridas sobre textura de grade do octógono.
   return (
     <div style={{
       background: '#141419', height: altura, position: 'relative', overflow: 'hidden',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: CHECKERED_BG }} />
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: CAGE_BG }} />
       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 4, background: cor }} />
       <div style={{
         position: 'relative', zIndex: 1,
@@ -1168,15 +1176,15 @@ function SdrsSection({
     <section style={{ marginTop: 32 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#E10600', letterSpacing: '.14em', textTransform: 'uppercase' }}>
-            Grid dos SDRs
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#D4AF37', letterSpacing: '.14em', textTransform: 'uppercase' }}>
+            Equipe SDR
           </div>
           <h2 style={{ margin: '4px 0 0', fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
-            Quem gera o ritmo da corrida
+            Quem abre o caminho no octógono
           </h2>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            SQL e reunião realizada vs. meta + velocidade de resposta por SDR — {rotuloJanela}
-            {metaFator !== 1 ? ' · meta rateada pelos dias da(s) volta(s)' : ''}
+            SQL e reunião realizada vs. meta + velocidade de resposta por SDR — {roundLabel(rotuloJanela)}
+            {metaFator !== 1 ? ' · meta rateada pelos dias do(s) round(s)' : ''}
           </div>
         </div>
       </div>

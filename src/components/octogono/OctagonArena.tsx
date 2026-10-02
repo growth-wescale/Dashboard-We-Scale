@@ -6,7 +6,7 @@ import { useMetasSDRs } from '@/hooks/useMetasSDRs'
 import { useCorridaPerformance } from '@/hooks/useCorridaPerformance'
 import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
 import { diaDaCampanha, mesAtualCampanha, montarCampanha, voltaDoDia } from '@/constants/metasCampanhaF1'
-import { duelosOctogono, rankingOctogono, type Competidor } from '@/lib/octogono'
+import { rankingOctogono, type Competidor } from '@/lib/octogono'
 
 export interface OctagonRankings { closers: Competidor[]; sdrs: Competidor[] }
 
@@ -26,7 +26,7 @@ export function OctagonStage({ mes, round, rounds, rankings, action }: {
     <section className="oct-stage" aria-label="Arena da campanha de metas">
       <div className="oct-stage__eyebrow">WE SCALE <span>·</span> CAMPANHA DE METAS <span>·</span> {mes}</div>
       <h2>O OCTÓGONO É DO TIME.</h2>
-      <p>Closer enfrenta closer. SDR enfrenta SDR. Cada pessoa compete pelo atingimento da própria meta.</p>
+      <p>Todos os Closers disputam juntos. Todos os SDRs disputam juntos. Cada pessoa avança pelo atingimento da própria meta.</p>
       <div className="oct-stage__leaders">
         {rankings.closers[0] && <span>Cinturão Closer <b>{rankings.closers[0].nome} · {num(rankings.closers[0].pct)}%</b></span>}
         {rankings.sdrs[0] && <span>Cinturão SDR <b>{rankings.sdrs[0].nome} · {num(rankings.sdrs[0].pct)}%</b></span>}
@@ -40,53 +40,51 @@ export function OctagonStage({ mes, round, rounds, rankings, action }: {
   )
 }
 
-export function OctagonFightCard({ rankings, mes, loading = false, error = null, title = 'Confrontos entre vendedores' }: {
+export function OctagonFightCard({ rankings, mes, loading = false, error = null, title = 'Disputa geral do time' }: {
   rankings: OctagonRankings
   mes: string
   loading?: boolean
   error?: string | null
   title?: string
 }) {
-  const duelos = useMemo(() => duelosOctogono(rankings), [rankings])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const selected = duelos.find(d => d.id === selectedId) ?? duelos[0]
+  const [cargo, setCargo] = useState<Competidor['cargo']>('Closer')
+  const competidores = cargo === 'Closer' ? rankings.closers : rankings.sdrs
+  const lider = competidores[0]
 
   return (
     <section className="oct-fights" aria-label={title}>
       <div className="oct-fights__arena">
-        <div className="oct-eyebrow">{selected ? `${selected.cargo} · ${mes}` : `Campanha de Metas · ${mes}`}</div>
+        <div className="oct-eyebrow">{cargo === 'Closer' ? 'CLOSERS' : 'SDRS'} · TODOS NO OCTÓGONO · {mes}</div>
         {error ? <p className="oct-fights__state" role="alert">Não foi possível carregar a disputa: {error}</p>
           : loading ? <p className="oct-fights__state">Carregando a disputa…</p>
-          : selected ? <>
-            <div className="oct-fights__versus">
-              <Competitor person={selected.a} corner="vermelho" />
-              <strong>VS</strong>
-              <Competitor person={selected.b} corner="azul" />
-            </div>
-            <div className="oct-fights__score"><b>{num(selected.a.pct)}%</b><span>Meta atingida</span><b>{num(selected.b.pct)}%</b></div>
-            <div className="oct-fights__score"><b>{valor(selected.a, selected.a.realizado)}</b><span>Realizado</span><b>{valor(selected.b, selected.b.realizado)}</b></div>
-            <div className="oct-fights__score"><b>{valor(selected.a, selected.a.meta)}</b><span>Meta</span><b>{valor(selected.b, selected.b.meta)}</b></div>
-            <p className="oct-fights__rule">Liderança pelo percentual da própria meta; realizado desempata.</p>
-          </> : <p className="oct-fights__state">Ainda não há duas pessoas do mesmo cargo com metas publicadas neste mês.</p>}
+          : competidores.length ? <div className="oct-field">
+            {competidores.map((person, index) => <div className="oct-field__row" key={`${person.cargo}-${person.nome}`}>
+              <span className={`oct-field__position${index === 0 ? ' is-leader' : ''}`}>{String(index + 1).padStart(2, '0')}</span>
+              <div className="oct-field__identity"><b>{person.nome}</b><small>{valor(person, person.realizado)} de {valor(person, person.meta)}</small></div>
+              <div className="oct-field__track" aria-label={`${num(person.pct)}% da meta`}><i style={{ width: `${Math.min(100, Math.max(0, person.pct))}%` }} /></div>
+              <strong>{num(person.pct)}%</strong>
+            </div>)}
+            <p className="oct-fights__rule">Ranking pelo percentual da própria meta; realizado desempata. Todos disputam a mesma liderança dentro do cargo.</p>
+          </div> : <p className="oct-fights__state">Ainda não há pessoas com metas publicadas neste mês.</p>}
       </div>
       <div className="oct-fights__list">
         <div className="oct-fights__list-head"><h3>{title}</h3><span>{mes}</span></div>
-        {duelos.map((d, i) => <button key={d.id} type="button" aria-pressed={selected?.id === d.id}
-          onClick={() => setSelectedId(d.id)} className="oct-fights__bout">
-          <small>{i === 0 ? 'Evento principal' : 'Duelo'} · {d.cargo === 'Closer' ? 'Closers' : 'SDRs'}</small>
-          <span><b>{d.a.nome} × {d.b.nome}</b><em>{num(d.a.pct)}% · {num(d.b.pct)}%</em></span>
-        </button>)}
-        <p>Sem confronto entre cargos. Se o grupo for ímpar, a pessoa sem par permanece no ranking.</p>
+        {(['Closer', 'SDR'] as const).map(tipo => {
+          const lista = tipo === 'Closer' ? rankings.closers : rankings.sdrs
+          return <button key={tipo} type="button" aria-pressed={cargo === tipo} onClick={() => setCargo(tipo)} className="oct-fights__bout">
+            <small>Disputa coletiva · {tipo === 'Closer' ? 'Closers' : 'SDRs'}</small>
+            <span><b>{lista.length} {lista.length === 1 ? 'competidor' : 'competidores'}</b><em>{lista[0] ? `Líder · ${lista[0].nome}` : 'Aguardando metas'}</em></span>
+          </button>
+        })}
+        <div className="oct-fights__leader">
+          <small>LIDERANÇA ATUAL</small>
+          <b>{lider?.nome ?? 'Aguardando metas'}</b>
+          {lider && <span>{num(lider.pct)}% da meta</span>}
+        </div>
+        <p>Closers e SDRs têm rankings separados. Dentro de cada cargo, a disputa envolve todo o grupo.</p>
       </div>
     </section>
   )
-}
-
-function Competitor({ person, corner }: { person: Competidor; corner: 'vermelho' | 'azul' }) {
-  return <div className={`oct-fights__person oct-fights__person--${corner}`}>
-    <small>Corner {corner}</small>
-    <b>{person.nome}</b>
-  </div>
 }
 
 /** Só monta consultas de Vendas se a pessoa tiver permissão da Campanha. */

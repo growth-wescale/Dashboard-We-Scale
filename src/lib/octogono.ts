@@ -11,13 +11,6 @@ export interface Competidor {
   unidade: 'R$' | 'SQL'
 }
 
-export interface Duelo {
-  id: string
-  cargo: Competidor['cargo']
-  a: Competidor
-  b: Competidor
-}
-
 interface CloserInput {
   nome: string
   iniciais: string
@@ -60,15 +53,4 @@ export function rankingOctogono(
       } as Competidor
     }).sort(ordenar),
   }
-}
-
-/** Pareia apenas vizinhos do ranking da MESMA função; ímpar fica sem par. */
-export function duelosOctogono(rankings: { closers: readonly Competidor[]; sdrs: readonly Competidor[] }): Duelo[] {
-  const duelos: Duelo[] = []
-  for (const [cargo, lista] of [['Closer', rankings.closers], ['SDR', rankings.sdrs]] as const) {
-    for (let i = 0; i + 1 < lista.length; i += 2) {
-      duelos.push({ id: `${cargo}-${i / 2}`, cargo, a: lista[i], b: lista[i + 1] })
-    }
-  }
-  return duelos
 }

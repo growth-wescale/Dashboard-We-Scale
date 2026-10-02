@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { duelosOctogono, rankingOctogono } from './octogono'
+import { rankingOctogono } from './octogono'
 
 describe('Octógono: apresentação sem alterar as métricas', () => {
   const closers = [
@@ -13,14 +13,12 @@ describe('Octógono: apresentação sem alterar as métricas', () => {
     { nome: 'S3', iniciais: 'S3', cor: '#666', metaSql: 10 },
   ]
 
-  it('ordena por percentual e compara somente pessoas do mesmo cargo', () => {
+  it('ordena todos por percentual dentro do próprio cargo', () => {
     const ranking = rankingOctogono(closers, sdrs, new Map([
       ['S1', { sql: 8 }], ['S2', { sql: 5 }], ['S3', { sql: 2 }],
     ]))
     expect(ranking.closers.map(c => c.nome)).toEqual(['Ana', 'Bia'])
     expect(ranking.sdrs.map(s => s.nome)).toEqual(['S1', 'S2', 'S3'])
-    expect(duelosOctogono(ranking).map(d => [d.cargo, d.a.nome, d.b.nome]))
-      .toEqual([['Closer', 'Ana', 'Bia'], ['SDR', 'S1', 'S2']])
   })
 
   it('escala só a meta do SDR no round, sem mudar o realizado', () => {

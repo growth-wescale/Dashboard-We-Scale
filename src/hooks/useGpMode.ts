@@ -1,24 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 
 /**
- * Modo GP — tema Fórmula 1 do dashboard (setembro/2026).
+ * Tema Octógono do dashboard. Mantém a preferência anterior de liga/desliga.
  *
- * Controla o atributo `data-gp="f1"` no `<html>` e persiste em
+ * Controla o atributo `data-gp="ufc"` no `<html>` e persiste em
  * `localStorage.ws-gp-mode`. Emite evento `gp-replay` pra reabrir a intro.
  *
- * **Default**: LIGADO em setembro (mês da campanha), DESLIGADO nos outros
- * meses. O usuário sempre pode sobrepor via toggle na topbar. A sobreposição
- * persiste (não é resetada em cada login).
+ * **Default**: LIGADO. A escolha explícita do usuário persiste via toggle.
  */
 
 const LS_KEY = 'ws-gp-mode'
 const HTML_ATTR = 'data-gp'
-const HTML_ATTR_VALUE = 'f1'
+const HTML_ATTR_VALUE = 'ufc'
 
-/** Retorna o default baseado no mês/ano atual. Setembro 2026 = LIGADO. */
 function computeDefault(): boolean {
-  const hoje = new Date()
-  return hoje.getFullYear() === 2026 && hoje.getMonth() === 8 // 8 = setembro
+  return true
 }
 
 function readInitial(): boolean {

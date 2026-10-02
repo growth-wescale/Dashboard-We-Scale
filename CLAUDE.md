@@ -602,6 +602,39 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-02 (3) — Automação de No Show nunca trocava o responsável; nova RPC `sdr_historico_no_show`
+
+Junior reportou deals movidos pra No Show que continuavam com o Closer como
+dono no RD. O workflow n8n "Altera o responsável da negociação para o SDR
+histórico quando No Show (draft anti-loop)" (`cXAfvBnmiJR9Ou16IgBA6`, chamado
+pelo roteador "Alerta - Disjuntor de Webhooks") **nunca escreveu nada desde
+a versão anti-loop (24/08)**: 449 checagens de eco em `rd_escrita_propria`,
+0 linhas de `no_show_sdr_historico` em `automacao_rate_guard` (o do Closer
+tem 223). Bugs encadeados, o 1º já matava tudo:
+
+1. O IF "Verifica se a etapa é No Show" lia `$json.body.document`, mas `$json`
+   ali é a resposta da Guarda 2 (um booleano) → sempre "não é No Show".
+2. O SDR vinha de `DB_Funil_Analitico_duplicate`, **congelada desde 17/08**
+   (último deal criado 17/08) — deal novo não existe lá.
+3. Casava nome do banco com `/users` do RD por igualdade: "Thiago" ≠
+   "Thiago Cotliarenco Gomes" → erro.
+4. "Registrar Escrita" e o PUT usavam `$json.id_sdr`, já sobrescrito pelas
+   respostas das guardas → PUT com `user_id` vazio.
+5. O alerta do Teams referenciava o nó `Webhook`, que não existe no sub-workflow.
+
+**Fix:** RPC nova `sdr_historico_no_show(p_id_deal)` (só `service_role`),
+devolve sempre 1 objeto `{nome_sdr, id_sdr, fonte}` com `id_sdr` = ID do
+usuário no RD (`nome_cargo_foto.user_id`). Prioridade:
+`atribuicao_manual.sdr_override` > `nome_sdr` do ciclo atual em
+`vw_funil_vendas` (regra handoff) > último dono com cargo SDR em
+`vw_deal_posse`. Só aceita cargo `SDR`/`SDR/Closer`, ativo e com `user_id`;
+senão `id_sdr` null → alerta no Teams. ~23 ms. Workflow corrigido entregue
+como JSON pra importar no n8n (o MCP do n8n não tem acesso a esse workflow);
+o JSON fica fora do repo porque carrega a chave `service_role`.
+
+**Regra que fica:** SDR novo precisa de `user_id` (ID do RD) em
+`nome_cargo_foto`, senão a automação não acha o dono e só alerta.
+
 ### 2026-10-02 (4) — Preview interno de anúncios com vídeo
 
 Saúde da Marca ganhou preview interno sem exigir acesso à BM: botão nas visões

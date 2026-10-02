@@ -602,6 +602,22 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-02 (4) — Preview interno de anúncios com vídeo
+
+Saúde da Marca ganhou preview interno sem exigir acesso à BM: botão nas visões
+de campanha e anúncio abre modal com imagem ou player de vídeo; o Facebook
+permanece como link secundário. Os arquivos ficam no bucket privado
+`ad-creative-media`, com URLs assinadas por uma hora.
+
+`ingest-meta-creatives` v5 preserva a sincronização diária das 3.026 peças e
+arquiva até 6 criativos ativos por execução. As duas primeiras execuções
+controladas armazenaram 12 vídeos e 12 capas (143.418.725 bytes), sem erro na
+versão final. Schema, bucket e política foram aplicados no Supabase Marketing.
+Build, 607 testes, lint dos arquivos alterados e diff check passaram. Commit
+`6dc1a81`, [PR #219](https://github.com/growth-wescale/Dashboard-We-Scale/pull/219),
+com os dois checks aprovados. Merge/deploy e QA autenticado ainda pendentes.
+Nenhuma chave foi copiada para código, Git ou documentação.
+
 ### 2026-10-02 (3) — S&OP de Marketing: mês fechado e snapshot We Scale
 
 Branch `codex/fix-sop-marketing-fechado`, criada após sincronizar a `main` até

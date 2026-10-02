@@ -14,6 +14,7 @@ import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { useLeads } from '@/hooks/useLeads'
 import { useAdCreatives } from '@/hooks/useAdCreatives'
+import type { AdCreativePreview } from '@/hooks/useAdCreatives'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
 import { SLUG_TO_MARCA, monthLabel, todayLocal, isoDate } from '@/lib/dateUtils'
 import { getCreativeAsset } from '@/lib/creativeAssets'
@@ -22,6 +23,7 @@ import { TermosPanel } from '@/components/ui/TermosPanel'
 import { SocialPanel } from '@/components/ui/SocialPanel'
 import { EmailMarketingPanel } from '@/components/ui/EmailMarketingPanel'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
+import { CreativePreview } from '@/components/ui/CreativePreview'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
@@ -104,11 +106,11 @@ function computeBrand(
   return { key: def.key, label: def.label, accent: def.accent, leads, mql, sql, diagnostico, sal, fech, invest, cpmql, cpsql, meta: metaPct, status, mqlMetaVal, investMetaVal, investMetaPct }
 }
 
-interface Ad { id: string; name: string; type?: string; spend: number; impressions: number; clicks: number; ctr: number; mql: number; cpmql: number; hue: number; preview_url?: string }
+interface Ad { id: string; name: string; type?: string; spend: number; impressions: number; clicks: number; ctr: number; mql: number; cpmql: number; hue: number; preview?: AdCreativePreview }
 interface AdSet { id: string; name: string; publico: string; spend: number; impressions: number; clicks: number; ctr: number; cpm: number; mql: number; sql: number; cpmql: number; freq: number; ads: Ad[] }
 interface Campaign { id: string; name: string; status: string; objetivo: string; spend: number; impressions: number; clicks: number; ctr: number; cpm: number; cpc: number; lpv: number; leads: number; mql: number; sql: number; cpmql: number; cpsql: number; adsets: AdSet[] }
 
-function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: number, totalLeadsReal: number, marca: string, adCreativesUrlByName?: Map<string, string>): Campaign[] {
+function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: number, totalLeadsReal: number, marca: string, adCreativesByName?: Map<string, AdCreativePreview>): Campaign[] {
   const totalMediaLeads = media.reduce((s, r) => s + r.leads, 0)
   const totalSpend = media.reduce((s, r) => s + r.spend_brl, 0)
   // Use real leads from leads table; fall back to media leads if table has none
@@ -189,10 +191,19 @@ function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: numb
         const aCtr = aImp > 0 ? (aClk / aImp) * 100 : 0
         const aCpmql = aMql > 0 ? aSpend / aMql : 0
         const asset = getCreativeAsset(marca, adName)
-        // Prioriza URL do banco (ad_creatives, atualizado diariamente) e cai
-        // pro mapa estático `creativeAssets.ts` se banco não tiver.
-        const preview_url = adCreativesUrlByName?.get(adName) ?? asset?.postUrl
-        ads.push({ id: `c${ci}-a${ai}-k${ki}`, name: adName, type: asset?.type, spend: aSpend, impressions: aImp, clicks: aClk, ctr: +aCtr.toFixed(2), mql: aMql, cpmql: Math.round(aCpmql), hue: (ci * 73 + ai * 37 + ki * 17) % 360, preview_url })
+        // A mídia arquivada no Supabase é a fonte principal. O mapa estático
+        // fica apenas como transição para anúncios ainda não processados.
+        const preview = adCreativesByName?.get(adName) ?? (asset ? {
+          adId: asset.adId,
+          adName,
+          postUrl: asset.postUrl,
+          mediaType: asset.type === 'video' ? 'video' : 'image',
+          mediaPath: null,
+          thumbnailPath: null,
+          mediaUrl: null,
+          thumbnailUrl: asset.thumbnailUrl,
+        } satisfies AdCreativePreview : undefined)
+        ads.push({ id: `c${ci}-a${ai}-k${ki}`, name: adName, type: asset?.type, spend: aSpend, impressions: aImp, clicks: aClk, ctr: +aCtr.toFixed(2), mql: aMql, cpmql: Math.round(aCpmql), hue: (ci * 73 + ai * 37 + ki * 17) % 360, preview })
         ki++
       }
 
@@ -837,7 +848,10 @@ function CampaignTable({ campaigns, on }: { campaigns:Campaign[]; on:Record<stri
                       {openA && as.ads.map((ad)=>(
                         <tr key={ad.id} style={{ borderBottom:'1px solid var(--ws-border)' }}>
                           <td style={{ padding:'8px 12px 8px 60px', color:'var(--ws-text-secondary)' }}>
-                            <span style={{ display:'inline-flex', alignItems:'center', gap:9 }}>{ad.preview_url ? <a href={ad.preview_url} target="_blank" rel="noopener noreferrer" style={{ color:'inherit', textDecoration:'none' }} onMouseEnter={e=>(e.currentTarget.style.textDecoration='underline')} onMouseLeave={e=>(e.currentTarget.style.textDecoration='none')}>{ad.name}</a> : ad.name}</span>
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:9, flexWrap:'wrap' }}>
+                              <span>{ad.name}</span>
+                              {ad.preview && <CreativePreview preview={ad.preview} compact />}
+                            </span>
                           </td>
                           {cols.map((c)=><CampCell key={c.k} v={val(ad,c.k)} />)}
                         </tr>
@@ -1383,7 +1397,10 @@ function SaudeAnuncios({ b: _b, campaigns }: { b: BrandData; campaigns: Campaign
     { k:'name', h:'Anúncio', render:(r)=>(
       <span style={{ display:'inline-flex', alignItems:'center', gap:10 }}>
         <span>
-          <span style={{ fontWeight:500 }}>{r.preview_url ? <a href={r.preview_url} target="_blank" rel="noopener noreferrer" style={{ color:'inherit', textDecoration:'none' }} onMouseEnter={e=>(e.currentTarget.style.textDecoration='underline')} onMouseLeave={e=>(e.currentTarget.style.textDecoration='none')}>{r.name}</a> : r.name}</span>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:8, flexWrap:'wrap', fontWeight:500 }}>
+            <span>{r.name}</span>
+            {r.preview && <CreativePreview preview={r.preview} compact />}
+          </span>
           <br /><span style={{ fontSize:11, color:'var(--ws-text-secondary)' }}>{r.conjunto}</span>
         </span>
       </span>
@@ -1925,12 +1942,19 @@ export function SaudeDaMarca() {
     : `${formatCompareLabel(effectiveCompareRange)} (mês anterior)`
 
   const mqlLeads = useMemo(() => deduplicateLeads(activeLeadsData).filter(isLeadMql), [activeLeadsData])
-  const { urlByName: adCreativesUrlByName } = useAdCreatives()
-  const campaigns = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesUrlByName)
+  const activeAdNames = useMemo(
+    () => [...new Set(activeMediaData.map(row => row.anuncio).filter((name): name is string => Boolean(name)))],
+    [activeMediaData],
+  )
+  const { previewByName: adCreativesByName, loading: creativesLoading, error: creativesError } = useAdCreatives(activeAdNames)
+  const campaigns = useMemo(
+    () => buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesByName),
+    [activeMediaData, b.mql, b.sql, b.leads, marca, adCreativesByName],
+  )
   const daily = buildDailySeries(activeMediaData)
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)
   const acqFunnel = buildAcqFunnel(b, activeMediaData)
-  const loading = mediaLoading || crmLoading || leadsLoading
+  const loading = mediaLoading || crmLoading || leadsLoading || creativesLoading
 
   const periodLabel = useMemo(() => {
     if (range.start.slice(0, 7) === range.end.slice(0, 7)) return monthLabel(range.start)
@@ -2021,7 +2045,7 @@ export function SaudeDaMarca() {
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
       {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}
-      <QueryErrorBanner errors={[mediaError, crmError, leadsError, metasError]} scope="Saúde da Marca" />
+      <QueryErrorBanner errors={[mediaError, crmError, leadsError, metasError, creativesError]} scope="Saúde da Marca" />
       <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
         {body}
       </div>

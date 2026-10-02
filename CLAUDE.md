@@ -614,8 +614,9 @@ rede..."` (Lisô Laser). Eles permanecem no fallback do Facebook.
 
 O bucket privado soma 84 objetos e 288.369.067 bytes após a carga; 42 criativos
 estão prontos no total (32 vídeos e 10 imagens, incluindo lotes anteriores).
-Build, 607 testes e diff check aprovados. Branch
-`codex/top-criativos-preview`; PR pendente. Fonte: Supabase vivo e código local.
+Build, 607 testes e diff check aprovados. Commit `69709e0`,
+[PR #221](https://github.com/growth-wescale/Dashboard-We-Scale/pull/221), com
+check automático aprovado. Merge pendente. Fonte: Supabase vivo e código local.
 
 ### 2026-10-02 (4) — Preview interno de anúncios com vídeo
 

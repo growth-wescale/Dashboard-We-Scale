@@ -13,15 +13,14 @@ import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useLeads } from '@/hooks/useLeads'
 import { useMetas } from '@/hooks/useMetas'
-import { useAllBrandsMqlPacing } from '@/hooks/useMqlPacing'
 import type { MediaDailyRaw, Lead, Meta, Marca } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
-import { isMediaOdontoLegacy, isMediaLegacy } from '@/lib/oralUnicMapping'
+import { isComunidadeRow, filterMediaByMarcas, filterMediaByMarca } from '@/lib/visaoGeralMedia'
 import { getMetaVendas } from '@/constants/metasVendas'
-import { PacingCard, MiniCard } from '@/pages/Pacing'
+import { MqlVolumeChart } from '@/components/ui/MqlVolumeChart'
 import { MqlDrawer } from '@/components/ui/MqlDrawer'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { MultiSelect } from '@/components/ui/MultiSelect'
@@ -67,43 +66,6 @@ const FUNNEL_STAGES = [
 function funnelFor(scope: Pick<Scope, 'leads' | 'mql' | 'sql' | 'sal' | 'fech'>) {
   const { leads, mql, sql, sal, fech } = scope
   return [leads, mql, sql, sal, fech].map((x) => Math.round(x))
-}
-
-// Ecossistema Oral Unic segregado em 3 buckets (decisão Junior, 09/09/2026):
-// - Franquia (Nossa + V4): marca='Oral Unic' sem [ODL]/[OS]/[LEGACY]/[CMD]
-// - Consultoria (Odonto Legacy = Scale): marca='Odonto Scale' cru + Oral Unic com [ODL]/[OS]
-// - Comunidade Legacy ([LEGACY]/[CMD]): fora dos cards da Visão Geral. Segue visível
-//   em Saúde da Marca / S&OP como topo de funil (sem MQL, sem meta de venda).
-function isComunidadeRow(r: MediaDailyRaw): boolean {
-  return r.marca === 'Oral Unic' && isMediaLegacy(r.campanha)
-}
-
-/**
- * Bucket "de negócio" ao qual uma linha de mídia pertence. Faz o mapa 1:1
- * linha → marca canônica seguindo a segregação Oral Unic acima. Retorna null
- * quando a linha é de Comunidade Legacy — que fica fora dos cards da Visão Geral.
- */
-function rowBucket(r: MediaDailyRaw): string | null {
-  if (r.marca === 'Oral Unic') {
-    if (isMediaOdontoLegacy(r.campanha)) return 'Odonto Scale'
-    if (isMediaLegacy(r.campanha)) return null
-    return 'Oral Unic'
-  }
-  return r.marca
-}
-
-/** Filtra linhas de mídia por uma LISTA de marcas (bucket). Multi-seleção. */
-function filterMediaByMarcas(rows: MediaDailyRaw[], marcas: string[]): MediaDailyRaw[] {
-  const set = new Set(marcas)
-  return rows.filter(r => {
-    const b = rowBucket(r)
-    return b !== null && set.has(b)
-  })
-}
-
-/** Wrapper 1-marca — usado por `computeBrands`, que agrega por marca uma a uma. */
-function filterMediaByMarca(rows: MediaDailyRaw[], marca: string): MediaDailyRaw[] {
-  return filterMediaByMarcas(rows, [marca])
 }
 
 // ─── Data computation ─────────────────────────────────────────────────────────
@@ -844,7 +806,7 @@ export function VisaoGeral() {
   const prev2Dates = useMemo(() => getPrevNthMtdDates(range.start, 2, days), [range.start, days])
   const prev3Dates = useMemo(() => getPrevNthMtdDates(range.start, 3, days), [range.start, days])
 
-  const { data: mediaCur,   loading: l1 } = useMediaData({ dataInicio: range.start,     dataFim: range.end })
+  const { data: mediaCur,   loading: l1, error: mediaError } = useMediaData({ dataInicio: range.start,     dataFim: range.end })
   const { data: mediaPrev,  loading: l2 } = useMediaData({ dataInicio: prevDates.start,  dataFim: prevDates.end })
   const { data: mediaPrev2, loading: l3 } = useMediaData({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
   const { data: mediaPrev3, loading: l4 } = useMediaData({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
@@ -864,13 +826,12 @@ export function VisaoGeral() {
   const crmPrev2   = useMemo(() => applyFonte(rawCrmPrev2),   [rawCrmPrev2,   applyFonte])
   const crmPrev3   = useMemo(() => applyFonte(rawCrmPrev3),   [rawCrmPrev3,   applyFonte])
   const crmCompare = useMemo(() => applyFonte(rawCrmCompare), [rawCrmCompare, applyFonte])
-  const { data: leadsCur,   loading: l9  } = useLeads({ dataInicio: range.start,      dataFim: range.end })
+  const { data: leadsCur,   loading: l9, error: leadsError } = useLeads({ dataInicio: range.start,      dataFim: range.end })
   const { data: leadsPrev,  loading: l10 } = useLeads({ dataInicio: prevDates.start,  dataFim: prevDates.end })
   const { data: leadsPrev2, loading: l11 } = useLeads({ dataInicio: prev2Dates.start, dataFim: prev2Dates.end })
   const { data: leadsPrev3, loading: l12 } = useLeads({ dataInicio: prev3Dates.start, dataFim: prev3Dates.end })
   const { data: leadsCompare } = useLeads({ dataInicio: effectiveCompareRange.start, dataFim: effectiveCompareRange.end })
   const { data: metas } = useMetas({ mes: initDates.mes })
-  const { data: pacingData, loading: pacingLoading, setTarget: setPacingTarget } = useAllBrandsMqlPacing()
 
   const loading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9 || l10 || l11 || l12
 
@@ -1032,56 +993,13 @@ export function VisaoGeral() {
 
       <WaterfallFunnel scope={scope} scopeLabel={scopeLabel} />
 
-      {/* ── Pacing de MQL ──────────────────────────────────────────────────── */}
-      <div style={{ marginTop: 32 }}>
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 21 }}>Pacing de MQL</h2>
-          <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
-            Ritmo de captação vs. meta mensal · {monthLabel(range.start)}
-          </div>
-        </div>
-
-        <div style={{ opacity: pacingLoading ? 0.5 : 1, pointerEvents: pacingLoading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
-        {/*
-          Pacing:
-          - Consolidado ou multi (0 ou 2+): todas as marcas em mini cards.
-            Pacing é por marca (meta individual, ritmo individual) — somar 2
-            pacings não faz sentido, então multi mostra o mesmo grid que
-            Consolidado, o usuário compara lado a lado.
-          - Exatamente 1 marca: card completo dela + "Outras marcas" abaixo.
-        */}
-        {brandKeys.length !== 1 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 16 }}>
-            {pacingData.map(d => <MiniCard key={d.marca} d={d} />)}
-          </div>
-        ) : (() => {
-          const selectedMarca = SLUG_TO_MARCA[brandKeys[0]]
-          const selectedPacing = pacingData.find(d => d.marca === selectedMarca)
-          const otherPacing = pacingData.filter(d => d.marca !== selectedMarca)
-          return (
-            <>
-              {selectedPacing && (
-                <PacingCard
-                  d={selectedPacing}
-                  onTargetChange={v => setPacingTarget(selectedMarca, v)}
-                  today={today}
-                />
-              )}
-              {otherPacing.length > 0 && (
-                <>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ws-text-secondary)', marginBottom: 12 }}>
-                    Outras marcas
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
-                    {otherPacing.map(d => <MiniCard key={d.marca} d={d} />)}
-                  </div>
-                </>
-              )}
-            </>
-          )
-        })()}
-        </div>
-      </div>
+      <MqlVolumeChart
+        // Trocar a marca da página devolve o gráfico ao acompanhamento dela.
+        key={JSON.stringify([brandKeys, marcasPermitidas])}
+        media={mediaCur} leads={leadsCur} range={range}
+        pageBrandKeys={brandKeys} allowedBrandKeys={marcasPermitidas}
+        loading={l1 || l9} error={mediaError || leadsError}
+      />
     </div>
 
     <MqlDrawer open={mqlDrawerOpen} onClose={() => setMqlDrawerOpen(false)} leads={mqlLeads} />

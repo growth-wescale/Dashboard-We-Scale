@@ -555,6 +555,52 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-02 — Motivo de perda no dashboard vem do EVENTO, não do deal
+
+Brunno reportou motivos errados na Análise de Perda depois da limpeza do
+catálogo (ver 22/09). O print mostrava o mesmo motivo em várias linhas:
+`Atingiu o fim da cadência` (128) junto com `Sem contato apos cadencia SDR`
+(6), `Dados inválidos` (10) junto com `[NJ] Dados Inválidos (Inbound)` (24),
+`Sem perfil (fora do ICP)` (23) junto com `[NJ] Fora ICP` (16).
+
+**Não era falta de sync** — `wf_5_sync_incremental` e `espelho_rd_edge`
+rodando com `status=success`, snapshot atualizado no minuto. A causa é
+estrutural: **`motivo_perda` vem de `deal_eventos`, não de
+`deal_snapshot`**. A cadeia é `vw_funil_vendas` → `vw_deal_ciclo` →
+`vw_deal_eventos_ciclo` → `deal_eventos.motivo_perda`, e esse campo é um
+retrato denormalizado gravado **no instante da perda**. `deal_eventos` é
+append-only: nada reescreve o nome depois.
+
+Consequência que não era óbvia: migrar o motivo de um deal no RD (PUT em
+`deal_lost_reason_id`) **atualiza o deal mas não o evento já gravado**, e
+renomear um motivo no RD não toca em evento nenhum. Conferido deal a deal —
+`6a8c398cf9ae040001647fdf` (Adelcio Daniel) tinha `[NOVO] Atingiu o fim da
+cadência` no RD com `updated_at` no minuto exato do PUT, e
+`Sem contato apos cadencia SDR` no evento.
+
+**Fix:** o mesmo de-para aplicado no RD em 22/09 foi reaplicado em
+`deal_eventos` — **79 nomes antigos em ~2.700 eventos** de `tipo_evento =
+'perda'`, seguido de `REFRESH MATERIALIZED VIEW mv_deal_ciclo_enriquecido`.
+Backup dos 6.326 eventos de perda em `_backup_motivo_perda_20261002`
+(`id_evento`, `id_deal`, `motivo_perda`, `data_evento`). Pós-fix: 0 nomes
+fora do catálogo, e os 36 motivos do banco batem exatamente com os 36 do RD.
+Conferência contra a tela: set/26 Inbound deu 704 / 108 / 93 / 63 / 39 / 38 /
+33 / 29 / 23 / 23, idêntico ao dashboard.
+
+**Regra que fica:** renomear ou fundir motivo no RD **nunca** chega sozinho
+ao dashboard. Toda mudança de catálogo precisa do UPDATE em
+`deal_eventos.motivo_perda` junto — inclusive a remoção do prefixo `[NOVO]`
+quando a lista fixa for aprovada.
+
+**O prefixo `[NOVO]` não aparece na tela** e nunca apareceu: `limparMotivo`
+(`src/lib/perdaRows.ts`) e `PerdaDealsDrawer.tsx` cortam `^\[NOVO\]\s*`
+antes de agrupar e exibir. O que aparecia cru eram os nomes `[NJ]` e
+`(legado)`, que não têm esse prefixo. `classificarMotivo`
+(`src/constants/motivosPerda.ts`) reconhece os 36 nomes atuais — conferido,
+nenhum cai em "não catalogado".
+
+Sem mudança de código nesta entrada: o fix foi 100% em dado do banco.
+
 ### 2026-09-22 (2) — Motivos de perda do RD: 463 cadastros viram 36
 
 Junior deu prazo de hoje pro Brunno limpar os motivos de perda. O plano

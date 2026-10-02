@@ -20,10 +20,11 @@ import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
-import { WE_SCALE_SOP_ATUAL } from '@/constants/weScaleSop'
+import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
+import { safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -761,9 +762,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
 
   // Compare range dinâmico (dropdown de mês). Default = mês anterior.
-  // Sempre MTD: recorta pelo dia de hoje (ou último dia do mês, o que for menor),
-  // independente do toggle Julho fechado — assim o gráfico compara os mesmos
-  // dias iniciais de cada mês.
+  // Mês fechado compara meses inteiros; mês corrente mantém MTD equivalente.
   const compareRange = useMemo(() => {
     const curKey = dates.monthStart.slice(0, 7)
     const [curY, curM] = curKey.split('-').map(Number)
@@ -772,10 +771,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     const key = compareMonthKey ?? `${defaultPrevY}-${String(defaultPrevM).padStart(2, '0')}`
     const [y, m] = key.split('-').map(Number)
     const start = isoDate(new Date(y, m - 1, 1))
-    const lastDayOfMonth = new Date(y, m, 0).getDate()
-    const todayDay = new Date().getDate()
-    const day = Math.min(todayDay, lastDayOfMonth)
-    const end = isoDate(new Date(y, m - 1, day))
+    const monthEnd = isoDate(new Date(y, m, 0))
+    const end = sopComparisonEnd(key, dates.isClosed, monthEnd)
     const label = shortMonth(y, m - 1)
     return { start, end, label, key }
   }, [compareMonthKey, dates])
@@ -1112,15 +1109,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const funnelMtd  = useMemo(() => buildFunnel(crmCur, mtdCurStart, mtdCurEnd), [crmCur, mtdCurStart, mtdCurEnd])
   const funnelMtdP = useMemo(() => buildFunnel(crmPrev, compareRange.start, compareRange.end), [crmPrev, compareRange.start, compareRange.end])
 
-  // ── Chart-specific: sempre MTD-vs-MTD (mesmo em modo Julho fechado) ──────────
-  // Recorta o lado "atual" até o dia de hoje (ou último dia do mês, o que for menor),
-  // pra que o gráfico compare os mesmos N dias iniciais de cada mês.
+  // ── Recorte dos comparativos ─────────────────────────────────────────────────
+  // Mês fechado usa o mês inteiro; mês corrente compara os mesmos N dias iniciais.
   const chartCurEnd = useMemo(() => {
-    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
-    const lastDay = new Date(y, m, 0).getDate()
-    const today = new Date().getDate()
-    return isoDate(new Date(y, m - 1, Math.min(today, lastDay)))
-  }, [dates.monthStart])
+    return sopComparisonEnd(dates.monthStart.slice(0, 7), dates.isClosed, dates.mtdCurEnd)
+  }, [dates.isClosed, dates.monthStart, dates.mtdCurEnd])
 
   const chartCurLeads = useMemo(
     () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart && l.dia <= chartCurEnd))),
@@ -1178,6 +1171,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const receitaMtd   = useMemo(() => somaGanhos(rawCrmAll, dates.monthStart, mtdCurEnd),   [somaGanhos, rawCrmAll, dates.monthStart, mtdCurEnd])
 
   const monthKeyCur    = dates.monthStart.slice(0, 7)
+  const weScaleSnapshot = getWeScaleSop(monthKeyCur)
   const metaReceita    = getMetaReceitaLegacy(monthKeyCur).meta_receita
   const pctReceita     = metaReceita > 0 ? Math.round((receitaMtd / metaReceita) * 100) : null
   const [mesLblY, mesLblM] = monthKeyCur.split('-').map(Number)
@@ -1286,36 +1280,46 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         },
       ]
-    // We Scale: valores MTD hardcoded de WE_SCALE_SOP_ATUAL — Meta Instant Forms não chegam ao
+    // We Scale: snapshot manual do mês selecionado — Meta Instant Forms não chegam ao
   // Supabase, então o Supabase só tem ≈ metade dos leads reais. "—" nas comparações porque a
   // marca só começou a receber dados em set/26, sem histórico anterior.
     : isWeScale
-      ? [
+      ? weScaleSnapshot ? [
           {
             label: 'SP · RECEITA',
-            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.vendas.receita),
+            value: fmtBRL(weScaleSnapshot.mtd.vendas.receita),
           },
           {
             label: 'SP · LEADS',
-            value: String(WE_SCALE_SOP_ATUAL.mtd.scaleParceiro.leads),
+            value: String(weScaleSnapshot.mtd.scaleParceiro.leads),
             extra: {
               label: 'VENDAS FECHADAS',
-              value: String(WE_SCALE_SOP_ATUAL.mtd.vendas.fechadas),
+              value: String(weScaleSnapshot.mtd.vendas.fechadas),
+              subtext: `Snapshot até ${weScaleSnapshot.ate}`,
             },
           },
           {
             label: 'BC · INVEST.',
-            value: fmtBRL(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest),
+            value: fmtBRL(weScaleSnapshot.mtd.beautyConnection.invest),
           },
           {
             label: 'BC · LEADS',
-            value: String(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads),
+            value: String(weScaleSnapshot.mtd.beautyConnection.leads),
             extra: {
               label: 'CUSTO/LEAD',
-              value: fmtBRL(Math.round(WE_SCALE_SOP_ATUAL.mtd.beautyConnection.invest / WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads)),
+              value: (() => {
+                const cost = safeUnitCost(weScaleSnapshot.mtd.beautyConnection.invest, weScaleSnapshot.mtd.beautyConnection.leads)
+                return cost == null ? '—' : fmtBRL(Math.round(cost))
+              })(),
             },
           },
         ] satisfies KpiCard[]
+        : [
+            { label: 'SP · RECEITA', value: '—' },
+            { label: 'SP · LEADS', value: '—', extra: { label: 'STATUS', value: 'Sem snapshot' } },
+            { label: 'BC · INVEST.', value: '—' },
+            { label: 'BC · LEADS', value: '—', extra: { label: 'CUSTO/LEAD', value: '—' } },
+          ] satisfies KpiCard[]
       : kpiCardsAll
 
   // Ago fechado como referência — só Odonto Legacy. Puxa mês anterior INTEIRO
@@ -1332,7 +1336,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     [isOdontoLegacy, allLeads, prevMonthStart, prevMonthEnd, filterLeads],
   )
 
-  // ── MTD chart items (sempre MTD-vs-MTD) ──────────────────────────────────────
+  // ── Itens do comparativo mensal ──────────────────────────────────────────────
   // Odonto Legacy: foco em receita/qualidade, sem SQL/SAL (removidos do funil)
   // We Scale: sem SQL/SAL (Funil de Eventos ainda sem deals)
   const mtdItems: MtdItem[] = isOdontoLegacy
@@ -1468,7 +1472,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            {isWeScale ? `MTD · ${WE_SCALE_SOP_ATUAL.mtd.periodo}` : `Semana · ${effectiveWeeks[4].label}`}
+            {isWeScale
+              ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Sem snapshot · ${dates.mtdLabel}`
+              : `Semana · ${effectiveWeeks[4].label}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -1584,8 +1590,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               )
             })() : (
               <WeeklyBarChart
-                values={isWeScale ? WE_SCALE_SOP_ATUAL.semanas.map(s => s.mql) : weeklyData.map(w => w.mql)}
-                labels={isWeScale ? WE_SCALE_SOP_ATUAL.semanas.map(s => s.label) : effectiveWeeks.map(w => w.label)}
+                values={isWeScale ? (weScaleSnapshot?.semanas.map(s => s.mql) ?? []) : weeklyData.map(w => w.mql)}
+                labels={isWeScale ? (weScaleSnapshot?.semanas.map(s => s.label) ?? []) : effectiveWeeks.map(w => w.label)}
                 accent={acc}
               />
             )}
@@ -1600,12 +1606,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               </div>
             </div>
           )}
-          {isWeScale && (
+          {isWeScale && weScaleSnapshot && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span>Funil Scale Partner — set MTD</span>
+                <span>Funil Scale Partner — {weScaleSnapshot.mtd.periodo}</span>
                 <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
-                  snapshot {WE_SCALE_SOP_ATUAL.ate}
+                  snapshot {weScaleSnapshot.ate}
                 </span>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -1794,7 +1800,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
-          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={WE_SCALE_SOP_ATUAL.mtd.beautyConnection.leads} />
+          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={weScaleSnapshot?.mtd.beautyConnection.leads ?? 0} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable

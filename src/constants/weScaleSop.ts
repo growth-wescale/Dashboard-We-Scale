@@ -4,6 +4,8 @@ export interface WeScaleSopSemana {
 }
 
 export interface WeScaleSop {
+  /** Mês ao qual o snapshot pertence (YYYY-MM). */
+  mes: string
   /** Data do snapshot (DD/MM). */
   ate: string
   mtd: {
@@ -22,6 +24,7 @@ export interface WeScaleSop {
 }
 
 export const WE_SCALE_SOP_ATUAL: WeScaleSop = {
+  mes: '2026-09',
   ate: '28/09',
   mtd: {
     periodo: 'MTD Set (01-28)',
@@ -39,4 +42,13 @@ export const WE_SCALE_SOP_ATUAL: WeScaleSop = {
     { label: 'S3 Set (15-21)', mql: 9 },
     { label: 'S4 Set (22-28)', mql: 13 },
   ],
+}
+
+const WE_SCALE_SOP_POR_MES: Record<string, WeScaleSop> = {
+  [WE_SCALE_SOP_ATUAL.mes]: WE_SCALE_SOP_ATUAL,
+}
+
+/** Retorna somente o snapshot correspondente ao mês selecionado. */
+export function getWeScaleSop(mes: string): WeScaleSop | null {
+  return WE_SCALE_SOP_POR_MES[mes] ?? null
 }

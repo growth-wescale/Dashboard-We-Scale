@@ -13,6 +13,7 @@ const MARCA_MAP: Record<string, string> = {
 };
 
 interface AdCreative {
+  video_id?: string;
   effective_object_story_id?: string;
   instagram_permalink_url?: string;
   thumbnail_url?: string;
@@ -28,6 +29,7 @@ interface AdCreative {
   };
 }
 interface MetaAd { id: string; name: string; account_id?: string; effective_status?: string; creative?: AdCreative }
+interface IngestRequest { archive_names?: string[]; archive_limit?: number }
 interface AdRow {
   ad_id: string; ad_name: string; account_id: string; marca: string;
   page_id: string | null; post_id: string | null; post_url: string | null;
@@ -49,7 +51,7 @@ function toRow(ad: MetaAd, accountId: string): AdRow {
     page_id, post_id, post_url: fbUrl ?? igUrl, effective_object_story_id: storyId, instagram_permalink_url: igUrl };
 }
 function slug(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
-function videoId(creative?: AdCreative) { return creative?.object_story_spec?.video_data?.video_id ?? creative?.asset_feed_spec?.videos?.[0]?.video_id ?? null; }
+function videoId(creative?: AdCreative) { return creative?.video_id ?? creative?.object_story_spec?.video_data?.video_id ?? creative?.asset_feed_spec?.videos?.[0]?.video_id ?? null; }
 function imageUrl(creative?: AdCreative) {
   return creative?.image_url ?? creative?.object_story_spec?.video_data?.image_url ?? creative?.object_story_spec?.link_data?.picture
     ?? creative?.object_story_spec?.photo_data?.url ?? creative?.asset_feed_spec?.images?.[0]?.url ?? creative?.thumbnail_url ?? null;
@@ -59,6 +61,30 @@ function extension(contentType: string, kind: 'image' | 'video') {
   if (contentType.includes('png')) return 'png';
   if (contentType.includes('webp')) return 'webp';
   return kind === 'video' ? 'mp4' : 'jpg';
+}
+
+async function fetchStoryMedia(storyId: string, token: string) {
+  const url = new URL(`https://graph.facebook.com/v22.0/${storyId}`);
+  url.searchParams.set('fields', 'full_picture,attachments{media_type,media,target,subattachments{media_type,media,target}}');
+  url.searchParams.set('access_token', token);
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) return null;
+  const story = await response.json();
+  const root = story.attachments?.data?.[0];
+  const attachment = root?.subattachments?.data?.[0] ?? root;
+  const kind = String(attachment?.media_type ?? '').toLowerCase();
+  const image = attachment?.media?.image?.src ?? story.full_picture ?? null;
+  if (kind.includes('video') && attachment?.target?.id) {
+    const videoUrl = new URL(`https://graph.facebook.com/v22.0/${attachment.target.id}`);
+    videoUrl.searchParams.set('fields', 'source,picture');
+    videoUrl.searchParams.set('access_token', token);
+    const videoResponse = await fetch(videoUrl, { signal: AbortSignal.timeout(15000) });
+    if (videoResponse.ok) {
+      const video = await videoResponse.json();
+      if (video.source) return { mediaType: 'video' as const, mediaSource: video.source as string, thumbnailSource: video.picture ?? image };
+    }
+  }
+  return image ? { mediaType: 'image' as const, mediaSource: image as string, thumbnailSource: image as string } : null;
 }
 
 async function fetchAllAds(accountId: string, token: string): Promise<MetaAd[]> {
@@ -79,7 +105,7 @@ async function fetchAllAds(accountId: string, token: string): Promise<MetaAd[]> 
 }
 
 async function fetchAdDetails(adId: string, token: string): Promise<MetaAd> {
-  const fields = 'id,name,creative{effective_object_story_id,instagram_permalink_url,thumbnail_url,image_url,object_story_spec,asset_feed_spec}';
+  const fields = 'id,name,creative{effective_object_story_id,instagram_permalink_url,video_id,thumbnail_url,image_url,object_story_spec,asset_feed_spec}';
   const url = new URL(`https://graph.facebook.com/v22.0/${adId}`);
   url.searchParams.set('fields', fields);
   url.searchParams.set('access_token', token);
@@ -119,6 +145,14 @@ async function archiveAd(supabase: ReturnType<typeof createClient>, ad: MetaAd, 
   } else {
     mediaSource = imageUrl(creative); mediaType = mediaSource ? 'image' : null;
   }
+  if ((!mediaType || !mediaSource) && creative?.effective_object_story_id) {
+    const storyMedia = await fetchStoryMedia(creative.effective_object_story_id, token);
+    if (storyMedia) {
+      mediaType = storyMedia.mediaType;
+      mediaSource = storyMedia.mediaSource;
+      thumbnailSource = storyMedia.thumbnailSource;
+    }
+  }
   if (!mediaType || !mediaSource) {
     await supabase.from('ad_creatives').update({ preview_status: 'unavailable', preview_error: 'Criativo sem mídia acessível', preview_updated_at: new Date().toISOString() }).eq('ad_id', ad.id);
     return 'unavailable';
@@ -132,7 +166,10 @@ async function archiveAd(supabase: ReturnType<typeof createClient>, ad: MetaAd, 
   return 'ready';
 }
 
-Deno.serve(async (_req: Request) => {
+Deno.serve(async (req: Request) => {
+  const body = await req.json().catch(() => ({})) as IngestRequest;
+  const requestedNames = new Set((body.archive_names ?? []).filter(name => typeof name === 'string' && name.trim()));
+  const archiveLimit = Math.max(1, Math.min(Number(body.archive_limit) || ARCHIVE_LIMIT, ARCHIVE_LIMIT));
   const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const { data: token, error: secretErr } = await supabase.rpc('get_secret', { secret_name: 'META_ACCESS_TOKEN' });
   if (secretErr || !token) return jsonError(500, 'vault:META_ACCESS_TOKEN', secretErr);
@@ -151,13 +188,22 @@ Deno.serve(async (_req: Request) => {
     const { error } = await supabase.from('ad_creatives').upsert(rows.slice(i, i + 500), { onConflict: 'ad_id' });
     if (error) return jsonError(500, 'upsert ad_creatives', error);
   }
-  const activeIds = items.filter(({ ad }) => ad.effective_status === 'ACTIVE').map(({ ad }) => ad.id);
+  const scopedItems = requestedNames.size > 0
+    ? items.filter(({ ad }) => requestedNames.has(ad.name))
+    : items.filter(({ ad }) => ad.effective_status === 'ACTIVE');
+  const scopedIds = scopedItems.map(({ ad }) => ad.id);
   const statusById = new Map<string, string>();
-  for (let i = 0; i < activeIds.length; i += 200) {
-    const { data } = await supabase.from('ad_creatives').select('ad_id,preview_status').in('ad_id', activeIds.slice(i, i + 200));
+  for (let i = 0; i < scopedIds.length; i += 200) {
+    const { data } = await supabase.from('ad_creatives').select('ad_id,preview_status').in('ad_id', scopedIds.slice(i, i + 200));
     for (const row of data ?? []) statusById.set(row.ad_id, row.preview_status);
   }
-  const candidates = items.filter(({ ad }) => ad.effective_status === 'ACTIVE' && statusById.get(ad.id) !== 'ready').slice(0, ARCHIVE_LIMIT);
+  const readyNames = new Set(scopedItems.filter(({ ad }) => statusById.get(ad.id) === 'ready').map(({ ad }) => ad.name));
+  const candidateByName = new Map<string, { ad: MetaAd; accountId: string }>();
+  for (const item of scopedItems) {
+    const status = statusById.get(item.ad.id);
+    if (status !== 'unavailable' && !readyNames.has(item.ad.name) && !candidateByName.has(item.ad.name)) candidateByName.set(item.ad.name, item);
+  }
+  const candidates = [...candidateByName.values()].slice(0, archiveLimit);
   let ready = 0, unavailable = 0, failed = 0;
   for (const { ad, accountId } of candidates) {
     try { (await archiveAd(supabase, ad, accountId, token as string)) === 'ready' ? ready++ : unavailable++; }
@@ -166,6 +212,6 @@ Deno.serve(async (_req: Request) => {
       await supabase.from('ad_creatives').update({ preview_status: 'error', preview_error: String((e as Error)?.message || e).slice(0, 500), preview_updated_at: new Date().toISOString() }).eq('ad_id', ad.id);
     }
   }
-  return new Response(JSON.stringify({ ok: true, total_ads: rows.length, archived: { attempted: candidates.length, ready, unavailable, failed }, per_account: summary, generated_at: new Date().toISOString() }), { headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify({ ok: true, total_ads: rows.length, requested_names: requestedNames.size, archived: { attempted: candidates.length, ready, unavailable, failed }, per_account: summary, generated_at: new Date().toISOString() }), { headers: { 'Content-Type': 'application/json' } });
 });
 function jsonError(status: number, msg: string, err?: unknown) { return new Response(JSON.stringify({ ok: false, error: msg, details: err }), { status, headers: { 'Content-Type': 'application/json' } }); }

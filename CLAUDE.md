@@ -602,6 +602,21 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-02 (5) — Top 5 criativos por marca arquivados
+
+Recorte autorizado: cinco anúncios Meta de maior investimento por marca nos
+últimos 60 dias (35 nomes em 7 marcas). A Edge Function v9 aceita uma lista
+explícita, limita cada lote a 6, deduplica nomes/IDs e tenta mídia pelo objeto do
+anúncio, `video_id` e attachments do post. Foram arquivados 33/35; dois vídeos
+não expuseram arquivo em nenhuma rota da API Meta: `8 | WSL | VIDEO | ALL |
+Tranforme energia em um negocio` (Eletrovias) e `VD I  LEO " Eu fundei a maior
+rede..."` (Lisô Laser). Eles permanecem no fallback do Facebook.
+
+O bucket privado soma 84 objetos e 288.369.067 bytes após a carga; 42 criativos
+estão prontos no total (32 vídeos e 10 imagens, incluindo lotes anteriores).
+Build, 607 testes e diff check aprovados. Branch
+`codex/top-criativos-preview`; PR pendente. Fonte: Supabase vivo e código local.
+
 ### 2026-10-02 (4) — Preview interno de anúncios com vídeo
 
 Saúde da Marca ganhou preview interno sem exigir acesso à BM: botão nas visões

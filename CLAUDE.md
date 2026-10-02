@@ -613,9 +613,10 @@ permanece como link secundário. Os arquivos ficam no bucket privado
 arquiva até 6 criativos ativos por execução. As duas primeiras execuções
 controladas armazenaram 12 vídeos e 12 capas (143.418.725 bytes), sem erro na
 versão final. Schema, bucket e política foram aplicados no Supabase Marketing.
-Build, 607 testes, lint dos arquivos alterados e diff check passaram. Branch
-`codex/preview-interno-criativos`; PR e QA autenticado ainda pendentes. Nenhuma
-chave foi copiada para código, Git ou documentação.
+Build, 607 testes, lint dos arquivos alterados e diff check passaram. Commit
+`6dc1a81`, [PR #219](https://github.com/growth-wescale/Dashboard-We-Scale/pull/219),
+com os dois checks aprovados. Merge/deploy e QA autenticado ainda pendentes.
+Nenhuma chave foi copiada para código, Git ou documentação.
 
 ### 2026-10-02 (3) — S&OP de Marketing: mês fechado e snapshot We Scale
 

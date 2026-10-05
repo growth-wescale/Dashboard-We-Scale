@@ -10,7 +10,14 @@ export function useLeads({ marca, dataInicio, dataFim, enabled = true }: Filters
     const rows: Lead[] = []
     for (let from = 0; ; from += 1000) {
       if (signal.aborted) throw new Error('Consulta cancelada.')
-      let q = supabase.from('leads').select('*').order('dia', { ascending: false }).range(from, from + 999).abortSignal(signal)
+      // Ordem total e estável: `dia` sozinho empata centenas de registros e o
+      // OFFSET pode repetir/pular linhas entre páginas. Isso fazia S&OP e
+      // Visão Geral divergirem no mesmo período conforme o range consultado.
+      let q = supabase.from('leads').select('*')
+        .order('dia', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, from + 999)
+        .abortSignal(signal)
       if (marca) q = q.eq('marca', marca)
       if (dataInicio) q = q.gte('dia', dataInicio)
       if (dataFim) q = q.lte('dia', dataFim)

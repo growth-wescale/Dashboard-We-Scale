@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
+import { closedMonthWeekRanges, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
 
 describe('sopComparisonEnd', () => {
   it('usa o fim completo de um mês fechado', () => {
@@ -25,5 +25,17 @@ describe('safeUnitCost', () => {
 
   it('não produz infinito quando o volume é zero', () => {
     expect(safeUnitCost(2628, 0)).toBeNull()
+  })
+})
+
+describe('closedMonthWeekRanges', () => {
+  it('cobre setembro fechado inteiro, incluindo os dias 28–30', () => {
+    expect(closedMonthWeekRanges('2026-09')).toEqual([
+      { start: '2026-09-01', end: '2026-09-06' },
+      { start: '2026-09-07', end: '2026-09-13' },
+      { start: '2026-09-14', end: '2026-09-20' },
+      { start: '2026-09-21', end: '2026-09-27' },
+      { start: '2026-09-28', end: '2026-09-30' },
+    ])
   })
 })

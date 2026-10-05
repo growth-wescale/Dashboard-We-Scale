@@ -24,7 +24,7 @@ import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
-import { safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
+import { closedMonthWeekRanges, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -179,19 +179,25 @@ function computeRanges(closedMonth?: string): DateRanges {
     ? (() => { const [ay, am] = closedMonth!.split('-').map(Number); return new Date(ay, am, 0) })()
     : new Date()
 
-  const dow = anchor.getDay()
-  const daysSinceMon = (dow + 6) % 7
-  // MTD: last Sunday BEFORE the current week. Fechado: last Sunday <= last day of month.
-  const lastSun = new Date(anchor)
-  if (isClosed) lastSun.setDate(anchor.getDate() - dow)
-  else          lastSun.setDate(anchor.getDate() - daysSinceMon - 1)
-
   const weeks: WeekRange[] = []
-  for (let i = 4; i >= 0; i--) {
-    const wEnd = new Date(lastSun); wEnd.setDate(lastSun.getDate() - i * 7)
-    const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6)
-    const s = isoDate(wStart), e = isoDate(wEnd)
-    weeks.push({ start: s, end: e, label: weekLabel(s, e) })
+  if (isClosed) {
+    // Particiona o mês fechado inteiro em semanas de calendário, cortando a
+    // primeira e a última no limite do mês. Assim 28–30/09 não desaparecem.
+    const monthKey = closedMonth!
+    weeks.push(...closedMonthWeekRanges(monthKey).map(({ start, end }) => ({
+      start, end, label: weekLabel(start, end),
+    })))
+  } else {
+    const dow = anchor.getDay()
+    const daysSinceMon = (dow + 6) % 7
+    const lastSun = new Date(anchor)
+    lastSun.setDate(anchor.getDate() - daysSinceMon - 1)
+    for (let i = 4; i >= 0; i--) {
+      const wEnd = new Date(lastSun); wEnd.setDate(lastSun.getDate() - i * 7)
+      const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6)
+      const s = isoDate(wStart), e = isoDate(wEnd)
+      weeks.push({ start: s, end: e, label: weekLabel(s, e) })
+    }
   }
 
   const y = anchor.getFullYear(), m = anchor.getMonth(), day = anchor.getDate()
@@ -209,7 +215,7 @@ function computeRanges(closedMonth?: string): DateRanges {
       ? isoDate(new Date(prevY, prevM + 1, 0))
       : isoDate(new Date(prevY, prevM, Math.min(day, lastDayPrev))),
     monthStart:   isoDate(new Date(y, m, 1)),
-    recentWeekLabel: weeks[4].label,
+    recentWeekLabel: weeks.at(-1)?.label ?? '',
     mtdLabel:     shortMonth(y, m),
     mtdPrevLabel: shortMonth(prevY, prevM),
     isClosed,
@@ -826,10 +832,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
 
   // Odonto Legacy: "semana atual" = MTD completo (Set 01 → hoje), "semana ant" = Ago fechado.
-  const weekCurStart   = isOdontoLegacy ? mtdCurStart   : dates.weeks[4].start
-  const weekCurEnd     = isOdontoLegacy ? mtdCurEnd     : dates.weeks[4].end
-  const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : dates.weeks[3].start
-  const weekPriorEnd   = isOdontoLegacy ? mtdPrevEnd    : dates.weeks[3].end
+  const latestWeek = dates.weeks.at(-1)!
+  const priorWeek = dates.weeks.at(-2) ?? latestWeek
+  const weekCurStart   = isOdontoLegacy ? mtdCurStart   : latestWeek.start
+  const weekCurEnd     = isOdontoLegacy ? mtdCurEnd     : latestWeek.end
+  const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : priorWeek.start
+  const weekPriorEnd   = isOdontoLegacy ? mtdPrevEnd    : priorWeek.end
 
   const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: weekCurStart,   dataFim: weekCurEnd })
   const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
@@ -1142,8 +1150,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mtdPrevCPSQL = funnelMtdP.sql > 0 ? mtdPrevInvest / funnelMtdP.sql : 0
 
   // ── KPI cards: last complete week (weeks[4]) + comparison ───────────────────
-  const w4 = weeklyData[4] ?? { invest: 0, leads: 0, mql: 0, cpmql: 0 }
-  const w3 = weeklyData[3] ?? { invest: 0, leads: 0, mql: 0, cpmql: 0 }
+  const w4 = weeklyData.at(-1) ?? { invest: 0, leads: 0, mql: 0, cpmql: 0 }
+  const w3 = weeklyData.at(-2) ?? { invest: 0, leads: 0, mql: 0, cpmql: 0 }
   const w4sql = funnelWeek.sql, w3sql = funnelPrior.sql
   const w4sal = funnelWeek.sal, w3sal = funnelPrior.sal
   const w4cpsql = w4sql > 0 ? w4.invest / w4sql : 0
@@ -1188,44 +1196,44 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const kpiCardsAll: KpiCard[] = [
     {
       label: 'INVEST.',
-      value: fmtBRL(w4.invest),
-      semAnt: deltaLabel(w4.invest, w3.invest),
+      value: fmtBRL(dates.isClosed ? mtdInvest : w4.invest),
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4.invest, w3.invest),
       mtdAnt: deltaLabel(mtdInvest, mtdPrevInvest),
     },
     {
       label: 'LEADS',
-      value: String(w4.leads),
-      semAnt: deltaLabel(w4.leads, w3.leads),
+      value: String(dates.isClosed ? mtdLeadsCnt : w4.leads),
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4.leads, w3.leads),
       mtdAnt: deltaLabel(mtdLeadsCnt, mtdPrevLeadsCnt),
     },
     {
       label: 'MQL',
-      value: String(w4.mql),
-      semAnt: deltaLabel(w4.mql, w3.mql),
+      value: String(dates.isClosed ? mtdMql : w4.mql),
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4.mql, w3.mql),
       mtdAnt: deltaLabel(mtdMql, mtdPrevMql),
     },
     {
       label: 'CP-MQL',
-      value: w4.cpmql > 0 ? fmtBRL(w4.cpmql) : '—',
-      semAnt: deltaLabel(w4.cpmql, w3.cpmql, true),
+      value: (dates.isClosed ? mtdCPMQL : w4.cpmql) > 0 ? fmtBRL(dates.isClosed ? mtdCPMQL : w4.cpmql) : '—',
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4.cpmql, w3.cpmql, true),
       mtdAnt: deltaLabel(mtdCPMQL, mtdPrevCPMQL, true),
     },
     {
       label: 'SQL',
-      value: String(w4sql),
-      semAnt: deltaLabel(w4sql, w3sql),
+      value: String(dates.isClosed ? funnelMtd.sql : w4sql),
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4sql, w3sql),
       mtdAnt: deltaLabel(funnelMtd.sql, funnelMtdP.sql),
     },
     {
       label: 'CP-SQL',
-      value: w4cpsql > 0 ? fmtBRL(w4cpsql) : '—',
-      semAnt: deltaLabel(w4cpsql, w3cpsql, true),
+      value: (dates.isClosed ? mtdCPSQL : w4cpsql) > 0 ? fmtBRL(dates.isClosed ? mtdCPSQL : w4cpsql) : '—',
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4cpsql, w3cpsql, true),
       mtdAnt: deltaLabel(mtdCPSQL, mtdPrevCPSQL, true),
     },
     {
       label: 'SAL',
-      value: String(w4sal),
-      semAnt: deltaLabel(w4sal, w3sal),
+      value: String(dates.isClosed ? funnelMtd.sal : w4sal),
+      semAnt: dates.isClosed ? undefined : deltaLabel(w4sal, w3sal),
       mtdAnt: deltaLabel(funnelMtd.sal, funnelMtdP.sal),
     },
   ]
@@ -1269,7 +1277,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         {
           label: 'RECEITA',
           value: fmtBRL(receitaWeek),
-          semAnt: deltaLabel(receitaWeek, receitaPrior),
+          semAnt: dates.isClosed ? undefined : deltaLabel(receitaWeek, receitaPrior),
           mtdAnt: deltaLabel(receitaCur, receitaPrev),
           extra: {
             label: `META ${mesLabelUpper}/${String(mesLblY).slice(-2)}`,
@@ -1284,7 +1292,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // Supabase, então o Supabase só tem ≈ metade dos leads reais. "—" nas comparações porque a
   // marca só começou a receber dados em set/26, sem histórico anterior.
     : isWeScale
-      ? weScaleSnapshot ? [
+      ? weScaleSnapshot ? dates.isClosed ? [
+          { label: 'INVEST.', value: fmtBRL(weScaleSnapshot.mtd.invest) },
+          { label: 'LEADS', value: String(weScaleSnapshot.mtd.leads) },
+          { label: 'MQL', value: String(weScaleSnapshot.mtd.mql) },
+          { label: 'CP-MQL', value: fmtBRL(weScaleSnapshot.mtd.cpMql) },
+          { label: 'SP · RECEITA', value: fmtBRL(weScaleSnapshot.mtd.vendas.receita), extra: { label: 'VENDAS FECHADAS', value: String(weScaleSnapshot.mtd.vendas.fechadas), subtext: `Snapshot até ${weScaleSnapshot.ate}` } },
+          { label: 'BC · INVEST.', value: fmtBRL(weScaleSnapshot.mtd.beautyConnection.invest), extra: { label: 'BC · LEADS', value: String(weScaleSnapshot.mtd.beautyConnection.leads) } },
+        ] satisfies KpiCard[] : [
           {
             label: 'SP · RECEITA',
             value: fmtBRL(weScaleSnapshot.mtd.vendas.receita),
@@ -1414,7 +1429,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-            {effectiveWeeks[4].label} · visão executiva de performance e CRM
+            {dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM
           </div>
         </div>
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
@@ -1462,8 +1477,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </button>
       </div>
 
-      {/* ── Semana: KPI strip (só no modo MTD) ── */}
-      {!dates.isClosed && (
+      {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{
@@ -1472,9 +1486,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            {isWeScale
+            {dates.isClosed
+              ? `Mês fechado · ${dates.mtdLabel}`
+              : isWeScale
               ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Sem snapshot · ${dates.mtdLabel}`
-              : `Semana · ${effectiveWeeks[4].label}`}
+              : `Semana · ${effectiveWeeks.at(-1)?.label}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -1523,7 +1539,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           ))}
         </div>
       </div>
-      )}
 
       {/* ── Mês (MTD): charts + funnel ── */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1542,17 +1557,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         {/* Grid: 3 cols (MTD) | 2 cols equal (fechado) | 2 cols (We Scale — sem MTD comparativo) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isWeScale
-            ? '1fr 1.4fr'
-            : dates.isClosed ? '1fr 1fr' : '1fr 1fr 1.4fr',
+          gridTemplateColumns: isWeScale ? '1fr 1.4fr' : '1fr 1fr 1.4fr',
           gap: 14, flex: 1, minHeight: 0,
         }}>
 
-        {/* Col 1: MQL semanal + CP-MQL (oculto no modo fechado)
+        {/* Col 1: MQL semanal + CP-MQL
              Odonto Legacy: chart cumulativo MTD com seletor MQL/Membros/Custo/membro +
              tabela do funil abaixo. Card fica scrollável se os dois não couberem
              de uma vez, e o chart tem piso de altura pra não achatar. */}
-        {!dates.isClosed && (
         <div style={(isOdontoLegacy || isWeScale) ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
           <div style={{ marginBottom: 6 }}>
             <div style={colTitle(acc)}>
@@ -1590,8 +1602,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               )
             })() : (
               <WeeklyBarChart
-                values={isWeScale ? (weScaleSnapshot?.semanas.map(s => s.mql) ?? []) : weeklyData.map(w => w.mql)}
-                labels={isWeScale ? (weScaleSnapshot?.semanas.map(s => s.label) ?? []) : effectiveWeeks.map(w => w.label)}
+                values={isWeScale && weScaleSnapshot ? weScaleSnapshot.semanas.map(s => s.mql) : weeklyData.map(w => w.mql)}
+                labels={isWeScale && weScaleSnapshot ? weScaleSnapshot.semanas.map(s => s.label) : effectiveWeeks.map(w => w.label)}
                 accent={acc}
               />
             )}
@@ -1684,7 +1696,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             </div>
           )}
         </div>
-        )}
 
         {/* Col 2: MTD comparativo — oculto para We Scale (usa layout 2 colunas) */}
         {!isWeScale && (
@@ -1885,8 +1896,8 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
   return (
     <div style={{ ...cardStyle, overflowY: 'auto' }}>
       <div style={{ marginBottom: 10, flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-        <div style={colTitle(accent)}>MQL por evento — {monthLabel} MTD</div>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} MQL total</div>
+        <div style={colTitle(accent)}>Leads mapeados por evento — {monthLabel}</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} leads mapeados</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {contagem.map(e => {

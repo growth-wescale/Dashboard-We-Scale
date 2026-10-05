@@ -4,10 +4,11 @@ import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucid
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
+import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { DealCardKanban } from '@/components/timeline/DealCardKanban'
-import { stageLabel, toWindow } from '@/lib/metrics'
+import { stageLabel, toWindow, type FunnelEventRow } from '@/lib/metrics'
 import { dealNaJanela } from '@/lib/funilFilterOptions'
 import { nf } from '@/lib/format'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
@@ -24,7 +25,8 @@ import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
-import { closedMonthWeekRanges, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
+import { closedMonthWeekRanges, fullCalendarMonthKey, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
+import { countSopSqlDeals } from '@/lib/sopFunnel'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -145,15 +147,23 @@ const SOP_MONTH_OPTIONS: Array<{ value: string; label: string }> = (() => {
 // Previous period = same endpoints shifted back one month.
 function computeCustomRanges(start: string, end: string): DateRanges {
   const anchorDate = localDate(end)
-  const dow = anchorDate.getDay()
-  const lastSun = new Date(anchorDate)
-  lastSun.setDate(anchorDate.getDate() - dow)
   const weeks: WeekRange[] = []
-  for (let i = 4; i >= 0; i--) {
-    const wEnd = new Date(lastSun); wEnd.setDate(lastSun.getDate() - i * 7)
-    const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6)
-    const s = isoDate(wStart), e = isoDate(wEnd)
-    weeks.push({ start: s, end: e, label: weekLabel(s, e) })
+  const fullMonthKey = fullCalendarMonthKey(start, end)
+  if (fullMonthKey) {
+    weeks.push(...closedMonthWeekRanges(fullMonthKey).map(range => ({
+      ...range,
+      label: weekLabel(range.start, range.end),
+    })))
+  } else {
+    const dow = anchorDate.getDay()
+    const lastSun = new Date(anchorDate)
+    lastSun.setDate(anchorDate.getDate() - dow)
+    for (let i = 4; i >= 0; i--) {
+      const wEnd = new Date(lastSun); wEnd.setDate(lastSun.getDate() - i * 7)
+      const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6)
+      const s = isoDate(wStart), e = isoDate(wEnd)
+      weeks.push({ start: s, end: e, label: weekLabel(s, e) })
+    }
   }
   const [sy, sm, sd] = start.split('-').map(Number)
   const [ey, em, ed] = end.split('-').map(Number)
@@ -166,7 +176,7 @@ function computeCustomRanges(start: string, end: string): DateRanges {
     mtdCurStart: start, mtdCurEnd: end,
     mtdPrevStart: prevStart, mtdPrevEnd: prevEnd,
     monthStart: `${sy}-${String(sm).padStart(2,'0')}-01`,
-    recentWeekLabel: weeks[4].label,
+    recentWeekLabel: weeks.at(-1)?.label ?? '',
     mtdLabel: weekLabel(start, end),
     mtdPrevLabel: weekLabel(prevStart, prevEnd),
     isClosed: true, monthSuffix: '(personalizado)', antShort: 'período ant',
@@ -237,13 +247,13 @@ function unidadesVendidas(r: VwMarketingFunil): number {
   return Number.isFinite(q) && q > 0 ? q : 1
 }
 
-function buildFunnel(rows: VwMarketingFunil[], di: string, df: string): Funnel {
+function buildFunnel(rows: VwMarketingFunil[], sqlEvents: FunnelEventRow[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
     mql:              d.filter(r => inPeriod(r.data_mql, di, df)).length,
     tentando_contato: d.filter(r => inPeriod(r.data_tentando_contato, di, df)).length,
     contato_efetivo:  d.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length,
-    sql:              d.filter(r => inPeriod(r.data_sql, di, df)).length,
+    sql:              countSopSqlDeals(d, sqlEvents, di, df),
     diag:             d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
     sal:              d.filter(r => inPeriod(r.data_sal, di, df)).length,
     oportunidade:     d.filter(r => inPeriod(r.data_oportunidade, di, df)).length,
@@ -843,6 +853,13 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
   const crmAllRes  = useVendasFunil({ marca: slide.marca })
   const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
+  const sqlEventsStart = [dates.fiveWeeksStart, prevRangeStart].sort()[0]
+  const sqlEventsEnd = [mtdCurEnd, prevRangeEnd].sort().at(-1)!
+  const sqlEventsRes = useSopSqlEvents({
+    dataInicio: sqlEventsStart,
+    dataFim: sqlEventsEnd,
+    enabled: !isOdontoLegacy && !isWeScale,
+  })
 
   // MTD Jul (prev2) e Jun (prev3) — só pro chart Odonto Legacy (Comparativo MTD 4 meses)
   const mtdN = useMemo(() => {
@@ -880,6 +897,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const { data: rawCrmPrior } = crmPriorRes
   const { data: rawCrmAll } = crmAllRes
   const { data: metas } = metasRes
+  const { data: sqlEvents } = sqlEventsRes
 
   // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
   const allLoaded =
@@ -890,7 +908,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !crmAllRes.loading && !metasRes.loading
+    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading
   useEffect(() => {
     if (allLoaded) onReady?.()
   }, [allLoaded, onReady])
@@ -956,8 +974,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     return { invest, leads, mql, cpmql: mql > 0 ? invest / mql : 0 }
   }), [activeMedia, allLeads, effectiveWeeks, filterLeads])
 
-  const funnelWeek  = useMemo(() => buildFunnel(crmWeek,  weekCurStart,   weekCurEnd),   [crmWeek,  weekCurStart,   weekCurEnd])
-  const funnelPrior = useMemo(() => buildFunnel(crmPrior, weekPriorStart, weekPriorEnd), [crmPrior, weekPriorStart, weekPriorEnd])
+  const funnelWeek  = useMemo(() => buildFunnel(crmWeek,  sqlEvents, weekCurStart,   weekCurEnd),   [crmWeek,  sqlEvents, weekCurStart,   weekCurEnd])
+  const funnelPrior = useMemo(() => buildFunnel(crmPrior, sqlEvents, weekPriorStart, weekPriorEnd), [crmPrior, sqlEvents, weekPriorStart, weekPriorEnd])
 
   // ── Séries MTD dia-a-dia (4 meses) — chart Comparativo MTD do Odonto Legacy ─
   //
@@ -1114,8 +1132,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const mtdPrevMql  = mtdPrevLeads.filter(isLeadMql).length
   const mtdPrevLeadsCnt = mtdPrevLeads.length
 
-  const funnelMtd  = useMemo(() => buildFunnel(crmCur, mtdCurStart, mtdCurEnd), [crmCur, mtdCurStart, mtdCurEnd])
-  const funnelMtdP = useMemo(() => buildFunnel(crmPrev, compareRange.start, compareRange.end), [crmPrev, compareRange.start, compareRange.end])
+  const funnelMtd  = useMemo(() => buildFunnel(crmCur, sqlEvents, mtdCurStart, mtdCurEnd), [crmCur, sqlEvents, mtdCurStart, mtdCurEnd])
+  const funnelMtdP = useMemo(() => buildFunnel(crmPrev, sqlEvents, compareRange.start, compareRange.end), [crmPrev, sqlEvents, compareRange.start, compareRange.end])
 
   // ── Recorte dos comparativos ─────────────────────────────────────────────────
   // Mês fechado usa o mês inteiro; mês corrente compara os mesmos N dias iniciais.
@@ -1136,12 +1154,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const chartPrevMql = chartPrevLeads.filter(isLeadMql).length
 
   const chartFunnelCur  = useMemo(
-    () => buildFunnel(crmCur, mtdCurStart, chartCurEnd),
-    [crmCur, mtdCurStart, chartCurEnd],
+    () => buildFunnel(crmCur, sqlEvents, mtdCurStart, chartCurEnd),
+    [crmCur, sqlEvents, mtdCurStart, chartCurEnd],
   )
   const chartFunnelPrev = useMemo(
-    () => buildFunnel(crmPrev, compareRange.start, compareRange.end),
-    [crmPrev, compareRange.start, compareRange.end],
+    () => buildFunnel(crmPrev, sqlEvents, compareRange.start, compareRange.end),
+    [crmPrev, sqlEvents, compareRange.start, compareRange.end],
   )
 
   const mtdCPMQL  = mtdMql > 0 ? mtdInvest / mtdMql : 0

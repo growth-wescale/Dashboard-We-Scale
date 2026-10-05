@@ -43,3 +43,16 @@ export function closedMonthWeekRanges(monthKey: string): Array<{ start: string; 
 
   return ranges
 }
+
+/** Retorna a chave YYYY-MM quando o intervalo cobre exatamente um mês calendário. */
+export function fullCalendarMonthKey(start: string, end: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start)
+  if (!match || match[3] !== '01') return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  if (month < 1 || month > 12) return null
+
+  const expectedEnd = isoDate(new Date(year, month, 0))
+  return end === expectedEnd ? `${match[1]}-${match[2]}` : null
+}

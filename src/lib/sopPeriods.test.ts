@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closedMonthWeekRanges, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
+import { closedMonthWeekRanges, fullCalendarMonthKey, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
 
 describe('sopComparisonEnd', () => {
   it('usa o fim completo de um mês fechado', () => {
@@ -37,5 +37,16 @@ describe('closedMonthWeekRanges', () => {
       { start: '2026-09-21', end: '2026-09-27' },
       { start: '2026-09-28', end: '2026-09-30' },
     ])
+  })
+})
+
+describe('fullCalendarMonthKey', () => {
+  it('reconhece um mês calendário completo', () => {
+    expect(fullCalendarMonthKey('2026-09-01', '2026-09-30')).toBe('2026-09')
+  })
+
+  it('rejeita intervalos personalizados parciais', () => {
+    expect(fullCalendarMonthKey('2026-09-02', '2026-09-30')).toBeNull()
+    expect(fullCalendarMonthKey('2026-09-01', '2026-09-29')).toBeNull()
   })
 })

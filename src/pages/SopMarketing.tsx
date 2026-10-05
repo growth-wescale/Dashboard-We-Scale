@@ -3,6 +3,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucide-react'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useLeads } from '@/hooks/useLeads'
+import { useLeadsEventos } from '@/hooks/useLeadsEventos'
+import { EVENTOS_MARKETING, leadsPorEvento, type LeadEvento } from '@/lib/eventosMarketing'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
@@ -838,6 +840,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
   const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
   const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const eventosRes = useLeadsEventos(isWeScale)
+  const eventosLeads = useMemo(() => leadsPorEvento(eventosRes.data, mtdCurStart, mtdCurEnd)
+    .filter(l => filterFonte === '__all__' || mapFonte(l.utm_source) === filterFonte),
+  [eventosRes.data, mtdCurStart, mtdCurEnd, filterFonte])
   const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
   const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
 
@@ -908,7 +914,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading
+    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading &&
+    !eventosRes.loading && !eventosRes.error
   useEffect(() => {
     if (allLoaded) onReady?.()
   }, [allLoaded, onReady])
@@ -1829,7 +1836,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
-          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={weScaleSnapshot?.mtd.beautyConnection.leads ?? 0} />
+          <WeScaleLeadsPorEvento leads={eventosLeads} accent={acc} monthLabel={dates.mtdLabel} loading={eventosRes.loading} error={eventosRes.error} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
@@ -1883,28 +1890,16 @@ function colTitle(accent: string): React.CSSProperties {
 }
 
 
-// ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
-// Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
-// Funil Inverso, que não faz sentido enquanto o funil de Eventos no CRM não tem deals.
-const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
-  { label: 'Scale Partner Odonto', adsetIncludes: ['ODONTOLOGIA'] },
-  // LLK é o adset "genérico" do Scale Partner (não vinculado a nicho).
-  { label: 'Scale Partner (geral)', adsetIncludes: ['LLK'] },
-]
-
-function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads }: { leads: Lead[]; accent: string; monthLabel: string; beautyConnectionLeads: number }) {
-  const contagemDigital = WE_SCALE_EVENTOS.map(evento => {
-    const rows = leads.filter(l => {
-      const adset = String(l.dados_extras?.adset ?? '').toUpperCase()
-      return evento.adsetIncludes.some(needle => adset.includes(needle))
-    })
-    return { label: evento.label, n: rows.length, rows }
+// Participações conciliadas com os funis do CRM; marca e UTMs não definem evento.
+function WeScaleLeadsPorEvento({ leads, accent, monthLabel, loading, error }: { leads: LeadEvento[]; accent: string; monthLabel: string; loading: boolean; error: string | null }) {
+  if (loading || error) return <div style={cardStyle} role={error ? 'alert' : 'status'}>
+    <div style={colTitle(accent)}>Leads mapeados por evento — {monthLabel}</div>
+    <p>{error ? `Não foi possível carregar os eventos: ${error}` : 'Carregando leads dos eventos…'}</p>
+  </div>
+  const contagem = EVENTOS_MARKETING.map(label => {
+    const rows = leads.filter(l => l.eventoMarketing === label)
+    return { label, n: rows.length, rows }
   })
-  // Beauty Connection: leads de evento físico — não estão no banco We Scale
-  const contagem: Array<{ label: string; n: number; rows: Lead[] }> = [
-    { label: 'Beauty Connection (evento)', n: beautyConnectionLeads, rows: [] },
-    ...contagemDigital,
-  ]
   const total = contagem.reduce((s, e) => s + e.n, 0)
   const max = Math.max(...contagem.map(e => e.n), 1)
   const fmtDia = (dia: string) => {
@@ -1915,12 +1910,12 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
     <div style={{ ...cardStyle, overflowY: 'auto' }}>
       <div style={{ marginBottom: 10, flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
         <div style={colTitle(accent)}>Leads mapeados por evento — {monthLabel}</div>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} leads mapeados</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} participações · {new Set(leads.map(l => l.id)).size} pessoas</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {contagem.map(e => {
           const pct = total > 0 ? Math.round((e.n / total) * 100) : 0
-          const barPct = Math.max(2, (e.n / max) * 100)
+          const barPct = (e.n / max) * 100
           return (
             <div key={e.label} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 60px', gap: 10, alignItems: 'center' }}>
               <div style={{ fontSize: 12, color: 'var(--ws-text-primary)', fontWeight: 600 }}>{e.label}</div>
@@ -1967,7 +1962,7 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
         ))}
       </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Beauty Connection = evento físico (leads fora do banco We Scale).
+        Fonte: base de Marketing conciliada com os exports do CRM de 05/10/2026 · evento definido pelo funil, sem depender de UTMs. Contatos únicos por evento; uma pessoa pode estar nos dois. Testes excluídos do mapeamento. Este quadro não representa o total de MQLs.
       </div>
     </div>
   )

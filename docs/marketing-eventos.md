@@ -48,8 +48,12 @@ o insert cegamente. Não alterar `dados_extras.evento`: esse campo antigo muda
 a deduplicação global. Manter `eventos_marketing` ao atualizar metadados desses
 cadastros em futuras ingestões; esta conciliação não cria um sync automático.
 
-Não há classificação MQL preenchida nos exports. Os 18 novos cadastros não
-ganharam MQL inferido. O snapshot manual de 49 MQLs e os demais cards da S&OP
+Não há classificação MQL preenchida nos exports. Na importação inicial, os 18
+novos cadastros ficaram sem classificação. Gabriel autorizou posteriormente,
+em 05/10/2026, classificá-los como MQL: `lead_type=MQL` e origem explícita
+`mql_classification_source=aprovacao_manual_gabriel_2026-10-05`. O SELECT após
+gravação confirmou 18/18 MQLs nesse lote, sem alterar os 49 cadastros existentes.
+O snapshot manual de 49 MQLs e os demais cards da S&OP
 não foram alterados. Leads de eventos e snapshot comercial têm escopos/data
 distintos e não devem ser tratados como totais intercambiáveis.
 

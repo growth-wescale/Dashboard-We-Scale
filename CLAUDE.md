@@ -30,16 +30,6 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
-### Meta & OKRs — Missão Impossível (out–dez/2026)
-
-`MissaoImpossivel` substitui a entrada de Acompanhamento Meta; jul–set continua
-acessível por consulta explícita. OKRs não mudam. Receita consolidada anual/Q4
-usa todas as marcas e origens de Expansão, independente do filtro local. Funil
-usa os mesmos negócios/ciclos por taxa e filtro opcional de criação original.
-CP-MQL preserva Marketing, identificado separadamente. Rateio 40/40/20 só em
-mídia, sem perda de performance automática. Contrato: `docs/missao-impossivel.md`.
-Metas locais não publicam configurações em Campanha/TV/Hub/S&OP.
-
 ## 2. Os DOIS Supabase (a confusão mais cara deste projeto)
 
 | Projeto | Ref | Serve para |
@@ -612,18 +602,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-10-07 — Missão Impossível na área de metas
+### 2026-10-07 — Reversão controlada da Missão Impossível para diagnóstico
 
-Implementação autorizada após esclarecer receita de todas as origens, taxas
-dos mesmos negócios e filtro opcional de criação. Branch própria baseada em
-`0447fff`; PR #226 continua separado. Placares anual e Q4 dinâmicos, três marcas
-prioritárias, verba mensal 40/40/20, Viva/Oral adicionais e histórico preservado.
-Novo hook isolado com paginação, cache, abort/timeout e refresh. OKRs e demais
-páginas/cálculos compartilhados não alterados; sem escrita no banco.
-Testes de cálculos, consultas e renderização sem navegador. Consulta viva com o
-código novo confirmou receita igual à regra de Vendas, delta zero centavos;
-contratos sem valor sinalizados sem estimativa. PR/merge/deploy e QA por print
-devem ser verificados separadamente. Contrato: `docs/missao-impossivel.md`.
+Gabriel autorizou testar a hipótese de carga adicional após indisponibilidade
+de Vendas. Revertido somente o PR #227, sem alterar banco ou metas comerciais.
+Código executável retorna ao estado `0447fff` (antes da Missão); correções
+anteriores preservadas. A implementação permanece recuperável em `aaf32f5`.
+Isto é mitigação experimental, não confirmação de causa nem recuperação.
+Merge pelo usuário, deploy e conferência da API ainda necessários. Abas abertas
+devem ser recarregadas após a publicação para encerrar a versão anterior.
 
 ### 2026-10-02 (7) — Octógono vira disputa coletiva
 

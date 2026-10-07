@@ -602,6 +602,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-07 — Disputa removida somente da Visão Geral
+
+Por solicitação de Gabriel, removida a montagem de `OctagonOverview` na
+Visão Geral e seus imports exclusivos. Campanha de Metas, modo TV, componentes
+compartilhados, fontes e cálculos permanecem intactos. A página deixa também
+de carregar as consultas exclusivas desse bloco. Alteração separada da prévia
+dos cards compactos, ainda não aprovada. Build e 646 testes aprovados;
+lint sem erros (avisos preexistentes). Publicação depende de merge e deploy.
+
 ### 2026-10-07 — Missão revisada com leitura limitada e metas cadastradas
 
 Nova implementação autorizada após #228, exclusivamente em Acompanhamento

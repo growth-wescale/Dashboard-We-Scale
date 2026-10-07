@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { etapasMissao, metaCadastrada, MESES_MISSAO, pacingMissao, proximoDia, realizadoMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
+import { captacaoMissao, etapasMissao, metaCadastrada, MESES_MISSAO, pacingMissao, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
+import type { Lead } from './types'
 
 const meta: MetaMissaoRow = { mes_referencia: '2026-10-01', marca: 'Inpot', funcao: 'Closer', meta_financeira: 1000, meta_qtd_vendas: 2, meta_sql: null, meta_volume_sal: null }
 const venda: VendaMissaoRow = { id_lead: 'teste', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100.25, quantidade_unidades: 3, data_venda: '2026-10-02T12:00:00Z' }
 
 describe('Missão: metas publicadas sem alterações comerciais', () => {
+  it('MQL preserva dedupe, classificação, marca e período; CP-MQL é razão dos totais', () => {
+    const lead = { id: 'a', dia: '2026-10-02', marca: 'Inpot', email: 'exemplo', telefone: null, dados_extras: { lead_type: 'MQL' } } as unknown as Lead
+    const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '', vendas: [], metas: [], etapas: [],
+      leads: [lead, { ...lead, id: 'b' }, { ...lead, id: 'c', email: 'outro', dados_extras: { lead_type_original: 'MQL' } }, { ...lead, id: 'd', email: 'lead', dados_extras: null }, { ...lead, id: 'e', dia: '2026-09-30' }],
+      metasMql: [{ marca: 'Inpot', valor_meta: 100 }], midia: [{ id: 'm', dia: '2026-10-02', marca: 'Inpot', canal: 'meta', spend_brl: 440 }] }
+    expect(captacaoMissao(dados, 'Inpot')).toEqual({ mql: 2, metaMql: 100, cpmql: 220, metaCpMql: 220 })
+    expect(captacaoMissao(dados, 'Eletrovias')).toEqual({ mql: 0, metaMql: null, cpmql: null, metaCpMql: 37 })
+    expect(captacaoMissao({ ...dados, metasMql: [{ marca: 'Inpot', valor_meta: 0 }] }, 'Inpot').metaMql).toBe(0)
+  })
   it('não apresenta outubro como uma meta completa de Q4', () => {
     expect(metaCadastrada([meta], 'Inpot', MESES_MISSAO, 'meta_financeira')).toEqual({ valor: null, parcial: 1000, faltantes: ['2026-11-01', '2026-12-01'] })
   })

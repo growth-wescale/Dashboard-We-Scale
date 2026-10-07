@@ -15,8 +15,15 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
-- Inpot, Eletrovias e Lisô Laser: trimestre no topo (unidades/faturamento,
-  meta e realizado); mês vigente abaixo (as mesmas duas métricas).
+- Inpot, Eletrovias e Lisô Laser: três cards separados por marca (nove no total):
+  MQL/CP-MQL, SQL/SAL e pacing de investimento, todos do mês vigente.
+  Vendas/faturamento por marca foram retirados; os dois placares fixos não mudam.
+- MQL: classificação/dedupe de `leadUtils` por marca, dentro do mês. Meta de
+  volume vem do cadastro mensal Marketing `metas` (`metrica=mql`); falta ou
+  duplicidade de cadastro fica pendente. CP-MQL = gasto/MQL, indisponível sem
+  MQL; custos-alvo aprovados: Inpot 220, Eletrovias 37, Lisô Laser 300 reais.
+  Eficiência do custo = meta/realizado, limitada a 100% quando dentro da meta;
+  o valor real e diferença continuam visíveis, inclusive custo zero válido.
 - Metas vêm de `DB_Metas_Performance`: soma das parcelas Closer para
   unidades/receita e SDR para SQL/SAL. Reutiliza o planejamento publicado
   pelo motor comercial, inclusive funil inverso quando configurado. Não
@@ -35,11 +42,11 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
   conversão de coorte ou com contagem de reuniões MeetRox.
 - `quantidade_unidades` usa `saleUnits` compartilhado. Receita não é
   multiplicada por unidades. Contratos sem valor são sinalizados.
-- Pacing mensal **depois** do Plano: gasto acumulado, orçamento mensal,
+- Pacing mensal no terceiro card de cada marca: gasto acumulado, orçamento mensal,
   saldo, percentual usado e ritmo contra proporção de dias corridos. Não
   inventar orçamento por canal nem presumir verba de Oral Unic.
 - Fora de out–dez/2026, os blocos mensais são omitidos com aviso explícito;
-  os placares e trimestre continuam identificados como 2026.
+  os placares continuam identificados como 2026.
 
 ## Proteção da leitura
 
@@ -54,9 +61,13 @@ ou troca de conta. Clientes de conexão e permissões existentes não mudam.
 3. SQL/SAL do mês vigente das três prioritárias: 500 + sentinela.
 4. Mídia das três marcas, mês até hoje, somente colunas necessárias;
    ordenação total `dia,id`, páginas de 500, máximo oito páginas.
+5. Metas MQL do mês/três marcas: 200 + sentinela, somente marca/valor.
+6. Leads do mês/três marcas: dia decrescente/id crescente, oito páginas de
+   500 no máximo. Campos mínimos para classificação e dedupe; sem nomes.
 
-Até 11 requisições por carga completa, uma por vez. Sem `SELECT *`, `count`,
-histórico completo de eventos, busca de leads ou consultas por card.
+Até 20 requisições por carga completa, uma por vez. Sem `SELECT *`, `count`,
+histórico completo de eventos ou consultas por card. Leituras adicionais
+exclusivas desta página, preservando o timeout total e cache anteriores.
 Sentinelas dependem do limite padrão da API (1.000), maior que 501. Se esse
 limite do servidor mudar, revisar o contrato para não aceitar truncamento.
 Ao atingir o teto ou ocorrer erro, não exibe totais parciais ou zeros falsos.

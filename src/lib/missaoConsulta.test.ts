@@ -71,7 +71,7 @@ describe('Consultas da Missão: recortes e limites obrigatórios', () => {
   it('encerra mídia na primeira página incompleta', async () => {
     const v = banco([ok(), ok(), ok()]), m = banco([ok(Array.from({ length: 500 }, () => ({}))), ok([{}])])
     const r = await consultarMissao(v.client, m.client, '2026-10-07', signal())
-    expect(m.calls).toHaveLength(2); expect(r.midia).toHaveLength(501)
+    expect(m.calls).toHaveLength(4); expect(r.midia).toHaveLength(501)
   })
   it('aborta antes de começar; fora de Q4 só consulta o consolidado e metas', async () => {
     const v = banco([]), m = banco([]), controller = new AbortController(); controller.abort()
@@ -80,5 +80,23 @@ describe('Consultas da Missão: recortes e limites obrigatórios', () => {
     await consultarMissao(v.client, m.client, '2027-01-01', signal())
     expect(v.calls).toHaveLength(2); expect(m.calls).toHaveLength(0)
     expect(v.calls[0].filtros).toContainEqual(['lt', ['data_venda', '2027-01-01T00:00:00-03:00']])
+  })
+  it('limita metas MQL e leads às três marcas e ao mês, com ordenação estável', async () => {
+    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), ok()])
+    await consultarMissao(v.client, m.client, '2026-10-07', signal())
+    expect(m.calls.map(c => c.table)).toEqual(['media_daily_raw', 'metas', 'leads'])
+    expect(m.calls[1].filtros).toContainEqual(['eq', ['metrica', 'mql']])
+    expect(m.calls[1].filtros).toContainEqual(['eq', ['mes', '2026-10-01']])
+    expect(m.calls[2].filtros).toContainEqual(['in', ['marca', ['Inpot', 'Eletrovias', 'Lisô Laser']]])
+    expect(m.calls[2].filtros).toContainEqual(['gte', ['dia', '2026-10-01']])
+    expect(m.calls[2].filtros).toContainEqual(['lte', ['dia', '2026-10-07']])
+    expect(m.calls[2].filtros).toContainEqual(['order', ['id', { ascending: true }]])
+  })
+  it('recusa leads truncados e erros novos sem exibir totais parciais', async () => {
+    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), ...Array.from({ length: 8 }, () => ok(Array.from({ length: 500 }, () => ({}))))])
+    await expect(consultarMissao(v.client, m.client, '2026-10-07', signal())).rejects.toThrow('Limite de leitura de leads')
+    const v2 = banco([ok(), ok(), ok()]), m2 = banco([ok(), { data: null, error: { message: 'falha' } }])
+    await expect(consultarMissao(v2.client, m2.client, '2026-10-07', signal())).rejects.toThrow('metas de MQL')
+    expect(m2.calls).toHaveLength(2)
   })
 })

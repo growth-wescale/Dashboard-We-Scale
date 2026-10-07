@@ -24,9 +24,27 @@
 .missao-marcas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
 .missao-marca { min-width: 0; padding: 22px; border: 1px solid var(--ws-border); border-top: 3px solid; border-radius: var(--radius-md); background: var(--ws-surface); font-size: 13px; }
 .missao-subtitulo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ws-text-secondary); margin: 26px 0 12px; }
-.missao-indicador { padding: 12px 0; border-bottom: 1px solid var(--ws-border); }
-.missao-indicador > .missao-between > strong { font-family: var(--font-display); font-size: 23px; font-variant-numeric: tabular-nums; }
-.missao-indicador > .missao-muted { margin-top: 5px; }
+.missao-marca.missao-marca-compacta { padding: 16px 18px; border-radius: var(--radius-sm); font-size: 12px; }
+.missao-coluna-marca { min-width: 0; display: grid; gap: 16px; grid-template-rows: auto repeat(3, auto); align-content: start; }
+.missao-coluna-marca .missao-marca { border-top-color: var(--missao-marca-accent); }
+.missao-coluna-marca .missao-marca-cabecalho h3 { display: flex; align-items: center; gap: 8px; font-size: 20px; }
+.missao-coluna-marca .missao-marca-cabecalho h3 span { width: 10px; height: 10px; border-radius: 50%; background: var(--missao-marca-accent); }
+.missao-marca-compacta .missao-marca-cabecalho { padding-bottom: 10px; border-bottom: 1px solid var(--ws-border); }
+.missao-marca-compacta .missao-marca-cabecalho h3 { display: flex; align-items: center; gap: 7px; font-size: 16px; line-height: 1.25; }
+.missao-marca-compacta .missao-marca-cabecalho h3 span { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--missao-marca-accent); }
+.missao-page .missao-marca-compacta .missao-marca-cabecalho p { font-size: 10px; margin: 4px 0 0; }
+.missao-marca-compacta .missao-subtitulo { margin: 12px 0 7px; font-size: 9px; }
+.missao-marca-compacta .missao-indicador { padding: 5px 0; }
+.missao-marca-compacta .missao-indicador-titulo { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 3px 8px; font-size: 11px; line-height: 1.3; color: var(--ws-text-secondary); }
+.missao-marca-compacta .missao-indicador-valores { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--ws-text-secondary); font-variant-numeric: tabular-nums; }
+.missao-marca-compacta .missao-indicador-valores strong { font-family: var(--font-display); font-size: 15px; line-height: 1.3; color: var(--ws-text-primary); }
+.missao-marca-compacta .missao-indicador-legenda { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; font-size: 10px; line-height: 1.4; color: var(--ws-text-secondary); }
+.missao-marca-compacta .missao-indicador-legenda > span:first-child { font-weight: 600; color: var(--ws-text-primary); }
+.missao-marca-compacta .missao-track { height: 5px; margin: 5px 0 3px; }
+.missao-marca-compacta .missao-track span { background: var(--missao-marca-accent); }
+.missao-page .missao-marca-compacta :is(.missao-footnote, .missao-aviso) { margin: 3px 0 0; font-size: 10px; line-height: 1.4; }
+.missao-marca-compacta .missao-reunioes-compactas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.missao-marca-compacta .missao-reunioes-compactas .missao-indicador-titulo { min-height: 40px; align-content: space-between; }
 .missao-aviso { color: var(--status-atencao); font-size: 12px; line-height: 1.6; }
 .missao-erro { border: 1px solid var(--status-atencao); padding: 18px; border-radius: var(--radius-sm); }
 .missao-metodologia { border-bottom: 1px solid var(--ws-border); padding: 18px 0; font-size: 12px; line-height: 1.7; color: var(--ws-text-secondary); }

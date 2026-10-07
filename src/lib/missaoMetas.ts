@@ -1,5 +1,7 @@
 import { daysInMonth, toLocalDate } from './dateUtils'
 import { saleUnits } from './metrics'
+import { deduplicateLeads, isLeadMql } from './leadUtils'
+import type { Lead } from './types'
 
 export const MISSAO = { anual: 4_932_000, trimestre: 2_068_360, inicio: '2026-10-01', fim: '2026-12-31' } as const
 export const MESES_MISSAO = ['2026-10-01', '2026-11-01', '2026-12-01'] as const
@@ -26,6 +28,21 @@ export interface MidiaMissaoRow { id: string; dia: string; marca: string; canal:
 export interface DadosMissao {
   hoje: string; atualizadoEm: string; metas: MetaMissaoRow[]; vendas: VendaMissaoRow[]
   etapas: EtapaMissaoRow[]; midia: MidiaMissaoRow[]
+  leads?: Lead[]; metasMql?: Array<{ marca: string; valor_meta: number }>
+}
+
+export const CP_MQL_MISSAO: Record<string, number> = { Inpot: 220, Eletrovias: 37, 'Lisô Laser': 300 }
+
+/** Mesmo dedupe/classificação dos KPIs de Marketing, dentro de cada marca. */
+export function captacaoMissao(dados: DadosMissao, marca: string) {
+  const inicio = dados.hoje.slice(0, 7) + '-01'
+  const leads = (dados.leads ?? []).filter(r => r.marca === marca && r.dia >= inicio && r.dia <= dados.hoje)
+  const mql = deduplicateLeads(leads).filter(isLeadMql).length
+  const registros = (dados.metasMql ?? []).filter(r => r.marca === marca)
+  const metaMql = registros.length === 1 ? numeroMeta(registros[0].valor_meta) : null
+  const investimento = FRENTES_MISSAO.find(f => f.marca === marca)?.investimento ?? 0
+  const gasto = pacingMissao(dados.midia, marca, investimento, dados.hoje).gasto
+  return { mql, metaMql, cpmql: mql > 0 ? gasto / mql : null, metaCpMql: CP_MQL_MISSAO[marca] }
 }
 
 export function numeroMeta(value: unknown): number | null {

@@ -9,14 +9,15 @@ import { MissaoImpossivel, MissaoPainel } from './MissaoImpossivel'
 
 const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [], metas: [], etapas: [], midia: [] }
 describe('Missão: apresentação e isolamento', () => {
-  it('preserva os dois placares e inclui trimestre, mês, SQL/SAL e pacing abaixo do plano', () => {
+  it('preserva os dois placares e mostra nove cards mensais sem vendas por marca', () => {
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados }))
     expect(html).toContain('Meta anual · 2026'); expect(html).toContain('Missão · outubro a dezembro')
     expect(html).toContain('4.932.000,00'); expect(html).toContain('2.068.360,00')
-    expect(html).toContain('Outubro a dezembro · metas cadastradas'); expect(html).toContain('Unidades vendidas no mês')
+    expect(html).not.toContain('Unidades vendidas no mês')
+    expect((html.match(/<article/g) ?? []).length).toBe(9)
+    expect(html).toContain('MQL e CP-MQL · Inpot')
     expect(html).toContain('SQL · reuniões agendadas'); expect(html).toContain('>SAL<')
-    expect(html.indexOf('Plano de investimento')).toBeLessThan(html.indexOf('Pacing de investimento'))
-    expect(html).not.toContain('CP-MQL'); expect(html).toContain('Total e atingimento pendentes')
+    expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('Total e atingimento pendentes')
   })
   it('nega acesso antes de iniciar leitura', () => {
     mocks.acesso = false; mocks.hook.mockClear()

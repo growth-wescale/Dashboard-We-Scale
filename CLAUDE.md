@@ -602,6 +602,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-07 — Visão Geral com Octógono oculto por padrão
+
+Estado inicial oculto para todos; somente Mostrar tema aparece. Pop-up
+retirado. Mostrar é temporário à visita: ao sair ou recarregar retorna ao
+padrão oculto. Menu, outras páginas, dados e cálculos preservados.
+
 ### 2026-10-07 — Nove cards mensais na Missão Impossível
 
 Por aprovação de Gabriel, três cards compactos por marca: MQL/CP-MQL,

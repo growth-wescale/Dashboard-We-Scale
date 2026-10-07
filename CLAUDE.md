@@ -602,6 +602,14 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-07 — Ocultar blocos do Octógono somente na Visão Geral
+
+Botão na faixa e aviso acessível permitem ocultar todos os blocos temáticos
+da Visão Geral e mostrar novamente. Estado local ao layout, sem alterar o
+modo global, menu, outras páginas ou consultas comerciais. Aviso uma vez por
+montagem da página; escolha de ocultação dura enquanto o layout está aberto.
+Cards da Missão permanecem fora deste ajuste. Publicação depende de merge.
+
 ### 2026-10-07 — Missão revisada com leitura limitada e metas cadastradas
 
 Nova implementação autorizada após #228, exclusivamente em Acompanhamento

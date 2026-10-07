@@ -28,8 +28,6 @@ import { MultiSelect } from '@/components/ui/MultiSelect'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { restringirMarcas } from '@/lib/permissoes'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
-import { useOctTheme } from '@/components/AppLayout'
-import { OctagonOverview } from '@/components/octogono/OctagonArena'
 
 // ─── Static brand definitions ──────────────────────────────────────────────────
 // Marca `vendasOnly` fica de fora: sem lead nem mídia no Supabase de Marketing,
@@ -765,7 +763,6 @@ const MEDIA_COLS = [
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export function VisaoGeral() {
-  const octAtivo = useOctTheme()
   const initDates = getMtdDates()
   // Pessoa limitada a marcas no controle de acessos (ex.: franqueado Inpot):
   // escolhe só entre as marcas dela, e "nada selecionado" vira a soma delas —
@@ -926,7 +923,6 @@ export function VisaoGeral() {
 
   return (
     <>
-    <OctagonOverview enabled={octAtivo} />
     <div {...rootProps} style={{ padding: 'var(--container-pad)' }}>
       <PageTop
         title="Visão Geral"

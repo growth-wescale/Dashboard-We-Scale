@@ -10,6 +10,7 @@ import { useAcesso } from '@/contexts/AcessoContext'
 import { PERM_GERENCIAR_USUARIOS, ROTA_ACESSOS, permissaoDaRota } from '@/lib/permissoes'
 import { OctagonIntro } from '@/components/octogono/OctagonIntro'
 import { OctagonStrip } from '@/components/octogono/OctagonStrip'
+import { OctagonOverviewVisibility } from '@/components/octogono/OctagonOverviewVisibility'
 import { PoatanCard } from '@/components/octogono/PoatanCard'
 import { OctagonPageBanner } from '@/components/octogono/OctagonPageBanner'
 import { useMediaQuery, MQ_COMPACTO } from '@/hooks/useMediaQuery'
@@ -200,6 +201,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isSaude = activeKey === 'saude'
   const isVendas = activeKey === 'vendas'
   const octAtivo = gpAtivo && activeKey !== 'sop'
+  const [overviewHidden, setOverviewHidden] = useState(false)
+  const isOverview = location.pathname === '/'
+  const overviewTheme = octAtivo && !(isOverview && overviewHidden)
 
   function handleNav(key: string) {
     setGavetaAberta(false)
@@ -266,7 +270,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <MarcaContext.Provider value={{ activeBrand, setActiveBrand }}>
-    <OctThemeContext.Provider value={octAtivo}>
+    <OctThemeContext.Provider value={overviewTheme}>
       <div
         style={{ minHeight: '100vh', background: 'var(--ws-bg)', display: 'flex' }}
         data-oct-theme={octAtivo ? 'true' : undefined}
@@ -386,8 +390,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           </header>
 
-          {octAtivo && pode('aba.campanha-metas') && !location.pathname.startsWith('/gp-setembro') && <OctagonStrip />}
-          {octAtivo && <OctagonPageBanner pathname={location.pathname} />}
+          {octAtivo && isOverview && pode('aba.campanha-metas') && <OctagonOverviewVisibility hidden={overviewHidden} onChange={setOverviewHidden} />}
+          {overviewTheme && pode('aba.campanha-metas') && !location.pathname.startsWith('/gp-setembro') && <OctagonStrip onHide={isOverview ? () => setOverviewHidden(true) : undefined} />}
+          {overviewTheme && <OctagonPageBanner pathname={location.pathname} />}
           <main style={{ flex: 1, minWidth: 0 }}>
             {children}
           </main>

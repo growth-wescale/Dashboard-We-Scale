@@ -201,8 +201,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isSaude = activeKey === 'saude'
   const isVendas = activeKey === 'vendas'
   const octAtivo = gpAtivo && activeKey !== 'sop'
-  const [overviewHidden, setOverviewHidden] = useState(false)
+  const [overviewHidden, setOverviewHidden] = useState(true)
   const isOverview = location.pathname === '/'
+  useEffect(() => {
+    if (!isOverview) setOverviewHidden(true)
+  }, [isOverview])
   const overviewTheme = octAtivo && !(isOverview && overviewHidden)
 
   function handleNav(key: string) {

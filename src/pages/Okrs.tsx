@@ -5,7 +5,7 @@ import { useOkrs, updateOkrValor, USE_MOCK, type Okr } from '@/hooks/useOkrs'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { useVendasSemestre, type VendaMarca } from '@/hooks/useVendasSemestre'
 import { money, pct } from '@/lib/format'
-import { MetaCopaB2B } from '@/pages/MetaCopaB2B'
+import { MissaoImpossivel } from '@/pages/MissaoImpossivel'
 
 type TabKey = 'copa' | 'vendas' | 'okrs'
 
@@ -45,12 +45,12 @@ export function Okrs() {
   const [editando, setEditando] = useState<Okr | null>(null)
   const [tab, setTab] = useState<TabKey>('copa')
 
-  // Aba Acompanhamento Meta = página Copa completa (traz seu próprio PageTop)
+  // Acompanhamento atual; OKRs e metas históricas continuam independentes.
   if (tab === 'copa') {
     return (
       <div>
         <TabsBar current={tab} onChange={setTab} />
-        <MetaCopaB2B />
+        <MissaoImpossivel />
       </div>
     )
   }
@@ -95,7 +95,12 @@ export function Okrs() {
         </div>
       )}
 
-      {tab === 'vendas' && <VendasSemestreBloco />}
+      {tab === 'vendas' && <>
+        <p style={{ color: 'var(--ws-text-secondary)', marginBottom: 16, fontSize: 13 }}>
+          Planejamento histórico H2 2026. A estratégia vigente de outubro–dezembro está em Acompanhamento Meta · Missão Impossível.
+        </p>
+        <VendasSemestreBloco />
+      </>}
 
       {tab === 'okrs' && (
         <>

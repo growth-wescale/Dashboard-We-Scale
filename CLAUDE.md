@@ -602,6 +602,23 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-07 — Missão revisada com leitura limitada e metas cadastradas
+
+Nova implementação autorizada após #228, exclusivamente em Acompanhamento
+Meta. Cards das três prioritárias mostram unidades/faturamento Q4 e mês
+vigente; SQL/SAL mensais usam metas comerciais publicadas e datas consolidadas.
+SAL é referência de realizada somente nesta página. Metas anual/Q4 fixas e
+plano de mídia preservados; pacing mensal fica abaixo do plano. Novembro e
+dezembro sem cadastro aparecem pendentes, não são projetados de outubro.
+
+Sem busca de histórico de etapas, polling ou gravação. Leitura sequencial,
+limites explícitos, timeout 20s, cache isolado 15min, intervalo mínimo de 1min
+entre tentativas e falhas sem zeros/totais parciais. OKRs, Meta de vendas,
+Campanha, TV, S&OP e demais páginas não mudam. Contrato e limites de validação:
+`docs/missao-impossivel.md`. Preparação local; merge/deploy e QA autenticado
+ainda pendentes. Leituras CRM restritas responderam 200, sem provar custo
+interno do banco ou desempenho concorrente.
+
 ### 2026-10-07 — Reversão controlada da Missão Impossível para diagnóstico
 
 Gabriel autorizou testar a hipótese de carga adicional após indisponibilidade

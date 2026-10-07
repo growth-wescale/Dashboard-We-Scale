@@ -1,0 +1,44 @@
+.missao-page { max-width: 1440px; margin: 0 auto; padding: 28px 32px 48px; color: var(--ws-text-primary); }
+.missao-page h1, .missao-page h2, .missao-page h3 { font-family: var(--font-display); margin: 0; }
+.missao-page h1 { font-size: clamp(32px, 4vw, 52px); line-height: 1.1; }
+.missao-page h2 { font-size: 25px; } .missao-page h3 { font-size: 27px; }
+.missao-page p { margin: 8px 0; }
+.missao-header, .missao-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.missao-header { margin-bottom: 26px; } .missao-header > div > p:last-child { color: var(--ws-text-secondary); }
+.missao-kicker { display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; font-weight: 700; color: var(--brand-accent); }
+.missao-placares { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
+.missao-placar { border: 1px solid var(--ws-border); border-top: 3px solid var(--brand-accent); background: var(--ws-surface); padding: 24px; border-radius: var(--radius-md); }
+.missao-meta { font-family: var(--font-display); font-size: clamp(26px, 3vw, 40px); font-weight: 700; }
+.missao-muted, .missao-footnote { color: var(--ws-text-secondary); font-size: 12px; line-height: 1.6; }
+.missao-footnote { font-size: 11px; }
+.missao-receita, .missao-saldo { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 24px; font-size: 13px; }
+.missao-receita strong { font-size: 22px; } .missao-saldo strong { font-size: 18px; }
+.missao-track { height: 7px; border-radius: 20px; background: var(--ws-bg); margin: 16px 0 10px; overflow: hidden; }
+.missao-track span { display: block; height: 100%; background: var(--brand-accent); }
+.missao-placar .missao-between { font-size: 12px; }
+.missao-saldo { border-top: 1px solid var(--ws-border); padding-top: 16px; }
+.missao-section { margin: 34px 0; }
+.missao-page button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; min-height: 40px; border: 1px solid var(--ws-border); border-radius: 6px; padding: 8px 12px; background: var(--ws-surface); color: var(--ws-text-primary); font: inherit; font-size: 12px; }
+.missao-page button:disabled { cursor: not-allowed; opacity: .6; }
+.missao-page :is(button, summary, [tabindex]):focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 3px; }
+.missao-marcas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+.missao-marca { min-width: 0; padding: 22px; border: 1px solid var(--ws-border); border-top: 3px solid; border-radius: var(--radius-md); background: var(--ws-surface); font-size: 13px; }
+.missao-subtitulo { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ws-text-secondary); margin: 26px 0 12px; }
+.missao-indicador { padding: 12px 0; border-bottom: 1px solid var(--ws-border); }
+.missao-indicador > .missao-between > strong { font-family: var(--font-display); font-size: 23px; font-variant-numeric: tabular-nums; }
+.missao-indicador > .missao-muted { margin-top: 5px; }
+.missao-aviso { color: var(--status-atencao); font-size: 12px; line-height: 1.6; }
+.missao-erro { border: 1px solid var(--status-atencao); padding: 18px; border-radius: var(--radius-sm); }
+.missao-metodologia { border-bottom: 1px solid var(--ws-border); padding: 18px 0; font-size: 12px; line-height: 1.7; color: var(--ws-text-secondary); }
+.missao-metodologia summary { cursor: pointer; font-weight: 600; color: var(--ws-text-primary); }
+.missao-tabela-scroll { overflow-x: auto; margin-top: 16px; border: 1px solid var(--ws-border); border-radius: var(--radius-sm); }
+.missao-page table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 12px; background: var(--ws-surface); }
+.missao-page th, .missao-page td { padding: 13px 16px; border-bottom: 1px solid var(--ws-border); text-align: right; font-variant-numeric: tabular-nums; }
+.missao-page th:first-child { text-align: left; } .missao-page thead th { color: var(--ws-text-secondary); font-size: 11px; }
+.missao-page tfoot { font-weight: 700; color: var(--brand-accent); }
+.missao-secundarias { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 12px; color: var(--ws-text-secondary); }
+.missao-secundarias strong { display: block; color: var(--ws-text-primary); margin-bottom: 5px; }
+.missao-pacing-track { position: relative; }
+.missao-pacing-track i { position: absolute; width: 2px; height: 15px; top: -4px; background: var(--ws-text-primary); transform: translateX(-2px); }
+@media (max-width: 1150px) { .missao-marcas { grid-template-columns: 1fr; } .missao-marca { padding: 20px; } }
+@media (max-width: 700px) { .missao-page { padding: 20px 16px; } .missao-placares, .missao-secundarias { grid-template-columns: 1fr; } .missao-placar { padding: 18px; } .missao-receita strong { font-size: 20px; } }

@@ -602,6 +602,17 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-07 — Nove cards mensais na Missão Impossível
+
+Por aprovação de Gabriel, três cards compactos por marca: MQL/CP-MQL,
+SQL/SAL e pacing de investimento. Removidos vendas e faturamento por marca.
+Meta Anual e Missão Outubro–Dezembro preservam componente, CSS e cálculo.
+Volume MQL usa cadastro mensal Marketing e dedupe/classificação do dashboard;
+CP-MQL usa razão dos totais e custos-alvo aprovados 220/37/300. Leitura nova
+sequencial só de três marcas/mês, até oito páginas de leads, sem polling.
+SQL/SAL, orçamento, cache e limites anteriores preservados. Build, 649 testes,
+lint e layout local 1420/390px verificados. Sem gravação no banco ou deploy.
+
 ### 2026-10-07 — Ocultar blocos do Octógono somente na Visão Geral
 
 Botão na faixa e aviso acessível permitem ocultar todos os blocos temáticos

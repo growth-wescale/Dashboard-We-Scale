@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Lead } from './types'
 import { FRENTES_MISSAO, MESES_MISSAO, proximoDia, type DadosMissao, type VendaMissaoRow, type MetaMissaoRow, type EtapaMissaoRow, type MidiaMissaoRow } from './missaoMetas'
 
 // Proteções locais: nunca baixar toda a base nem repetir consulta em caso de erro.
-export const LIMITES_MISSAO = { vendas: 500, metas: 200, etapas: 500, paginaMidia: 500, paginasMidia: 8 } as const
+export const LIMITES_MISSAO = { vendas: 500, metas: 200, etapas: 500, paginaMidia: 500, paginasMidia: 8, paginasLeads: 8 } as const
 type Resposta = { data: unknown[] | null; error: { message: string } | null }
 function ler<T>(res: Resposta, nome: string, limite: number): T[] {
   if (res.error) throw new Error(`Não foi possível consultar ${nome}. Tente novamente mais tarde.`)
@@ -47,7 +48,21 @@ export async function consultarMissao(vendasDb: SupabaseClient, marketingDb: Sup
       .range(from, from + LIMITES_MISSAO.paginaMidia - 1).abortSignal(signal), 'mídia do mês', LIMITES_MISSAO.paginaMidia)
     midia.push(...lote)
     if (lote.length < LIMITES_MISSAO.paginaMidia) {
-      return { hoje, atualizadoEm: new Date().toISOString(), vendas, metas, etapas, midia }
+      const metasMql = ler<{ marca: string; valor_meta: number }>(await marketingDb.from('metas')
+        .select('marca,valor_meta').in('marca', marcas).eq('mes', mes).eq('metrica', 'mql')
+        .limit(LIMITES_MISSAO.metas + 1).abortSignal(signal), 'metas de MQL do mês', LIMITES_MISSAO.metas)
+      const leads: Lead[] = []
+      for (let pagina = 0; pagina < LIMITES_MISSAO.paginasLeads; pagina++) {
+        signal.throwIfAborted()
+        const de = pagina * 500
+        const loteLeads = ler<Lead>(await marketingDb.from('leads')
+          .select('id,dia,marca,email,telefone,dados_extras').in('marca', marcas).gte('dia', mes).lte('dia', hoje)
+          .order('dia', { ascending: false }).order('id', { ascending: true })
+          .range(de, de + 499).abortSignal(signal), 'leads do mês', 500)
+        leads.push(...loteLeads)
+        if (loteLeads.length < 500) return { hoje, atualizadoEm: new Date().toISOString(), vendas, metas, etapas, midia, metasMql, leads }
+      }
+      throw new Error('Limite de leitura de leads atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.')
     }
   }
   throw new Error('Limite de leitura da mídia atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.')

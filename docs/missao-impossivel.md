@@ -15,6 +15,12 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
+Orçamento aprovado em 08/10/2026: Eletrovias R$ 28.000 em outubro,
+R$ 28.000 em novembro e R$ 20.000 em dezembro (total R$ 76.000).
+Inpot e Lisô preservam 40/40/20. Tabela e pacing usam os mesmos valores;
+totais mensais das prioritárias: R$ 92.800 / R$ 92.800 / R$ 52.400,
+somando R$ 238.000. Sem alteração de metas comerciais ou banco.
+
 - Inpot, Eletrovias e Lisô Laser: três cards separados por marca (nove no total):
   MQL/CP-MQL, SQL/SAL e pacing de investimento, todos do mês vigente.
   Vendas/faturamento por marca foram retirados; os dois placares fixos não mudam.

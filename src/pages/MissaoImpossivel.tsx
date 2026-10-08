@@ -3,7 +3,7 @@ import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
 import { BRAND_ACCENT } from '@/constants/brands'
 import { fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
-import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, metaCadastrada, pacingMissao, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
+import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, metaCadastrada, orcamentoMensalMissao, pacingMissao, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
 import './missaoImpossivel.css'
 
 const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -93,11 +93,11 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
 function Plano() {
   return <section className="missao-section" aria-labelledby="missao-plano">
     <h2 id="missao-plano">Plano de investimento</h2>
-    <p className="missao-muted">R$ 238.000 nas três prioritárias. O rateio 40% / 40% / 20% é só da mídia, não da receita.</p>
+    <p className="missao-muted">R$ 238.000 nas três prioritárias. Inpot e Lisô Laser mantêm 40% / 40% / 20% da mídia; Eletrovias: R$ 28.000 / R$ 28.000 / R$ 20.000. Não há rateio da receita.</p>
     <div className="missao-tabela-scroll" tabIndex={0} role="region" aria-label="Orçamento por marca e mês"><table>
-      <thead><tr><th scope="col">Marca</th>{MESES_MISSAO.map((mes, i) => <th scope="col" key={mes}>{shortMonth(mes)} · {[40, 40, 20][i]}%</th>)}<th scope="col">Trimestre</th></tr></thead>
-      <tbody>{FRENTES_MISSAO.map(f => <tr key={f.marca}><th scope="row">{f.marca}</th>{[0.4, 0.4, 0.2].map((peso, i) => <td key={i}>{money(f.investimento * peso)}</td>)}<td>{money(f.investimento)}</td></tr>)}</tbody>
-      <tfoot><tr><th scope="row">Total prioritárias</th>{[0.4, 0.4, 0.2].map((peso, i) => <td key={i}>{money(238_000 * peso)}</td>)}<td>{money(238_000)}</td></tr></tfoot>
+      <thead><tr><th scope="col">Marca</th>{MESES_MISSAO.map(mes => <th scope="col" key={mes}>{shortMonth(mes)}</th>)}<th scope="col">Trimestre</th></tr></thead>
+      <tbody>{FRENTES_MISSAO.map(f => <tr key={f.marca}><th scope="row">{f.marca}</th>{MESES_MISSAO.map((_, i) => <td key={i}>{money(orcamentoMensalMissao(f.marca, f.investimento, i) ?? 0)}</td>)}<td>{money(f.investimento)}</td></tr>)}</tbody>
+      <tfoot><tr><th scope="row">Total prioritárias</th>{MESES_MISSAO.map((_, i) => <td key={i}>{money(FRENTES_MISSAO.reduce((s, f) => s + (orcamentoMensalMissao(f.marca, f.investimento, i) ?? 0), 0))}</td>)}<td>{money(238_000)}</td></tr></tfoot>
     </table></div>
     <div className="missao-secundarias"><p><strong>Viva</strong>R$ 4.000 / mês · R$ 12.000 adicionais no trimestre.</p><p><strong>Oral Unic</strong>Orçamento mínimo a definir, adicional.</p><p><strong>B2Case</strong>Sem novo investimento de mídia. Histórico e receita preservados.</p></div>
   </section>

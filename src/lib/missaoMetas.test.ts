@@ -62,6 +62,14 @@ describe('Missão: realizado', () => {
 })
 
 describe('Missão: pacing mensal', () => {
+  it('Eletrovias usa 28 mil, 28 mil e 20 mil; mantém orçamento trimestral de 76 mil', () => {
+    const valores = MESES_MISSAO.map(m => pacingMissao([], 'Eletrovias', 76_000, m).orcamento)
+    expect(valores).toEqual([28_000, 28_000, 20_000])
+    expect(valores.reduce<number>((s, v) => s + (v ?? 0), 0)).toBe(76_000)
+    expect(pacingMissao([], 'Eletrovias', 76_000, '2026-10-07').previsto).toBeCloseTo(28_000 * 7 / 31)
+    expect(pacingMissao([], 'Lisô Laser', 72_000, '2026-10-07').orcamento).toBe(28_800)
+    expect(pacingMissao([], 'Eletrovias', 76_000, '2027-01-01').orcamento).toBeNull()
+  })
   it('rateia só orçamento, soma mídia até hoje e marca proporção de dias corridos', () => {
     const row = { id: 'm1', marca: 'Inpot', dia: '2026-10-01', canal: 'meta', spend_brl: 100 }
     const r = pacingMissao([row, row, { ...row, id: 'm2', spend_brl: 200, canal: 'google' }, { ...row, id: 'futuro', dia: '2026-10-08' }], 'Inpot', 90_000, '2026-10-07')

@@ -100,10 +100,15 @@ export function etapasMissao(rows: EtapaMissaoRow[], marca: string, inicio: stri
   return { sql: sql.size, sal: sal.size }
 }
 
+export function orcamentoMensalMissao(marca: string, investimento: number, indice: number): number | null {
+  if (indice < 0 || indice > 2) return null
+  return marca === 'Eletrovias' ? [28_000, 28_000, 20_000][indice] : investimento * [0.4, 0.4, 0.2][indice]
+}
+
 export function pacingMissao(rows: MidiaMissaoRow[], marca: string, investimento: number, hoje: string) {
   const inicio = hoje.slice(0, 7) + '-01'
   const indice = MESES_MISSAO.indexOf(inicio as typeof MESES_MISSAO[number])
-  const orcamento = indice < 0 ? null : investimento * [0.4, 0.4, 0.2][indice]
+  const orcamento = orcamentoMensalMissao(marca, investimento, indice)
   const vistos = new Set<string>()
   let gasto = 0
   for (const r of rows) {

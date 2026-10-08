@@ -38,6 +38,10 @@ export interface DadosMissao {
 }
 
 export const CP_MQL_MISSAO: Record<string, number> = { Inpot: 220, Eletrovias: 37, 'Lisô Laser': 300 }
+// Metas aprovadas por Gabriel para esta página, sem publicar no cadastro global.
+export const MQL_MISSAO: Record<string, readonly number[]> = {
+  Inpot: [164, 163, 82], Eletrovias: [757, 756, 541], 'Lisô Laser': [96, 96, 48],
+}
 
 /** Mesmo dedupe/classificação dos KPIs de Marketing, dentro de cada marca. */
 export function captacaoMissao(dados: DadosMissao, marca: string) {
@@ -45,7 +49,10 @@ export function captacaoMissao(dados: DadosMissao, marca: string) {
   const leads = (dados.leads ?? []).filter(r => r.marca === marca && r.dia >= inicio && r.dia <= dados.hoje)
   const mql = deduplicateLeads(leads).filter(isLeadMql).length
   const registros = (dados.metasMql ?? []).filter(r => r.marca === marca)
-  const metaMql = registros.length === 1 ? numeroMeta(registros[0].valor_meta) : null
+  const indice = MESES_MISSAO.indexOf(inicio as typeof MESES_MISSAO[number])
+  const metaMql = indice >= 0 && MQL_MISSAO[marca]
+    ? MQL_MISSAO[marca][indice]
+    : registros.length === 1 ? numeroMeta(registros[0].valor_meta) : null
   const investimento = FRENTES_MISSAO.find(f => f.marca === marca)?.investimento ?? 0
   const gasto = pacingMissao(dados.midia, marca, investimento, dados.hoje).gasto
   return { mql, metaMql, cpmql: mql > 0 ? gasto / mql : null, metaCpMql: CP_MQL_MISSAO[marca] }

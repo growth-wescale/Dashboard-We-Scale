@@ -15,6 +15,11 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
+Metas MQL específicas desta página aprovadas em 08/10, out/nov/dez:
+Inpot 164/163/82 (409); Eletrovias 757/756/541 (2.054);
+Lisô Laser 96/96/48 (240). Prevalecem nesta missão sobre o cadastro global,
+sem gravar banco ou alterar metas de outras páginas.
+
 Em 08/10, aprovado marcador visual de pacing somente no placar Q4:
 proporção inclusiva dos dias de 01/10 a 31/12 (92 dias), limitada a 0–100%.
 É referência linear temporal, não rateio de receita nem nova meta financeira.

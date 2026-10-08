@@ -6,9 +6,24 @@ const mocks = vi.hoisted(() => ({ acesso: true, hook: vi.fn() }))
 vi.mock('@/contexts/AcessoContext', () => ({ useAcesso: () => ({ pode: () => mocks.acesso, carregando: false }) }))
 vi.mock('@/hooks/useMissaoResumo', () => ({ useMissaoResumo: mocks.hook }))
 import { MissaoImpossivel, MissaoPainel } from './MissaoImpossivel'
+import { pacingTrimestre } from '@/lib/missaoMetas'
 
 const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [], metas: [], etapas: [], midia: [] }
 describe('Missão: apresentação e isolamento', () => {
+  it('pacing trimestral inclusivo não rateia receita e limita início/fim', () => {
+    expect(pacingTrimestre('2026-09-30')).toBe(0)
+    expect(pacingTrimestre('2026-10-01')).toBeCloseTo(1 / 92)
+    expect(pacingTrimestre('2026-10-08')).toBeCloseTo(8 / 92)
+    expect(pacingTrimestre('2026-12-31')).toBe(1)
+    expect(pacingTrimestre('2027-01-01')).toBe(1)
+  })
+  it('MQL com meta mostra percentual; sem meta mantém barra neutra sem zero fictício', () => {
+    const lead: NonNullable<DadosMissao['leads']>[number] = { id: 'a', dia: '2026-10-01', marca: 'Inpot', email: 'teste', telefone: null, dados_extras: { lead_type: 'MQL' }, nome: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, row_hash: null, criado_em: '2026-10-01T12:00:00Z' }
+    const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, leads: [lead], metasMql: [{ marca: 'Inpot', valor_meta: 2 }] } }))
+    expect(html).toContain('50% atingidos')
+    expect(html).toContain('Percentual de MQL pendente')
+    expect(html).toContain('esperado pelos dias transcorridos do trimestre')
+  })
   it('preserva os dois placares e mostra nove cards mensais sem vendas por marca', () => {
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados }))
     expect(html).toContain('Meta anual · 2026'); expect(html).toContain('Missão · outubro a dezembro')

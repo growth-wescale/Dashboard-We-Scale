@@ -5,6 +5,12 @@ import type { Lead } from './types'
 
 export const MISSAO = { anual: 4_932_000, trimestre: 2_068_360, inicio: '2026-10-01', fim: '2026-12-31' } as const
 export const MESES_MISSAO = ['2026-10-01', '2026-11-01', '2026-12-01'] as const
+export function pacingTrimestre(hoje: string) {
+  const dia = 86_400_000
+  const inicio = Date.parse(MISSAO.inicio + 'T00:00:00Z')
+  const fim = Date.parse(MISSAO.fim + 'T00:00:00Z')
+  return Math.max(0, Math.min(1, (Date.parse(hoje + 'T00:00:00Z') - inicio + dia) / (fim - inicio + dia)))
+}
 export const FRENTES_MISSAO = [
   { marca: 'Inpot', investimento: 90_000 },
   { marca: 'Eletrovias', investimento: 76_000 },

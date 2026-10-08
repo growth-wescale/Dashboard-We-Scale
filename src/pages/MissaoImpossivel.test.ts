@@ -20,8 +20,8 @@ describe('Missão: apresentação e isolamento', () => {
   it('MQL com meta mostra percentual; sem meta mantém barra neutra sem zero fictício', () => {
     const lead: NonNullable<DadosMissao['leads']>[number] = { id: 'a', dia: '2026-10-01', marca: 'Inpot', email: 'teste', telefone: null, dados_extras: { lead_type: 'MQL' }, nome: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, row_hash: null, criado_em: '2026-10-01T12:00:00Z' }
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, leads: [lead], metasMql: [{ marca: 'Inpot', valor_meta: 2 }] } }))
-    expect(html).toContain('50% atingidos')
-    expect(html).toContain('Percentual de MQL pendente')
+    expect(html).toContain('0,61% atingidos')
+    expect(html).not.toContain('Percentual de MQL pendente')
     expect(html).toContain('esperado pelos dias transcorridos do trimestre')
   })
   it('preserva os dois placares e mostra nove cards mensais sem vendas por marca', () => {
@@ -32,7 +32,7 @@ describe('Missão: apresentação e isolamento', () => {
     expect((html.match(/<article/g) ?? []).length).toBe(9)
     expect(html).toContain('MQL e CP-MQL · Inpot')
     expect(html).toContain('SQL · reuniões agendadas'); expect(html).toContain('>SAL<')
-    expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('Total e atingimento pendentes')
+    expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('/ 164'); expect(html).toContain('/ 757'); expect(html).toContain('/ 96')
   })
   it('nega acesso antes de iniciar leitura', () => {
     mocks.acesso = false; mocks.hook.mockClear()

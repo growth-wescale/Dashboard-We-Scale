@@ -11,9 +11,13 @@ describe('Missão: metas publicadas sem alterações comerciais', () => {
     const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '', vendas: [], metas: [], etapas: [],
       leads: [lead, { ...lead, id: 'b' }, { ...lead, id: 'c', email: 'outro', dados_extras: { lead_type_original: 'MQL' } }, { ...lead, id: 'd', email: 'lead', dados_extras: null }, { ...lead, id: 'e', dia: '2026-09-30' }],
       metasMql: [{ marca: 'Inpot', valor_meta: 100 }], midia: [{ id: 'm', dia: '2026-10-02', marca: 'Inpot', canal: 'meta', spend_brl: 440 }] }
-    expect(captacaoMissao(dados, 'Inpot')).toEqual({ mql: 2, metaMql: 100, cpmql: 220, metaCpMql: 220 })
-    expect(captacaoMissao(dados, 'Eletrovias')).toEqual({ mql: 0, metaMql: null, cpmql: null, metaCpMql: 37 })
-    expect(captacaoMissao({ ...dados, metasMql: [{ marca: 'Inpot', valor_meta: 0 }] }, 'Inpot').metaMql).toBe(0)
+    expect(captacaoMissao(dados, 'Inpot')).toEqual({ mql: 2, metaMql: 164, cpmql: 220, metaCpMql: 220 })
+    expect(captacaoMissao(dados, 'Eletrovias')).toEqual({ mql: 0, metaMql: 757, cpmql: null, metaCpMql: 37 })
+    expect(captacaoMissao({ ...dados, metasMql: [{ marca: 'Inpot', valor_meta: 0 }] }, 'Inpot').metaMql).toBe(164)
+    for (const [marca, valores] of Object.entries({ Inpot: [164, 163, 82], Eletrovias: [757, 756, 541], 'Lisô Laser': [96, 96, 48] })) {
+      expect(MESES_MISSAO.map(hoje => captacaoMissao({ ...dados, hoje }, marca).metaMql)).toEqual(valores)
+    }
+    expect(captacaoMissao({ ...dados, hoje: '2027-01-01', metasMql: [] }, 'Inpot').metaMql).toBeNull()
   })
   it('não apresenta outubro como uma meta completa de Q4', () => {
     expect(metaCadastrada([meta], 'Inpot', MESES_MISSAO, 'meta_financeira')).toEqual({ valor: null, parcial: 1000, faltantes: ['2026-11-01', '2026-12-01'] })

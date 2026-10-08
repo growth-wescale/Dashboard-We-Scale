@@ -3,7 +3,7 @@ import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
 import { BRAND_ACCENT } from '@/constants/brands'
 import { fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
-import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, metaCadastrada, orcamentoMensalMissao, pacingMissao, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
+import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, metaCadastrada, orcamentoMensalMissao, pacingMissao, pacingTrimestre, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
 import './missaoImpossivel.css'
 
 const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -30,7 +30,10 @@ function Placar({ titulo, meta, inicio, dados }: { titulo: string; meta: number;
     <div className="missao-kicker"><Target size={15} aria-hidden="true" />{titulo}</div>
     <p className="missao-meta">{money(meta)}</p><p className="missao-muted">Todas as marcas · todas as origens</p>
     <div className="missao-receita"><span>Receita realizada</span><strong>{money(r.receita)}</strong></div>
-    <Progresso atual={r.receita} meta={meta} label={`Atingimento: ${titulo}`} />
+    {inicio === MISSAO.inicio ? <>
+      <div className="missao-pacing-track"><Progresso atual={r.receita} meta={meta} label={`Atingimento: ${titulo}`} /><i style={{ left: `${pacingTrimestre(dados.hoje) * 100}%` }} aria-hidden="true" /></div>
+      <p className="missao-footnote">Traço: {pct(pacingTrimestre(dados.hoje) * 100)} esperado pelos dias transcorridos do trimestre.</p>
+    </> : <Progresso atual={r.receita} meta={meta} label={`Atingimento: ${titulo}`} />}
     <div className="missao-between"><span>{pct(r.receita / meta * 100)} atingidos</span><span>{r.negocios} negócios ganhos</span></div>
     <div className="missao-saldo"><span>{r.receita > meta ? 'Acima da meta' : 'Falta gerar'}</span><strong>{money(Math.abs(meta - r.receita))}</strong></div>
     {r.semValor > 0 && <p className="missao-aviso">{r.semValor} negócio(s) ganho(s) sem valor de contrato. Não acrescentam receita ao total.</p>}
@@ -47,7 +50,7 @@ function Indicador({ label, atual, meta, moeda = false }: { label: string; atual
     {meta.valor !== null ? <>
       <Progresso atual={atual} meta={meta.valor} label={label} />
       <div className="missao-indicador-legenda"><span>{meta.valor > 0 ? `${pct(atual / meta.valor * 100)} atingidos` : 'Meta 0'}</span><span>{atual > meta.valor ? 'Acima da meta' : 'Falta atingir'}: {format(Math.abs(meta.valor - atual))}</span></div>
-    </> : <p className="missao-aviso">Cadastrado até agora: {format(meta.parcial)}. Falta completar: {meta.faltantes.map(shortMonth).join(', ')}. Total e atingimento pendentes.</p>}
+    </> : <>{label === 'MQL' && <><div className="missao-track" aria-hidden="true" /><p className="missao-footnote">Percentual de MQL pendente · meta mensal não cadastrada.</p></>}<p className="missao-aviso">Cadastrado até agora: {format(meta.parcial)}. Falta completar: {meta.faltantes.map(shortMonth).join(', ')}. Total e atingimento pendentes.</p></>}
   </div>
 }
 

@@ -15,6 +15,12 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
+Em 08/10, aprovado marcador visual de pacing somente no placar Q4:
+proporção inclusiva dos dias de 01/10 a 31/12 (92 dias), limitada a 0–100%.
+É referência linear temporal, não rateio de receita nem nova meta financeira.
+MQL mantém percentual realizado/meta cadastrada; quando pendente, barra
+neutra sem valor numérico fictício. Meta Anual e CP-MQL preservados.
+
 Orçamento aprovado em 08/10/2026: Eletrovias R$ 28.000 em outubro,
 R$ 28.000 em novembro e R$ 20.000 em dezembro (total R$ 76.000).
 Inpot e Lisô preservam 40/40/20. Tabela e pacing usam os mesmos valores;

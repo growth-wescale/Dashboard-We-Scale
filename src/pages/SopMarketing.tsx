@@ -11,6 +11,7 @@ import { DealCardKanban } from '@/components/timeline/DealCardKanban'
 import { stageLabel, toWindow, type FunnelEventRow } from '@/lib/metrics'
 import { dealNaJanela } from '@/lib/funilFilterOptions'
 import { nf } from '@/lib/format'
+import { fmtBR } from '@/lib/dateUtils'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
@@ -1391,13 +1392,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       const acc = new Map<string, { label: string; sort: number; count: number }>()
       for (const l of leads.filter(isLeadMql)) {
         const raw = l.dados_extras?.['capital'] ?? l.dados_extras?.['capital_disponivel']
-        if (typeof raw !== 'string' || raw.trim() === '') continue
-        const b = parseCapital(raw)
-        if (b.kind === 'unknown') continue
-        const k = bucketKey(b)
+        const vazio = typeof raw !== 'string' || raw.trim() === ''
+        if (vazio && !isOdontoLegacy) continue
+        const b = parseCapital(typeof raw === 'string' ? raw : '')
+        if (b.kind === 'unknown' && !isOdontoLegacy) continue
+        const k = vazio ? 'sem-capital' : b.kind === 'unknown' ? 'capital-nao-reconhecido' : bucketKey(b)
         const prev = acc.get(k)
         if (prev) prev.count += 1
-        else acc.set(k, { label: formatBucketLabel(b), sort: bucketSort(b), count: 1 })
+        else acc.set(k, { label: vazio ? 'Não informado' : b.kind === 'unknown' ? 'Faixa não reconhecida' : formatBucketLabel(b), sort: b.kind === 'unknown' ? Number.MAX_SAFE_INTEGER : bucketSort(b), count: 1 })
       }
       return acc
     }
@@ -1411,7 +1413,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     })
     rows.sort((a, b) => a.sort - b.sort)
     return rows.map(({ label, cur: c, prev: p }) => ({ label, cur: c, prev: p }))
-  }, [chartCurLeads, chartPrevLeads])
+  }, [chartCurLeads, chartPrevLeads, isOdontoLegacy])
 
   // ── Funnel stages ─────────────────────────────────────────────────────────────
   // Fechado: usa override manual quando existir (RD Marketing não popula
@@ -1792,8 +1794,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6 }}>
                 MQLs por capital de investimento
               </div>
+              {isOdontoLegacy && <div style={{ fontSize: 9, color: 'var(--ws-text-secondary)', marginBottom: 6 }}>
+                {compareRange.label}: {fmtBR(compareRange.start)} a {fmtBR(compareRange.end)} · {dates.mtdLabel}: {fmtBR(mtdCurStart)} a {fmtBR(chartCurEnd)}
+              </div>}
               <div style={{
-                display: 'grid', gridTemplateColumns: '1fr 40px 40px',
+                display: 'grid', gridTemplateColumns: isOdontoLegacy ? 'minmax(0, 1fr) minmax(65px, auto) minmax(65px, auto)' : '1fr 40px 40px',
                 gap: 8, padding: '0 8px', marginBottom: 4,
                 fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
                 color: 'var(--ws-text-secondary)', textTransform: 'uppercase',
@@ -1805,7 +1810,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {mqlByCapital.map(row => (
                   <div key={row.label} style={{
-                    display: 'grid', gridTemplateColumns: '1fr 40px 40px',
+                    display: 'grid', gridTemplateColumns: isOdontoLegacy ? 'minmax(0, 1fr) minmax(65px, auto) minmax(65px, auto)' : '1fr 40px 40px',
                     gap: 8, alignItems: 'baseline',
                     padding: '4px 8px', background: 'var(--ws-bg)',
                     borderRadius: 4, fontSize: 11,

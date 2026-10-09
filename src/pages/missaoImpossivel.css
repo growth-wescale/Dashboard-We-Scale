@@ -57,6 +57,8 @@
 .missao-secundarias { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 12px; color: var(--ws-text-secondary); }
 .missao-secundarias strong { display: block; color: var(--ws-text-primary); margin-bottom: 5px; }
 .missao-pacing-track { position: relative; }
-.missao-pacing-track i { position: absolute; width: 2px; height: 15px; top: -4px; background: var(--ws-text-primary); transform: translateX(-2px); }
+.missao-track.missao-pacing-track { overflow: visible; }
+.missao-track.missao-pacing-track span { border-radius: inherit; }
+.missao-pacing-track i { position: absolute; width: 2px; height: 15px; top: -4px; background: #111; transform: translateX(-2px); }
 @media (max-width: 1150px) { .missao-marcas { grid-template-columns: 1fr; } .missao-marca { padding: 20px; } }
 @media (max-width: 700px) { .missao-page { padding: 20px 16px; } .missao-placares, .missao-secundarias { grid-template-columns: 1fr; } .missao-placar { padding: 18px; } .missao-receita strong { font-size: 20px; } }

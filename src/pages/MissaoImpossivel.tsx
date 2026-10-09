@@ -2,7 +2,7 @@ import { RefreshCw, Target } from 'lucide-react'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
 import { BRAND_ACCENT } from '@/constants/brands'
-import { fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
+import { daysInMonth, fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
 import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, metaCadastrada, orcamentoMensalMissao, pacingMissao, pacingTrimestre, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
 import './missaoImpossivel.css'
 
@@ -17,10 +17,10 @@ export function MissaoImpossivel() {
   return <MissaoConteudo />
 }
 
-function Progresso({ atual, meta, label }: { atual: number; meta: number; label: string }) {
+function Progresso({ atual, meta, label, referencia }: { atual: number; meta: number; label: string; referencia?: number }) {
   if (meta <= 0) return null
   const valor = Math.max(0, Math.min(100, atual / meta * 100))
-  return <div className="missao-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={valor} aria-valuetext={pct(atual / meta * 100)}><span style={{ width: `${valor}%` }} /></div>
+  return <div className="missao-track missao-pacing-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={valor} aria-valuetext={pct(atual / meta * 100)}><span style={{ width: `${valor}%` }} />{referencia !== undefined && <i style={{ left: `${Math.max(0, Math.min(1, referencia)) * 100}%` }} title={`Referência: ${pct(referencia * 100)}`} aria-hidden="true" />}</div>
 }
 
 function Placar({ titulo, meta, inicio, dados }: { titulo: string; meta: number; inicio: string; dados: DadosMissao }) {
@@ -33,7 +33,7 @@ function Placar({ titulo, meta, inicio, dados }: { titulo: string; meta: number;
     {inicio === MISSAO.inicio ? <>
       <div className="missao-pacing-track"><Progresso atual={r.receita} meta={meta} label={`Atingimento: ${titulo}`} /><i style={{ left: `${pacingTrimestre(dados.hoje) * 100}%` }} aria-hidden="true" /></div>
       <p className="missao-footnote">Traço: {pct(pacingTrimestre(dados.hoje) * 100)} esperado pelos dias transcorridos do trimestre.</p>
-    </> : <Progresso atual={r.receita} meta={meta} label={`Atingimento: ${titulo}`} />}
+    </> : <Progresso atual={r.receita} meta={meta} label={`Atingimento: ${titulo}`} referencia={(Date.parse(dados.hoje + 'T00:00:00Z') - Date.parse(inicio + 'T00:00:00Z') + 86400000) / (Date.parse('2027-01-01T00:00:00Z') - Date.parse(inicio + 'T00:00:00Z'))} />}
     <div className="missao-between"><span>{pct(r.receita / meta * 100)} atingidos</span><span>{r.negocios} negócios ganhos</span></div>
     <div className="missao-saldo"><span>{r.receita > meta ? 'Acima da meta' : 'Falta gerar'}</span><strong>{money(Math.abs(meta - r.receita))}</strong></div>
     {r.semValor > 0 && <p className="missao-aviso">{r.semValor} negócio(s) ganho(s) sem valor de contrato. Não acrescentam receita ao total.</p>}
@@ -41,14 +41,14 @@ function Placar({ titulo, meta, inicio, dados }: { titulo: string; meta: number;
   </section>
 }
 
-function Indicador({ label, atual, meta, moeda = false }: { label: string; atual: number; meta: ReturnType<typeof metaCadastrada>; moeda?: boolean }) {
+function Indicador({ label, atual, meta, moeda = false, referencia }: { label: string; atual: number; meta: ReturnType<typeof metaCadastrada>; moeda?: boolean; referencia: number }) {
   const format = moeda ? money : numero
   return <div className="missao-indicador">
     <div className="missao-indicador-titulo"><span>{label}</span>
       <span className="missao-indicador-valores"><strong>{format(atual)}</strong><span>/ {meta.valor === null ? 'meta pendente' : format(meta.valor)}</span></span>
     </div>
     {meta.valor !== null ? <>
-      <Progresso atual={atual} meta={meta.valor} label={label} />
+      <Progresso atual={atual} meta={meta.valor} label={label} referencia={referencia} />
       <div className="missao-indicador-legenda"><span>{meta.valor > 0 ? `${pct(atual / meta.valor * 100)} atingidos` : 'Meta 0'}</span><span>{atual > meta.valor ? 'Acima da meta' : 'Falta atingir'}: {format(Math.abs(meta.valor - atual))}</span></div>
     </> : <>{label === 'MQL' && <><div className="missao-track" aria-hidden="true" /><p className="missao-footnote">Percentual de MQL pendente · meta mensal não cadastrada.</p></>}<p className="missao-aviso">Cadastrado até agora: {format(meta.parcial)}. Falta completar: {meta.faltantes.map(shortMonth).join(', ')}. Total e atingimento pendentes.</p></>}
   </div>
@@ -56,6 +56,7 @@ function Indicador({ label, atual, meta, moeda = false }: { label: string; atual
 
 function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[number]; dados: DadosMissao; noTrimestre: boolean }) {
   const mes = dados.hoje.slice(0, 7) + '-01'
+  const referencia = Number(dados.hoje.slice(-2)) / daysInMonth(dados.hoje.slice(0, 7))
   const captacao = captacaoMissao(dados, frente.marca)
   const pacing = pacingMissao(dados.midia, frente.marca, frente.investimento, dados.hoje)
   const etapas = etapasMissao(dados.etapas, frente.marca, mes, dados.hoje)
@@ -65,17 +66,17 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
     {noTrimestre && <>
       <article className="missao-marca missao-marca-compacta" aria-label={`MQL e CP-MQL · ${frente.marca}`}>
       <h4 className="missao-subtitulo">MQL e CP-MQL · {monthLabelLong(mes)}</h4>
-      <Indicador label="MQL" atual={captacao.mql} meta={{ valor: captacao.metaMql, parcial: 0, faltantes: [mes] }} />
+      <Indicador label="MQL" atual={captacao.mql} meta={{ valor: captacao.metaMql, parcial: 0, faltantes: [mes] }} referencia={referencia} />
       <div className="missao-indicador"><div className="missao-indicador-titulo"><span>CP-MQL</span><strong>{captacao.cpmql === null ? '—' : money(captacao.cpmql)}</strong></div>
         <p className="missao-footnote">Meta ≤ {money(captacao.metaCpMql)}</p>
-        {captacao.cpmql !== null && <><Progresso atual={captacao.metaCpMql} meta={captacao.cpmql > 0 ? captacao.cpmql : captacao.metaCpMql} label={`Eficiência do CP-MQL · ${frente.marca}`} /><p className="missao-footnote">{pct(captacao.cpmql <= captacao.metaCpMql ? 100 : captacao.metaCpMql / captacao.cpmql * 100)} de eficiência em relação à meta · menor custo é melhor.</p></>}
+        {captacao.cpmql !== null && <><Progresso atual={captacao.metaCpMql} meta={captacao.cpmql > 0 ? captacao.cpmql : captacao.metaCpMql} label={`Eficiência do CP-MQL · ${frente.marca}`} referencia={1} /><p className="missao-footnote">{pct(captacao.cpmql <= captacao.metaCpMql ? 100 : captacao.metaCpMql / captacao.cpmql * 100)} de eficiência em relação à meta · menor custo é melhor. Traço: 100% de eficiência.</p></>}
         <p className="missao-footnote">{captacao.cpmql === null ? 'Sem MQL: custo não calculável.' : `${captacao.cpmql <= captacao.metaCpMql ? 'Dentro' : 'Acima'} da meta · diferença ${money(Math.abs(captacao.cpmql - captacao.metaCpMql))}`}</p>
       </div></article>
       <article className="missao-marca missao-marca-compacta" aria-label={`SQL e SAL · ${frente.marca}`}>
       <h4 className="missao-subtitulo">SQL e SAL · mês vigente</h4>
       <div className="missao-reunioes-compactas">
-        <Indicador label="SQL · reuniões agendadas" atual={etapas.sql} meta={meta('meta_sql', [mes])} />
-        <Indicador label="SAL" atual={etapas.sal} meta={meta('meta_volume_sal', [mes])} />
+        <Indicador label="SQL · reuniões agendadas" atual={etapas.sql} meta={meta('meta_sql', [mes])} referencia={referencia} />
+        <Indicador label="SAL" atual={etapas.sal} meta={meta('meta_volume_sal', [mes])} referencia={referencia} />
       </div>
       <p className="missao-footnote">SAL é a referência de realizada nesta página. Não altera a etapa Reunião Realizada/Diagnóstico do CRM.</p>
       </article>

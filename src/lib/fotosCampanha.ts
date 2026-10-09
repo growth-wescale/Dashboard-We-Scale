@@ -1,6 +1,8 @@
 // Fotos aprovadas exclusivas da página Campanha de Metas.
 // Não altera o cadastro compartilhado nem as imagens da TV/outras páginas.
 const FOTOS: Record<string, string> = {
+  'Bruna': '/assets/campanha-ufc/bruna.png',
+  'Douglas': '/assets/campanha-ufc/douglas.png',
   'Paula Marinheiro': '/assets/campanha-ufc/paula.png',
   'Jéssica': '/assets/campanha-ufc/jessica.png',
   'Sarah Padilha': '/assets/campanha-ufc/sarah.png',

@@ -10,6 +10,14 @@ import { pacingTrimestre } from '@/lib/missaoMetas'
 
 const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [], metas: [], etapas: [], midia: [] }
 describe('Missão: apresentação e isolamento', () => {
+  it('marca pacing mensal e anual, e CP-MQL usa referência de eficiência', () => {
+    const lead: NonNullable<DadosMissao['leads']>[number] = { id: 'a', dia: '2026-10-01', marca: 'Inpot', email: 'teste', telefone: null, dados_extras: { lead_type: 'MQL' }, nome: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, row_hash: null, criado_em: '2026-10-01T12:00:00Z' }
+    const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, leads: [lead] } }))
+    expect(html).toContain(`left:${7 / 31 * 100}%`)
+    expect(html).toContain('title="Referência: 100%"')
+    expect(html).toContain('Traço: 100% de eficiência')
+    expect(html).toContain('title="Referência: 76,71%"')
+  })
   it('pacing trimestral inclusivo não rateia receita e limita início/fim', () => {
     expect(pacingTrimestre('2026-09-30')).toBe(0)
     expect(pacingTrimestre('2026-10-01')).toBeCloseTo(1 / 92)

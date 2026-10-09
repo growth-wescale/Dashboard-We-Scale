@@ -30,6 +30,7 @@ const MARCAS_FRANQUIA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 
 import { money, pct, nf, nfCeil } from '@/lib/format'
 import { OctagonFightCard } from '@/components/octogono/OctagonArena'
 import { rankingOctogono } from '@/lib/octogono'
+import { fotoCampanha } from '@/lib/fotosCampanha'
 
 const POOL_PREMIOS = 12000
 type Ciclo = 'semanal' | 'mensal'
@@ -980,6 +981,7 @@ function VendedorFoto({
   escuderia?: string
   altura?: number
 }) {
+  foto = fotoCampanha(nome, foto)
   if (foto) {
     return (
       <div style={{

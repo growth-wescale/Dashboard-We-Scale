@@ -95,7 +95,9 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
         padding: '7px 10px', background: 'var(--ws-bg)',
         borderRadius: 6, borderLeft: '3px solid #cbd5e1',
       }}>
-        Perfil observado em {c.sampleN} cadastros únicos do sample ({Math.round(c.sampleN / c.total * 100)}% do total). % aplicáveis ao total.
+        {c.amostraPeriodo
+          ? `Perfil de ${c.sampleN} cadastros únicos de ${c.amostraPeriodo}, excluindo três testes. Percentuais apenas da amostra, não dos ${c.total} membros ativos. Distribuição de origens dos membros não informada.`
+          : `Perfil observado em ${c.sampleN} cadastros únicos do sample (${Math.round(c.sampleN / c.total * 100)}% do total). % aplicáveis ao total.`}
       </div>
 
       {c.duplicados && (

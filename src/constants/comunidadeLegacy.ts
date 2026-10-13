@@ -1,4 +1,5 @@
 export interface ComunidadeLegacy {
+  amostraPeriodo?: string
   ate: string
   total: number
   origens: { label: string; n: number; pct: number }[]
@@ -10,6 +11,19 @@ export interface ComunidadeLegacy {
   }[]
   sampleN: number
   duplicados?: { leads: number; pico: string }
+}
+
+// Total ativo informado por Gabriel em 13/10. Perfil é somente a amostra
+// enviada (01–06/10), sem os três testes; não extrapolar para os 186 membros.
+export const COMUNIDADE_LEGACY_OUTUBRO: ComunidadeLegacy = {
+  ate: '13/10', total: 186, sampleN: 24, amostraPeriodo: '01–06/10/2026',
+  origens: [],
+  quadrantes: [
+    { tier: 'ok', pct: 25, label: 'Dentista com clínica', aprox: '6 cadastros da amostra' },
+    { tier: 'mid', pct: 16.67, label: 'Dentista sem clínica', aprox: '4 cadastros da amostra' },
+    { tier: 'low', pct: 16.67, label: 'Não-dentista com clínica', aprox: '4 cadastros da amostra' },
+    { tier: 'low', pct: 41.67, label: 'Não-dentista sem clínica', aprox: '10 cadastros da amostra' },
+  ],
 }
 
 export const COMUNIDADE_LEGACY_ATUAL: ComunidadeLegacy = {

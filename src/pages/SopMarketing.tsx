@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucide-react'
 import { useMediaData } from '@/hooks/useMediaData'
-import { useLeads } from '@/hooks/useLeads'
+import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
@@ -21,7 +21,7 @@ import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
-import { COMUNIDADE_LEGACY_ATUAL, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { COMUNIDADE_LEGACY_ATUAL, COMUNIDADE_LEGACY_OUTUBRO, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { BRAND_LIST } from '@/constants/brands'
@@ -1278,8 +1278,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     add(mediaAllComunidade.data)
     add(mediaPrev2Comunidade.data)
     add(mediaPrev3Comunidade.data)
-    return total / COMUNIDADE_LEGACY_ATUAL.total
-  }, [isOdontoLegacy, mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data])
+    const membros = dates.monthStart.startsWith('2026-10') ? COMUNIDADE_LEGACY_OUTUBRO.total : COMUNIDADE_LEGACY_ATUAL.total
+    return total / membros
+  }, [isOdontoLegacy, dates.monthStart, mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data])
 
   // Card RECEITA usa valor 7d (consistente com outros cards do slide) + extra
   // mostrando MTD do mês inteiro vs meta mensal (metasReceitaLegacy).
@@ -1349,10 +1350,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         ] satisfies KpiCard[]
         : [
-            { label: 'SP · RECEITA', value: '—' },
-            { label: 'SP · LEADS', value: '—', extra: { label: 'STATUS', value: 'Sem snapshot' } },
-            { label: 'BC · INVEST.', value: '—' },
-            { label: 'BC · LEADS', value: '—', extra: { label: 'CUSTO/LEAD', value: '—' } },
+            { label: 'INVEST.', value: fmtBRL(mtdInvest) },
+            { label: 'LEADS', value: String(mtdLeads.length), extra: { label: 'FONTE', value: 'Base Marketing' } },
+            { label: 'MQL', value: String(mtdMql) },
+            { label: 'CP-MQL', value: mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
           ] satisfies KpiCard[]
       : kpiCardsAll
 
@@ -1509,7 +1510,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             {dates.isClosed
               ? `Mês fechado · ${dates.mtdLabel}`
               : isWeScale
-              ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Sem snapshot · ${dates.mtdLabel}`
+              ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Base Marketing · ${dates.mtdLabel}`
               : `Semana · ${effectiveWeeks.at(-1)?.label}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
@@ -1592,6 +1593,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             </div>
           </div>
           <div style={isOdontoLegacy ? { minHeight: 260, flexShrink: 0 } : { height: 180 }}>
+            {isOdontoLegacy && dates.monthStart.startsWith('2026-10') && legacyMtdMetric !== 'mql' && <p style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>Série histórica estimada pela âncora de 30/09; não inclui saídas/limpezas posteriores. Total ativo confirmado em 13/10: 186, no painel da Comunidade. Não representa evolução diária confirmada de outubro.</p>}
             {isOdontoLegacy && legacyMtdSeries ? (() => {
               const days = legacyMtdSeries.days
               const pick = (m: typeof legacyMtdMetric) => (w: (typeof legacyMtdSeries.series)[number]['data']) =>
@@ -1686,7 +1688,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span>Funil de negociações</span>
                 <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
-                  snapshot {FUNIL_ODONTO_LEGACY_ATUAL.ate}
+                  histórico · snapshot {FUNIL_ODONTO_LEGACY_ATUAL.ate}/2026
                 </span>
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
@@ -1832,7 +1834,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
 
         {/* Col 3: Taxas de conversão — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
         {isOdontoLegacy ? (
-          <ComunidadeLegacyPanel data={COMUNIDADE_LEGACY_ATUAL} accent={acc} />
+          <ComunidadeLegacyPanel data={monthKeyCur === '2026-10' ? COMUNIDADE_LEGACY_OUTUBRO : COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
           <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={weScaleSnapshot?.mtd.beautyConnection.leads ?? 0} />
         ) : (

@@ -17,6 +17,7 @@ import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
+import { metaMqlSqlPerformance } from '@/lib/metaMqlSqlPerformance'
 import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { useReunioesCloser } from '@/hooks/useReunioesCloser'
@@ -721,15 +722,23 @@ export function PerformanceVendas() {
     [clickedCloserStage, scoped, eventos, win, viewModes],
   )
 
+  const metaMqlSql = useMemo(() => metaMqlSqlPerformance(
+    marcasParaEscopo.map(marca => ({
+      marca,
+      mql: countStageEvents(eventos, 'MQL', win, viewModes, {
+        ...evOpts,
+        extra: noEscopoDoCiclo(scoped.filter(r => r.marca === marca)),
+      }),
+    })),
+  ), [marcasParaEscopo, scoped, eventos, win, viewModes, evOpts])
+
   const convTopo: ConversaoLinha[] = useMemo(() => [
-    // MQL → SQL fica sem meta: não existe meta de MQL em nenhuma das tabelas de
-    // meta da Expansão (o funil cadastrado começa em Ligações → SQL).
-    { label: `${mqlLbl} → SQL`, val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0 },
+    { label: `${mqlLbl} → SQL`, val: strip.mqlEvento > 0 ? (strip.sql / strip.mqlEvento) * 100 : 0, meta: metaMqlSql },
     { label: 'SQL → Diagnóstico', val: strip.sql > 0 ? (strip.rr / strip.sql) * 100 : 0, meta: metasConv?.sql_diag },
     { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0, meta: metasConv?.diag_sal },
     { label: 'SQL → SAL', val: strip.sql > 0 ? (strip.sal / strip.sql) * 100 : 0, meta: metasConv?.sql_sal },
     { label: 'SQL → No-show', val: strip.sql > 0 ? (strip.noShow / strip.sql) * 100 : 0, meta: metasConv?.no_show, polaridade: 'menor' },
-  ], [strip, mqlLbl, metasConv])
+  ], [strip, mqlLbl, metasConv, metaMqlSql])
   const convFundo: ConversaoLinha[] = useMemo(() => [
     { label: 'Diagnóstico → SAL', val: strip.rr > 0 ? (strip.sal / strip.rr) * 100 : 0, meta: metasConv?.diag_sal },
     { label: 'SAL → Oportunidade · COF', val: strip.sal > 0 ? (strip.cof / strip.sal) * 100 : 0, meta: metasConv?.sal_cof },
@@ -741,7 +750,7 @@ export function PerformanceVendas() {
     ? 'Meta derivada das metas de volume do mês, no recorte de marca e pessoa selecionado — muda conforme os filtros.'
     : 'A meta de conversão aparece quando o período é um mês único.'
   // Só o card do topo tem a linha de no-show, então só ele explica o teto.
-  const notaConversaoTopo = mesUnico ? `${notaConversao} O teto de no-show é fixo em 10%.` : notaConversao
+  const notaConversaoTopo = `MQL → SQL: referência da planilha de pré-vendas, ponderada pelo volume de MQL de cada marca no recorte; sem volume, meta pendente. ${mesUnico ? `${notaConversao} O teto de no-show é fixo em 10%.` : 'As demais metas de conversão aparecem quando o período é um mês único.'}`
 
   const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
     ? `${periodValues.length} períodos selecionados`

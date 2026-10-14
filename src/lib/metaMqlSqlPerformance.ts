@@ -1,8 +1,8 @@
-// Referências de pré-vendas aprovadas na planilha enviada em 14/10/2026.
+// Referências de pré-vendas aprovadas em 14/10/2026: 20%, exceto Inpot 23%.
 // Não substituem as metas da Missão nem o cadastro comercial compartilhado.
 export const METAS_MQL_SQL_PERFORMANCE: Readonly<Record<string, number>> = {
-  'Oral Unic': 10, Inpot: 23, 'Lisô Laser': 15, B2Case: 15,
-  Viva: 10, Eletrovias: 10, 'Odonto Scale': 8,
+  'Oral Unic': 20, Inpot: 23, 'Lisô Laser': 20, B2Case: 20,
+  Viva: 20, Eletrovias: 20, 'Odonto Scale': 20,
 }
 
 export function metaMqlSqlPerformance(volumes: ReadonlyArray<{ marca: string; mql: number }>): number | null {

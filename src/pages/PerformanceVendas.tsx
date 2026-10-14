@@ -750,7 +750,7 @@ export function PerformanceVendas() {
     ? 'Meta derivada das metas de volume do mês, no recorte de marca e pessoa selecionado — muda conforme os filtros.'
     : 'A meta de conversão aparece quando o período é um mês único.'
   // Só o card do topo tem a linha de no-show, então só ele explica o teto.
-  const notaConversaoTopo = `MQL → SQL: referência da planilha de pré-vendas, ponderada pelo volume de MQL de cada marca no recorte; sem volume, meta pendente. ${mesUnico ? `${notaConversao} O teto de no-show é fixo em 10%.` : 'As demais metas de conversão aparecem quando o período é um mês único.'}`
+  const notaConversaoTopo = `MQL → SQL: meta de 20% por marca, exceto Inpot (23%), ponderada pelo volume de MQL de cada marca no recorte; sem volume, meta pendente. ${mesUnico ? `${notaConversao} O teto de no-show é fixo em 10%.` : 'As demais metas de conversão aparecem quando o período é um mês único.'}`
 
   const subtitlePeriodo = periodMode !== 'dia' && periodValues.length > 1
     ? `${periodValues.length} períodos selecionados`

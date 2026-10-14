@@ -6,7 +6,7 @@ describe('meta MQL SQL exclusiva Performance', () => {
     expect(metaMqlSqlPerformance([{ marca, mql: 10 }])).toBe(meta)
   })
   it('pondera pelo MQL e não pela média simples', () => {
-    expect(metaMqlSqlPerformance([{ marca: 'Inpot', mql: 100 }, { marca: 'Eletrovias', mql: 300 }])).toBe(13.25)
+    expect(metaMqlSqlPerformance([{ marca: 'Inpot', mql: 100 }, { marca: 'Eletrovias', mql: 300 }])).toBe(20.75)
   })
   it('volume zero não pesa; vazio e marca sem meta ficam pendentes', () => {
     expect(metaMqlSqlPerformance([])).toBeNull()

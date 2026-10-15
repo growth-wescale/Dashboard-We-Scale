@@ -80,7 +80,7 @@ novo.
 ### Campos que importam
 
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
-- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD. O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
+- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD, e o dashboard não a usa: ela diverge do cliente (ex.: põe `audience_network` em "Outros"). O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
@@ -631,6 +631,43 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-15 (3) — Sub-fonte: Audience Network vira Meta e ChatGPT ganha opção própria
+
+Achado ao levantar as fontes do RMP de setembro: `audience_network` (posicionamento
+Audience Network da Meta) não estava no mapa de `normalizeSubFonte` e caía em
+"Outros". Em set/26, 188 dos 417 MQLs Inbound do Odonto Legacy vieram assim
+(`utm_medium` `paid_social`, campanha `[ODL] Consultoria I LEADS I SITE LEGACY`):
+o filtro Sub-fonte mostrava "Outros" para lead de mídia paga da Meta.
+
+**Regra nova** (`src/lib/fonteMapping.ts`, decisão do Junior):
+- `audience_network`, `messenger`, `msg` e `threads` → Meta (`an` já ia). Os três
+  últimos não aparecem na base hoje; entraram por serem nomes do mesmo posicionamento.
+- `chatgpt.com` → grupo próprio **ChatGPT** (5 negócios na base: link aberto a
+  partir de resposta do ChatGPT, que põe o `utm_source` sozinho).
+- O resto segue em "Outros" (7 negócios na base): `crm` de formulário de teste (2),
+  `manychat`, `portaldofranchising`, `botão wpp lp`, uma tag do GTM e uma UTM
+  quebrada do Scale Partner.
+
+Template de UTM não resolvido não era problema: o único na base é
+`{{site_source_name}}` (16), que já usa o "Sub-Fonte" do RD ou vira "Não identificado".
+
+**Efeito** (base inteira, 8.400 linhas de `vw_funil_vendas`): "Outros" 202 → 7 e Meta
+5.044 → 5.234. Odonto Legacy, Inbound, MQL de set/26: Meta 216 → 404, Outros 188 → 0,
+total 417 igual. Muda só o agrupamento do filtro Sub-fonte (Visão Macro, Performance,
+Análise de Perda e bloco do MeetRox); sem esse filtro, nenhum número muda. Sem
+mudança de banco.
+
+**Fora do escopo, registrado:** a coluna `sub_fonte` da view (normalização feita no
+banco) também põe `audience_network` em "Outros". O dashboard não a exibe, mas
+relatório que a leia herda o buraco. E `CHANNEL_SOURCES['Meta Ads']` da Saúde da
+Marca (Marketing) também não reconhece `audience_network`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (676 testes, 2 novos em
+`fonteMapping.test.ts`) + oxlint limpo nos arquivos tocados, em worktree fora do
+OneDrive. Opções do filtro conferidas rodando o `funilFilterOptions` real sobre a
+base real (Odonto Legacy set/26: só "Meta" e "Não identificado"). App exige login,
+então não foi visto renderizado.
 
 ### 2026-10-15 (2) — Meta MQL → SQL sai do código e vai pras metas do mês; cadastro de pessoas
 

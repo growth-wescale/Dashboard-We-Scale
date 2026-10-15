@@ -574,18 +574,50 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   literais por `id_funil` (ver entrada de 21/09)
 - [ ] **`rd_funis_etapas` desatualizada = eventos sem nome** — `registrar_stage_history`
   resolve nome de etapa/funil por essa tabela; etapa ausente vira evento com
-  `nome_etapa`/`id_funil` nulos, invisível pra todas as views. Ainda sem nome:
-  `6a8ef358b82ba00020654de6` (214 eventos, 26/08), `6ab14ed684645500206bee30`
-  (3, 21/09), `6a724afc6886670020b2cb83` (2). Funil novo no RD = cadastrar as
-  etapas nessa tabela
-- [ ] **`wf_5` usa janela fixa de 60 min, não o watermark** — processa no
-  máximo 30 deals por rodada e adia o resto, mas a janela anda sozinha; em
-  pico (ou depois de qualquer queda > 1h) deal adiado pode sair da janela.
-  Hoje quem cobre é o `espelho_rd_edge` (15 min). Corrigir no n8n: ler
-  `deals_sync_state.watermark` em vez de `now() − 60 min` (ver 22/09)
+  `nome_etapa`/`id_funil` nulos, invisível pra todas as views. Funil ou etapa
+  nova no RD = cadastrar a etapa nessa tabela **e** o nome cru em
+  `etapa_canonica` (sem o 2º, o evento ganha nome mas não conta em etapa
+  nenhuma). Em 15/10 só restam sem nome etapas de funis fora do dashboard:
+  Repasse (`6a8ef358b82ba00020654de6` e mais 3, ~220 eventos), Beauty Connection
+  (`6ab14ed684645500206bee30` a `…34`, 22) e Funil de teste (6). A Oportunidade
+  do Odonto Legacy (`6a724afc6886670020b2cb83`) foi resolvida em 15/10
+- [x] ~~`wf_5` usa janela fixa de 60 min, não o watermark~~ — RESOLVIDO (conferido
+  em 15/10): o checkpoint de `sync_execucao` anda de `watermark_anterior` para
+  `novo_watermark`, e na volta da queda de 07/10 (71 min parado) ele retomou
+  exatamente de 13:40, processando os adiados nas rodadas seguintes
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
-- [ ] **RLS desabilitado** em `atributos_legado` e `_backup_correcao_closer_20260807`
+- [ ] **Escrita aberta pra chave anon** — `atributos_legado` e `atribuicao_manual`
+  (overrides de SDR/Closer/origem) estão sem RLS e com INSERT/UPDATE/DELETE pra
+  anon; `invocar_marca_put`, `invocar_aplicar_plano` e `invocar_auditoria_marca`
+  (SECURITY DEFINER, ferramentas da auditoria de marca de 18/09) são executáveis
+  por anon e chamam Edge Functions com a `service_role`. Nem o front nem o job do
+  TI dependem disso (o job usa `service_role`). Junior deixou pra depois (15/10).
+  `_backup_correcao_closer_20260807` também segue sem RLS
+- [ ] **RPCs de previsão (`calcular_previsao_*`) podem derrubar o banco** — Monte
+  Carlo em SQL, executáveis por anon, chamadas da rede do escritório (provável
+  app antigo do Lovable; o dashboard não usa). Foram o maior consumo na queda de
+  07/10 (ver entrada de 15/10). Opções: `statement_timeout` por função, revogar
+  anon ou desligar o app
+- [ ] **`wf_8` grava ~200 alertas falsos por dia em `sync_dlq`** ("15% dos deals
+  divergentes", enquanto o espelho mede 0 a 5) e o `wf_6` não grava em
+  `divergencias_sync` desde 18/09. Ninguém lê nenhum dos dois
+- [ ] **Automação de No Show não disparou em 2 de 17 entradas** desde 02/10 (dois
+  deals da Eletrovias, 08/10 e 12/10, seguem com a Jéssica). A RPC
+  `sdr_historico_no_show` devolve a Sarah certinho, então a falha é no disparo do
+  n8n — não dá pra ver daqui: o MCP do n8n desta máquina é a instância pessoal
+  do Junior, não `n8n.wescale.com.br`
+- [ ] **Cadastro de pessoas (`nome_cargo_foto`) defasado** — Thaina Freitas (no RD
+  desde 01/10, faz R1 no MeetRox, dona de deals do Odonto Legacy) e Alberto
+  Faria (dono no RD da venda Odonto Legacy de 08/10) fora do cadastro; Vanessa
+  Daniel trocou de `SDR/Closer` pra `SDR` sem registro (deixa de ser eleita
+  Closer); Paula Marinheiro sem nenhuma reunião no MeetRox em outubro
+- [ ] **PR #242 (meta MQL → SQL fixa no código) no ar desde 14/10** — contraria a
+  decisão de 16/09 e a meta some no Consolidado quando há MQL de Scale Partner
+  ou Instituto do Autismo (fora da tabela do código). Junior vai alinhar com o
+  Gabriel
+- [ ] **`main` sem proteção** — a seção 6 diz que é protegida, mas a API do GitHub
+  mostra `protected: false`; os 17 PRs de 05 a 14/10 entraram sem review
 - [ ] **Anon key do Supabase de Marketing exposta** no histórico do git (repo é público) — rotacionar
 - [ ] **~50 deals sem marca** no CRM, invisíveis no dashboard
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
@@ -594,13 +626,50 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 - [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09; `DB_Reunioes_MeetRox` também pela Performance › Closer, 01/10)
 - [ ] **Closers gravam reunião de venda sem tipo de call no MeetRox** — em set/26 foram 52 sem tipo contra 86 tipadas (Jéssica 35, Douglas 15), muitas com título de venda ("Devolutiva Comitê", "Alinhamento Contrato", "Finalização"). Ficam fora da contagem R1–R5 do bloco "Reuniões no MeetRox"; o próprio bloco lista elas. Correção é de processo (classificar a call no MeetRox), não de código
 - [ ] **Closer novo some com o nome do MeetRox** em `vw_closer_reunioes` até ganhar uma linha no CTE `pessoa` da view (e-mail → nome do RD) ou e-mail em `nome_cargo_foto` — senão aparece como "Fulano Sobrenome Completo" e não casa com o filtro de Closer da barra
-- [ ] **`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia** — o insert de evento `'perda'` não tem `EXCEPTION WHEN unique_violation` pro índice `ux_deal_eventos_perda_por_dia` (só o `ON CONFLICT` do índice de timestamp exato). Se um deal for perdido, reaberto e perdido de novo no mesmo dia calendário, a segunda perda derruba a função inteira — visto 1x num backfill em 25/08. Raro, mas real
+- [x] ~~`processar_deal_evento` sem tratamento pra perda duplicada no mesmo dia~~ — RESOLVIDO em 01/09 (entrada "Bug real de perda duplicada corrigido"); conferido em 15/10 que a função trata `unique_violation` do índice `ux_deal_eventos_perda_por_dia`
 - [ ] **Páginas de Marketing ainda não responsivas** — Visão Geral, Saúde da Marca, Meta & OKRs e S&OP herdaram o menu em gaveta e a barra do topo compacta (14/09), mas as grades internas seguem com colunas fixas e quebram no celular. São do Gabriel; aplicar o mesmo padrão `rs-*` da seção 7 quando ele quiser
 - [ ] **Chave `service_role` do Supabase de Expansão e token do RD circularam em texto plano** (JSONs de workflow do n8n, exportados pra debug em 25/08). `service_role` ignora RLS por completo — rotacionar as duas quando der
 
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-15 — Auditoria da volta de férias; etapa Oportunidade do Odonto Legacy
+
+Auditoria pedida pelo Junior na volta das férias (05 a 14/10), só leitura,
+exceto a correção abaixo. Conferência independente contra a API do RD (via
+`pg_net`, token `rd_token` no Vault): vendas 01–15/10 5 = 5 (mesmos deals, datas
+e valores), perdas 05–14/10 431 = 431 (o dashboard mostra 428: 1 teste e 2 do
+funil Beauty Connection, fora da allowlist), abertos SDR 470 = 470 e Closer
+51 = 51. Espelho com cobertura de 10.657 de 10.657 deals. Sem passagens
+duplicadas; as 436 perdas do período têm motivo da lista fixa; os 428 deals
+criados aparecem, menos testes e Beauty Connection. Metas de outubro: a V2
+ativa bate 16/16 com `DB_Metas_Performance`.
+
+**Queda do banco em 07/10, das 13:44 às 14:48.** Timeouts em massa, queda e
+crash recovery, sem perda de dados (o `wf_5` retomou do watermark). Duas cargas
+anormais somadas: rajadas das RPCs `calcular_previsao_*` vindas do escritório
+(246 chamadas em 3 rajadas, contra 39 no dia anterior inteiro; às 13:40, 108
+chamadas somaram ~10.500 s de banco) e o PR #227 (Missão Impossível, ~33
+consultas sem filtro a cada 5 min, revertido no #228). Ver pendência das RPCs
+de previsão.
+
+**Etapa "Oportunidade" do Odonto Legacy** (`6a724afc6886670020b2cb83`, funil
+`68b84341646c55001ed64e4f`) não estava em `rd_funis_etapas`, e o nome cru
+"Oportunidade" não existia em `etapa_canonica` (os outros funis usam
+"Oportunidade COF"). 3 passagens ficavam sem nome e fora da contagem, todas de
+vendas: 24/08, 01/09 e 08/10. Cadastrada a etapa (ordem 10; Documentação foi
+pra 11), mapeado "Oportunidade" → `Oportunidade COF` (ordem 90, Closer),
+preenchidos os 3 eventos e o `nome_etapa_anterior` dos 2 eventos seguintes. O
+nome cru só existe nesse funil, então nenhum outro foi afetado. Backup em
+`_backup_etapa_oportunidade_odonto_20261015` (RLS ligado). Checksum de
+`vw_funil_vendas` idêntico (8.392 linhas, 68 ganhos, R$ 2.970.537,98); deals
+com data de Oportunidade 188 → 191, os 3 do Odonto Legacy.
+
+Demais achados (cadastro de pessoas, No Show, segurança, alertas, PR #242,
+`main` sem proteção) foram para a seção 8, sem ação por enquanto, a pedido do
+Junior. Duas pendências antigas fechadas: `wf_5` já usa o watermark e
+`processar_deal_evento` já trata perda duplicada no mesmo dia.
 
 ### 2026-10-07 — Visão Geral com Octógono oculto por padrão
 

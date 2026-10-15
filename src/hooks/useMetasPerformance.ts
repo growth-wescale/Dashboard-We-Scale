@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 
 export type FuncaoMeta = 'SDR' | 'Closer'
@@ -94,17 +94,22 @@ export function useMetasPerformance({ mesKey, marca }: Filters): UseMetasResult 
   const [rawRows, setRawRows] = useState<RawMetaRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Chave ativa: resposta de um mês que já saiu da tela é descartada (ver useMetaResumo).
+  const chave = `${mesKey}|${marca ?? ''}`
+  const chaveAtiva = useRef<string | null>(chave)
 
   const fetchAll = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
     setError(null)
     const { rows, error: err } = await fetchMetas(mesKey, marca)
+    if (chaveAtiva.current !== chave) return
     if (err) { setError(err); setLoading(false); return }
     setRawRows(rows)
     setLoading(false)
-  }, [mesKey, marca])
+  }, [chave, mesKey, marca])
 
   useEffect(() => {
+    chaveAtiva.current = chave
     let cancelled = false
     fetchAll(true).catch(() => {})
 
@@ -114,10 +119,11 @@ export function useMetasPerformance({ mesKey, marca }: Filters): UseMetasResult 
 
     return () => {
       cancelled = true
+      chaveAtiva.current = null
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [fetchAll])
+  }, [chave, fetchAll])
 
   const data = useMemo(() => aggregate(rawRows), [rawRows])
   return { data, rows: rawRows, loading, error }
@@ -188,17 +194,24 @@ export function useMetaResumo({ mesesKeys }: ResumoFilters): UseMetaResumoResult
   const [porMarca, setPorMarca] = useState<Map<string, MetaResumo>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Chave ativa (mesmo padrão de useFunilVendas): resposta de uma seleção que já
+  // mudou é descartada. Ao marcar e desmarcar Julho com Setembro selecionado, a
+  // consulta de Jul+Set chegava depois da de Set e o card ficava com a meta dos
+  // dois meses somada até recarregar a página.
+  const chaveAtiva = useRef<string | null>(chave)
 
   const fetchAll = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
     setError(null)
     const { rows, error: err } = await fetchMetasMeses(chave ? chave.split(',') : [])
+    if (chaveAtiva.current !== chave) return
     if (err) { setError(err); setLoading(false); return }
     setPorMarca(resumirPorMarca(rows))
     setLoading(false)
   }, [chave])
 
   useEffect(() => {
+    chaveAtiva.current = chave
     let cancelled = false
     fetchAll(true).catch(() => {})
 
@@ -208,10 +221,11 @@ export function useMetaResumo({ mesesKeys }: ResumoFilters): UseMetaResumoResult
 
     return () => {
       cancelled = true
+      chaveAtiva.current = null
       clearInterval(timer)
       window.removeEventListener('dashboard:refresh', handleRefresh)
     }
-  }, [fetchAll])
+  }, [chave, fetchAll])
 
   return { porMarca, loading, error }
 }

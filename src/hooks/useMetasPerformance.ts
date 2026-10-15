@@ -17,6 +17,8 @@ export interface RawMetaRow {
   meta_qtd_vendas: number | null
   /** Coluna `text` no banco (ex.: "25") — precisa de Number() antes de somar. */
   meta_volume_sal: string | null
+  /** Meta de MQL do SDR (etapa MQL da Configuração das Metas). Vazia em meses publicados antes de 15/10/2026. */
+  meta_mql?: number | null
 }
 
 // Meta agregada por (colaborador, funcao) no mês solicitado
@@ -54,7 +56,7 @@ async function fetchMetas(mesKey: string, marca?: string): Promise<{ rows: RawMe
   const mesInicio = `${mesKey}-01`
   let q = supabaseVendas
     .from('DB_Metas_Performance')
-    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal')
+    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal, meta_mql')
     .eq('mes_referencia', mesInicio)
     .in('funcao', ['SDR', 'Closer'])
   if (marca) q = q.eq('marca', marca)
@@ -139,7 +141,7 @@ async function fetchMetasMeses(mesesKeys: string[]): Promise<{ rows: RawMetaRow[
   const mesesInicio = mesesKeys.map(k => `${k}-01`)
   const { data, error } = await supabaseVendas
     .from('DB_Metas_Performance')
-    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal')
+    .select('nome_colaborador, marca, mes_referencia, funcao, meta_sql, meta_agendamento, meta_reuniao_realizada, meta_cof, meta_financeira, meta_qtd_vendas, meta_volume_sal, meta_mql')
     .in('mes_referencia', mesesInicio)
     .in('funcao', ['SDR', 'Closer'])
   if (error) return { rows: [], error: error.message }

@@ -323,6 +323,8 @@ export interface LinhaEspelho {
   meta_cof: number | null
   meta_financeira: number | null
   meta_qtd_vendas: number | null
+  /** Meta de MQL do SDR (etapa MQL). Ausente em versões publicadas antes de 15/10/2026. */
+  meta_mql?: number | null
 }
 
 export interface PessoaComFuncao extends PessoaComPeso {
@@ -344,6 +346,7 @@ export function gerarLinhasEspelho(
     const sdrs = pessoas.filter(p => p.funcao === 'SDR')
     const closers = pessoas.filter(p => p.funcao === 'Closer')
 
+    const mql = resolucao.valores['MQL']
     const sql = resolucao.valores['Reunião Agendada SQL']
     const reuniao = resolucao.valores['Reunião Realizada']
     const sal = resolucao.valores['SAL']
@@ -351,6 +354,7 @@ export function gerarLinhasEspelho(
     const fechamento = resolucao.valores['Fechamento']
     const faturamento = resolucao.faturamento
 
+    const rateioMql = mql != null ? ratearPorPeso(mql, sdrs) : {}
     const rateioSql = sql != null ? ratearPorPeso(sql, sdrs) : {}
     const rateioReuniao = reuniao != null ? ratearPorPeso(reuniao, sdrs) : {}
     const rateioSal = sal != null ? ratearPorPeso(sal, sdrs) : {}
@@ -371,6 +375,7 @@ export function gerarLinhasEspelho(
         meta_cof: null,
         meta_financeira: null,
         meta_qtd_vendas: null,
+        meta_mql: rateioMql[sdr.nome] ?? null,
       })
     }
 

@@ -16,6 +16,7 @@ import { META_NO_SHOW_MAX } from '@/constants/metasVendas'
  */
 
 export type ConvKey =
+  | 'mql_sql'    // MQL → Reunião Agendada SQL (meta de MQL das metas do mês)
   | 'sql_diag'   // Reunião Agendada SQL → Diagnóstico (RR)
   | 'diag_sal'   // Diagnóstico → SAL
   | 'sql_sal'    // Reunião Agendada SQL → SAL
@@ -41,12 +42,12 @@ export interface EscopoMetaConversao {
 const MARCAS_EXCLUIR = new Set(['Geral', 'Outbound', 'Repasse'])
 
 const VAZIO: MetasConversao = {
-  sql_diag: null, diag_sal: null, sql_sal: null,
+  mql_sql: null, sql_diag: null, diag_sal: null, sql_sal: null,
   sal_cof: null, cof_fech: null, sal_fech: null,
   no_show: META_NO_SHOW_MAX,
 }
 
-interface EtapasSdr { sql: number; rr: number; sal: number }
+interface EtapasSdr { mql: number; sql: number; rr: number; sal: number }
 interface EtapasCloser { cof: number; vendas: number }
 
 const num = (v: number | string | null | undefined): number => Number(v) || 0
@@ -108,7 +109,8 @@ export function metasConversao(rows: RawMetaRow[], escopo: EscopoMetaConversao):
     if (r.funcao === 'SDR') {
       if (sdrsSel.size > 0 && !sdrsSel.has(r.nome_colaborador)) continue
       marcasComSdrFiltrado.add(marca)
-      const cur = sdrPorMarca.get(marca) ?? { sql: 0, rr: 0, sal: 0 }
+      const cur = sdrPorMarca.get(marca) ?? { mql: 0, sql: 0, rr: 0, sal: 0 }
+      cur.mql += num(r.meta_mql)
       cur.sql += num(r.meta_sql)
       cur.rr  += num(r.meta_reuniao_realizada)
       cur.sal += num(r.meta_volume_sal)
@@ -134,6 +136,8 @@ export function metasConversao(rows: RawMetaRow[], escopo: EscopoMetaConversao):
   const clo = (m: string) => closerPorMarca.get(m)
 
   return {
+    // Marca sem meta de MQL no mês fica fora (razao exige as duas pontas > 0).
+    mql_sql:  razao(marcas, m => { const s = sdr(m); return s && { destino: s.sql, origem: s.mql } }),
     sql_diag: razao(marcas, m => { const s = sdr(m); return s && { destino: s.rr, origem: s.sql } }),
     diag_sal: razao(marcas, m => { const s = sdr(m); return s && { destino: s.sal, origem: s.rr } }),
     sql_sal:  razao(marcas, m => { const s = sdr(m); return s && { destino: s.sal, origem: s.sql } }),

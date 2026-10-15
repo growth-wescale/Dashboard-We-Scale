@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, Flag, Phone } from 'lucide-react'
 import {
-  ETAPA_ABAIXO, ROTULO_ETAPA, definirModoEtapa,
+  ETAPA_ABAIXO, ROTULO_ETAPA, definirModoEtapa, modoDaEtapa,
   type EtapaCalculada, type EtapaConfiguravel, type EtapaMetaConfig, type FunilCalculado,
   type MarcaConfig, type ModoEtapaConfig, type ReferenciaMarca,
 } from '@/lib/configMetas'
@@ -10,14 +10,15 @@ import { capitalizar, fmtDec, fmtInt, fmtPct, pillStyle, type PillKind } from '.
 
 /**
  * Ordem da tela: a partir das vendas (informadas logo acima, na Base do mês),
- * voltando etapa por etapa até o SQL; Ligações por último, fora da cadeia.
+ * voltando etapa por etapa até o SQL e o MQL (topo do funil); Ligações por
+ * último. MQL e Ligações ficam fora da cadeia, penduradas no SQL.
  * A conversão de cada etapa fica no conector ACIMA dela (entre ela e a etapa
  * de baixo do funil, que na tela aparece antes).
  */
-const ORDEM_TELA: EtapaMetaConfig[] = ['Fechamento', 'Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações']
+const ORDEM_TELA: EtapaMetaConfig[] = ['Fechamento', 'Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'MQL', 'Ligações']
 
 const DONO: Record<EtapaMetaConfig, string> = {
-  'Ligações': 'SDR', 'Reunião Agendada SQL': 'SDR', 'Reunião Realizada': 'SDR', SAL: 'SDR',
+  MQL: 'SDR', 'Ligações': 'SDR', 'Reunião Agendada SQL': 'SDR', 'Reunião Realizada': 'SDR', SAL: 'SDR',
   'Oportunidade COF': 'Closer', Fechamento: 'Closer',
 }
 
@@ -64,7 +65,7 @@ export function FunilReverso({ marca, funil, onMudar }: {
             <Conector
               etapa={etapa}
               calc={funil.etapas[etapa]}
-              modo={marca.etapas[etapa]}
+              modo={modoDaEtapa(marca, etapa)}
               referencia={marca.referencia}
               onMudarModo={mudarModo}
             />
@@ -72,7 +73,7 @@ export function FunilReverso({ marca, funil, onMudar }: {
           <LinhaEtapa
             etapa={etapa}
             calc={funil.etapas[etapa]}
-            modo={etapa === 'Fechamento' ? undefined : marca.etapas[etapa]}
+            modo={etapa === 'Fechamento' ? undefined : modoDaEtapa(marca, etapa)}
             escala={etapa === 'Ligações' ? null : escala}
             onMudarModo={mudarModo}
             mostrarProblema={mostrarProblemas}
@@ -95,7 +96,10 @@ function LinhaEtapa({ etapa, calc, modo, escala, onMudarModo, mostrarProblema }:
   const ligacoes = etapa === 'Ligações'
   const semMeta = calc.origem === 'sem_meta'
   const selo = SELO[calc.origem]
-  const detalhe = ancora ? ' · vem da Base do mês' : ligacoes ? ' · atividade, fora da cadeia de conversão' : ''
+  const detalhe = ancora ? ' · vem da Base do mês'
+    : ligacoes ? ' · atividade, fora da cadeia de conversão'
+    : etapa === 'MQL' ? ' · topo do funil, vira a meta de MQL → SQL da Performance'
+    : ''
   const largura = escala && calc.meta != null ? Math.max(3, (calc.meta / escala) * 100) : 0
 
   return (
@@ -127,7 +131,7 @@ function LinhaEtapa({ etapa, calc, modo, escala, onMudarModo, mostrarProblema }:
           <CampoNumero
             valor={modo.valor}
             onMudar={v => onMudarModo(etapa as EtapaConfiguravel, { tipo: 'manual', valor: v })}
-            passo={ligacoes ? 10 : 1}
+            passo={ligacoes || etapa === 'MQL' ? 10 : 1}
             largura={80}
             destaque
             rotulo={`Número de ${ROTULO_ETAPA[etapa]}`}

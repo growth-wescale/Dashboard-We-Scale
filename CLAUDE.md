@@ -538,6 +538,15 @@ Não confundir com os hooks novos de Vendas (`useFunilVendas`/`useFunilEventos`)
 As fontes, filtros SQL e ordem existentes foram preservados; medir latência
 e revisar a ordenação total da paginação separadamente com acesso autorizado.
 
+**Hook com `await` + `setState` precisa descartar resposta velha.** Trocar
+filtro rápido dispara várias consultas, e a rede devolve fora de ordem. Se o
+hook não confere depois do `await` que a chave (meses, origem, filtros) ainda
+é a ativa, a resposta mais lenta de uma seleção intermediária fica na tela até
+recarregar a página. Padrão: `chaveAtiva` (`useFunilVendas`, `useMetaResumo`)
+ou `useConsultaFiltrada`. O `cancelled` que muitos hooks têm só barra o polling
+depois de desmontar, não protege a resposta. Em 15/10 o card de meta somou
+Jul+Set com só Setembro selecionado.
+
 **`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
 noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
 Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
@@ -587,6 +596,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   exatamente de 13:40, processando os adiados nas rodadas seguintes
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
+- [ ] **Campanha de Metas sem guarda de resposta atrasada** — `useMetasClosers`,
+  `useMetasSDRs`, `useMetaPorMarca`, `useRealizadoPorMarca`, `useCorridaPerformance`
+  e `useHistoricoAtingimento` gravam o resultado depois do `await` sem conferir
+  o mês ativo, o mesmo defeito corrigido em `useMetaResumo` em 15/10. Trocar de
+  mês rápido no seletor pode deixar números de outro mês na tela até recarregar.
+  `useSemanasCampanha` já tem a guarda
 - [ ] **Escrita aberta pra chave anon** — `atributos_legado` e `atribuicao_manual`
   (overrides de SDR/Closer/origem) estão sem RLS e com INSERT/UPDATE/DELETE pra
   anon; `invocar_marca_put`, `invocar_aplicar_plano` e `invocar_auditoria_marca`
@@ -631,6 +646,38 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-15 (4) — Card "Meta do período" ficava com a meta de uma seleção antiga
+
+Achado na conferência do RMP de setembro contra o dash em produção: com
+Consolidado e Setembro 2026, o card "Meta do período" da Visão Macro mostrava
+**R$ 1,63M / 43 un** em vez de **R$ 981,4 mil / 25 un**, depois de alternar
+meses no filtro de Período sem recarregar. Com F5 voltava ao certo. Os números
+do deck estavam certos.
+
+**Causa:** `useMetaResumo` (`useMetasPerformance.ts`) gravava o resultado da
+consulta depois do `await` sem conferir se a seleção ainda era a mesma. Ao
+marcar e desmarcar Julho, a consulta de Jul+Set chegava depois da de Set e
+ficava no card. Conferido no banco: R$ 1.625.495 / 43 un é exatamente a soma
+das metas de julho (R$ 644.110 / 18) e setembro (R$ 981.385 / 25).
+`useMetasPerformance` (metas por pessoa da Performance) tinha o mesmo defeito
+ao trocar de mês.
+
+**Fix:** os dois hooks descartam a resposta (dados, erro e `loading`) cuja
+chave já não é a ativa, mesmo padrão do `chaveAtiva` de `useFunilVendas`. Teste
+novo (`useMetasPerformance.foraDeOrdem.test.ts`, 5 casos) simula as respostas
+fora de ordem com o React sem DOM de `useConsultaFiltrada.test.ts`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (681 testes, 5 novos)
++ oxlint sem aviso nos arquivos tocados, em worktree fora do OneDrive. **Visto
+renderizado** com dado real numa rota temporária sem login e com atraso
+artificial de 4 s só na consulta que inclui julho (patch fora do commit).
+Marcar e desmarcar Julho com o hook antigo reproduz R$ 1,63M / 43. Com o
+corrigido o card fica em R$ 981,4 mil / 25, e a resposta de Jul+Set, que chega
+3,8 s depois, é descartada.
+
+Os hooks do seletor de mês da Campanha de Metas têm o mesmo padrão sem guarda
+(ver pendência na seção 8).
 
 ### 2026-10-15 (3) — Sub-fonte: Audience Network vira Meta e ChatGPT ganha opção própria
 

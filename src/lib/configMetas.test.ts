@@ -90,7 +90,9 @@ describe('marcaDoMesAnterior', () => {
     const m = marcaDoMesAnterior(INPOT_SET, 'setembro')
     expect(m.vendas).toBeNull()
     expect(m.ticketMedio).toBe(74900)
-    expect(Object.values(m.etapas).every(e => e.tipo === 'referencia')).toBe(true)
+    // Setembro não tinha MQL: a etapa vem sem meta; as do funil viram referência.
+    expect(m.etapas.MQL).toEqual({ tipo: 'sem_meta' })
+    expect(Object.entries(m.etapas).filter(([k]) => k !== 'MQL').every(([, e]) => e.tipo === 'referencia')).toBe(true)
     expect(m.pessoas).toHaveLength(3)
     expect(m.pessoas).not.toBe(INPOT_SET.pessoas)
     expect(statusMarca(m)).toBe('nao_configurada')
@@ -264,7 +266,9 @@ describe('paraConfigEtapas e ida-e-volta', () => {
   it('revisão de versão importada trata os fixos como conversão de referência', () => {
     const m = marcaDeVersao(INPOT_SET, 'V1', true)
     expect(m.vendas).toBe(5)
-    expect(Object.values(m.etapas).every(e => e.tipo === 'referencia')).toBe(true)
+    // Setembro não tinha MQL: a etapa vem sem meta; as do funil viram referência.
+    expect(m.etapas.MQL).toEqual({ tipo: 'sem_meta' })
+    expect(Object.entries(m.etapas).filter(([k]) => k !== 'MQL').every(([, e]) => e.tipo === 'referencia')).toBe(true)
     const h = marcaDeVersao(INPOT_SET, 'V1', false)
     expect(h.etapas.SAL).toEqual({ tipo: 'manual', valor: 28 })
   })

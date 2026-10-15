@@ -607,15 +607,13 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   `sdr_historico_no_show` devolve a Sarah certinho, então a falha é no disparo do
   n8n — não dá pra ver daqui: o MCP do n8n desta máquina é a instância pessoal
   do Junior, não `n8n.wescale.com.br`
-- [ ] **Cadastro de pessoas (`nome_cargo_foto`) defasado** — Thaina Freitas (no RD
-  desde 01/10, faz R1 no MeetRox, dona de deals do Odonto Legacy) e Alberto
-  Faria (dono no RD da venda Odonto Legacy de 08/10) fora do cadastro; Vanessa
-  Daniel trocou de `SDR/Closer` pra `SDR` sem registro (deixa de ser eleita
-  Closer); Paula Marinheiro sem nenhuma reunião no MeetRox em outubro
-- [ ] **PR #242 (meta MQL → SQL fixa no código) no ar desde 14/10** — contraria a
-  decisão de 16/09 e a meta some no Consolidado quando há MQL de Scale Partner
-  ou Instituto do Autismo (fora da tabela do código). Junior vai alinhar com o
-  Gabriel
+- [x] ~~Cadastro de pessoas (`nome_cargo_foto`) defasado~~ — RESOLVIDO em 15/10: Thaina Freitas
+  cadastrada como Closer (Oral Unic, com ID do RD e e-mail — o bloco do MeetRox passa a
+  mostrar "Thaina Freitas"); Alberto Faria (ex-gerente, saiu em out/26) como `Gestor` inativo;
+  Vanessa Daniel confirmada como `SDR` puro pelo Junior. Segue aberto só: Paula Marinheiro
+  sem reunião no MeetRox em outubro (processo, não cadastro)
+- [x] ~~PR #242 (meta MQL → SQL fixa no código)~~ — RESOLVIDO em 15/10: a meta saiu do código
+  e foi pra Configuração das Metas (etapa MQL); ver entrada de 15/10 (2)
 - [ ] **`main` sem proteção** — a seção 6 diz que é protegida, mas a API do GitHub
   mostra `protected: false`; os 17 PRs de 05 a 14/10 entraram sem review
 - [ ] **Anon key do Supabase de Marketing exposta** no histórico do git (repo é público) — rotacionar
@@ -633,6 +631,49 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-15 (2) — Meta MQL → SQL sai do código e vai pras metas do mês; cadastro de pessoas
+
+Pedido do Junior depois de entender o PR #242 com o Gabriel: manter a meta de
+MQL → SQL (20%, Inpot 23%, aprovada por pré-vendas em 14/10), mas sem número
+fixo no código.
+
+**Configuração das Metas ganhou a etapa MQL**, pendurada no SQL igual às
+Ligações (fora da cadeia: não alimenta nenhuma etapa de baixo). O gestor define
+a conversão MQL → SQL (meta de MQL = SQL ÷ taxa) ou um número fixo; os SDRs
+recebem a meta de MQL pelo peso, em inteiros. Marca nova e mês novo a partir de
+mês sem MQL começam com MQL "sem meta" (opcional, sem pendência). SQL sem meta
+leva o MQL junto, salvo se o MQL for manual. Rascunho salvo no navegador antes
+da mudança (sem a chave `MQL`) abre como "sem meta" (`modoDaEtapa`).
+
+**Banco:** coluna `meta_mql` em `DB_Metas_Performance` (migration
+`metas_meta_mql`); `ativar_meta_versao` passou a copiá-la das `linhas_espelho`.
+Versões antigas ficam com `meta_mql` nulo.
+
+**Performance:** a linha MQL → SQL do card "Conversões — topo do funil" usa a
+mesma regra das outras (`metaConversao.ts`, chave `mql_sql`): Σ meta SQL ÷ Σ meta
+MQL do recorte de marca e SDR, só com mês único. Marca sem meta de MQL fica fora
+da conta em vez de anular a meta — some o "sem meta" do Consolidado que o #242
+causava com Scale Partner/Instituto do Autismo. Saiu
+`src/lib/metaMqlSqlPerformance.ts`.
+
+**V3 de outubro publicada** (versão 7, `v3 outubro · MQL`, ativa), gerada com as
+próprias funções da tela a partir da V2: tudo igual à V2 (16/16 linhas do
+espelho e 134 itens semanais idênticos) + MQL com 20%, Inpot 23%; Odonto Scale
+segue sem meta de SQL, então sem MQL. Metas de MQL: Inpot 234, Eletrovias 505
+(Sarah 253, Xayane 151, Thiago 101), B2Case 207, Oral Unic 154, Lisô 55, Viva 0.
+Consolidado de outubro: 239 SQL ÷ 1.155 MQL = 20,7%. A V2 continua guardada e
+pode ser reativada na Configuração das Metas.
+
+**Cadastro de pessoas (`nome_cargo_foto`):** Thaina Freitas (Closer, Oral Unic,
+id 20) e Alberto Faria (`Gestor`, inativo, id 21). Nenhum deal trocou de SDR ou
+Closer (conferido nos 8.392 antes/depois). O contador do `id` estava atrasado
+(Paula entrou com id manual em 30/09) e foi acertado com `setval`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (674 testes; 11 novos em
+`metaMql.test.ts`, saiu o teste do arquivo removido) + oxlint sem aviso novo, em
+clone fora do OneDrive. A tela da Configuração das Metas não foi vista
+renderizada (exige login).
 
 ### 2026-10-15 — Auditoria da volta de férias; etapa Oportunidade do Odonto Legacy
 

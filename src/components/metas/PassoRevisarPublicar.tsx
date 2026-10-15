@@ -12,7 +12,7 @@ import {
   pillStyle, primaryButtonStyle, smallButtonStyle,
 } from './metasUi'
 
-const COLUNAS: EtapaMetaConfig[] = [...[...ETAPAS_FUNIL].reverse().slice(1), 'Ligações']
+const COLUNAS: EtapaMetaConfig[] = [...[...ETAPAS_FUNIL].reverse().slice(1), 'MQL', 'Ligações']
 
 function delta(n: number, fmt: (v: number) => string): string {
   if (Math.abs(n) < 0.5) return 'igual'

@@ -21,13 +21,22 @@ export const ETAPAS_FUNIL = ['Reunião Agendada SQL', 'Reunião Realizada', 'SAL
 export type EtapaFunil = typeof ETAPAS_FUNIL[number]
 
 /** Etapas que o gestor configura, na ordem em que o cálculo sobe (de baixo pra
- *  cima). Ligações fica fora da cadeia, pendurada no SQL. */
-export const ETAPAS_CONFIGURAVEIS = ['Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações'] as const
+ *  cima). Ligações e MQL ficam fora da cadeia, penduradas no SQL: MQL é o topo
+ *  do funil (vira a meta de conversão MQL → SQL da Performance), Ligações é
+ *  atividade. Nenhuma das duas alimenta as etapas de baixo. */
+export const ETAPAS_CONFIGURAVEIS = ['Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações', 'MQL'] as const
 export type EtapaConfiguravel = typeof ETAPAS_CONFIGURAVEIS[number]
 
-export type EtapaMetaConfig = EtapaFunil | 'Ligações'
+/** Etapas penduradas no SQL, fora da cadeia de conversão. */
+const ETAPAS_PENDURADAS: readonly EtapaConfiguravel[] = ['Ligações', 'MQL']
+
+export type EtapaMetaConfig = EtapaFunil | 'Ligações' | 'MQL'
+
+/** Todas as etapas com meta (funil + penduradas). */
+export const ETAPAS_COM_META: readonly EtapaMetaConfig[] = [...ETAPAS_FUNIL, 'Ligações', 'MQL']
 
 export const ROTULO_ETAPA: Record<EtapaMetaConfig, string> = {
+  MQL: 'MQL',
   'Ligações': 'Ligações',
   'Reunião Agendada SQL': 'SQL',
   'Reunião Realizada': 'Diagnóstico',
@@ -38,6 +47,7 @@ export const ROTULO_ETAPA: Record<EtapaMetaConfig, string> = {
 
 /** A conversão de uma etapa é sempre dela pra de baixo: taxa = valor(baixo) ÷ valor(etapa). */
 export const ETAPA_ABAIXO: Record<EtapaConfiguravel, EtapaFunil> = {
+  MQL: 'Reunião Agendada SQL',
   'Ligações': 'Reunião Agendada SQL',
   'Reunião Agendada SQL': 'Reunião Realizada',
   'Reunião Realizada': 'SAL',
@@ -46,7 +56,7 @@ export const ETAPA_ABAIXO: Record<EtapaConfiguravel, EtapaFunil> = {
 }
 
 /** Quem leva a meta de cada etapa — mesma partição de `gerarLinhasEspelho`. */
-export const ETAPAS_SDR: readonly EtapaMetaConfig[] = ['Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
+export const ETAPAS_SDR: readonly EtapaMetaConfig[] = ['MQL', 'Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
 export const ETAPAS_CLOSER: readonly EtapaMetaConfig[] = ['Oportunidade COF', 'Fechamento']
 
 export function funcaoDaEtapaSemanal(etapa: EtapaMeta): 'SDR' | 'Closer' {
@@ -140,7 +150,7 @@ export function referenciaDeVersao(estado: EstadoMesMarca, rotulo: string): Refe
     if (vx != null && vx > 0 && vb != null && vb > 0) taxas[x] = vb / vx
   }
   const valores: Partial<Record<EtapaMetaConfig, number>> = {}
-  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+  for (const e of ETAPAS_COM_META) {
     const v = exato[e]
     if (v != null) valores[e] = arredondarMeta(v)
   }
@@ -206,7 +216,8 @@ export function marcaEmBranco(marca: string): MarcaConfig {
     marca,
     vendas: null,
     ticketMedio: null,
-    etapas: etapasPadrao(() => ({ tipo: 'conversao', taxa: null })),
+    // MQL é opcional: marca nova começa sem meta de MQL, o resto pede conversão.
+    etapas: etapasPadrao(x => (x === 'MQL' ? { tipo: 'sem_meta' } : { tipo: 'conversao', taxa: null })),
     pessoas: [],
     referencia: null,
   }
@@ -301,7 +312,7 @@ export function calcularFunil(m: MarcaConfig): FunilCalculado {
   }
 
   for (const x of ETAPAS_CONFIGURAVEIS) {
-    const modo = m.etapas[x]
+    const modo = modoDaEtapa(m, x)
     const abaixo = etapas[ETAPA_ABAIXO[x]]
     const refTaxa = m.referencia?.taxas[x] ?? null
     let exato: number | null = null
@@ -346,13 +357,29 @@ export function calcularFunil(m: MarcaConfig): FunilCalculado {
   return { etapas, faturamento }
 }
 
-/** Troca o modo de uma etapa. "Sem meta" leva junto as de cima até a primeira manual. */
+/** Modo da etapa no rascunho. Rascunho salvo antes da etapa MQL existir não tem a chave: vale "sem meta". */
+export function modoDaEtapa(m: MarcaConfig, etapa: EtapaConfiguravel): ModoEtapaConfig {
+  return m.etapas[etapa] ?? { tipo: 'sem_meta' }
+}
+
+/**
+ * Troca o modo de uma etapa. "Sem meta" leva junto as de cima da cadeia até a
+ * primeira manual; as penduradas no SQL (Ligações, MQL) vão junto quando o SQL
+ * fica sem meta, a menos que sejam manuais.
+ */
 export function definirModoEtapa(m: MarcaConfig, etapa: EtapaConfiguravel, modo: ModoEtapaConfig): MarcaConfig {
   const etapas = { ...m.etapas, [etapa]: modo }
   if (modo.tipo === 'sem_meta') {
-    for (const acima of ETAPAS_CONFIGURAVEIS.slice(ETAPAS_CONFIGURAVEIS.indexOf(etapa) + 1)) {
-      if (etapas[acima].tipo === 'manual') break
-      etapas[acima] = { tipo: 'sem_meta' }
+    const cadeia = ETAPAS_CONFIGURAVEIS.filter(x => !ETAPAS_PENDURADAS.includes(x))
+    if (cadeia.includes(etapa)) {
+      for (const acima of cadeia.slice(cadeia.indexOf(etapa) + 1)) {
+        if ((etapas[acima] ?? { tipo: 'sem_meta' }).tipo === 'manual') break
+        etapas[acima] = { tipo: 'sem_meta' }
+      }
+    }
+    for (const p of ETAPAS_PENDURADAS) {
+      const base = etapas[ETAPA_ABAIXO[p] as EtapaConfiguravel] ?? { tipo: 'sem_meta' }
+      if (p !== etapa && base.tipo === 'sem_meta' && (etapas[p] ?? { tipo: 'sem_meta' }).tipo !== 'manual') etapas[p] = { tipo: 'sem_meta' }
     }
   }
   return { ...m, etapas }
@@ -585,7 +612,7 @@ export function metasPorPessoa(m: MarcaConfig, funil: FunilCalculado = calcularF
 export function paraConfigEtapas(m: MarcaConfig): ConfigEtapa[] {
   const cfgs: ConfigEtapa[] = [{ etapa: 'Fechamento', modo: 'fixo', valorFixo: m.vendas ?? 0 }]
   for (const x of ETAPAS_CONFIGURAVEIS) {
-    const modo = m.etapas[x]
+    const modo = modoDaEtapa(m, x)
     const etapaOrigem = ETAPA_ABAIXO[x]
     if (modo.tipo === 'referencia' && m.referencia?.taxas[x] != null) {
       cfgs.push({ etapa: x, modo: 'derivado', etapaOrigem, taxa: m.referencia.taxas[x], taxaOrigem: 'mes_anterior' })
@@ -603,7 +630,7 @@ export function paraConfigEtapas(m: MarcaConfig): ConfigEtapa[] {
 /** Metas arredondadas no formato que `gerarLinhasEspelho` consome. */
 export function resolucaoArredondada(m: MarcaConfig, funil: FunilCalculado = calcularFunil(m)): ResolucaoFunil {
   const valores: Partial<Record<EtapaMeta, number>> = {}
-  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+  for (const e of ETAPAS_COM_META) {
     const meta = funil.etapas[e].meta
     if (meta != null) valores[e] = meta
   }
@@ -618,8 +645,8 @@ export interface Publicacao {
 
 /**
  * Linhas de `DB_Metas_Performance` (o que o dashboard lê) com as metas
- * inteiras por pessoa. Mesma partição de `gerarLinhasEspelho`: SDR leva SQL
- * (= agendamento), Diagnóstico e SAL; Closer leva Oportunidade, vendas e
+ * inteiras por pessoa. Mesma partição de `gerarLinhasEspelho`: SDR leva MQL,
+ * SQL (= agendamento), Diagnóstico e SAL; Closer leva Oportunidade, vendas e
  * faturamento.
  */
 export function linhasEspelho(r: RascunhoConfig): LinhaEspelho[] {
@@ -641,6 +668,7 @@ export function linhasEspelho(r: RascunhoConfig): LinhaEspelho[] {
           meta_cof: funcao === 'Closer' ? v['Oportunidade COF'] ?? null : null,
           meta_financeira: funcao === 'Closer' ? p.faturamento : null,
           meta_qtd_vendas: funcao === 'Closer' ? v.Fechamento ?? null : null,
+          meta_mql: funcao === 'SDR' ? v.MQL ?? null : null,
         })
       }
     }
@@ -715,7 +743,7 @@ export function metasPorSemana(r: RascunhoConfig, marca: string, funil?: FunilCa
   if (!m || distribuido <= 0) return r.semanas.map(() => ({}))
   const f = funil ?? calcularFunil(m)
   const semanas = r.semanas.map((): Partial<Record<EtapaMetaConfig, number>> => ({}))
-  for (const e of [...ETAPAS_FUNIL, 'Ligações'] as EtapaMetaConfig[]) {
+  for (const e of ETAPAS_COM_META) {
     const meta = f.etapas[e].meta
     if (meta == null) continue
     const partes = e === 'Fechamento' ? porSemana : repartirInteiro(meta, porSemana)

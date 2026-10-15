@@ -18,7 +18,7 @@ const DIA_LABEL: Record<DiaSemana, string> = {
 }
 
 /** Etapas derivadas mostradas embaixo de cada semana, na ordem do funil a partir das vendas. */
-const DERIVADAS: EtapaMetaConfig[] = ['Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações']
+const DERIVADAS: EtapaMetaConfig[] = ['Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'MQL', 'Ligações']
 
 /** Acima disso a coluna mostra "× N" em vez de uma ficha por venda. */
 const MAX_FICHAS = 12
@@ -81,7 +81,7 @@ export function PassoSemanas({ rascunho, onMudar, onVoltar, onAvancar }: {
 
       <div style={{ ...infoBoxStyle, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ flex: '1 1 320px', minWidth: 0 }}>
-          <b>Distribua só as vendas.</b> Oportunidade, SAL, Diagnóstico, SQL e Ligações de cada semana vêm junto, na mesma proporção,
+          <b>Distribua só as vendas.</b> Oportunidade, SAL, Diagnóstico, SQL, MQL e Ligações de cada semana vêm junto, na mesma proporção,
           e cada pessoa recebe a parte dela pelo peso. É opcional — mas quando começar numa marca, feche todas as vendas dela.
         </span>
         {comVendas.length > 0 && (
@@ -269,7 +269,7 @@ function CartaoMarcaSemanas({ rascunho, marca, semanas, onVendas }: {
 
 function TabelaPessoas({ rascunho, marca, semanas }: { rascunho: RascunhoConfig; marca: MarcaConfig; semanas: Semana[] }) {
   const funil = calcularFunil(marca)
-  const ordem: EtapaMetaConfig[] = ['Fechamento', 'Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'Ligações']
+  const ordem: EtapaMetaConfig[] = ['Fechamento', 'Oportunidade COF', 'SAL', 'Reunião Realizada', 'Reunião Agendada SQL', 'MQL', 'Ligações']
   const linhas = metasPessoaSemana(rascunho, marca.marca).flatMap(p => ordem
     .filter(e => funil.etapas[e].meta != null && p.porSemana.some(s => s[e] != null))
     .map(e => ({ pessoa: p, etapa: e, valores: p.porSemana.map(s => s[e] ?? 0) })))

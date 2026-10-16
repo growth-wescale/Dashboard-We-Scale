@@ -65,6 +65,7 @@ function PageLoader() {
 }
 
 const Acessos = lazyWithRetry(() => import('@/pages/Acessos').then(m => ({ default: m.Acessos })))
+const DistribuicaoLeads = lazyWithRetry(() => import('@/pages/DistribuicaoLeads').then(m => ({ default: m.DistribuicaoLeads })))
 
 function RoutedContent() {
   // key={pathname} reseta o ErrorBoundary ao trocar de rota — erro numa página não persiste na próxima.
@@ -83,6 +84,7 @@ function RoutedContent() {
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
           <Route path="/metas"              element={<HubMetas />} />
+          <Route path="/distribuicao-leads" element={<DistribuicaoLeads />} />
           <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
           <Route path="/gp-setembro"        element={<GpSetembro />} />
           <Route path="/analise-perda"      element={<AnalisePerda />} />

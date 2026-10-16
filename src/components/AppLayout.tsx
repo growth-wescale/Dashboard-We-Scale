@@ -54,6 +54,7 @@ const VENDAS_SUB = [
   { key: 'analise-objecoes',    label: 'Análise de Objeções' },
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
   { key: 'metas',               label: 'Configuração das Metas' },
+  { key: 'distribuicao-leads',  label: 'Distribuição de Leads' },
 ]
 
 const NAV_ITEMS = [

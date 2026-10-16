@@ -112,3 +112,14 @@ describe('catálogo', () => {
     for (const c of chaves) expect(c).toMatch(/^(aba|acao)\.[a-z0-9-]+$/)
   })
 })
+
+describe('Distribuição de Leads no catálogo', () => {
+  it('a rota /distribuicao-leads exige aba.distribuicao', () => {
+    expect(permissaoDaRota('/distribuicao-leads')).toBe('aba.distribuicao')
+    expect(ABAS.find(a => a.chave === 'aba.distribuicao')).toMatchObject({ label: 'Distribuição de Leads', area: 'Vendas' })
+  })
+
+  it('existe a ação acao.distribuicao-editar', () => {
+    expect(ACOES.some(a => a.chave === 'acao.distribuicao-editar')).toBe(true)
+  })
+})

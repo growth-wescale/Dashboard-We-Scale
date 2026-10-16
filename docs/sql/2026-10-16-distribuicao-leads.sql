@@ -731,3 +731,12 @@ grant select on public.vw_distribuicao_painel, public.vw_distribuicao_campos_vis
 
 -- [distribuicao_time_da_marca_leitura_anon] — a view do painel chama a função; é só leitura.
 grant execute on function public.distribuicao_time_da_marca(text, timestamptz) to anon, authenticated;
+
+-- Bloco 6b — v2 das regras (16/10, ~16:50 BRT): barreira publicada com a chave real do payload
+-- legado, `cf_capital_disponivel` (campo "Qual o capital disponível para o investimento?"),
+-- valores exatamente os da tabela da spec; IDA com `cf_capital` (chave presumida, confirmar na
+-- 1ª conversão real). campos_extra: cf_capital_disponivel → 699f2143a0f592001365ce42,
+-- cf_motivo_franquia → 699f369f439d5d00136cd82e, cf_tempo_abertura → 699f374fdd9cf5001edbbf13.
+-- 1ª paridade observada: Adriana (B2Case, capital "Até R$ 60.000") → RD não criou deal; o sombra
+-- v1 (sem barreira) simulou, a v2 barra. Eventos do CRM ("Tarefa criada no RD Station CRM") chegam
+-- pelo mesmo webhook e são ignorados.

@@ -452,10 +452,10 @@ begin
 
   insert into public.distribuicao_atribuicao
     (recebido_em, marca, evento_identificador, regra_id, lead_email, lead_uuid, lead_nome, payload, resultado, motivo,
-     barreira_valor_lido, fonte_time, meta_versao_id, reinicio_em, nome_sdr, user_id, contadores, inelegiveis)
+     barreira_valor_lido, fonte_time, meta_versao_id, reinicio_em, nome_sdr, user_id, contadores, inelegiveis, deal_pronto)
   values
     (p_recebido_em, v_regra.marca, v_evento, v_regra.id, v_email, v_contact->>'uuid', v_contact->>'name', p_payload, v_resultado, v_motivo,
-     v_valor_txt, v_time->>'fonte', (v_time->>'meta_versao_id')::bigint, (v_time->>'reinicio_em')::timestamptz, v_nome, v_user, v_cont_out, v_time->'inelegiveis')
+     v_valor_txt, v_time->>'fonte', (v_time->>'meta_versao_id')::bigint, (v_time->>'reinicio_em')::timestamptz, v_nome, v_user, v_cont_out, v_time->'inelegiveis', v_deal)
   returning id into v_id;
 
   return jsonb_build_object(
@@ -473,3 +473,152 @@ grant execute on function public.distribuicao_processar(jsonb, timestamptz) to s
 --   campo vazio passa com motivo 'campo vazio, passou'; duplicado em 1 min e atribuido 11 min
 --   depois; evento desconhecido 'ignorado' sem linha; marca sem time → fallback com uPad;
 --   sombra → simulado fora do contador do ativo. 14/14 em 16/10/2026.
+
+-- =====================================================================================
+-- Bloco 4 [distribuicao_escrita] — coluna deal_pronto no log (reprocessar reenvia o mesmo
+-- objeto, sem recalcular a escolha; distribuicao_processar passou a gravá-la) + RPCs:
+--   distribuicao_fechar(id, id_deal, erro, tentativas)   — passo 7 do Edge
+--   distribuicao_publicar_regra(p jsonb, autor)           — encerra a vigente e insere versao+1;
+--       exige marca, marca_rd, modo, evento, funil, etapa, responsável padrão; motivo a partir
+--       da v2; recusa evento já usado por outra marca
+--   distribuicao_alterar_disponibilidade(p jsonb, autor) — fora_agora | voltou | agendar | cancelar
+--   distribuicao_reabrir(id)                              — só registro em 'erro'; devolve payload + deal
+-- Todas security definer, só service_role.
+-- =====================================================================================
+alter table public.distribuicao_atribuicao add column if not exists deal_pronto jsonb;
+-- distribuicao_processar: mesmo corpo do bloco 3, com deal_pronto na lista do INSERT.
+
+create or replace function public.distribuicao_fechar(p_id bigint, p_id_deal text, p_erro text, p_tentativas int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_id_deal is not null then
+    update public.distribuicao_atribuicao
+       set id_deal = p_id_deal, erro_rd = null, tentativas = coalesce(p_tentativas, tentativas),
+           resultado = case when nome_sdr is null then 'fallback' else 'atribuido' end
+     where id = p_id;
+  else
+    update public.distribuicao_atribuicao
+       set erro_rd = p_erro, tentativas = coalesce(p_tentativas, tentativas), resultado = 'erro'
+     where id = p_id;
+  end if;
+end $$;
+
+create or replace function public.distribuicao_publicar_regra(p jsonb, p_autor text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_marca text := p->>'marca';
+  v_versao int;
+  v_id bigint;
+  v_outra text;
+  k text;
+begin
+  foreach k in array array['marca','marca_rd','modo','evento_identificador','id_funil','id_etapa','responsavel_padrao_user_id'] loop
+    if nullif(btrim(coalesce(p->>k, '')), '') is null then
+      raise exception 'campo obrigatório ausente: %', k;
+    end if;
+  end loop;
+  if (p->>'modo') not in ('desligado','sombra','ativo') then
+    raise exception 'modo inválido: %', p->>'modo';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('distribuicao:' || v_marca));
+
+  select marca into v_outra from public.distribuicao_regra
+   where evento_identificador = p->>'evento_identificador' and vigente_ate is null and marca <> v_marca limit 1;
+  if v_outra is not null then
+    raise exception 'evento % já é usado pela regra vigente da marca %', p->>'evento_identificador', v_outra;
+  end if;
+
+  select coalesce(max(versao), 0) + 1 into v_versao from public.distribuicao_regra where marca = v_marca;
+  if v_versao > 1 and nullif(btrim(coalesce(p->>'motivo', '')), '') is null then
+    raise exception 'motivo é obrigatório para publicar uma versão nova da regra';
+  end if;
+
+  update public.distribuicao_regra set vigente_ate = now() where marca = v_marca and vigente_ate is null;
+
+  insert into public.distribuicao_regra
+    (marca, marca_rd, versao, vigente_de, modo, evento_identificador, id_funil, id_etapa, campaign_id,
+     barreira_campo, barreira_valores_barrados, responsavel_padrao_user_id, nome_formato, campos_extra, time_proprio,
+     criado_por, motivo)
+  values
+    (v_marca, p->>'marca_rd', v_versao, now(), p->>'modo', p->>'evento_identificador', p->>'id_funil', p->>'id_etapa', nullif(p->>'campaign_id', ''),
+     nullif(p->>'barreira_campo', ''),
+     coalesce((select array_agg(x) from jsonb_array_elements_text(coalesce(p->'barreira_valores_barrados', '[]'::jsonb)) x), '{}'::text[]),
+     p->>'responsavel_padrao_user_id', nullif(p->>'nome_formato', ''),
+     coalesce(p->'campos_extra', '{}'::jsonb),
+     case when jsonb_typeof(p->'time_proprio') = 'array' and jsonb_array_length(p->'time_proprio') > 0 then p->'time_proprio' else null end,
+     p_autor, nullif(p->>'motivo', ''))
+  returning id into v_id;
+
+  return jsonb_build_object('regra_id', v_id, 'versao', v_versao);
+end $$;
+
+create or replace function public.distribuicao_alterar_disponibilidade(p jsonb, p_autor text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_acao text := p->>'acao';
+  v_sdr  text := p->>'nome_sdr';
+  v_id   bigint;
+begin
+  if v_acao = 'fora_agora' then
+    if v_sdr is null then raise exception 'nome_sdr obrigatório'; end if;
+    select id into v_id from public.distribuicao_disponibilidade
+     where nome_sdr = v_sdr and tipo = 'fora_agora' and encerrado_em is null and fim is null limit 1;
+    if v_id is null then
+      insert into public.distribuicao_disponibilidade (nome_sdr, tipo, inicio, motivo, criado_por)
+      values (v_sdr, 'fora_agora', now(), nullif(p->>'motivo', ''), p_autor) returning id into v_id;
+    end if;
+  elsif v_acao = 'voltou' then
+    if v_sdr is null then raise exception 'nome_sdr obrigatório'; end if;
+    update public.distribuicao_disponibilidade
+       set encerrado_em = now()
+     where nome_sdr = v_sdr and encerrado_em is null and inicio <= now() and (fim is null or fim > now());
+    select max(id) into v_id from public.distribuicao_disponibilidade where nome_sdr = v_sdr and encerrado_em is not null;
+  elsif v_acao = 'agendar' then
+    if v_sdr is null or p->>'inicio' is null or p->>'fim' is null then raise exception 'nome_sdr, inicio e fim são obrigatórios'; end if;
+    insert into public.distribuicao_disponibilidade (nome_sdr, tipo, inicio, fim, motivo, criado_por)
+    values (v_sdr, 'ausencia', (p->>'inicio')::timestamptz, (p->>'fim')::timestamptz, nullif(p->>'motivo', ''), p_autor) returning id into v_id;
+  elsif v_acao = 'cancelar' then
+    v_id := (p->>'id')::bigint;
+    update public.distribuicao_disponibilidade set encerrado_em = now() where id = v_id and encerrado_em is null;
+  else
+    raise exception 'ação desconhecida: %', v_acao;
+  end if;
+  return jsonb_build_object('id', v_id, 'acao', v_acao);
+end $$;
+
+create or replace function public.distribuicao_reabrir(p_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare a public.distribuicao_atribuicao;
+begin
+  select * into a from public.distribuicao_atribuicao where id = p_id;
+  if not found then raise exception 'registro % não existe', p_id; end if;
+  if a.resultado <> 'erro' then raise exception 'registro % não está em erro (%)', p_id, a.resultado; end if;
+  return jsonb_build_object('atribuicao_id', a.id, 'marca', a.marca, 'regra_id', a.regra_id, 'nome_sdr', a.nome_sdr, 'user_id', a.user_id,
+                            'tentativas', a.tentativas, 'payload', a.payload, 'deal', a.deal_pronto);
+end $$;
+
+revoke execute on function public.distribuicao_fechar(bigint, text, text, int) from public, anon, authenticated;
+revoke execute on function public.distribuicao_publicar_regra(jsonb, text) from public, anon, authenticated;
+revoke execute on function public.distribuicao_alterar_disponibilidade(jsonb, text) from public, anon, authenticated;
+revoke execute on function public.distribuicao_reabrir(bigint) from public, anon, authenticated;
+grant execute on function public.distribuicao_fechar(bigint, text, text, int) to service_role;
+grant execute on function public.distribuicao_publicar_regra(jsonb, text) to service_role;
+grant execute on function public.distribuicao_alterar_disponibilidade(jsonb, text) to service_role;
+grant execute on function public.distribuicao_reabrir(bigint) to service_role;

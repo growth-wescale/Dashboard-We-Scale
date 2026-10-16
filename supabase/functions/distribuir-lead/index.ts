@@ -11,7 +11,8 @@
 // Responde 200 sempre que o registro foi gravado (o RD reenvia quando não recebe 2xx, e
 // reenvio viraria 'duplicado' de qualquer jeito). 500 só se nem gravar deu.
 //
-// ?reprocessar=<id>: refaz só o passo 3 sobre o registro em 'erro' (rpc distribuicao_reabrir).
+// ?reprocessar=<id>: refaz só o passo 3 sobre o registro em 'erro' ou preso (atribuido/fallback
+// sem id_deal — rpc distribuicao_reabrir). Antes de reprocessar um timeout, conferir no RD.
 //
 // Formatos aceitos: o da API 2.0 ({event_identifier, contact{...}}) e o legado da tela do RD
 // ({leads:[{uuid,email,name,custom_fields{...},last_conversion{content:{identificador}}}]}) — este
@@ -95,7 +96,14 @@ async function criarEFechar(sb: Sb, atribuicaoId: number, marca: string, deal: D
   const tentativas = await configInt(sb, 'retries_rd', 3)
   const r = await criarDealNoRd(token, deal, { tentativas })
   const totalTentativas = tentativasAnteriores + r.tentativas
-  await sb.rpc('distribuicao_fechar', { p_id: atribuicaoId, p_id_deal: r.id ?? null, p_erro: r.erro ?? null, p_tentativas: totalTentativas })
+  const { error: erroFechar } = await sb.rpc('distribuicao_fechar', { p_id: atribuicaoId, p_id_deal: r.id ?? null, p_erro: r.erro ?? null, p_tentativas: totalTentativas })
+  if (erroFechar) {
+    // O deal pode existir no RD e o registro ficar "preso" (atribuido sem id_deal). A view de saúde
+    // mostra como presos_sem_deal e o Reprocessar reabre; aqui só avisa com o id, pra ninguém
+    // criar de novo sem olhar.
+    await alertarTeams(sb, 'Distribuição de leads · registro não fechou',
+      `${marca} · ${deal.contato.email} · deal ${r.id ?? '(não criado)'} · registro #${atribuicaoId} · ${String(erroFechar.message).slice(0, 200)}`)
+  }
   if (r.erro) {
     await alertarTeams(sb, 'Distribuição de leads · erro ao criar deal',
       `${marca} · ${deal.contato.email} · ${r.erro.slice(0, 300)} · registro #${atribuicaoId} (reprocessar no dashboard)`)
@@ -132,7 +140,8 @@ async function reprocessar(sb: Sb, id: number, autor: string, iniciadoEm: string
   const a = data as any
   if (!a?.deal) return respond({ error: 'registro sem deal_pronto' }, 400)
   const fim = await criarEFechar(sb, id, a.marca, a.deal as DealPronto, a.nome_sdr ? 'atribuido' : 'fallback', Number(a.tentativas) || 0)
-  await sb.from('distribuicao_atribuicao').update({ reprocessado_em: new Date().toISOString(), reprocessado_por: autor }).eq('id', id)
+  // reprocessado_em só quando deu certo: um reprocesso que falhou continua pendente (tentativas acumula o rastro).
+  if (!fim.erro) await sb.from('distribuicao_atribuicao').update({ reprocessado_em: new Date().toISOString(), reprocessado_por: autor }).eq('id', id)
   await logar(sb, iniciadoEm, fim.erro ? 'failure' : 'success', { reprocessar: id, marca: a.marca, ...fim }, fim.erro ?? undefined)
   return respond({ ok: !fim.erro, ...fim }, 200)
 }

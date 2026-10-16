@@ -72,7 +72,7 @@ export function LogAtribuicoes({ linhas, podeEditar, reprocessando, onReprocessa
                     ) : '—'}
                   </td>
                   <td style={td}>
-                    {podeEditar && l.resultado === 'erro' && (
+                    {podeEditar && (l.resultado === 'erro' || ((l.resultado === 'atribuido' || l.resultado === 'fallback') && !l.id_deal)) && (
                       <button type="button" style={botaoTexto()} disabled={reprocessando === l.id} onClick={() => onReprocessar(l.id)}>
                         {reprocessando === l.id ? 'Reprocessando…' : 'Reprocessar'}
                       </button>

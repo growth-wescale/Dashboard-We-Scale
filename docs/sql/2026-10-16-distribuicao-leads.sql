@@ -740,3 +740,109 @@ grant execute on function public.distribuicao_time_da_marca(text, timestamptz) t
 -- 1ª paridade observada: Adriana (B2Case, capital "Até R$ 60.000") → RD não criou deal; o sombra
 -- v1 (sem barreira) simulou, a v2 barra. Eventos do CRM ("Tarefa criada no RD Station CRM") chegam
 -- pelo mesmo webhook e são ignorados.
+
+-- =====================================================================================
+-- Bloco 12 [distribuicao_revisao_final] — correções da revisão final da branch (16/10)
+--   (6) distribuicao_time_da_marca: virada do mês em America/Sao_Paulo (v_mes e reinicio_em);
+--       antes `date_trunc('month', timestamptz)` usava o fuso da sessão (UTC) e virava às 21:00 BRT.
+--   (5) reinício por disponibilidade só quando o RODÍZIO muda: fora_agora → criado_em/encerrado_em;
+--       ausência agendada → inicio, fim, ou encerrado_em se cancelada em curso. Agendar férias de
+--       dezembro em outubro não zera mais o contador de hoje.
+--   (2) distribuicao_reabrir aceita também registro "preso" (atribuido/fallback sem id_deal);
+--       vw_distribuicao_saude ganha presos_sem_deal (> 5 min) e erros_pendentes passa a ser todo
+--       'erro' (reprocessado ou não).
+--   (7) alerta de silêncio: distribuicao_marcas_em_silencio(p_em) lista marca ativa sem lead há
+--       mais de alerta_silencio_horas em dia útil 9–20h BRT; distribuicao_alertar_silencio() posta
+--       no Teams via pg_net (URL do Vault) e roda no pg_cron 'distribuicao_alerta_silencio'
+--       (minuto 20 de cada hora).
+-- distribuicao_time_da_marca: igual ao bloco 2, com estas 3 diferenças:
+--   v_mes_ini := date_trunc('month', p_em at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo';
+--   v_mes     := (date_trunc('month', p_em at time zone 'America/Sao_Paulo'))::date;   (e v_mes_ini no lugar de date_trunc('month', p_em))
+--   reinício por disponibilidade:
+--     select unnest(case when d.tipo = 'fora_agora'
+--                        then array[d.criado_em, d.encerrado_em]
+--                        else array[case when d.inicio <= p_em then d.inicio end,
+--                                   case when d.fim <= p_em then d.fim end,
+--                                   case when d.encerrado_em is not null and d.encerrado_em >= d.inicio then d.encerrado_em end]
+--                   end) as x ...
+create or replace function public.distribuicao_reabrir(p_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare a public.distribuicao_atribuicao;
+begin
+  select * into a from public.distribuicao_atribuicao where id = p_id;
+  if not found then raise exception 'registro % não existe', p_id; end if;
+  if not (a.resultado = 'erro' or (a.resultado in ('atribuido','fallback') and a.id_deal is null)) then
+    raise exception 'registro % não está em erro nem preso sem deal (%, deal %)', p_id, a.resultado, coalesce(a.id_deal, '-');
+  end if;
+  return jsonb_build_object('atribuicao_id', a.id, 'marca', a.marca, 'regra_id', a.regra_id, 'nome_sdr', a.nome_sdr, 'user_id', a.user_id,
+                            'tentativas', a.tentativas, 'payload', a.payload, 'deal', a.deal_pronto);
+end $$;
+
+-- (sem DROP: coluna nova no fim, que o CREATE OR REPLACE aceita)
+create or replace view public.vw_distribuicao_saude as
+select r.marca, r.marca_rd, r.modo,
+       (select max(a.recebido_em) from public.distribuicao_atribuicao a where a.marca = r.marca) as ultimo_recebido_em,
+       (select count(*) from public.distribuicao_atribuicao a where a.marca = r.marca and a.resultado = 'erro')::int as erros_pendentes,
+       case when r.modo = 'ativo' then (
+         select count(*) from public.deal_snapshot d
+         where d.marca = r.marca_rd and d.id_funil = r.id_funil and d.deleted_at is null
+           and (d.payload->>'_created_at')::timestamptz > now() - interval '24 hours'
+           and not exists (select 1 from public.distribuicao_atribuicao a where a.id_deal = d.id_deal)
+       ) else null end::int as deals_rd_sem_registro_24h,
+       (select count(*) from public.distribuicao_atribuicao a where a.marca = r.marca and a.resultado in ('atribuido','fallback')
+          and a.id_deal is null and a.recebido_em < now() - interval '5 min')::int as presos_sem_deal
+from public.distribuicao_regra r
+where r.vigente_ate is null;
+grant select on public.vw_distribuicao_saude to anon, authenticated;
+
+create or replace function public.distribuicao_marcas_em_silencio(p_em timestamptz default now())
+returns table (marca text, ultimo_recebido_em timestamptz, horas numeric)
+language sql
+stable
+as $$
+  with cfg as (select coalesce((select valor::numeric from public.distribuicao_config where chave = 'alerta_silencio_horas'), 6) as h),
+       brt as (select p_em at time zone 'America/Sao_Paulo' as t)
+  select r.marca, s.ultimo, round(extract(epoch from (p_em - s.ultimo)) / 3600, 1)
+  from public.distribuicao_regra r
+  cross join cfg
+  cross join brt
+  left join lateral (select max(a.recebido_em) as ultimo from public.distribuicao_atribuicao a where a.marca = r.marca) s on true
+  where r.vigente_ate is null and r.modo = 'ativo'
+    and extract(isodow from brt.t) between 1 and 5
+    and extract(hour from brt.t) between 9 and 20
+    and coalesce(s.ultimo, r.vigente_de) < p_em - make_interval(hours => cfg.h::int)
+$$;
+
+create or replace function public.distribuicao_alertar_silencio()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare v_url text; v_txt text; v_n int;
+begin
+  select string_agg(m.marca || ' (último lead ' || coalesce(to_char(m.ultimo_recebido_em at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI'), 'nunca') || ', ' || m.horas || ' h)', '; '), count(*)
+    into v_txt, v_n
+  from public.distribuicao_marcas_em_silencio() m;
+  if coalesce(v_n, 0) = 0 then return 0; end if;
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'teams_alertas_url';
+  if v_url is null then return v_n; end if;
+  perform net.http_post(
+    url := v_url,
+    headers := '{"Content-Type":"application/json"}'::jsonb,
+    body := jsonb_build_object('titulo', 'Distribuição de leads · silêncio', 'texto', 'Marca ativa sem lead novo: ' || v_txt || '. Conferir o webhook do RD Marketing e a chave no Vault.',
+                               'link', 'https://dashboard.srv1816822.hstgr.cloud/distribuicao-leads'));
+  return v_n;
+end $$;
+revoke execute on function public.distribuicao_alertar_silencio() from public, anon, authenticated;
+revoke execute on function public.distribuicao_marcas_em_silencio(timestamptz) from public, anon, authenticated;
+
+select cron.schedule('distribuicao_alerta_silencio', '20 * * * *', $$select public.distribuicao_alertar_silencio()$$);
+-- Testes (rolados): 31/01 23:30 BRT → versao_ativa; 01/02 00:10 BRT → reinicio 01/02 00:00 BRT;
+-- ausência futura não reinicia; durante → só 1 SDR e reinicio = inicio; depois → reinicio = fim;
+-- reabrir aceita atribuido sem deal; marcas_em_silencio com fixture ativa e última conversão há 7 h
+-- numa terça 10:00 BRT → 1 linha, e 0 linhas no domingo.

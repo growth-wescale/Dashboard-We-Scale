@@ -76,7 +76,7 @@ export function DistribuicaoLeads() {
             <h2 style={sectionTitleStyle}>Saúde</h2>
             <div className="rs-scroll-x">
               <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
-                <thead><tr><th style={th}>Marca</th><th style={th}>Modo</th><th style={th}>Último lead recebido</th><th style={th}>Erros pendentes</th><th style={th}>Deals no RD sem registro (24 h)</th></tr></thead>
+                <thead><tr><th style={th}>Marca</th><th style={th}>Modo</th><th style={th}>Último lead recebido</th><th style={th}>Erros pendentes</th><th style={th}>Presos sem deal</th><th style={th}>Deals no RD sem registro (24 h)</th></tr></thead>
                 <tbody>
                   {saudeVisivel.map(s => {
                     const mv = MODO_VISUAL[s.modo]
@@ -86,6 +86,7 @@ export function DistribuicaoLeads() {
                         <td style={td}><span style={pill(mv.bg, mv.fg)}>{mv.label}</span></td>
                         <td style={td}>{fmtRelativo(s.ultimo_recebido_em)}</td>
                         <td style={{ ...td, color: s.erros_pendentes > 0 ? 'var(--status-risco)' : undefined }}>{s.erros_pendentes}</td>
+                        <td style={{ ...td, color: s.presos_sem_deal > 0 ? 'var(--status-risco)' : undefined }} title="Atribuído sem id do deal há mais de 5 min: conferir no RD e reprocessar">{s.presos_sem_deal}</td>
                         <td style={td}>{s.modo === 'ativo' ? (s.deals_rd_sem_registro_24h ?? 0) + (s.deals_rd_sem_registro_24h ? ' (podem ser manuais; confira se a automação do RD ainda cria deal)' : '') : '—'}</td>
                       </tr>
                     )

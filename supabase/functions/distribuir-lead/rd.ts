@@ -2,9 +2,14 @@
 // Cria o deal no RD Station CRM a partir do objeto `deal` que a RPC distribuicao_processar
 // devolve. Só este arquivo conhece IDs de campo do CRM.
 //
-// Retry: 3 tentativas (config retries_rd) SÓ para 429 (respeita Retry-After), 5xx e timeout.
-// 4xx devolve erro na hora com o corpo da resposta — campo obrigatório, etapa inexistente,
-// token inválido não melhoram repetindo.
+// Retry: até 3 tentativas (config retries_rd) SÓ para 429 (respeita Retry-After) e 5xx, que o RD
+// garante não ter aplicado. 4xx devolve erro na hora (campo obrigatório, etapa inexistente, token
+// inválido não melhoram repetindo). TIMEOUT NÃO REPETE: o RD pode ter criado o deal mesmo sem
+// responder a tempo, e repetir criaria um segundo — fica em 'erro' pra alguém conferir no CRM
+// antes de reprocessar. 2xx com corpo sem id também não repete.
+// Toda mensagem de erro passa por `semToken()`: o token vai na query string e o Deno inclui a URL
+// inteira em erros de rede ("error sending request for url (...?token=XXX)"); sem isso o token
+// iria parar em erro_rd (view lida pela chave anon), em sync_execucao e no Teams.
 
 export type DealPronto = {
   name: string
@@ -87,11 +92,23 @@ function esperaMs(resp: Response | null, tentativa: number): number {
   return Math.min(1000 * 2 ** tentativa, 10_000)
 }
 
+/** Apaga o token de qualquer texto que possa ir pro log, pra view ou pro Teams. */
+export function semToken(texto: string, token: string): string {
+  let t = texto
+  if (token) t = t.split(token).join('[token]')
+  return t.replace(/token=[^&\s)]+/g, 'token=[token]')
+}
+
+function ehTimeout(e: unknown): boolean {
+  const n = (e as { name?: string })?.name ?? ''
+  return n === 'TimeoutError' || n === 'AbortError'
+}
+
 export async function criarDealNoRd(
   token: string, deal: DealPronto, opts: { tentativas?: number; timeoutMs?: number; fetchImpl?: typeof fetch } = {},
 ): Promise<ResultadoRd> {
   const max = Math.max(1, opts.tentativas ?? 3)
-  const timeoutMs = opts.timeoutMs ?? 10_000
+  const timeoutMs = opts.timeoutMs ?? 15_000
   const f = opts.fetchImpl ?? fetch
   const body = JSON.stringify(montarCorpoDeal(deal))
   let ultimoErro = 'sem tentativa'
@@ -101,19 +118,25 @@ export async function criarDealNoRd(
       resp = await f(`https://crm.rdstation.com/api/v1/deals?token=${encodeURIComponent(token)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(timeoutMs),
       })
-      const txt = await resp.text()
-      if (resp.ok) {
-        const j = JSON.parse(txt)
-        const id = j?.id ?? j?._id
-        if (id) return { id: String(id), tentativas: i, status: resp.status }
-        return { erro: `resposta ${resp.status} sem id: ${txt.slice(0, 300)}`, tentativas: i, status: resp.status }
-      }
-      ultimoErro = `HTTP ${resp.status}: ${txt.slice(0, 500)}`
-      const repete = resp.status === 429 || resp.status >= 500
-      if (!repete) return { erro: ultimoErro, tentativas: i, status: resp.status }
     } catch (e) {
-      ultimoErro = `timeout/rede: ${(e as Error)?.message ?? String(e)}`
+      const msg = semToken((e as Error)?.message ?? String(e), token)
+      if (ehTimeout(e)) {
+        return { erro: `timeout após ${timeoutMs / 1000}s sem resposta do RD: conferir no RD se o deal foi criado antes de reprocessar`, tentativas: i }
+      }
+      ultimoErro = `rede: ${msg}`
+      if (i < max) await new Promise(r => setTimeout(r, esperaMs(null, i)))
+      continue
     }
+    const txt = semToken(await resp.text(), token)
+    if (resp.ok) {
+      let id: unknown = null
+      try { const j = JSON.parse(txt); id = j?.id ?? j?._id } catch { id = null }
+      if (id) return { id: String(id), tentativas: i, status: resp.status }
+      return { erro: `resposta ${resp.status} sem id: ${txt.slice(0, 300)}`, tentativas: i, status: resp.status }
+    }
+    ultimoErro = `HTTP ${resp.status}: ${txt.slice(0, 500)}`
+    const repete = resp.status === 429 || resp.status >= 500
+    if (!repete) return { erro: ultimoErro, tentativas: i, status: resp.status }
     if (i < max) await new Promise(r => setTimeout(r, esperaMs(resp, i)))
   }
   return { erro: ultimoErro, tentativas: max }

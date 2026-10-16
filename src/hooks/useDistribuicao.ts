@@ -12,6 +12,8 @@ export interface SaudeMarca {
   ultimo_recebido_em: string | null
   erros_pendentes: number
   deals_rd_sem_registro_24h: number | null
+  /** atribuido/fallback sem id_deal há mais de 5 min: o POST no RD não fechou; reprocessar. */
+  presos_sem_deal: number
 }
 
 export interface CampoVisto { marca: string; chave: string; valores: string[] | null; ultima_vez: string; ocorrencias: number }

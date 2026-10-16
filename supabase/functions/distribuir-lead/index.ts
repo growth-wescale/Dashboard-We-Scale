@@ -153,12 +153,15 @@ Deno.serve(async (req: Request) => {
     return await reprocessar(sb, id, url.searchParams.get('autor') ?? 'dashboard', iniciadoEm)
   }
 
-  let body: unknown
-  try { body = await req.json() } catch { return respond({ error: 'JSON inválido' }, 400) }
+  // O RD valida a URL ao criar o webhook com um POST sem conversão: tem que receber 2xx.
+  // Corpo vazio/ilegível ou sem conversão → 200 "ignorado" (logado só quando veio algo).
+  const texto = await req.text()
+  let body: unknown = null
+  try { body = texto ? JSON.parse(texto) : null } catch { body = null }
   const conversoes = normalizarPayloads(body)
   if (conversoes.length === 0) {
-    await logar(sb, iniciadoEm, 'failure', { motivo: 'payload sem event_identifier/contact nem leads[]' }, 'payload inesperado')
-    return respond({ error: 'payload inesperado' }, 400)
+    if (texto) await logar(sb, iniciadoEm, 'failure', { motivo: 'payload sem event_identifier/contact nem leads[]', amostra: texto.slice(0, 500) }, 'payload inesperado')
+    return respond({ ok: true, resultado: 'ignorado', motivo: 'payload sem conversão' }, 200)
   }
 
   const resultados: unknown[] = []

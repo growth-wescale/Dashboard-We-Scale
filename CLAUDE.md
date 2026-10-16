@@ -133,6 +133,46 @@ ganhou a coluna `origem_override`, com prioridade sobre a regra em
 Usar só para casos confirmados como artefato, nunca para "esconder" um deal
 de Prospecção Ativa de verdade.
 
+### Distribuição de leads por SDR (desde 16/10/2026)
+
+A criação dos deals de conversão (chatbot `<marca>_multistep`) sai das
+automações do RD Marketing e passa pela Edge Function **`distribuir-lead`**
+(Expansão), alimentada por **um** webhook do RD Marketing (gatilho "Conversão",
+sem filtro; formato legado `leads[]`, identificador em
+`last_conversion.content.identificador`). Spec:
+`docs/superpowers/specs/2026-10-16-distribuicao-leads-sdr-design.md`.
+
+- **Peso = peso da versão ativa das metas** (`meta_pessoa.peso`), com cadeia
+  de prioridade: versão ativa do mês → última versão ativa da marca →
+  `time_proprio` da regra (só marca sem meta) → `nenhum` (responsável padrão).
+  Função `distribuicao_time_da_marca(marca, em)`.
+- **Escolha**: `distribuicao_escolher` minimiza `n_i − p_i × (N+1)/100`
+  (empate: maior peso, depois nome), contando só desde `reinicio_em` = o mais
+  recente entre ativação da versão, virada do mês e última mudança de
+  disponibilidade de alguém do time. "Dali em diante", nunca compensa.
+- **`distribuicao_processar(payload)`** faz tudo numa transação com advisory
+  lock por marca: regra vigente pelo evento → dedup (`janela_dedup_min`, 10) →
+  barreira (campo `cf_*` + lista de valores barrados; **campo vazio passa**,
+  array barra se qualquer elemento bater) → time → escolha → INSERT em
+  `distribuicao_atribuicao` com `deal_pronto`. Modo `sombra` grava `simulado`
+  (contador só de simulados); `ativo` grava `atribuido`/`fallback` e conta
+  `atribuido` + `erro`.
+- **Tabelas** (RLS sem policy; front lê só `vw_distribuicao_*`):
+  `distribuicao_regra` (versionada, append-only, 1 vigente por marca, `marca`
+  = nome das metas e `marca_rd` = valor do campo Marca do CRM),
+  `distribuicao_atribuicao` (log de toda conversão, inclusive barradas),
+  `distribuicao_disponibilidade` (fora_agora / ausência agendada),
+  `distribuicao_config`. Escrita só pela Edge Function `gravar-distribuicao`
+  (sessão do Marketing + `tem_permissao('acao.distribuicao-editar')`).
+- **Conversão nova = deal novo**, sempre. Só o reenvio em < 10 min vira
+  `duplicado`.
+- **Não envia "SDR Responsável"** (campo de opção com "Xay"/"Thiago"/"Sarah
+  Padilha", a automação do RD também não preenchia). Dono = `user_id`.
+- Segredos no Vault: `distribuicao_webhook_chave` (`?chave=` da URL do
+  webhook), `teams_alertas_url`, `rd_token`.
+- `sync_execucao.status` tem CHECK (`success`/`failure`/…): logar `error`
+  descarta a linha em silêncio.
+
 ### Event Sourcing dirigido por configuração
 
 Para rastrear um campo novo do payload **basta inserir uma linha** — sem tocar
@@ -320,6 +360,13 @@ src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/
 src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
 src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação
 
+src/lib/distribuicao/regras.ts  tipos das vw_distribuicao_* + textoBarreira/diffRegra/desvios (puro, testado)
+src/hooks/useDistribuicao.ts    lê vw_distribuicao_painel/_regras/_atribuicoes/_disponibilidade/_saude/_campos_vistos
+src/hooks/useGravarDistribuicao.ts  escrita via Edge Function gravar-distribuicao (publicar regra, disponibilidade, reprocessar)
+src/pages/DistribuicaoLeads.tsx + src/components/distribuicao/*  aba Distribuição de Leads (só Administrador)
+supabase/functions/distribuir-lead/   webhook RD Marketing → RPCs → POST /deals (rd.ts tem os IDs de campo do CRM)
+supabase/functions/gravar-distribuicao/  escrita autenticada da configuração
+docs/sql/2026-10-16-distribuicao-leads.sql  todo o SQL aplicado (tabelas, RPCs, views) com os testes
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
@@ -562,6 +609,27 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Distribuição de leads: virada das marcas está travada no gatilho da COF.** As 10
+  regras estão em modo `sombra` (webhook ativo, função `distribuir-lead` v6 publicada,
+  aba no dashboard). Verificado em 16/10: deal criado pela API cria o lead no RD
+  Marketing, mas o lead fica **sem dono e sem nenhuma conversão "[CRM] Negociação
+  criada/atualizada"** — o gatilho novo pensado pra automação da COF não dispara.
+  Mas **"Tarefa criada no RD Station CRM" chega em segundos** mesmo para deal da
+  API (testado: tarefa criada via `POST /tasks` virou conversão no lead). Opções
+  pra virada, decisão do Junior: (a) automação da COF disparada por "Tarefa criada
+  no RD Station CRM" + funil + marca — as cadências já criam tarefa em todo deal
+  novo do funil SDR (conferir no primeiro deal real); (b) a própria função cria
+  uma tarefa "Novo lead" pro SDR ao criar o deal; (c) plano B da spec (evento de
+  conversão via API do Marketing, exige app OAuth). Nota: o lead criado pela API
+  fica **sem dono** no Marketing — a ação "Notificar responsável pelo Lead" da
+  automação do Odonto Legacy não acharia ninguém. Também faltam: capturar as chaves
+  `cf_*` reais (as conversões de chatbot ainda não tinham chegado no sombra),
+  publicar as barreiras (v2 de cada regra) e rodar a paridade ≥ 3 dias úteis.
+- [ ] **Transferência de carteira** (SDR de férias/saída: transferir no RD os deals
+  em etapas iniciais e as reuniões agendadas no período, pelos mesmos pesos) —
+  segunda entrega da distribuição de leads, decisão do Junior em 16/10
+- [ ] **Segmentações "Entrada Chatbot - <marca>"** ficam sem uso quando as automações
+  perderem o passo "Criar Negociação"; não foram apagadas
 - [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
 - [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
 - [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
@@ -631,6 +699,43 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-16 (3) — Distribuição de leads por SDR com peso da meta (entrega 1, em sombra)
+
+Pedido do Junior: parar de depender do rodízio 1:1 das equipes do RD CRM e
+distribuir os leads de cada marca entre os SDRs pelo **peso da meta do mês**
+(ex.: Eletrovias 50/20/30), configurável no dashboard, com histórico das
+barreiras de MQL (hoje ninguém sabia o que a barreira era antes de alguém
+mexer na segmentação). Desenho e plano em `docs/superpowers/specs/` e
+`docs/superpowers/plans/` de 2026-10-16; regras na seção 3.
+
+**O que entrou:** tabelas, RPCs e views (`docs/sql/2026-10-16-distribuicao-leads.sql`,
+todas as migrations aplicadas e testadas com transação rolada: 10 + 14 + 11
+casos, inclusive a sequência 50/20/30 × 10 leads = 5/2/3); Edge Function
+`distribuir-lead` (testada de ponta a ponta na marca "Teste" do Funil de
+teste: deal criado no RD com Xayane/Marca/Fonte Macro/Cidade/UTM/campo extra,
+dedup, 401, 422 sem retry e sem deal fantasma, 429 com retry, reprocessar);
+webhook do RD Marketing criado pela tela (formato legado — ver seção 3);
+`gravar-distribuicao`; aba **Distribuição de Leads** (permissões
+`aba.distribuicao` / `acao.distribuicao-editar`, só Administrador): saúde,
+card por marca com peso alvo × recebidos × desvio e histórico de versões,
+disponibilidade dos SDRs (fora hoje / voltou / ausência agendada) e log com
+reprocessar. 10 regras publicadas em **sombra**; marcas sem meta (IDA, Scale
+Partner, Beauty Connection) com `time_proprio` = quem recebe hoje; responsável
+padrão inicial = Brunno.
+
+**Achados no caminho:** o webhook da tela manda o formato legado (`leads[]`,
+`identificador`) e dispara até para eventos do CRM; o `sync_execucao.status`
+tem CHECK e engolia o log de erro ("error" → "failure"); "SDR Responsável" é
+campo de opção com valores que não casam com o cadastro (não enviado); o deal
+criado pela API cria o lead no Marketing mas **não gera conversão de CRM** —
+é o que trava a virada (pendência na seção 8).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (684 testes, 10 novos)
++ oxlint, em cópia fora do OneDrive; tela vista renderizada com dado real em
+1440×900 e 375×812 numa rota de prévia só na cópia de build. Deals de teste no
+RD enviados pra lixeira / a apagar: `6ad2773f3ec05a00216805e2`,
+`6ad27e002b43550028bfeab5` (com uma tarefa "Teste gatilho").
 
 ### 2026-10-15 (2) — Meta MQL → SQL sai do código e vai pras metas do mês; cadastro de pessoas
 

@@ -14,8 +14,10 @@
 // ?reprocessar=<id>: refaz só o passo 3 sobre o registro em 'erro' (rpc distribuicao_reabrir).
 //
 // Formatos aceitos: o da API 2.0 ({event_identifier, contact{...}}) e o legado da tela do RD
-// ({leads:[{uuid,email,name,custom_fields{...},last_conversion{...}}]}) — este último vira o
-// primeiro, com os campos personalizados achatados em cf_<nome>.
+// ({leads:[{uuid,email,name,custom_fields{...},last_conversion{content:{identificador}}}]}) — este
+// último vira o primeiro, com os campos personalizados achatados em cf_<nome>. Observado em
+// 16/10/2026: o webhook criado pela tela manda o legado, inclusive eventos do CRM ("Tarefa
+// atualizada no RD Station CRM") como conversão — sem regra vigente, são ignorados sem log.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { criarDealNoRd, type DealPronto } from './rd.ts'
 
@@ -55,7 +57,7 @@ export function normalizarPayloads(body: unknown): Conversao[] {
       delete contact.custom_fields
       // deno-lint-ignore no-explicit-any
       const lc = (l.last_conversion ?? {}) as any
-      const ident = lc?.conversion_identifier ?? lc?.content?.identifier ?? lc?.identifier ?? null
+      const ident = lc?.conversion_identifier ?? lc?.content?.identificador ?? lc?.content?.identifier ?? lc?.identificador ?? lc?.identifier ?? null
       return { event_identifier: ident ? String(ident) : null, contact, event_type: 'WEBHOOK.CONVERTED', raw: l }
     })
   }
@@ -167,6 +169,11 @@ Deno.serve(async (req: Request) => {
   const resultados: unknown[] = []
   for (const c of conversoes) {
     if (!c.contact?.email) { resultados.push({ resultado: 'ignorado', motivo: 'sem e-mail' }); continue }
+    if (!c.event_identifier) {
+      // Formato que o normalizador não reconheceu: guarda uma amostra pra ajustar o parser.
+      await logar(sb, iniciadoEm, 'failure', { motivo: 'conversão sem identificador', amostra: JSON.stringify(c.raw).slice(0, 3000) }, 'sem event_identifier')
+      resultados.push({ resultado: 'ignorado', motivo: 'sem identificador de conversão' }); continue
+    }
     try {
       resultados.push(await processarConversao(sb, c, iniciadoEm))
     } catch (e) {

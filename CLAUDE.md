@@ -647,6 +647,37 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-16 — Dashboard fora do ar por 45 min: a Hostinger desligou a VPS
+
+Junior viu as abas presas em "Carregando..." e depois `ERR_CONNECTION_TIMED_OUT`.
+**Não foi o dashboard nem o banco.** O journal da VPS mostra
+`qemu-ga: guest-shutdown called` → `System is powering down (hypervisor
+initiated shutdown)` às **10:53 BRT**: desligamento limpo pedido pelo
+hipervisor (painel da Hostinger ou manutenção dela), não comando de dentro
+do servidor nem crash. Nenhum aviso, OOM ou falta de recurso antes. A VPS
+ficou desligada 34 min e voltou às 11:28 com kernel novo (6.8.0-134 → 147).
+Docker levou ~9 min pra subir os containers (carga 40+ em 4 vCPU). Às 11:38
+o Traefik ainda devolvia 404, e o site voltou a dar 200 por volta das 11:40.
+
+"Carregando..." é o fallback do `Suspense`: o app já estava aberto no
+navegador, mas os chunks das rotas (lazy) vêm da VPS. Por isso as abas
+travaram antes do erro de conexão.
+
+Sem perda de dado do dashboard. O Supabase de Expansão ficou saudável o tempo
+todo (0 erros 5xx, p95 ≤ 1,3 s), e `wf_5`, `espelho_rd_edge` e
+`meetrox_sync_reunioes` rodaram sem falha (o `n8n.wescale.com.br` está em
+outro servidor, 72.60.6.16). Saíram do ar junto todos os serviços dessa VPS
+(n8n-4ot6, Metabase, receptor de webhook do RD do DW, Chatwoot etc.), que são
+do TI.
+
+**Se acontecer de novo:** `ssh wescale-vps` (chave `~/.ssh/wescale_vps` no Mac
+do Junior). `uptime` e `last -x reboot shutdown` mostram se reiniciou;
+`journalctl -b -1 | grep -iE "guest-shutdown|powering down"` diz quem
+desligou. O dashboard é o container `dashboard-app-1` (nginx servindo
+`/opt/dashboard/dist`, rota por label do Traefik), com `restart:
+unless-stopped`: sobe sozinho, e é só esperar o Docker terminar de carregar.
+Quem desligou só aparece no histórico de atividades do painel da Hostinger.
+
 ### 2026-10-15 (4) — Card "Meta do período" ficava com a meta de uma seleção antiga
 
 Achado na conferência do RMP de setembro contra o dash em produção: com

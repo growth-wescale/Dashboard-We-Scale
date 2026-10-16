@@ -622,3 +622,34 @@ grant execute on function public.distribuicao_fechar(bigint, text, text, int) to
 grant execute on function public.distribuicao_publicar_regra(jsonb, text) to service_role;
 grant execute on function public.distribuicao_alterar_disponibilidade(jsonb, text) to service_role;
 grant execute on function public.distribuicao_reabrir(bigint) to service_role;
+
+-- =====================================================================================
+-- Bloco 6 — regras iniciais (modo sombra, sem barreira) publicadas em 16/10/2026 e a query
+-- de paridade. Webhook do RD Marketing criado pela tela (Integrações → Webhooks), gatilho
+-- "Conversão", sem filtro de evento: a função ignora identificador sem regra vigente.
+-- Responsável padrão inicial de todas as marcas = Brunno (gestor, user 68a6224426b00500192ff6f4);
+-- o Junior troca na aba do dashboard. Marcas sem meta (IDA, Scale Partner, Beauty Connection)
+-- com time_proprio = quem recebe hoje.
+-- =====================================================================================
+-- Eventos confirmados nas segmentações "Entrada Chatbot - <marca>" do RD Marketing:
+--   eletrovias_multistep · inpot_multistep · lisolaser_multistep · b2case_multistep ·
+--   viva_multistep · oralunic_multistep · IDA_multistep · odontolegacy_multistep ·
+--   partner_multistep · beautyconnection_multistep
+-- Exemplo (Eletrovias); as outras só mudam marca/evento/funil/etapa/campanha:
+-- select distribuicao_publicar_regra('{"marca":"Eletrovias","marca_rd":"Eletrovias","modo":"sombra",
+--   "evento_identificador":"eletrovias_multistep","id_funil":"69380917e00ed10014daaa62",
+--   "id_etapa":"69380917e00ed10014daaa64","campaign_id":"69e0e12b7fe67b000120920d",
+--   "responsavel_padrao_user_id":"68a6224426b00500192ff6f4"}'::jsonb, 'autor');
+-- Regra "Teste" (Funil de teste, time_proprio Xayane 100, modo ativo) e "Teste-erro" (desligada)
+-- existem só para o teste de ponta a ponta da Edge Function.
+
+-- Paridade sombra × automação do RD (rodar por marca antes da virada):
+-- para cada simulado/barrado, existe deal criado pela automação do RD (mesma campanha) para o
+-- mesmo e-mail na mesma hora? Esperado: todo simulado tem deal; nenhum barrado tem.
+-- select a.id, a.marca, a.resultado, a.lead_email, a.recebido_em, d.id_deal, d.payload->>'_created_at' as criado_rd
+-- from distribuicao_atribuicao a
+-- join distribuicao_regra r on r.id = a.regra_id
+-- left join deal_snapshot d on lower(d.payload->>'_contact_email') = a.lead_email  -- ajustar à chave de e-mail do espelho
+--   and (d.payload->>'_created_at')::timestamptz between a.recebido_em - interval '30 min' and a.recebido_em + interval '30 min'
+-- where a.resultado in ('simulado','barrado') and a.marca = 'Eletrovias'
+-- order by a.recebido_em desc;

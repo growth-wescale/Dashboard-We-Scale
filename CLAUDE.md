@@ -172,6 +172,17 @@ sem filtro; formato legado `leads[]`, identificador em
   webhook), `teams_alertas_url`, `rd_token`.
 - `sync_execucao.status` tem CHECK (`success`/`failure`/…): logar `error`
   descarta a linha em silêncio.
+- **Registro preso** = `atribuido`/`fallback` sem `id_deal` há mais de 5 min (o POST
+  no RD não fechou ou o worker morreu). Aparece em `vw_distribuicao_saude.presos_sem_deal`
+  e o Reprocessar da tela reabre. **Timeout do POST não repete** (o RD pode ter criado o
+  deal): fica em `erro` pedindo pra conferir no CRM antes de reprocessar. Só 429 e 5xx
+  repetem. O token nunca entra em mensagem de erro (`semToken` em `rd.ts`): o Deno põe a
+  URL inteira, com `?token=`, em erro de rede.
+- **Virada do mês e ausências**: `date_trunc` em `America/Sao_Paulo` (o banco é UTC);
+  ausência agendada só reinicia o contador em `inicio`/`fim`, `fora_agora` reinicia no
+  cadastro. Alerta de silêncio: `pg_cron` `distribuicao_alerta_silencio` (minuto 20 de
+  cada hora) avisa no Teams marca `ativo` sem lead há mais de `alerta_silencio_horas`
+  em dia útil 9–20h.
 
 ### Event Sourcing dirigido por configuração
 
@@ -731,7 +742,15 @@ campo de opção com valores que não casam com o cadastro (não enviado); o dea
 criado pela API cria o lead no Marketing mas **não gera conversão de CRM** —
 é o que trava a virada (pendência na seção 8).
 
-Verificado: `npm run build` (tsc -b) + `npx vitest run` (684 testes, 10 novos)
+**Revisão final** (revisor independente sobre a branch) achou 1 Critical e 6
+Important, todos corrigidos no mesmo PR: token do RD podia vazar em mensagem de
+erro de rede; registro podia ficar preso sem deal e invisível; retry após timeout
+podia criar deal duplicado; reprocesso falho sumia da saúde; ausência agendada
+zerava o contador no cadastro; virada do mês em UTC; alerta de silêncio não
+existia. 10 Minor ficaram registrados no ledger da sessão.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (690 testes, 16 novos,
+inclusive `supabase/functions/distribuir-lead/rd.test.ts` rodando no Node)
 + oxlint, em cópia fora do OneDrive; tela vista renderizada com dado real em
 1440×900 e 375×812 numa rota de prévia só na cópia de build. Deals de teste no
 RD enviados pra lixeira / a apagar: `6ad2773f3ec05a00216805e2`,

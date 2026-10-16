@@ -653,3 +653,81 @@ grant execute on function public.distribuicao_reabrir(bigint) to service_role;
 --   and (d.payload->>'_created_at')::timestamptz between a.recebido_em - interval '30 min' and a.recebido_em + interval '30 min'
 -- where a.resultado in ('simulado','barrado') and a.marca = 'Eletrovias'
 -- order by a.recebido_em desc;
+
+-- =====================================================================================
+-- Bloco 10 [distribuicao_painel_views] — views da aba Distribuição de Leads
+--   vw_distribuicao_painel        1 linha por SDR (elegível ou inelegível) de cada regra vigente,
+--                                 com peso renormalizado e recebidos desde reinicio_em (sombra conta
+--                                 'simulado'; ativo conta 'atribuido' + 'erro')
+--   vw_distribuicao_campos_vistos chaves cf_* vistas nos payloads por marca (90 dias) + valores
+--   vw_distribuicao_saude         último recebido, erros pendentes e, em modo ativo, deals do RD da
+--                                 marca criados nas últimas 24 h no funil de destino sem registro
+--                                 nosso (inclui deals manuais — o espelho não guarda campanha)
+-- =====================================================================================
+create or replace view public.vw_distribuicao_painel as
+with regras as (
+  select r.*, public.distribuicao_time_da_marca(r.marca, now()) as t
+  from public.distribuicao_regra r
+  where r.vigente_ate is null
+),
+pessoas as (
+  select r.marca, r.marca_rd, r.modo,
+         r.t->>'fonte' as fonte_time, (r.t->>'meta_versao_id')::bigint as meta_versao_id,
+         (r.t->>'reinicio_em')::timestamptz as reinicio_em,
+         s->>'nome' as nome_sdr, s->>'user_id' as user_id, (s->>'peso')::numeric as peso, null::text as inelegivel_motivo
+  from regras r, jsonb_array_elements(coalesce(r.t->'sdrs', '[]'::jsonb)) s
+  union all
+  select r.marca, r.marca_rd, r.modo,
+         r.t->>'fonte', (r.t->>'meta_versao_id')::bigint, (r.t->>'reinicio_em')::timestamptz,
+         i->>'nome', null, (i->>'peso')::numeric, i->>'motivo'
+  from regras r, jsonb_array_elements(coalesce(r.t->'inelegiveis', '[]'::jsonb)) i
+  union all
+  select r.marca, r.marca_rd, r.modo,
+         r.t->>'fonte', (r.t->>'meta_versao_id')::bigint, (r.t->>'reinicio_em')::timestamptz,
+         null, null, null, null
+  from regras r
+  where jsonb_array_length(coalesce(r.t->'sdrs', '[]'::jsonb)) = 0 and jsonb_array_length(coalesce(r.t->'inelegiveis', '[]'::jsonb)) = 0
+)
+select p.marca, p.marca_rd, p.modo, p.fonte_time, p.meta_versao_id, p.reinicio_em, p.nome_sdr, p.user_id, p.peso,
+       coalesce((
+         select count(*) from public.distribuicao_atribuicao a
+         where a.marca = p.marca and a.nome_sdr = p.nome_sdr and a.recebido_em >= p.reinicio_em
+           and a.resultado = any(case when p.modo = 'sombra' then array['simulado'] else array['atribuido','erro'] end)
+       ), 0)::int as recebidos,
+       p.inelegivel_motivo
+from pessoas p;
+
+create or replace view public.vw_distribuicao_campos_vistos as
+with kv as (
+  select a.marca, e.key as chave,
+         case when jsonb_typeof(e.value) = 'array' then v.x else e.value #>> '{}' end as valor,
+         a.recebido_em
+  from public.distribuicao_atribuicao a
+  cross join lateral jsonb_each(coalesce(a.payload->'contact', '{}'::jsonb)) e
+  left join lateral jsonb_array_elements_text(case when jsonb_typeof(e.value) = 'array' then e.value else '[]'::jsonb end) v(x) on true
+  where a.recebido_em > now() - interval '90 days' and e.key like 'cf\_%'
+)
+select marca, chave,
+       (array_agg(distinct valor) filter (where valor is not null and valor <> ''))[1:30] as valores,
+       max(recebido_em) as ultima_vez,
+       count(*)::int as ocorrencias
+from kv
+group by marca, chave;
+
+create or replace view public.vw_distribuicao_saude as
+select r.marca, r.marca_rd, r.modo,
+       (select max(a.recebido_em) from public.distribuicao_atribuicao a where a.marca = r.marca) as ultimo_recebido_em,
+       (select count(*) from public.distribuicao_atribuicao a where a.marca = r.marca and a.resultado = 'erro' and a.reprocessado_em is null)::int as erros_pendentes,
+       case when r.modo = 'ativo' then (
+         select count(*) from public.deal_snapshot d
+         where d.marca = r.marca_rd and d.id_funil = r.id_funil and d.deleted_at is null
+           and (d.payload->>'_created_at')::timestamptz > now() - interval '24 hours'
+           and not exists (select 1 from public.distribuicao_atribuicao a where a.id_deal = d.id_deal)
+       ) else null end::int as deals_rd_sem_registro_24h
+from public.distribuicao_regra r
+where r.vigente_ate is null;
+
+grant select on public.vw_distribuicao_painel, public.vw_distribuicao_campos_vistos, public.vw_distribuicao_saude to anon, authenticated;
+
+-- [distribuicao_time_da_marca_leitura_anon] — a view do painel chama a função; é só leitura.
+grant execute on function public.distribuicao_time_da_marca(text, timestamptz) to anon, authenticated;

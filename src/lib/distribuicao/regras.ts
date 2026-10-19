@@ -2,6 +2,8 @@
 // (vw_distribuicao_*) e as funções de texto/cálculo que a tela usa. Sem rede, sem React.
 
 export type ModoRegra = 'desligado' | 'sombra' | 'ativo'
+export interface TarefaRegra { assunto: string; tipo?: string; horas?: number }
+
 export type FonteTime = 'versao_ativa' | 'versao_anterior' | 'time_proprio' | 'nenhum'
 export type ResultadoAtribuicao = 'atribuido' | 'barrado' | 'duplicado' | 'simulado' | 'fallback' | 'erro'
 
@@ -26,6 +28,12 @@ export interface RegraRow {
   nome_formato: string | null
   campos_extra: Record<string, string>
   time_proprio: PessoaPeso[] | null
+  /** Conversão registrada no RD Marketing depois do deal (dispara a automação "<marca> > COF (distribuição)"). */
+  conversao_cof: string | null
+  /** Anotação que a função cria no deal ({nome}, {email}, {sdr}). Nas marcas com COF quem anota é a automação do RD. */
+  nota_deal: string | null
+  /** Tarefa criada pro dono do deal (Odonto Legacy: "Novo Lead", ligação, 1 h). */
+  tarefa: TarefaRegra | null
   criado_por: string | null
   criado_em: string
   motivo: string | null
@@ -104,6 +112,10 @@ function textoCampos(c: Record<string, string> | null | undefined): string {
   return e.map(([k, v]) => `${k} → ${v}`).join(', ')
 }
 
+export function textoTarefa(t: TarefaRegra | null | undefined): string {
+  return t?.assunto ? `${t.assunto} (${t.tipo || 'call'}, ${Number(t.horas) > 0 ? t.horas : 1} h)` : '(nenhuma)'
+}
+
 /** Uma frase por campo que mudou entre duas versões (versão, datas e autor não contam). */
 export function diffRegra(antes: RegraRow, depois: RegraRow): string[] {
   const out: string[] = []
@@ -117,6 +129,9 @@ export function diffRegra(antes: RegraRow, depois: RegraRow): string[] {
   cmp('nome do deal', antes.nome_formato ?? '(nome do lead)', depois.nome_formato ?? '(nome do lead)')
   cmp('campos extra', textoCampos(antes.campos_extra), textoCampos(depois.campos_extra))
   cmp('time próprio', textoTime(antes.time_proprio), textoTime(depois.time_proprio))
+  cmp('conversão da COF', antes.conversao_cof ?? '(nenhuma)', depois.conversao_cof ?? '(nenhuma)')
+  cmp('anotação no deal', antes.nota_deal ?? '(nenhuma)', depois.nota_deal ?? '(nenhuma)')
+  cmp('tarefa', textoTarefa(antes.tarefa), textoTarefa(depois.tarefa))
   cmp('marca no RD', antes.marca_rd, depois.marca_rd)
   return out
 }

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase' // sessão vive no Supabase de Marketing
-import type { ModoRegra, PessoaPeso } from '@/lib/distribuicao/regras'
+import type { ModoRegra, PessoaPeso, TarefaRegra } from '@/lib/distribuicao/regras'
 
 // Escrita da configuração da distribuição de leads: tudo passa pela Edge Function
 // gravar-distribuicao (Expansão), que valida a sessão e a permissão acao.distribuicao-editar
@@ -36,6 +36,9 @@ export interface RegraInput {
   nome_formato: string | null
   campos_extra: Record<string, string>
   time_proprio: PessoaPeso[] | null
+  conversao_cof: string | null
+  nota_deal: string | null
+  tarefa: TarefaRegra | null
 }
 
 /** Publica a PRÓXIMA versão da regra da marca (a vigente é encerrada). Motivo obrigatório a partir da v2. */

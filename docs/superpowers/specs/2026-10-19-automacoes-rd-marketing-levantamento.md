@@ -38,3 +38,27 @@ Achados que mudam a virada:
    conhece o segundo — é o lead de 18/10 10h18 que não chegou.
 4. **IDA tem dois fluxos criando deal**, com barreiras em campos diferentes.
 5. Odonto Legacy cria tarefa "Novo Lead" e notifica o dono — a função tem que criar a tarefa.
+
+## Automações novas da COF (criadas em 19/10/2026, ativas, ainda sem disparo)
+
+Uma por marca com COF, todas iguais na forma: entrada **"Leads que vão atender aos critérios"**
+(só leads novos) por **conversão `cof_<marca>`**, lead pode passar **mais de uma vez** (COF de novo
+na reconversão, decisão do Junior), passos **Enviar e-mail** (o mesmo e-mail de hoje, então os fluxos
+"Abriu/Clicou email cof" seguem valendo) → **Adicionar anotação** (texto e link copiados da automação
+atual; o RD anota na "negociação mais recente do lead" = a que a distribuição acabou de criar —
+testado no fluxo de teste: a anotação entrou 50 s depois).
+
+| Fluxo | Conversão | E-mail |
+|---|---|---|
+| Eletrovias > COF (distribuição) | cof_eletrovias | cof_eletrovias (22664114) |
+| B2Case > COF (distribuição) | cof_b2case | cof_b2case (22664104) |
+| Inpot > COF (distribuição) | cof_inpot | cof_inpot (22664035) |
+| Oral Unic > COF (distribuição) | cof_oralunic | cof_oralunic (22664099) |
+| Viva > COF (distribuição) | cof_viva | cof_viva (22664108) |
+| Lisô Laser > COF (distribuição) | cof_liso | cof_liso (22664095) |
+
+As regras dessas 6 marcas têm `conversao_cof` desde 19/10 e seguem em `sombra`: a conversão só é
+enviada quando a regra vira `ativo`. Na virada de cada marca: regra → `ativo` e pausar a
+"<marca> > CRM (Limpo)" antiga no mesmo minuto. Anotação no deal fica com a automação do RD, não com a
+função (`nota_deal` vazio nessas marcas, pra não duplicar). Fluxo de teste "TESTE COF distribuição
+(apagar)" (conversão cof_distribuicao_teste, tag + anotação) fica ativo até o teste final.

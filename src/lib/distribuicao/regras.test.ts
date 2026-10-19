@@ -6,9 +6,17 @@ function regra(p: Partial<RegraRow>): RegraRow {
     id: 1, marca: 'Eletrovias', marca_rd: 'Eletrovias', versao: 1, vigente_de: '2026-10-16T12:00:00Z', vigente_ate: null,
     modo: 'sombra', evento_identificador: 'eletrovias_multistep', id_funil: 'f', id_etapa: 'e', campaign_id: null,
     barreira_campo: null, barreira_valores_barrados: [], responsavel_padrao_user_id: 'u', nome_formato: null,
-    campos_extra: {}, time_proprio: null, criado_por: 'x', criado_em: '2026-10-16T12:00:00Z', motivo: null, ...p,
+    campos_extra: {}, time_proprio: null, conversao_cof: null, nota_deal: null, tarefa: null, criado_por: 'x', criado_em: '2026-10-16T12:00:00Z', motivo: null, ...p,
   }
 }
+
+describe('diffRegra: campos da COF e da tarefa', () => {
+  it('aponta a conversão da COF e a tarefa que mudaram', () => {
+    const d = diffRegra(regra({}), regra({ conversao_cof: 'cof_eletrovias', tarefa: { assunto: 'Novo Lead', horas: 1 } }))
+    expect(d).toContain('conversão da COF: (nenhuma) → cof_eletrovias')
+    expect(d).toContain('tarefa: (nenhuma) → Novo Lead (call, 1 h)')
+  })
+})
 
 describe('textoBarreira', () => {
   it('sem campo ou sem valores = sem barreira', () => {

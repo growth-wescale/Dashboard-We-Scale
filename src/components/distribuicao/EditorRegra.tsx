@@ -34,6 +34,7 @@ export function EditorRegra({ regra, camposVistos, pessoas, fonteTime, onSalvar,
     campaign_id: regra?.campaign_id ?? null, barreira_campo: regra?.barreira_campo ?? null,
     barreira_valores_barrados: regra?.barreira_valores_barrados ?? [], responsavel_padrao_user_id: regra?.responsavel_padrao_user_id ?? '',
     nome_formato: regra?.nome_formato ?? null, campos_extra: regra?.campos_extra ?? {}, time_proprio: regra?.time_proprio ?? null,
+    conversao_cof: regra?.conversao_cof ?? null, nota_deal: regra?.nota_deal ?? null, tarefa: regra?.tarefa ?? null,
   })
   const [motivo, setMotivo] = useState('')
   const [novoValor, setNovoValor] = useState('')
@@ -104,6 +105,13 @@ export function EditorRegra({ regra, camposVistos, pessoas, fonteTime, onSalvar,
             </select>
           </Campo>
           <Campo label="Nome do deal (opcional)" dica="use {primeiro_nome}; vazio = nome do lead"><input style={campo} value={f.nome_formato ?? ''} onChange={e => set('nome_formato', e.target.value || null)} /></Campo>
+          <Campo label="Conversão da COF (opcional)" dica="enviada ao RD Marketing depois do deal; dispara a automação <marca> > COF (distribuição)"><input style={campo} placeholder="ex.: cof_eletrovias" value={f.conversao_cof ?? ''} onChange={e => set('conversao_cof', e.target.value.trim() || null)} /></Campo>
+          <Campo label="Tarefa pro SDR (opcional)" dica="assunto da tarefa criada no deal, com prazo em horas">
+            <span style={{ display: 'flex', gap: 6 }}>
+              <input style={campo} placeholder="ex.: Novo Lead" value={f.tarefa?.assunto ?? ''} onChange={e => set('tarefa', e.target.value.trim() ? { assunto: e.target.value, tipo: f.tarefa?.tipo ?? 'call', horas: f.tarefa?.horas ?? 1 } : null)} />
+              <input type="number" min={1} max={72} step={1} aria-label="prazo em horas" style={{ ...campo, maxWidth: 80 }} value={f.tarefa?.horas ?? 1} disabled={!f.tarefa} onChange={e => f.tarefa && set('tarefa', { ...f.tarefa, horas: Number(e.target.value) || 1 })} />
+            </span>
+          </Campo>
         </div>
 
         <fieldset style={{ border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', padding: 12 }}>

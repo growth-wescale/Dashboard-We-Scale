@@ -432,6 +432,15 @@ gh pr create --base main
 
 Convenções em `CONTRIBUTING.md`. Commits em pt-BR, Conventional Commits.
 
+**Cache do navegador (desde 19/10/2026).** O nginx da VPS
+(`/opt/dashboard/nginx.conf`, cópia versionada em `deploy/nginx.conf`) manda
+`Cache-Control: no-cache` no `index.html` e em toda rota do app, e
+`immutable` de 1 ano só nos JS/CSS com hash em `/assets`. O deploy **não**
+sincroniza esse arquivo: mudou `deploy/nginx.conf`, aplicar na VPS à mão
+(`cat > nginx.conf`, nunca `mv`/`cp` por cima: é bind mount de arquivo e
+trocar o inode deixa o container no arquivo antigo), depois
+`docker exec dashboard-app-1 nginx -t && docker exec dashboard-app-1 nginx -s reload`.
+
 ### Papéis de acesso (RBAC frontend)
 
 Dois papéis, guardados em `auth.users.raw_app_meta_data` no Supabase de
@@ -646,6 +655,32 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-19 (2) — Depois do deploy, o navegador seguia abrindo a versão antiga
+
+Junior viu a caixa de No-show clicável, abriu o dashboard de novo e ela não
+clicava mais. O código em produção era o novo (conferido no arquivo
+publicado). **Causa:** o nginx não mandava nenhum `Cache-Control`, então o
+navegador aplicava cache heurístico (10% da idade do `Last-Modified`) no
+`index.html`. O deploy anterior era de 16/10, então uma cópia guardada antes
+das 09h35 de 19/10 valia por horas sem perguntar ao servidor. E cada rota
+(`/`, `/funil-vendas`…) é uma entrada separada no cache: recarregar uma não
+atualiza as outras. Por isso a pessoa via a versão nova num endereço e a
+antiga em outro.
+
+**Fix (VPS, sem mudança no app):** `index.html` e rotas com `no-cache`
+(sempre revalida, 304 quando não mudou); JS/CSS com hash em `/assets` com
+`max-age=31536000, immutable`; imagens/vídeos sem hash em `/assets` também
+`no-cache`; chunk que não existe responde 404 em vez do `index.html`
+(o `lazyWithRetry` recarrega a página). Backup do arquivo antigo em
+`/opt/dashboard/nginx.conf.bak-20261019`. Conferido com curl: cabeçalhos
+certos em `/`, `/funil-vendas`, chunks, imagens e 404 de chunk falso,
+revalidação devolvendo 304.
+
+**Limite:** cópias guardadas **antes** da mudança não têm o cabeçalho novo e
+podem valer até expirar (algumas horas). Cmd+Shift+R resolve só aquele
+endereço; limpar o cache do site resolve todos. Aba que fica aberta durante
+um deploy também segue com o código antigo até recarregar.
 
 ### 2026-10-19 — Caixa de No-show do funil abre os deals
 

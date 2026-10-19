@@ -58,8 +58,16 @@ testado no fluxo de teste: a anotação entrou 50 s depois).
 | Viva > COF (distribuição) | cof_viva | cof_viva (22664108) |
 | Lisô Laser > COF (distribuição) | cof_liso | cof_liso (22664095) |
 
-As regras dessas 6 marcas têm `conversao_cof` desde 19/10 e seguem em `sombra`: a conversão só é
-enviada quando a regra vira `ativo`. Na virada de cada marca: regra → `ativo` e pausar a
-"<marca> > CRM (Limpo)" antiga no mesmo minuto. Anotação no deal fica com a automação do RD, não com a
+As regras dessas 6 marcas têm `conversao_cof` desde 19/10. A conversão só é enviada com a regra em
+`ativo`. Na virada de cada marca: desativar a "<marca> > CRM (Limpo)" antiga e publicar a regra
+`ativo` no mesmo minuto.
+
+**Virada feita em 19/10/2026:** Eletrovias 11h43 (regra id 49); B2Case 13h36 (50), Inpot 13h37 (51),
+Oral Unic 13h37 (52), Viva 13h37 (53) e Lisô Laser 13h38 (54). As 6 automações antigas estão
+desativadas no RD (ids: Eletrovias `33b6126b-de85-4439-92e0-a05d77295af4`, B2Case
+`eaddf832-b2f9-4eae-a2e6-fb684cbd5660`, Inpot `88fc2834-86b2-472a-a3d8-ec99d9faacba`, Oral Unic
+`8e3d33ef-6650-4c4b-9c6e-db8ff57ce060`, Viva `e82aa05c-e594-4edf-a203-97a85dfe7420`, Lisô
+`55a0d668-4107-4f1a-8e40-2fa28c11ec61`). Para voltar uma marca atrás: reativar o fluxo antigo e
+publicar a regra em `sombra`, também no mesmo minuto. As versões "- Prosp Ativa" não foram tocadas. Anotação no deal fica com a automação do RD, não com a
 função (`nota_deal` vazio nessas marcas, pra não duplicar). Fluxo de teste "TESTE COF distribuição
 (apagar)" (conversão cof_distribuicao_teste, tag + anotação) fica ativo até o teste final.

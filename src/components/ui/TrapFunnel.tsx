@@ -119,13 +119,18 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
               <div className="rs-trap-row" style={{ margin: '6px 0 10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <div
-                    onClick={onRepeatClick && noShowRepeated ? () => onRepeatClick('No Show') : undefined}
-                    title="Agendaram e não apareceram — sai do fluxo aqui, não conta como etapa do funil"
+                    role={onStageClick ? 'button' : undefined}
+                    tabIndex={onStageClick ? 0 : undefined}
+                    onClick={onStageClick ? () => onStageClick('No Show') : undefined}
+                    onKeyDown={onStageClick ? e => {
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStageClick('No Show') }
+                    } : undefined}
+                    title={`Ver os ${nf(noShow)} deals que agendaram e não apareceram — sai do fluxo aqui, não conta como etapa do funil`}
                     style={{
                       width: `${width(noShow)}%`,
                       border: '1.5px dashed #000', borderRadius: 8, background: 'transparent',
                       padding: '5px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      lineHeight: 1.25, cursor: onRepeatClick && noShowRepeated ? 'pointer' : 'default',
+                      lineHeight: 1.25, cursor: onStageClick ? 'pointer' : 'default',
                     }}>
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -135,13 +140,19 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
                       No-show · {nf(noShow)}
                     </span>
                     {noShowRepeated > 0 && (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2,
-                        fontSize: 10, fontWeight: 600, color: 'var(--status-atencao)', whiteSpace: 'nowrap',
-                      }}>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); onRepeatClick?.('No Show') }}
+                        title={`Ver os ${nf(noShowRepeated)} repetidos em No-show`}
+                        style={{
+                          border: 'none', background: 'none', padding: 0, marginTop: 2,
+                          cursor: onRepeatClick ? 'pointer' : 'default',
+                          display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'var(--font-body)',
+                          fontSize: 10, fontWeight: 600, color: 'var(--status-atencao)', whiteSpace: 'nowrap',
+                        }}>
                         <Repeat size={8} />
                         +{nf(noShowRepeated)} repetido{noShowRepeated !== 1 ? 's' : ''}
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>

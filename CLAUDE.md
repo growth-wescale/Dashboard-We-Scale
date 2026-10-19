@@ -647,6 +647,22 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-19 — Caixa de No-show do funil abre os deals
+
+Pedido do Junior: no funil da Visão Macro, toda etapa abre o popup de deals ao
+clicar, menos a caixa tracejada de No-show (ela só abria o popup de repetidos,
+e só quando havia repetido). Agora clicar na caixa abre o mesmo
+`StageDealsDrawer` das etapas, com título "No-show". A lista sai de
+`rowsInStage(scoped, 'No Show', win, viewModes)`, a mesma regra do
+`countStage` que gera o número da caixa (data de No Show na linha do deal, e
+não evento como as etapas), então lista e número não divergem. O
+"+N repetidos" dentro da caixa virou botão próprio e continua abrindo os
+repetidos. Só a Visão Macro mostra a caixa (o funil da Performance não passa
+`noShow`).
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (681 testes) num
+worktree fora do OneDrive. App exige login, então não foi visto renderizado.
+
 ### 2026-10-16 — Dashboard fora do ar por 45 min: a Hostinger desligou a VPS
 
 Junior viu as abas presas em "Carregando..." e depois `ERR_CONNECTION_TIMED_OUT`.

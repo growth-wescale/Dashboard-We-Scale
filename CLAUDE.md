@@ -133,6 +133,57 @@ ganhou a coluna `origem_override`, com prioridade sobre a regra em
 Usar só para casos confirmados como artefato, nunca para "esconder" um deal
 de Prospecção Ativa de verdade.
 
+### Distribuição de leads por SDR (desde 16/10/2026)
+
+A criação dos deals de conversão (chatbot `<marca>_multistep`) sai das
+automações do RD Marketing e passa pela Edge Function **`distribuir-lead`**
+(Expansão), alimentada por **um** webhook do RD Marketing (gatilho "Conversão",
+sem filtro; formato legado `leads[]`, identificador em
+`last_conversion.content.identificador`). Spec:
+`docs/superpowers/specs/2026-10-16-distribuicao-leads-sdr-design.md`.
+
+- **Peso = peso da versão ativa das metas** (`meta_pessoa.peso`), com cadeia
+  de prioridade: versão ativa do mês → última versão ativa da marca →
+  `time_proprio` da regra (só marca sem meta) → `nenhum` (responsável padrão).
+  Função `distribuicao_time_da_marca(marca, em)`.
+- **Escolha**: `distribuicao_escolher` minimiza `n_i − p_i × (N+1)/100`
+  (empate: maior peso, depois nome), contando só desde `reinicio_em` = o mais
+  recente entre ativação da versão, virada do mês e última mudança de
+  disponibilidade de alguém do time. "Dali em diante", nunca compensa.
+- **`distribuicao_processar(payload)`** faz tudo numa transação com advisory
+  lock por marca: regra vigente pelo evento → dedup (`janela_dedup_min`, 10) →
+  barreira (campo `cf_*` + lista de valores barrados; **campo vazio passa**,
+  array barra se qualquer elemento bater) → time → escolha → INSERT em
+  `distribuicao_atribuicao` com `deal_pronto`. Modo `sombra` grava `simulado`
+  (contador só de simulados); `ativo` grava `atribuido`/`fallback` e conta
+  `atribuido` + `erro`.
+- **Tabelas** (RLS sem policy; front lê só `vw_distribuicao_*`):
+  `distribuicao_regra` (versionada, append-only, 1 vigente por marca, `marca`
+  = nome das metas e `marca_rd` = valor do campo Marca do CRM),
+  `distribuicao_atribuicao` (log de toda conversão, inclusive barradas),
+  `distribuicao_disponibilidade` (fora_agora / ausência agendada),
+  `distribuicao_config`. Escrita só pela Edge Function `gravar-distribuicao`
+  (sessão do Marketing + `tem_permissao('acao.distribuicao-editar')`).
+- **Conversão nova = deal novo**, sempre. Só o reenvio em < 10 min vira
+  `duplicado`.
+- **Não envia "SDR Responsável"** (campo de opção com "Xay"/"Thiago"/"Sarah
+  Padilha", a automação do RD também não preenchia). Dono = `user_id`.
+- Segredos no Vault: `distribuicao_webhook_chave` (`?chave=` da URL do
+  webhook), `teams_alertas_url`, `rd_token`.
+- `sync_execucao.status` tem CHECK (`success`/`failure`/…): logar `error`
+  descarta a linha em silêncio.
+- **Registro preso** = `atribuido`/`fallback` sem `id_deal` há mais de 5 min (o POST
+  no RD não fechou ou o worker morreu). Aparece em `vw_distribuicao_saude.presos_sem_deal`
+  e o Reprocessar da tela reabre. **Timeout do POST não repete** (o RD pode ter criado o
+  deal): fica em `erro` pedindo pra conferir no CRM antes de reprocessar. Só 429 e 5xx
+  repetem. O token nunca entra em mensagem de erro (`semToken` em `rd.ts`): o Deno põe a
+  URL inteira, com `?token=`, em erro de rede.
+- **Virada do mês e ausências**: `date_trunc` em `America/Sao_Paulo` (o banco é UTC);
+  ausência agendada só reinicia o contador em `inicio`/`fim`, `fora_agora` reinicia no
+  cadastro. Alerta de silêncio: `pg_cron` `distribuicao_alerta_silencio` (minuto 20 de
+  cada hora) avisa no Teams marca `ativo` sem lead há mais de `alerta_silencio_horas`
+  em dia útil 9–20h.
+
 ### Event Sourcing dirigido por configuração
 
 Para rastrear um campo novo do payload **basta inserir uma linha** — sem tocar
@@ -320,6 +371,13 @@ src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/
 src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
 src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação
 
+src/lib/distribuicao/regras.ts  tipos das vw_distribuicao_* + textoBarreira/diffRegra/desvios (puro, testado)
+src/hooks/useDistribuicao.ts    lê vw_distribuicao_painel/_regras/_atribuicoes/_disponibilidade/_saude/_campos_vistos
+src/hooks/useGravarDistribuicao.ts  escrita via Edge Function gravar-distribuicao (publicar regra, disponibilidade, reprocessar)
+src/pages/DistribuicaoLeads.tsx + src/components/distribuicao/*  aba Distribuição de Leads (só Administrador)
+supabase/functions/distribuir-lead/   webhook RD Marketing → RPCs → POST /deals (rd.ts tem os IDs de campo do CRM)
+supabase/functions/gravar-distribuicao/  escrita autenticada da configuração
+docs/sql/2026-10-16-distribuicao-leads.sql  todo o SQL aplicado (tabelas, RPCs, views) com os testes
 src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
 src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
@@ -580,6 +638,26 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Distribuição de leads: virada das marcas (ainda em `sombra`).** Gatilho da COF
+  decidido pelo Junior em 19/10: a automação de cada marca no RD Marketing **fica como
+  está** (dispara na conversão / segmentação "Entrada Chatbot - <marca>", manda o e-mail
+  da COF), só perde o passo **"Criar Negociação"**. Deal criado à mão no CRM não recebe
+  COF (aceito). Paridade 16–19/10 (simulado × deal criado pela automação em até 60 min,
+  por e-mail): Eletrovias 36/36, Inpot 13/13, Odonto 4/4, Beauty 3/3, B2Case 23/30 →
+  barreira da B2Case corrigida na v3 ("Ainda não tenho"). Antes de virar: (1) **queda
+  da API do Supabase (18/10 18h52 → 19/10 08h56) não chegou nem a chamar a função** e o
+  RD Marketing **não reenvia** webhook: em modo `ativo`, ~17 leads dessa noite ficariam
+  sem deal. Precisa de rede de proteção (fila/reenvio fora do Supabase ou reconciliação)
+  antes da virada; (2) 1 lead do Odonto Legacy (18/10 10h18) virou deal no RD sem chegar
+  conversão com identificador conhecido: `vw_distribuicao_eventos_ignorados` (19/10)
+  conta os identificadores sem regra pra achar qual é; (3) 1 lead da Oral Unic com
+  "Até R$ 200.000" virou deal pela automação (a segmentação documentada barra esse
+  valor), conferir a segmentação no RD. Instituto do Autismo, Lisô, Viva e Scale
+  Partner quase sem volume ainda.
+- [ ] **Transferência de carteira** (SDR de férias/saída: transferir no RD os deals
+  em etapas iniciais e as reuniões agendadas no período, pelos mesmos pesos) —
+  segunda entrega da distribuição de leads, decisão do Junior em 16/10
+- [x] ~~Segmentações "Entrada Chatbot - <marca>" sem uso~~ — seguem em uso: a automação da COF continua disparando por elas (decisão de 19/10)
 - [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
 - [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
 - [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
@@ -697,6 +775,51 @@ repetidos. Só a Visão Macro mostra a caixa (o funil da Performance não passa
 
 Verificado: `npm run build` (tsc -b) + `npx vitest run` (681 testes) num
 worktree fora do OneDrive. App exige login, então não foi visto renderizado.
+
+### 2026-10-16 (3) — Distribuição de leads por SDR com peso da meta (entrega 1, em sombra)
+
+Pedido do Junior: parar de depender do rodízio 1:1 das equipes do RD CRM e
+distribuir os leads de cada marca entre os SDRs pelo **peso da meta do mês**
+(ex.: Eletrovias 50/20/30), configurável no dashboard, com histórico das
+barreiras de MQL (hoje ninguém sabia o que a barreira era antes de alguém
+mexer na segmentação). Desenho e plano em `docs/superpowers/specs/` e
+`docs/superpowers/plans/` de 2026-10-16; regras na seção 3.
+
+**O que entrou:** tabelas, RPCs e views (`docs/sql/2026-10-16-distribuicao-leads.sql`,
+todas as migrations aplicadas e testadas com transação rolada: 10 + 14 + 11
+casos, inclusive a sequência 50/20/30 × 10 leads = 5/2/3); Edge Function
+`distribuir-lead` (testada de ponta a ponta na marca "Teste" do Funil de
+teste: deal criado no RD com Xayane/Marca/Fonte Macro/Cidade/UTM/campo extra,
+dedup, 401, 422 sem retry e sem deal fantasma, 429 com retry, reprocessar);
+webhook do RD Marketing criado pela tela (formato legado — ver seção 3);
+`gravar-distribuicao`; aba **Distribuição de Leads** (permissões
+`aba.distribuicao` / `acao.distribuicao-editar`, só Administrador): saúde,
+card por marca com peso alvo × recebidos × desvio e histórico de versões,
+disponibilidade dos SDRs (fora hoje / voltou / ausência agendada) e log com
+reprocessar. 10 regras publicadas em **sombra**; marcas sem meta (IDA, Scale
+Partner, Beauty Connection) com `time_proprio` = quem recebe hoje; responsável
+padrão inicial = Brunno.
+
+**Achados no caminho:** o webhook da tela manda o formato legado (`leads[]`,
+`identificador`) e dispara até para eventos do CRM; o `sync_execucao.status`
+tem CHECK e engolia o log de erro ("error" → "failure"); "SDR Responsável" é
+campo de opção com valores que não casam com o cadastro (não enviado); o deal
+criado pela API cria o lead no Marketing mas **não gera conversão de CRM** —
+é o que trava a virada (pendência na seção 8).
+
+**Revisão final** (revisor independente sobre a branch) achou 1 Critical e 6
+Important, todos corrigidos no mesmo PR: token do RD podia vazar em mensagem de
+erro de rede; registro podia ficar preso sem deal e invisível; retry após timeout
+podia criar deal duplicado; reprocesso falho sumia da saúde; ausência agendada
+zerava o contador no cadastro; virada do mês em UTC; alerta de silêncio não
+existia. 10 Minor ficaram registrados no ledger da sessão.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (690 testes, 16 novos,
+inclusive `supabase/functions/distribuir-lead/rd.test.ts` rodando no Node)
++ oxlint, em cópia fora do OneDrive; tela vista renderizada com dado real em
+1440×900 e 375×812 numa rota de prévia só na cópia de build. Deals de teste no
+RD enviados pra lixeira / a apagar: `6ad2773f3ec05a00216805e2`,
+`6ad27e002b43550028bfeab5` (com uma tarefa "Teste gatilho").
 
 ### 2026-10-16 — Dashboard fora do ar por 45 min: a Hostinger desligou a VPS
 

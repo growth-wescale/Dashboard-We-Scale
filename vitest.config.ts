@@ -9,7 +9,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // As Edge Functions (Deno) usam só APIs web (fetch, AbortSignal); os módulos puros delas
+    // rodam no Node e são testados aqui também.
+    include: ['src/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
     // Contagens dependem de fuso: fixa Brasília para o resultado não variar
     // com a máquina que roda os testes (CI em UTC vs. laptop em BRT).
     env: { TZ: 'America/Sao_Paulo' },

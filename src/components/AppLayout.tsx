@@ -100,7 +100,7 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/linha-do-tempo') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/linha-do-tempo') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas') || pathname.startsWith('/distribuicao-leads')) return 'vendas'
   return 'geral'
 }
 
@@ -111,6 +111,7 @@ function getVendasActiveSub(pathname: string): string {
   if (pathname.startsWith('/linha-do-tempo'))     return 'linha-do-tempo'
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
   if (pathname.startsWith('/metas'))              return 'metas'
+  if (pathname.startsWith('/distribuicao-leads')) return 'distribuicao-leads'
   return 'funil-vendas'
 }
 
@@ -231,6 +232,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'analise-objecoes') navigate('/analise-objecoes')
     else if (key === 'gp-setembro') navigate('/gp-setembro')
     else if (key === 'metas') navigate('/metas')
+    else if (key === 'distribuicao-leads') navigate('/distribuicao-leads')
     else {
       setActiveBrand(key)
       navigate('/marca')

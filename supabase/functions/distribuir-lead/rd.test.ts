@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { criarDealNoRd, montarCorpoDeal, type DealPronto } from './rd.ts'
+import { criarDealNoRd, criarNotaNoRd, criarTarefaNoRd, montarCorpoDeal, prazoBrt, type DealPronto } from './rd.ts'
 
 const deal: DealPronto = {
   name: 'Lead X', deal_stage_id: 'etapa', user_id: 'u1', campaign_id: 'camp', marca_rd: 'Eletrovias', nome_sdr: 'Sarah Padilha',
@@ -76,5 +76,25 @@ describe('criarDealNoRd', () => {
     const r = await criarDealNoRd(TOKEN, deal, { fetchImpl: q.fetch, tentativas: 3 })
     expect(q.chamadas).toBe(1)
     expect(r.erro).toContain('HTTP 422')
+  })
+})
+
+describe('nota e tarefa no deal', () => {
+  it('prazoBrt soma as horas no horário de Brasília', () => {
+    expect(prazoBrt(1, new Date('2026-10-19T12:30:00Z'))).toEqual({ date: '2026-10-19', hour: '10:30' })
+    expect(prazoBrt(1, new Date('2026-10-20T02:30:00Z'))).toEqual({ date: '2026-10-20', hour: '00:30' }) // 23h30 de 19/10 + 1 h vira o dia
+  })
+  it('tarefa vai com deal, dono, assunto e tipo', async () => {
+    let corpo: unknown = null
+    const f = (async (_u: string, init: RequestInit) => { corpo = JSON.parse(String(init.body)); return new Response('{}', { status: 200 }) }) as unknown as typeof fetch
+    const e = await criarTarefaNoRd(TOKEN, 'd1', 'u1', { assunto: 'Novo Lead', horas: 1 }, f, new Date('2026-10-19T12:00:00Z'))
+    expect(e).toBeNull()
+    expect(corpo).toEqual({ task: { deal_id: 'd1', user_ids: ['u1'], subject: 'Novo Lead', type: 'call', date: '2026-10-19', hour: '10:00' } })
+  })
+  it('nota com erro 422 devolve a mensagem sem o token', async () => {
+    const f = (async () => new Response(`ruim ${TOKEN}`, { status: 422 })) as unknown as typeof fetch
+    const e = await criarNotaNoRd(TOKEN, 'd1', 'u1', 'oi', f)
+    expect(e).toContain('HTTP 422')
+    expect(e).not.toContain(TOKEN)
   })
 })

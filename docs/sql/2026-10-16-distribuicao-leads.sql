@@ -885,3 +885,15 @@ grant select on public.vw_distribuicao_eventos_ignorados to anon, authenticated;
 -- POST https://api.rd.services/platform/conversions?api_key=<Vault rdmkt_api_key> depois do deal.
 -- Teste 19/10 na marca Teste (v3 ativo, cof_distribuicao_teste): deal 6ad6109ba09f230026c34000
 -- criado com Xayane e conversão aceita (cof_enviada_em preenchido, sem erro).
+
+-- =====================================================================================
+-- Bloco 15 (19/10) — nota e tarefa no deal (migration distribuicao_nota_e_tarefa)
+-- =====================================================================================
+-- distribuicao_regra.nota_deal (texto com {nome}/{email}/{sdr}) e .tarefa
+-- ({"assunto","tipo","horas"}), entram na trava, em publicar_regra e no deal_pronto ('nota',
+-- 'tarefa'); distribuicao_atribuicao.extras_erro + RPC distribuicao_marcar_extras (service_role).
+-- Substituem os passos "Adicionar anotação" (CRMDN, na negociação) e "Criar tarefa" (CRMCT) das
+-- automações do RD, que somem quando a automação deixa de criar o deal. Edge Function v9:
+-- POST /api/v1/activities {activity{deal_id,user_id,text}} e POST /api/v1/tasks
+-- {task{deal_id,user_ids,subject,type,date,hour}} (prazo em BRT). Teste 19/10 na marca Teste:
+-- deal 6ad6183a83539d002789cbac com nota, tarefa "Novo Lead (teste)" pra Xayane em +1 h e COF.

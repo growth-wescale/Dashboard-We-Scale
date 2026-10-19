@@ -6,6 +6,7 @@
 //   1. autentica (?chave= = Vault distribuicao_webhook_chave) e normaliza o payload
 //   2. rpc distribuicao_processar(payload): roteia, dedup, barreira, escolhe, grava o registro
 //   3. se 'atribuido'/'fallback': POST /deals no RD CRM (rd.ts) → rpc distribuicao_fechar
+//   3a. deal criado: nota e tarefa da regra (o que a automação do RD fazia dentro do deal)
 //   3b. deal criado e a regra tem conversao_cof: registra a conversão no RD Marketing (rdmkt.ts),
 //       que dispara a automação da COF → rpc distribuicao_marcar_cof
 //   4. erro ou fallback → alerta no Teams; 1 linha em sync_execucao (job distribuir_lead,
@@ -22,7 +23,7 @@
 // 16/10/2026: o webhook criado pela tela manda o legado, inclusive eventos do CRM ("Tarefa
 // atualizada no RD Station CRM") como conversão — sem regra vigente, são ignorados sem log.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { criarDealNoRd, type DealPronto } from './rd.ts'
+import { criarDealNoRd, criarNotaNoRd, criarTarefaNoRd, type DealPronto } from './rd.ts'
 import { enviarConversaoCof } from './rdmkt.ts'
 
 const DASHBOARD_URL = 'https://dashboard.srv1816822.hstgr.cloud/distribuicao-leads'
@@ -114,9 +115,23 @@ async function criarEFechar(sb: Sb, atribuicaoId: number, marca: string, deal: D
     await alertarTeams(sb, 'Distribuição de leads · responsável padrão',
       `${marca} · ${deal.contato.email} · nenhum SDR elegível, deal ${r.id} foi para o responsável padrão · registro #${atribuicaoId}`)
   }
+  if (r.id && (deal.nota || deal.tarefa)) await criarExtras(sb, token, atribuicaoId, marca, deal, r.id)
   let cof: string | null = null
   if (r.id && deal.conversao_cof) cof = await dispararCof(sb, atribuicaoId, marca, deal, r.id)
   return { id_deal: r.id ?? null, erro: r.erro ?? null, tentativas: totalTentativas, ...(deal.conversao_cof ? { cof } : {}) }
+}
+
+/** Passo 3a: nota e tarefa no deal. Falha não desfaz o deal: grava extras_erro e avisa. */
+async function criarExtras(sb: Sb, token: string, atribuicaoId: number, marca: string, deal: DealPronto, idDeal: string) {
+  const erros: string[] = []
+  if (deal.nota) { const e = await criarNotaNoRd(token, idDeal, deal.user_id, deal.nota); if (e) erros.push(e) }
+  if (deal.tarefa) { const e = await criarTarefaNoRd(token, idDeal, deal.user_id, deal.tarefa); if (e) erros.push(e) }
+  const erro = erros.length ? erros.join(' | ').slice(0, 500) : null
+  await sb.rpc('distribuicao_marcar_extras', { p_id: atribuicaoId, p_erro: erro })
+  if (erro) {
+    await alertarTeams(sb, 'Distribuição de leads · nota/tarefa não criada',
+      `${marca} · deal ${idDeal} criado, mas: ${erro.slice(0, 300)} · registro #${atribuicaoId}`)
+  }
 }
 
 /** Passo 3b: conversão da COF no RD Marketing. Falha não desfaz o deal: avisa e fica em cof_erro. */

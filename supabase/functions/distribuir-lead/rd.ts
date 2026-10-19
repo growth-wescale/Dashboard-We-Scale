@@ -25,6 +25,10 @@ export type DealPronto = {
   capital: string | null
   /** Conversão registrada no RD Marketing depois do deal (dispara a automação da COF). null = não envia. */
   conversao_cof?: string | null
+  /** Anotação a criar no deal (já com {nome}/{email}/{sdr} trocados). */
+  nota?: string | null
+  /** Tarefa a criar pro dono do deal. */
+  tarefa?: TarefaRegra | null
   /** { "<custom_field_id do CRM>": valor } — resolvido pela regra da marca (campos_extra). */
   campos_extra: Record<string, unknown>
 }
@@ -142,4 +146,46 @@ export async function criarDealNoRd(
     if (i < max) await new Promise(r => setTimeout(r, esperaMs(resp, i)))
   }
   return { erro: ultimoErro, tentativas: max }
+}
+
+// ---- Passos que as automações do RD faziam dentro do deal (nota e tarefa) ----
+// Melhor esforço: o deal já existe; falha vira extras_erro + alerta, nunca desfaz o deal.
+// Repete só 429/5xx (até 2 vezes); timeout não repete (evita nota/tarefa em dobro).
+
+export type TarefaRegra = { assunto: string; tipo?: string; horas?: number }
+
+async function postRd(token: string, caminho: string, body: unknown, f: typeof fetch, timeoutMs = 15_000): Promise<string | null> {
+  for (let i = 1; i <= 2; i++) {
+    let resp: Response
+    try {
+      resp = await f(`https://crm.rdstation.com/api/v1/${caminho}?token=${encodeURIComponent(token)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
+      })
+    } catch (e) {
+      return `${caminho}: ${semToken((e as Error)?.message ?? String(e), token)}`.slice(0, 300)
+    }
+    if (resp.ok) return null
+    const txt = semToken(await resp.text(), token)
+    if (!(resp.status === 429 || resp.status >= 500) || i === 2) return `${caminho}: HTTP ${resp.status} ${txt.slice(0, 250)}`
+    await new Promise(r => setTimeout(r, 1500))
+  }
+  return null
+}
+
+/** Data e hora (Brasília) daqui a `horas` horas, no formato que a API de tarefas do RD pede. */
+export function prazoBrt(horas: number, agora = new Date()): { date: string; hour: string } {
+  const alvo = new Date(agora.getTime() + horas * 3_600_000 - 3 * 3_600_000) // UTC-3 (sem horário de verão)
+  const iso = alvo.toISOString()
+  return { date: iso.slice(0, 10), hour: iso.slice(11, 16) }
+}
+
+export async function criarNotaNoRd(token: string, idDeal: string, userId: string, texto: string, fetchImpl: typeof fetch = fetch) {
+  return await postRd(token, 'activities', { activity: { deal_id: idDeal, user_id: userId, text: texto } }, fetchImpl)
+}
+
+export async function criarTarefaNoRd(token: string, idDeal: string, userId: string, t: TarefaRegra, fetchImpl: typeof fetch = fetch, agora = new Date()) {
+  const { date, hour } = prazoBrt(Number(t.horas) > 0 ? Number(t.horas) : 1, agora)
+  return await postRd(token, 'tasks', {
+    task: { deal_id: idDeal, user_ids: [userId], subject: t.assunto, type: t.tipo || 'call', date, hour },
+  }, fetchImpl)
 }

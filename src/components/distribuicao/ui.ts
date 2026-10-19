@@ -9,10 +9,13 @@ export function pill(bg: string, fg: string): CSSProperties {
   return { display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: bg, color: fg, whiteSpace: 'nowrap' }
 }
 
-export const MODO_VISUAL: Record<ModoRegra, { label: string; bg: string; fg: string }> = {
-  desligado: { label: 'Desligado', bg: 'var(--ws-bg)', fg: 'var(--ws-text-secondary)' },
-  sombra:    { label: 'Sombra',    bg: 'var(--status-atencao-bg)', fg: 'var(--status-atencao)' },
-  ativo:     { label: 'Ativo',     bg: 'var(--status-positivo-bg)', fg: 'var(--status-positivo)' },
+export const MODO_VISUAL: Record<ModoRegra, { label: string; bg: string; fg: string; ajuda: string }> = {
+  desligado: { label: 'Desligado', bg: 'var(--ws-bg)', fg: 'var(--ws-text-secondary)',
+    ajuda: 'A distribuição ignora as conversões desta marca.' },
+  sombra:    { label: 'Em teste',  bg: 'var(--status-atencao-bg)', fg: 'var(--status-atencao)',
+    ajuda: 'Modo sombra: o sistema decide pra quem iria cada lead e registra, mas não cria nada. Quem cria a negociação ainda é a automação antiga do RD.' },
+  ativo:     { label: 'Ativo',     bg: 'var(--status-positivo-bg)', fg: 'var(--status-positivo)',
+    ajuda: 'A distribuição cria a negociação no RD com o SDR escolhido e dispara a COF.' },
 }
 
 export const RESULTADO_VISUAL: Record<ResultadoAtribuicao, { label: string; bg: string; fg: string }> = {
@@ -22,6 +25,16 @@ export const RESULTADO_VISUAL: Record<ResultadoAtribuicao, { label: string; bg: 
   duplicado: { label: 'Duplicado',          bg: 'var(--ws-bg)',              fg: 'var(--ws-text-secondary)' },
   fallback:  { label: 'Responsável padrão', bg: 'var(--status-atencao-bg)',  fg: 'var(--status-atencao)' },
   erro:      { label: 'Erro',               bg: 'var(--status-risco-bg)',    fg: 'var(--status-risco)' },
+}
+
+/** O que cada resultado do log quer dizer (legenda da tela). */
+export const RESULTADO_AJUDA: Record<ResultadoAtribuicao, string> = {
+  atribuido: 'Passou na régua de MQL e a negociação foi criada no RD com o SDR escolhido (marca em Ativo).',
+  simulado:  'Passou na régua, mas a marca está Em teste: o sistema anotou pra quem iria, sem criar nada. A negociação continua vindo da automação antiga do RD.',
+  barrado:   'Não passou na régua de MQL da marca (capital abaixo do mínimo). Nenhuma negociação é criada; o motivo mostra o valor lido.',
+  duplicado: 'O mesmo lead converteu de novo no mesmo formulário em menos de 10 minutos (reenvio). Ignorado pra não duplicar a negociação.',
+  fallback:  'Passou na régua, mas nenhum SDR da marca estava disponível: a negociação foi para o responsável padrão (Brunno) e chegou aviso no Teams.',
+  erro:      'Era pra criar a negociação, mas o RD recusou ou não respondeu. Fica pendente até alguém clicar em Reprocessar.',
 }
 
 export function fmtDataHora(iso: string | null | undefined): string {

@@ -873,3 +873,15 @@ alter table public.distribuicao_evento_ignorado enable row level security;
 create or replace view public.vw_distribuicao_eventos_ignorados as
   select identificador, cf_marca_ultima, ocorrencias, primeira_vez, ultima_vez from public.distribuicao_evento_ignorado;
 grant select on public.vw_distribuicao_eventos_ignorados to anon, authenticated;
+
+-- =====================================================================================
+-- Bloco 14 (19/10) — COF disparada pela distribuição (migration distribuicao_conversao_cof)
+-- =====================================================================================
+-- distribuicao_regra.conversao_cof (ex. cof_eletrovias; entra na trava de imutabilidade e em
+-- distribuicao_publicar_regra, validada ^[A-Za-z0-9_-]{3,100}$); deal_pronto ganha
+-- 'conversao_cof'; distribuicao_atribuicao.cof_enviada_em / cof_erro; RPC
+-- distribuicao_marcar_cof(p_id, p_erro) só service_role; vw_distribuicao_regras e
+-- vw_distribuicao_atribuicoes expõem as colunas novas no fim. A Edge Function (v8) envia
+-- POST https://api.rd.services/platform/conversions?api_key=<Vault rdmkt_api_key> depois do deal.
+-- Teste 19/10 na marca Teste (v3 ativo, cof_distribuicao_teste): deal 6ad6109ba09f230026c34000
+-- criado com Xayane e conversão aceita (cof_enviada_em preenchido, sem erro).

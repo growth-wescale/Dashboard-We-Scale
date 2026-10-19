@@ -23,6 +23,8 @@ export type DealPronto = {
   cidade: string | null
   estado: string | null
   capital: string | null
+  /** Conversão registrada no RD Marketing depois do deal (dispara a automação da COF). null = não envia. */
+  conversao_cof?: string | null
   /** { "<custom_field_id do CRM>": valor } — resolvido pela regra da marca (campos_extra). */
   campos_extra: Record<string, unknown>
 }

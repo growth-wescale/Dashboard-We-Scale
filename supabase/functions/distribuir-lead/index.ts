@@ -6,10 +6,12 @@
 //   1. autentica (?chave= = Vault distribuicao_webhook_chave) e normaliza o payload
 //   2. rpc distribuicao_processar(payload): roteia, dedup, barreira, escolhe, grava o registro
 //   3. se 'atribuido'/'fallback': POST /deals no RD CRM (rd.ts) → rpc distribuicao_fechar
+//   3b. deal criado e a regra tem conversao_cof: registra a conversão no RD Marketing (rdmkt.ts),
+//       que dispara a automação da COF → rpc distribuicao_marcar_cof
 //   4. erro ou fallback → alerta no Teams; 1 linha em sync_execucao (job distribuir_lead,
 //      status 'success' ou 'failure' — a tabela tem CHECK e descarta qualquer outro valor)
-// Responde 200 sempre que o registro foi gravado (o RD reenvia quando não recebe 2xx, e
-// reenvio viraria 'duplicado' de qualquer jeito). 500 só se nem gravar deu.
+// Responde 200 sempre que o registro foi gravado. 500 só se nem gravar deu. O RD Marketing NÃO
+// reenvia webhook que falhou (visto na queda da API de 18–19/10).
 //
 // ?reprocessar=<id>: refaz só o passo 3 sobre o registro em 'erro' ou preso (atribuido/fallback
 // sem id_deal — rpc distribuicao_reabrir). Antes de reprocessar um timeout, conferir no RD.
@@ -21,6 +23,7 @@
 // atualizada no RD Station CRM") como conversão — sem regra vigente, são ignorados sem log.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { criarDealNoRd, type DealPronto } from './rd.ts'
+import { enviarConversaoCof } from './rdmkt.ts'
 
 const DASHBOARD_URL = 'https://dashboard.srv1816822.hstgr.cloud/distribuicao-leads'
 
@@ -43,7 +46,7 @@ function respond(body: unknown, status: number) {
 }
 
 function slug(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 }
 
 /** Aceita o formato da API 2.0 e o legado (leads[]); devolve uma conversão por lead. */
@@ -111,7 +114,27 @@ async function criarEFechar(sb: Sb, atribuicaoId: number, marca: string, deal: D
     await alertarTeams(sb, 'Distribuição de leads · responsável padrão',
       `${marca} · ${deal.contato.email} · nenhum SDR elegível, deal ${r.id} foi para o responsável padrão · registro #${atribuicaoId}`)
   }
-  return { id_deal: r.id ?? null, erro: r.erro ?? null, tentativas: totalTentativas }
+  let cof: string | null = null
+  if (r.id && deal.conversao_cof) cof = await dispararCof(sb, atribuicaoId, marca, deal, r.id)
+  return { id_deal: r.id ?? null, erro: r.erro ?? null, tentativas: totalTentativas, ...(deal.conversao_cof ? { cof } : {}) }
+}
+
+/** Passo 3b: conversão da COF no RD Marketing. Falha não desfaz o deal: avisa e fica em cof_erro. */
+async function dispararCof(sb: Sb, atribuicaoId: number, marca: string, deal: DealPronto, idDeal: string): Promise<string> {
+  let erro: string | null = null
+  try {
+    const apiKey = await segredo(sb, 'rdmkt_api_key')
+    const c = await enviarConversaoCof(apiKey, { identificador: deal.conversao_cof!, email: deal.contato.email, nome: deal.contato.nome })
+    erro = c.ok ? null : (c.erro ?? 'falhou')
+  } catch (e) {
+    erro = `cof: ${(e as Error)?.message ?? String(e)}`.slice(0, 400)
+  }
+  await sb.rpc('distribuicao_marcar_cof', { p_id: atribuicaoId, p_erro: erro })
+  if (erro) {
+    await alertarTeams(sb, 'Distribuição de leads · COF não disparou',
+      `${marca} · ${deal.contato.email} · deal ${idDeal} criado, mas a conversão ${deal.conversao_cof} não entrou no RD Marketing: ${erro.slice(0, 250)} · registro #${atribuicaoId}`)
+  }
+  return erro ? 'erro' : 'enviada'
 }
 
 async function processarConversao(sb: Sb, c: Conversao, iniciadoEm: string) {

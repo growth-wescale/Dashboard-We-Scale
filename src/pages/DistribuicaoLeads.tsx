@@ -50,13 +50,17 @@ export function DistribuicaoLeads() {
     await d.refetch()
   }
 
-  async function reprocessarRegistro(id: number) {
+  async function reprocessarRegistro(id: number): Promise<boolean> {
     setReprocessando(id)
     const r = await reprocessar(id)
     setReprocessando(null)
     setAviso(r.ok ? { tipo: 'sucesso', texto: `Registro #${id} reprocessado: deal ${r.idDeal}.` } : { tipo: 'erro', texto: `Registro #${id}: ${r.error}` })
     await d.refetch()
+    return r.ok
   }
+
+  const marcasLog = useMemo(() => [...new Set(d.regras.map(r => r.marca))].sort(), [d.regras])
+  const sdrsLog = useMemo(() => d.pessoas.filter(p => p.cargo === 'SDR' || p.cargo === 'SDR/Closer').map(p => p.nome).sort(), [d.pessoas])
 
   return (
     <div style={{ padding: '24px var(--page-pad-x, 24px)', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -76,14 +80,14 @@ export function DistribuicaoLeads() {
             <h2 style={sectionTitleStyle}>Saúde</h2>
             <div className="rs-scroll-x">
               <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 640 }}>
-                <thead><tr><th style={th}>Marca</th><th style={th}>Modo</th><th style={th}>Último lead recebido</th><th style={th}>Erros pendentes</th><th style={th}>Presos sem deal</th><th style={th}>Deals no RD sem registro (24 h)</th></tr></thead>
+                <thead><tr><th style={th}>Marca</th><th style={th}>Modo</th><th style={th} title="Qualquer conversão da marca que chegou, inclusive barradas e duplicadas">Última conversão</th><th style={th}>Erros pendentes</th><th style={th}>Presos sem deal</th><th style={th}>Deals no RD sem registro (24 h)</th></tr></thead>
                 <tbody>
                   {saudeVisivel.map(s => {
                     const mv = MODO_VISUAL[s.modo]
                     return (
                       <tr key={s.marca} style={{ borderTop: '1px solid var(--ws-border)' }}>
                         <td style={td}>{s.marca}</td>
-                        <td style={td}><span style={pill(mv.bg, mv.fg)}>{mv.label}</span></td>
+                        <td style={td}><span style={pill(mv.bg, mv.fg)} title={mv.ajuda}>{mv.label}</span></td>
                         <td style={td}>{fmtRelativo(s.ultimo_recebido_em)}</td>
                         <td style={{ ...td, color: s.erros_pendentes > 0 ? 'var(--status-risco)' : undefined }}>{s.erros_pendentes}</td>
                         <td style={{ ...td, color: s.presos_sem_deal > 0 ? 'var(--status-risco)' : undefined }} title="Atribuído sem id do deal há mais de 5 min: conferir no RD e reprocessar">{s.presos_sem_deal}</td>
@@ -94,11 +98,15 @@ export function DistribuicaoLeads() {
                 </tbody>
               </table>
             </div>
+            <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+              <strong>Última conversão</strong> conta qualquer formulário da marca que chegou, inclusive os barrados pela régua de MQL. Os cards abaixo contam só os leads que passaram na régua e foram (ou, em teste, teriam sido) distribuídos desde o início do contador.
+              {' '}<strong>Em teste</strong> (modo sombra): o sistema registra pra quem iria cada lead, mas quem cria a negociação ainda é a automação antiga do RD. <strong>Ativo</strong>: o sistema cria a negociação e dispara a COF.
+            </p>
           </section>
 
           <section>
             <h2 style={{ ...sectionTitleStyle, fontSize: 16 }}>Marcas</h2>
-            <div className="rs-grid rs-cols-2" style={{ gap: 16 }}>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(min(560px, 100%), 1fr))', alignItems: 'start' }}>
               {vigentes.map(r => (
                 <CardMarca key={r.id} regra={r} versoes={d.regras.filter(v => v.marca === r.marca)} linhas={porMarca.get(r.marca) ?? []} podeEditar={podeEditar} onEditar={setEditando} />
               ))}
@@ -108,7 +116,7 @@ export function DistribuicaoLeads() {
 
           <PainelDisponibilidade pessoas={d.pessoas} disponibilidade={d.disponibilidade} painel={d.painel} podeEditar={podeEditar} onAlterar={alterarDisp} />
 
-          <LogAtribuicoes linhas={d.atribuicoes} podeEditar={podeEditar} reprocessando={reprocessando} onReprocessar={reprocessarRegistro} />
+          <LogAtribuicoes marcas={marcasLog} sdrs={sdrsLog} podeEditar={podeEditar} reprocessando={reprocessando} onReprocessar={reprocessarRegistro} />
         </>
       )}
 

@@ -65,6 +65,9 @@ export interface AtribuicaoRow {
   erro_rd: string | null
   reprocessado_em: string | null
   reprocessado_por: string | null
+  cof_enviada_em?: string | null
+  cof_erro?: string | null
+  extras_erro?: string | null
 }
 
 /** Linha de vw_distribuicao_disponibilidade. */

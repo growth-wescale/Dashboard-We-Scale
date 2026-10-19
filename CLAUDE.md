@@ -183,6 +183,19 @@ sem filtro; formato legado `leads[]`, identificador em
   cadastro. Alerta de silêncio: `pg_cron` `distribuicao_alerta_silencio` (minuto 20 de
   cada hora) avisa no Teams marca `ativo` sem lead há mais de `alerta_silencio_horas`
   em dia útil 9–20h.
+- **Caixa reserva contra queda da API** (19/10): o RD Marketing não reenvia webhook. Um
+  2º webhook ("Caixa reserva distribuição") manda cada conversão também para a Edge Function
+  `caixa-reserva-leads` no **Supabase de Marketing** (tabela `lead_caixa_reserva`, guarda só o
+  que pode virar deal). A `repassar-caixa-reserva` (Expansão, pg_cron
+  `distribuicao_repasse_caixa_reserva` a cada 2 min) busca o que tem mais de 2 min, entrega à
+  `distribuir-lead` e confirma na caixa; 3 falhas seguidas = API fora, tenta de novo na próxima
+  rodada (espera até 10 min). Não duplica deal porque `distribuicao_processar` grava a chave
+  `uuid do lead | evento | last_conversion.created_at` em `distribuicao_conversao_vista` e
+  devolve "ignorado" para a mesma conversão. A chave `caixa_reserva_chave` existe nos dois
+  Vaults. SQL: `docs/sql/2026-10-19-caixa-reserva-leads-marketing.sql` (Marketing) e bloco 16–17
+  de `docs/sql/2026-10-16-distribuicao-leads.sql`. A função no Marketing foi publicada pelo
+  painel (arquivo único `supabase/functions/caixa-reserva-leads/painel-arquivo-unico.ts`), com
+  "Verify JWT" desligado: os conectores daqui não acessam o projeto de Marketing.
 
 ### Event Sourcing dirigido por configuração
 
@@ -638,22 +651,16 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Distribuição de leads: virada das marcas (ainda em `sombra`).** Gatilho da COF
-  decidido pelo Junior em 19/10: a automação de cada marca no RD Marketing **fica como
-  está** (dispara na conversão / segmentação "Entrada Chatbot - <marca>", manda o e-mail
-  da COF), só perde o passo **"Criar Negociação"**. Deal criado à mão no CRM não recebe
-  COF (aceito). Paridade 16–19/10 (simulado × deal criado pela automação em até 60 min,
-  por e-mail): Eletrovias 36/36, Inpot 13/13, Odonto 4/4, Beauty 3/3, B2Case 23/30 →
-  barreira da B2Case corrigida na v3 ("Ainda não tenho"). Antes de virar: (1) **queda
-  da API do Supabase (18/10 18h52 → 19/10 08h56) não chegou nem a chamar a função** e o
-  RD Marketing **não reenvia** webhook: em modo `ativo`, ~17 leads dessa noite ficariam
-  sem deal. Precisa de rede de proteção (fila/reenvio fora do Supabase ou reconciliação)
-  antes da virada; (2) 1 lead do Odonto Legacy (18/10 10h18) virou deal no RD sem chegar
-  conversão com identificador conhecido: `vw_distribuicao_eventos_ignorados` (19/10)
-  conta os identificadores sem regra pra achar qual é; (3) 1 lead da Oral Unic com
-  "Até R$ 200.000" virou deal pela automação (a segmentação documentada barra esse
-  valor), conferir a segmentação no RD. Instituto do Autismo, Lisô, Viva e Scale
-  Partner quase sem volume ainda.
+- [ ] **Distribuição de leads: sobras da virada.** As 10 marcas estão em `ativo` (19/10) e a
+  caixa reserva está no ar. Falta: (1) a "OdontoScale > CRM (Limpo)" (LP antiga,
+  `odontoscale_multistep`) **segue ativa** de propósito até o Gabriel trocar a LP, porque a
+  distribuição não conhece esse evento; depois, desativar; (2) IDA: a barreira lê
+  `cf_capital_text` ("Menos de R$ 550k"), confirmar na 1ª conversão; (3) Beauty Connection
+  agora grava Marca = "Beauty Connection" no deal (a automação antiga gravava Lisô Laser);
+  (4) conferir no RD a segmentação da Oral Unic ("Até R$ 200.000" virou deal na automação
+  antiga); (5) Brunno fora de `nome_cargo_foto` (responsável padrão em branco no editor);
+  (6) limpar deals/leads de teste (inclusive `teste.caixa.a/b@exemplo-wescale.com`), o fluxo
+  "TESTE COF distribuição (apagar)" e desligar a regra Teste.
 - [ ] **Transferência de carteira** (SDR de férias/saída: transferir no RD os deals
   em etapas iniciais e as reuniões agendadas no período, pelos mesmos pesos) —
   segunda entrega da distribuição de leads, decisão do Junior em 16/10
@@ -733,6 +740,61 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-19 (4) — Distribuição nas 10 marcas e caixa reserva contra queda
+
+Continuação da (3), mesmo dia. **Viradas:** Scale Partner 14h00 (regra id 55), Beauty
+Connection 14h01 (56), IDA 14h02 (57, barreira passou a ler `cf_capital_text`, o campo da
+automação antiga) e Odonto Legacy 14h10 (58). Nas três primeiras a automação antiga foi
+desativada. No Odonto Legacy, a `odontolegacy_multistep` foi **editada** (autorização do
+Junior) e ficou só com a tag `converteu_odonto_legacy_consultoria`; a regra cria o deal e a
+tarefa "Novo Lead" (ligação, 1 h). Ao reativar, o RD passou de novo os 278 leads que já tinham
+convertido nesse evento: efeito só na tag.
+
+**Caixa reserva** (seção 3): o 2º webhook + a caixa no Supabase de Marketing (OK do Gabriel;
+projeto novo de US$ 10/mês descartado pelo Junior) + o repasse em Expansão + a chave de
+conversão repetida em `distribuicao_processar`. Teste de ponta a ponta no funil de teste:
+conversão só na caixa virou deal no repasse; conversão nos dois caminhos virou 1 deal só.
+
+Conferido com lead real: Eletrovias 12h10 (deal da Xayane, COF, anotação, 7 tarefas de
+cadência) e B2Case 13h48 (deal do Thiago, COF, anotação, cadência; o lead já agendou reunião).
+
+### 2026-10-19 (3) — Distribuição de leads em produção em 6 marcas
+
+Pedido do Junior: tirar do RD o rodízio 1:1 e distribuir os leads pelo peso da meta.
+Na virada de cada marca, a automação antiga "<marca> > CRM (Limpo)" do RD Marketing foi
+**desativada** e a regra da marca publicada em `ativo` no mesmo minuto (menos de 1 s
+entre as duas). Eletrovias às 11h43 (regra v4, id 49); B2Case 13h36 (v5, id 50), Inpot
+13h37 (v4, 51), Oral Unic 13h37 (v4, 52), Viva 13h37 (v4, 53) e Lisô 13h38 (v4, 54).
+Desde a virada, a função `distribuir-lead` cria o deal no RD CRM e registra a conversão
+`cof_<marca>` no RD Marketing (API key no Vault, `rdmkt_api_key`).
+
+**COF:** decisão do Junior. Uma automação nova por marca, "<Marca> > COF
+(distribuição)", disparada pela conversão `cof_<marca>`, só para leads novos e
+repetível (a COF vai de novo na reconversão). Ela manda o mesmo e-mail de antes e põe a
+mesma anotação no deal, porque o passo "anotação" do RD anota a negociação mais recente
+do lead. Por isso as regras dessas marcas ficam com `nota_deal` vazio. Levantamento
+das automações em `docs/superpowers/specs/2026-10-19-automacoes-rd-marketing-levantamento.md`.
+
+**Banco:** `distribuicao_regra.conversao_cof`, `nota_deal` e `tarefa`;
+`distribuicao_atribuicao.cof_enviada_em`, `cof_erro` e `extras_erro`; RPCs
+`distribuicao_marcar_cof` e `distribuicao_marcar_extras`; tabela
+`distribuicao_evento_ignorado` + view `vw_distribuicao_eventos_ignorados` (conta
+conversões de identificador sem regra). Tudo em `docs/sql/2026-10-16-distribuicao-leads.sql`,
+blocos 13 a 15.
+
+**Metas:** V4 de outubro (id 17) ativa, com a Eletrovias em Xayane 50 / Sarah 25 /
+Thiago 25. As outras marcas ficaram idênticas à V3 (conferido por md5). Nas outras 5
+marcas o time tem 1 SDR só (B2Case Thiago, Inpot e Lisô Xayane, Oral Unic e Viva Sarah).
+
+**Tela:** aba Distribuição de Leads abria Saúde da Marca pelo menu (PR #251, corrigido);
+registro de leads paginado no banco (10/25/50/100), legenda dos resultados, "sombra"
+virou "Em teste" e cards das marcas redesenhados (PR #252).
+
+**Conferido:** primeiro deal real da Eletrovias pela distribuição nova às 12h10, com
+deal da Xayane no funil SDR com Marca, cidade, UTM e capital, COF enviada 2 s depois,
+anotação da COF no deal e 7 tarefas da cadência criadas. Nas outras 5 marcas ainda não
+tinha chegado conversão na hora do registro.
 
 ### 2026-10-19 (2) — Depois do deploy, o navegador seguia abrindo a versão antiga
 

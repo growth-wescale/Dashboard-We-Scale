@@ -8,6 +8,14 @@ describe('normalizeSubFonte', () => {
     }
   })
 
+  it('agrupa os posicionamentos da Meta (Audience Network, Messenger, Threads)', () => {
+    // Em set/26, 188 dos 417 MQLs Inbound do Odonto Legacy vieram com
+    // 'audience_network' (utm_medium 'paid_social') e caíam em "Outros".
+    for (const raw of ['audience_network', 'an', 'messenger', 'msg', 'threads']) {
+      expect(normalizeSubFonte(raw), raw).toBe('Meta')
+    }
+  })
+
   it('agrupa Google e adwords', () => {
     expect(normalizeSubFonte('google')).toBe('Google')
     expect(normalizeSubFonte('adwords')).toBe('Google')
@@ -48,9 +56,15 @@ describe('normalizeSubFonte', () => {
     expect(normalizeSubFonte('', '   ')).toBe('Não identificado')
   })
 
+  it('separa o tráfego vindo do ChatGPT em grupo próprio', () => {
+    // Decisão do Junior (15/10): chatgpt.com vira opção própria no filtro, não "Outros".
+    expect(normalizeSubFonte('chatgpt.com')).toBe('ChatGPT')
+    expect(normalizeSubFonte('chatgpt.com', 'Busca Orgânica')).toBe('ChatGPT')
+  })
+
   it('joga valor desconhecido em Outros, sem descartar', () => {
     expect(normalizeSubFonte('portaldofranchising')).toBe('Outros')
-    expect(normalizeSubFonte('chatgpt.com')).toBe('Outros')
+    expect(normalizeSubFonte('manychat')).toBe('Outros')
   })
 
   it('ignora espaços em volta e diferença de caixa', () => {

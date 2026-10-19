@@ -331,6 +331,12 @@ se a verificação falhar.
 As segmentações "Entrada Chatbot - <marca>" deixam de ter automação
 pendurada; não são apagadas nesta entrega (podem servir de conferência).
 
+**Decisão de 19/10 (Junior):** a automação de cada marca fica como está hoje, disparada
+pela conversão (segmentação "Entrada Chatbot - <marca>"), e só perde o passo "Criar
+Negociação". O e-mail da COF continua saindo dela, com a mesma barreira de capital. Deal
+criado à mão no CRM não recebe COF (aceito, pra destravar a virada). O gatilho por
+"Tarefa criada no RD Station CRM" e a tarefa criada pela função ficam descartados.
+
 ### 6.6 Alertas
 
 Teams, pelo mesmo canal das automações de No Show/Closer de hoje (URL do

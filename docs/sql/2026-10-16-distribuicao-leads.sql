@@ -846,3 +846,30 @@ select cron.schedule('distribuicao_alerta_silencio', '20 * * * *', $$select publ
 -- ausência futura não reinicia; durante → só 1 SDR e reinicio = inicio; depois → reinicio = fim;
 -- reabrir aceita atribuido sem deal; marcas_em_silencio com fixture ativa e última conversão há 7 h
 -- numa terça 10:00 BRT → 1 linha, e 0 linhas no domingo.
+
+-- =====================================================================================
+-- Bloco 13 (19/10) — paridade do modo sombra e contador de eventos ignorados
+-- =====================================================================================
+-- Paridade 16–19/10 (simulado × deal criado pela automação do RD em até 60 min, por e-mail):
+-- Eletrovias 36/36, Inpot 13/13, Odonto 4/4, Beauty 3/3, B2Case 23/30. Os 7 da B2Case: 6 com
+-- capital "Ainda não tenho" (o formulário da B2Case não usa "Ainda não possuo") + 1 da v1.
+-- B2Case v3 publicada pela própria RPC, com "Ainda não tenho" na lista barrada.
+-- Migration distribuicao_identificadores_ignorados: tabela distribuicao_evento_ignorado
+-- (identificador + cf_marca, sem dado do lead) alimentada por distribuicao_processar quando o
+-- evento não tem regra vigente, e vw_distribuicao_eventos_ignorados pra leitura.
+create table if not exists public.distribuicao_evento_ignorado (
+  identificador text primary key,
+  primeira_vez timestamptz not null default now(),
+  ultima_vez timestamptz not null default now(),
+  ocorrencias int not null default 1,
+  cf_marca_ultima text
+);
+alter table public.distribuicao_evento_ignorado enable row level security;
+-- (em distribuicao_processar, no ramo "sem regra vigente", antes do return:)
+--   insert into public.distribuicao_evento_ignorado as e (identificador, cf_marca_ultima)
+--   values (left(v_evento, 200), left(v_contact->>'cf_marca', 100))
+--   on conflict (identificador) do update set ultima_vez = now(), ocorrencias = e.ocorrencias + 1,
+--     cf_marca_ultima = coalesce(excluded.cf_marca_ultima, e.cf_marca_ultima);
+create or replace view public.vw_distribuicao_eventos_ignorados as
+  select identificador, cf_marca_ultima, ocorrencias, primeira_vez, ultima_vez from public.distribuicao_evento_ignorado;
+grant select on public.vw_distribuicao_eventos_ignorados to anon, authenticated;

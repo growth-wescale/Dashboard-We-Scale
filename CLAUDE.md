@@ -80,7 +80,7 @@ novo.
 ### Campos que importam
 
 - `fonte_macro` — classificação de negócio: `Inbound`, `Resgate`, `Prospecção Ativa`, `Sem Classificação`. Vem de `payload->>'Fonte Macro'`
-- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD. O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
+- `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD, e o dashboard não a usa: ela diverge do cliente (ex.: põe `audience_network` em "Outros"). O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
@@ -596,6 +596,15 @@ Não confundir com os hooks novos de Vendas (`useFunilVendas`/`useFunilEventos`)
 As fontes, filtros SQL e ordem existentes foram preservados; medir latência
 e revisar a ordenação total da paginação separadamente com acesso autorizado.
 
+**Hook com `await` + `setState` precisa descartar resposta velha.** Trocar
+filtro rápido dispara várias consultas, e a rede devolve fora de ordem. Se o
+hook não confere depois do `await` que a chave (meses, origem, filtros) ainda
+é a ativa, a resposta mais lenta de uma seleção intermediária fica na tela até
+recarregar a página. Padrão: `chaveAtiva` (`useFunilVendas`, `useMetaResumo`)
+ou `useConsultaFiltrada`. O `cancelled` que muitos hooks têm só barra o polling
+depois de desmontar, não protege a resposta. Em 15/10 o card de meta somou
+Jul+Set com só Setembro selecionado.
+
 **`new Date('YYYY-MM-DD')` (sem hora) parseia como meia-noite UTC, não meia-
 noite local.** Formatar isso em Brasília (UTC-3) devolve o dia ANTERIOR.
 Só afeta colunas `date` puras (ex.: `vw_funil_etapas_v2.dia`) — colunas
@@ -620,27 +629,26 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Distribuição de leads: virada das marcas está travada no gatilho da COF.** As 10
-  regras estão em modo `sombra` (webhook ativo, função `distribuir-lead` v6 publicada,
-  aba no dashboard). Verificado em 16/10: deal criado pela API cria o lead no RD
-  Marketing, mas o lead fica **sem dono e sem nenhuma conversão "[CRM] Negociação
-  criada/atualizada"** — o gatilho novo pensado pra automação da COF não dispara.
-  Mas **"Tarefa criada no RD Station CRM" chega em segundos** mesmo para deal da
-  API (testado: tarefa criada via `POST /tasks` virou conversão no lead). Opções
-  pra virada, decisão do Junior: (a) automação da COF disparada por "Tarefa criada
-  no RD Station CRM" + funil + marca — as cadências já criam tarefa em todo deal
-  novo do funil SDR (conferir no primeiro deal real); (b) a própria função cria
-  uma tarefa "Novo lead" pro SDR ao criar o deal; (c) plano B da spec (evento de
-  conversão via API do Marketing, exige app OAuth). Nota: o lead criado pela API
-  fica **sem dono** no Marketing — a ação "Notificar responsável pelo Lead" da
-  automação do Odonto Legacy não acharia ninguém. Também faltam: capturar as chaves
-  `cf_*` reais (as conversões de chatbot ainda não tinham chegado no sombra),
-  publicar as barreiras (v2 de cada regra) e rodar a paridade ≥ 3 dias úteis.
+- [ ] **Distribuição de leads: virada das marcas (ainda em `sombra`).** Gatilho da COF
+  decidido pelo Junior em 19/10: a automação de cada marca no RD Marketing **fica como
+  está** (dispara na conversão / segmentação "Entrada Chatbot - <marca>", manda o e-mail
+  da COF), só perde o passo **"Criar Negociação"**. Deal criado à mão no CRM não recebe
+  COF (aceito). Paridade 16–19/10 (simulado × deal criado pela automação em até 60 min,
+  por e-mail): Eletrovias 36/36, Inpot 13/13, Odonto 4/4, Beauty 3/3, B2Case 23/30 →
+  barreira da B2Case corrigida na v3 ("Ainda não tenho"). Antes de virar: (1) **queda
+  da API do Supabase (18/10 18h52 → 19/10 08h56) não chegou nem a chamar a função** e o
+  RD Marketing **não reenvia** webhook: em modo `ativo`, ~17 leads dessa noite ficariam
+  sem deal. Precisa de rede de proteção (fila/reenvio fora do Supabase ou reconciliação)
+  antes da virada; (2) 1 lead do Odonto Legacy (18/10 10h18) virou deal no RD sem chegar
+  conversão com identificador conhecido: `vw_distribuicao_eventos_ignorados` (19/10)
+  conta os identificadores sem regra pra achar qual é; (3) 1 lead da Oral Unic com
+  "Até R$ 200.000" virou deal pela automação (a segmentação documentada barra esse
+  valor), conferir a segmentação no RD. Instituto do Autismo, Lisô, Viva e Scale
+  Partner quase sem volume ainda.
 - [ ] **Transferência de carteira** (SDR de férias/saída: transferir no RD os deals
   em etapas iniciais e as reuniões agendadas no período, pelos mesmos pesos) —
   segunda entrega da distribuição de leads, decisão do Junior em 16/10
-- [ ] **Segmentações "Entrada Chatbot - <marca>"** ficam sem uso quando as automações
-  perderem o passo "Criar Negociação"; não foram apagadas
+- [x] ~~Segmentações "Entrada Chatbot - <marca>" sem uso~~ — seguem em uso: a automação da COF continua disparando por elas (decisão de 19/10)
 - [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
 - [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
 - [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
@@ -666,6 +674,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   exatamente de 13:40, processando os adiados nas rodadas seguintes
 - [ ] **Metas não separam Inbound de Prospecção Ativa** — `DB_Metas_Performance` não tem a dimensão, então o card de Meta mostra a meta CHEIA nos dois lados do toggle. No toggle Prospecção Ativa isso vira meta inteira contra R$ 0 realizado. Decisão do Junior em 27/08 foi deixar assim por ora; separar quando o time lançar meta de prospecção
 - [ ] **Metas hardcoded** em `src/constants/metasVendas.ts` — `DB_Metas_Performance` já tem o dado. Viva diverge: 1 no código, 0 no banco
+- [ ] **Campanha de Metas sem guarda de resposta atrasada** — `useMetasClosers`,
+  `useMetasSDRs`, `useMetaPorMarca`, `useRealizadoPorMarca`, `useCorridaPerformance`
+  e `useHistoricoAtingimento` gravam o resultado depois do `await` sem conferir
+  o mês ativo, o mesmo defeito corrigido em `useMetaResumo` em 15/10. Trocar de
+  mês rápido no seletor pode deixar números de outro mês na tela até recarregar.
+  `useSemanasCampanha` já tem a guarda
 - [ ] **Escrita aberta pra chave anon** — `atributos_legado` e `atribuicao_manual`
   (overrides de SDR/Closer/origem) estão sem RLS e com INSERT/UPDATE/DELETE pra
   anon; `invocar_marca_put`, `invocar_aplicar_plano` e `invocar_auditoria_marca`
@@ -755,6 +769,106 @@ inclusive `supabase/functions/distribuir-lead/rd.test.ts` rodando no Node)
 1440×900 e 375×812 numa rota de prévia só na cópia de build. Deals de teste no
 RD enviados pra lixeira / a apagar: `6ad2773f3ec05a00216805e2`,
 `6ad27e002b43550028bfeab5` (com uma tarefa "Teste gatilho").
+
+### 2026-10-16 — Dashboard fora do ar por 45 min: a Hostinger desligou a VPS
+
+Junior viu as abas presas em "Carregando..." e depois `ERR_CONNECTION_TIMED_OUT`.
+**Não foi o dashboard nem o banco.** O journal da VPS mostra
+`qemu-ga: guest-shutdown called` → `System is powering down (hypervisor
+initiated shutdown)` às **10:53 BRT**: desligamento limpo pedido pelo
+hipervisor (painel da Hostinger ou manutenção dela), não comando de dentro
+do servidor nem crash. Nenhum aviso, OOM ou falta de recurso antes. A VPS
+ficou desligada 34 min e voltou às 11:28 com kernel novo (6.8.0-134 → 147).
+Docker levou ~9 min pra subir os containers (carga 40+ em 4 vCPU). Às 11:38
+o Traefik ainda devolvia 404, e o site voltou a dar 200 por volta das 11:40.
+
+"Carregando..." é o fallback do `Suspense`: o app já estava aberto no
+navegador, mas os chunks das rotas (lazy) vêm da VPS. Por isso as abas
+travaram antes do erro de conexão.
+
+Sem perda de dado do dashboard. O Supabase de Expansão ficou saudável o tempo
+todo (0 erros 5xx, p95 ≤ 1,3 s), e `wf_5`, `espelho_rd_edge` e
+`meetrox_sync_reunioes` rodaram sem falha (o `n8n.wescale.com.br` está em
+outro servidor, 72.60.6.16). Saíram do ar junto todos os serviços dessa VPS
+(n8n-4ot6, Metabase, receptor de webhook do RD do DW, Chatwoot etc.), que são
+do TI.
+
+**Se acontecer de novo:** `ssh wescale-vps` (chave `~/.ssh/wescale_vps` no Mac
+do Junior). `uptime` e `last -x reboot shutdown` mostram se reiniciou;
+`journalctl -b -1 | grep -iE "guest-shutdown|powering down"` diz quem
+desligou. O dashboard é o container `dashboard-app-1` (nginx servindo
+`/opt/dashboard/dist`, rota por label do Traefik), com `restart:
+unless-stopped`: sobe sozinho, e é só esperar o Docker terminar de carregar.
+Quem desligou só aparece no histórico de atividades do painel da Hostinger.
+
+### 2026-10-15 (4) — Card "Meta do período" ficava com a meta de uma seleção antiga
+
+Achado na conferência do RMP de setembro contra o dash em produção: com
+Consolidado e Setembro 2026, o card "Meta do período" da Visão Macro mostrava
+**R$ 1,63M / 43 un** em vez de **R$ 981,4 mil / 25 un**, depois de alternar
+meses no filtro de Período sem recarregar. Com F5 voltava ao certo. Os números
+do deck estavam certos.
+
+**Causa:** `useMetaResumo` (`useMetasPerformance.ts`) gravava o resultado da
+consulta depois do `await` sem conferir se a seleção ainda era a mesma. Ao
+marcar e desmarcar Julho, a consulta de Jul+Set chegava depois da de Set e
+ficava no card. Conferido no banco: R$ 1.625.495 / 43 un é exatamente a soma
+das metas de julho (R$ 644.110 / 18) e setembro (R$ 981.385 / 25).
+`useMetasPerformance` (metas por pessoa da Performance) tinha o mesmo defeito
+ao trocar de mês.
+
+**Fix:** os dois hooks descartam a resposta (dados, erro e `loading`) cuja
+chave já não é a ativa, mesmo padrão do `chaveAtiva` de `useFunilVendas`. Teste
+novo (`useMetasPerformance.foraDeOrdem.test.ts`, 5 casos) simula as respostas
+fora de ordem com o React sem DOM de `useConsultaFiltrada.test.ts`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (681 testes, 5 novos)
++ oxlint sem aviso nos arquivos tocados, em worktree fora do OneDrive. **Visto
+renderizado** com dado real numa rota temporária sem login e com atraso
+artificial de 4 s só na consulta que inclui julho (patch fora do commit).
+Marcar e desmarcar Julho com o hook antigo reproduz R$ 1,63M / 43. Com o
+corrigido o card fica em R$ 981,4 mil / 25, e a resposta de Jul+Set, que chega
+3,8 s depois, é descartada.
+
+Os hooks do seletor de mês da Campanha de Metas têm o mesmo padrão sem guarda
+(ver pendência na seção 8).
+
+### 2026-10-15 (3) — Sub-fonte: Audience Network vira Meta e ChatGPT ganha opção própria
+
+Achado ao levantar as fontes do RMP de setembro: `audience_network` (posicionamento
+Audience Network da Meta) não estava no mapa de `normalizeSubFonte` e caía em
+"Outros". Em set/26, 188 dos 417 MQLs Inbound do Odonto Legacy vieram assim
+(`utm_medium` `paid_social`, campanha `[ODL] Consultoria I LEADS I SITE LEGACY`):
+o filtro Sub-fonte mostrava "Outros" para lead de mídia paga da Meta.
+
+**Regra nova** (`src/lib/fonteMapping.ts`, decisão do Junior):
+- `audience_network`, `messenger`, `msg` e `threads` → Meta (`an` já ia). Os três
+  últimos não aparecem na base hoje; entraram por serem nomes do mesmo posicionamento.
+- `chatgpt.com` → grupo próprio **ChatGPT** (5 negócios na base: link aberto a
+  partir de resposta do ChatGPT, que põe o `utm_source` sozinho).
+- O resto segue em "Outros" (7 negócios na base): `crm` de formulário de teste (2),
+  `manychat`, `portaldofranchising`, `botão wpp lp`, uma tag do GTM e uma UTM
+  quebrada do Scale Partner.
+
+Template de UTM não resolvido não era problema: o único na base é
+`{{site_source_name}}` (16), que já usa o "Sub-Fonte" do RD ou vira "Não identificado".
+
+**Efeito** (base inteira, 8.400 linhas de `vw_funil_vendas`): "Outros" 202 → 7 e Meta
+5.044 → 5.234. Odonto Legacy, Inbound, MQL de set/26: Meta 216 → 404, Outros 188 → 0,
+total 417 igual. Muda só o agrupamento do filtro Sub-fonte (Visão Macro, Performance,
+Análise de Perda e bloco do MeetRox); sem esse filtro, nenhum número muda. Sem
+mudança de banco.
+
+**Fora do escopo, registrado:** a coluna `sub_fonte` da view (normalização feita no
+banco) também põe `audience_network` em "Outros". O dashboard não a exibe, mas
+relatório que a leia herda o buraco. E `CHANNEL_SOURCES['Meta Ads']` da Saúde da
+Marca (Marketing) também não reconhece `audience_network`.
+
+Verificado: `npm run build` (tsc -b) + `npx vitest run` (676 testes, 2 novos em
+`fonteMapping.test.ts`) + oxlint limpo nos arquivos tocados, em worktree fora do
+OneDrive. Opções do filtro conferidas rodando o `funilFilterOptions` real sobre a
+base real (Odonto Legacy set/26: só "Meta" e "Não identificado"). App exige login,
+então não foi visto renderizado.
 
 ### 2026-10-15 (2) — Meta MQL → SQL sai do código e vai pras metas do mês; cadastro de pessoas
 

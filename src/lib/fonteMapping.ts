@@ -2,7 +2,8 @@
  * Normalização da sub-fonte (utm_source).
  *
  * O utm_source vem sujo do RD: Meta aparece como 'meta', 'ig', 'facebook',
- * 'instagram' e 'fb'; Google como 'google' e 'adwords'; e há template de UTM
+ * 'instagram', 'fb' e pelo posicionamento ('audience_network', 'messenger');
+ * Google como 'google' e 'adwords'; e há template de UTM
  * que nunca foi substituído ('{{site_source_name}}'). Sem agrupar, o filtro de
  * Sub-Fonte vira uma lista de 20+ opções com a mesma origem repartida.
  *
@@ -15,6 +16,7 @@ export const SUB_FONTE_GRUPOS = [
   'Google',
   'Evento',
   'Landing Page',
+  'ChatGPT',
   'Outros',
   'Não identificado',
 ] as const
@@ -29,7 +31,13 @@ const MAPA: Record<string, SubFonteGrupo> = {
   fb: 'Meta',
   facebook: 'Meta',
   instagram: 'Meta',
-  an: 'Meta', // audience network
+  // Posicionamentos da Meta: nomes do publisher_platform ('audience_network')
+  // e abreviações do {{site_source_name}} ('an', 'msg').
+  audience_network: 'Meta',
+  an: 'Meta',
+  messenger: 'Meta',
+  msg: 'Meta',
+  threads: 'Meta',
   'forms nativo meta': 'Meta',
   facebookluizti: 'Meta',
   // Google
@@ -42,6 +50,8 @@ const MAPA: Record<string, SubFonteGrupo> = {
   // Landing pages próprias
   'landing-page-viva': 'Landing Page',
   'inpot-landing': 'Landing Page',
+  // Link aberto a partir de resposta do ChatGPT (ele mesmo põe o utm_source)
+  'chatgpt.com': 'ChatGPT',
 }
 
 /** Valores que significam "não sabemos", incluindo macro de UTM não resolvida. */

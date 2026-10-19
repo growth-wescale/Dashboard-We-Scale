@@ -71,3 +71,21 @@ desativadas no RD (ids: Eletrovias `33b6126b-de85-4439-92e0-a05d77295af4`, B2Cas
 publicar a regra em `sombra`, também no mesmo minuto. As versões "- Prosp Ativa" não foram tocadas. Anotação no deal fica com a automação do RD, não com a
 função (`nota_deal` vazio nessas marcas, pra não duplicar). Fluxo de teste "TESTE COF distribuição
 (apagar)" (conversão cof_distribuicao_teste, tag + anotação) fica ativo até o teste final.
+
+## Virada das outras 4 marcas (19/10/2026, à tarde)
+
+| Marca | O que foi feito no RD Marketing | Regra |
+|---|---|---|
+| Scale Partner | `partner_multistep` desativada 14h00 | id 55, nome "Scale Partner - {primeiro_nome}", Vanessa |
+| Beauty Connection | `beautyconnection_multistep` desativada 14h01 | id 56, nome "Beauty Connection - {primeiro_nome}", Vanessa; Marca = Beauty Connection (a automação gravava Lisô Laser) |
+| IDA | "Instituto do Autismo > CRM (Limpo)" desativada 14h02 (`IDA_multistep` já estava desativada pelo Junior) | id 57, barreira `cf_capital_text` = "Menos de R$ 550k", Sarah |
+| Odonto Legacy | `odontolegacy_multistep` **editada** 14h10: saíram Criar Negociação, Notificar responsável e Criar tarefa; ficou só a tag `converteu_odonto_legacy_consultoria` | id 58, tarefa "Novo Lead" (ligação, 1 h), Sarah |
+
+"OdontoScale > CRM (Limpo)" (`odontoscale_multistep`, LP antiga) **continua ativa** até o Gabriel
+trocar a LP: a distribuição não conhece esse evento, então não há duplicidade.
+
+## Caixa reserva (2º webhook)
+
+Webhook "Caixa reserva distribuição" (gatilho Conversão, sem filtro) → Edge Function
+`caixa-reserva-leads` no Supabase de Marketing. Não substitui o webhook "Distribuição de leads
+(dashboard We Scale)": cobre só quando ele falha. Detalhes no CLAUDE.md, seção 3.

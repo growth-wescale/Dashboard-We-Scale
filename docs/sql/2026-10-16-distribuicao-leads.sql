@@ -897,3 +897,47 @@ grant select on public.vw_distribuicao_eventos_ignorados to anon, authenticated;
 -- POST /api/v1/activities {activity{deal_id,user_id,text}} e POST /api/v1/tasks
 -- {task{deal_id,user_ids,subject,type,date,hour}} (prazo em BRT). Teste 19/10 na marca Teste:
 -- deal 6ad6183a83539d002789cbac com nota, tarefa "Novo Lead (teste)" pra Xayane em +1 h e COF.
+
+-- =====================================================================================
+-- Bloco 16 [distribuicao_conversao_vista] — 19/10/2026. Base da proteção contra queda: o RD
+-- Marketing não reenvia webhook, então cada conversão vai ter um segundo caminho (caixa
+-- reserva fora deste Supabase que repassa para distribuir-lead). Para a mesma conversão poder
+-- chegar pelos dois caminhos sem virar deal duplicado, distribuicao_processar grava a chave
+-- uuid do lead | evento | last_conversion.created_at e devolve "ignorado" (sem log) quando a
+-- chave já existe. Payload sem uuid ou sem horário segue o caminho normal (só a janela de 10 min).
+-- Testado com rollback: repetida → ignorado; outra conversão do mesmo lead < 10 min → duplicado;
+-- evento sem regra repetido não conta duas vezes no contador de ignorados; sem uuid → normal.
+-- =====================================================================================
+create table if not exists public.distribuicao_conversao_vista (chave text primary key, vista_em timestamptz not null default now());
+alter table public.distribuicao_conversao_vista enable row level security;
+-- distribuicao_processar: novas variáveis v_chave/v_novas e, antes de buscar a regra:
+--   if nullif(v_contact->>'uuid','') is not null and nullif(v_contact->'last_conversion'->>'created_at','') is not null then
+--     v_chave := (v_contact->>'uuid') || '|' || v_evento || '|' || (v_contact->'last_conversion'->>'created_at');
+--     insert into public.distribuicao_conversao_vista (chave) values (v_chave) on conflict do nothing;
+--     get diagnostics v_novas = row_count;
+--     if v_novas = 0 then
+--       return jsonb_build_object('resultado','ignorado','motivo','conversão já recebida','chave',v_chave);
+--     end if;
+--   end if;
+-- (aplicado por replace sobre pg_get_functiondef, migration distribuicao_conversao_vista)
+select cron.schedule('distribuicao_conversao_vista_limpeza', '40 4 * * *',
+  $c$delete from public.distribuicao_conversao_vista where vista_em < now() - interval '45 days'$c$);
+
+-- =====================================================================================
+-- Bloco 17 [invocar_repasse_caixa_reserva] — 19/10/2026. Caixa reserva no Supabase de MARKETING
+-- (docs/sql/2026-10-19-caixa-reserva-leads-marketing.sql + Edge Function caixa-reserva-leads lá).
+-- Aqui: Edge Function repassar-caixa-reserva (busca pendentes na caixa, entrega à distribuir-lead,
+-- confirma na caixa; 3 falhas seguidas = API fora, para a rodada) e o pg_cron que a chama.
+-- Vault: caixa_reserva_chave (cópia da chave gerada no Marketing). Teste de ponta a ponta em 19/10:
+-- conversão só na caixa virou deal no repasse; conversão nos dois caminhos virou 1 deal só.
+-- =====================================================================================
+create or replace function public.invocar_repasse_caixa_reserva()
+returns bigint language sql security definer set search_path = public, vault, net as $$
+  select net.http_post(
+    url := 'https://cygxmduuwlwfbodfrlkr.supabase.co/functions/v1/repassar-caixa-reserva?chave='
+           || (select decrypted_secret from vault.decrypted_secrets where name = 'distribuicao_webhook_chave'),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 140000)
+$$;
+revoke all on function public.invocar_repasse_caixa_reserva() from public, anon, authenticated;
+select cron.schedule('distribuicao_repasse_caixa_reserva', '*/2 * * * *', $c$select public.invocar_repasse_caixa_reserva()$c$);

@@ -33,7 +33,8 @@ Também existem "<marca> > CRM (Limpo) - Prosp Ativa" (fora do escopo) e "Abriu/
 Achados que mudam a virada:
 1. **A barreira lê o campo do lead** (Capital Disponível = última resposta do lead em qualquer
    formulário), não a resposta da conversão — explica deal na marca errada e o caso da Oral Unic.
-2. **`CRMDN` é anotação na negociação**: some se o fluxo não cria o deal. A função tem que criar.
+2. **`CRMDN` é anotação na negociação mais recente do lead**: não depende de o próprio fluxo criar o
+   deal (os fluxos "Abriu/Clicou email cof" já usam assim). Fica na automação nova da COF (abaixo).
 3. **Odonto tem dois identificadores** (odontoscale_multistep e odontolegacy_multistep) e a regra só
    conhece o segundo — é o lead de 18/10 10h18 que não chegou.
 4. **IDA tem dois fluxos criando deal**, com barreiras em campos diferentes.

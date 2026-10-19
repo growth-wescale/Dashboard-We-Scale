@@ -537,6 +537,11 @@ export function FunilVendas() {
     if (!clickedStage) return []
     if (modo === 'aging') return dealsInEtapaAtual(scoped, clickedStage, win)
     if (modo === 'atual') return dealsInEtapaAtual(scoped, clickedStage, null)
+    // No-show não é etapa do funil: o número da caixa sai de countStage (data
+    // de No Show na linha do deal), então a lista sai de rowsInStage.
+    if (clickedStage === 'No Show') {
+      return rowsInStage(scoped, 'No Show', win, viewModes).map(row => ({ row, dataEtapa: row.data_no_show }))
+    }
     return dealsInStage(scoped, eventos, clickedStage, win, viewModes, 'performance')
   }, [clickedStage, modo, scoped, eventos, win, viewModes])
 

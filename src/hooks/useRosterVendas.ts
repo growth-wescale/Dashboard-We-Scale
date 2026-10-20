@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { nomesInativos } from '@/lib/equipe'
 
 export type CargoVendas = 'SDR' | 'Closer' | 'SDR/Closer'
 
@@ -7,8 +8,8 @@ export interface MembroRoster {
   nome: string
   cargo: CargoVendas
   foto: string | null
-  /** `nome_cargo_foto.ativo`. Quem saiu continua na lista (a Performance precisa
-   *  do nome pra meses passados); só quem escolhe gente pro mês filtra por ele. */
+  /** `nome_cargo_foto.ativo`. Quem saiu continua na lista (foto e cargo valem
+   *  pra meses passados), mas não aparece nas visões por pessoa: ver `nomesInativos`. */
   ativo: boolean
 }
 
@@ -60,4 +61,10 @@ export function useRosterVendas(): UseRosterResult {
   }, [fetchAll])
 
   return { data, loading, error }
+}
+
+/** Nomes de quem saiu do time, pra esconder das tabelas, gráficos e filtros por pessoa. */
+export function useNomesInativos(): ReadonlySet<string> {
+  const { data } = useRosterVendas()
+  return useMemo(() => nomesInativos(data), [data])
 }

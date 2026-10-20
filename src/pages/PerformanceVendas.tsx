@@ -19,6 +19,7 @@ import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
 import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
+import { nomesInativos } from '@/lib/equipe'
 import { useReunioesCloser } from '@/hooks/useReunioesCloser'
 import { filtrarReunioes } from '@/lib/reunioesCloser'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
@@ -397,6 +398,7 @@ export function PerformanceVendas() {
   const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
   const { data: eventos } = useFunilEventos({ enabled: true, origem })
   const { data: roster } = useRosterVendas()
+  const inativos = useMemo(() => nomesInativos(roster), [roster])
   const { data: reunioesBase, loading: reunioesLoading, error: reunioesError } = useReunioesCloser()
 
   const scope = useMemo(
@@ -428,9 +430,9 @@ export function PerformanceVendas() {
   const opcoes = useMemo(
     () => funilFilterOptions({
       rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers,
-      cohort: viewModes.funnelView === 'cohort',
+      cohort: viewModes.funnelView === 'cohort', inativos,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, inativos],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),
@@ -826,7 +828,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR fora da equipe atual, não entra nela, então a soma das linhas pode ficar abaixo do card. Com um SDR filtrado, os dois batem.
+            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR que saiu do time, não entra nela, então a soma das linhas pode ficar abaixo do card. Com um SDR filtrado, os dois batem.
           </p>
 
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
@@ -892,7 +894,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído.
+            Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído. Quem saiu do time não aparece na tabela, mas as vendas dele seguem nos cards.
           </p>
 
           <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />
@@ -902,7 +904,7 @@ export function PerformanceVendas() {
           </div>
 
           <ReunioesMeetroxSection reunioes={reunioes} loading={reunioesLoading} origem={origem}
-            subtitulo={`${scopeLabel} · ${subtitlePeriodo}`} accent={CLOSER_ACCENT} />
+            subtitulo={`${scopeLabel} · ${subtitlePeriodo}`} accent={CLOSER_ACCENT} inativos={inativos} />
 
           <div style={{ marginTop: 32 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>

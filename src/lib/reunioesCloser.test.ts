@@ -126,6 +126,19 @@ describe('agruparReunioes', () => {
     expect(linhas[2]).toMatchObject({ total: 0, semTipo: 1, duracaoMedia: null, notaMedia: null })
   })
 
+  it('por Closer, quem saiu do time não vira linha; por marca, a reunião dele conta', () => {
+    const rows = [
+      reuniao({ closer: 'Douglas', marca: 'Viva' }),
+      reuniao({ closer: 'Aurélio Briano', marca: 'Viva' }),
+    ]
+    const inativos = new Set(['aurelio briano'])
+    expect(agruparReunioes(rows, 'closer', inativos).map(l => l.chave)).toEqual(['Douglas'])
+    expect(agruparReunioes(rows, 'marca', inativos)[0]).toMatchObject({ chave: 'Viva', total: 2 })
+    const resumo = resumirReunioes(rows, inativos)
+    expect(resumo.total).toBe(2)
+    expect(resumo.porTipo[0]).toMatchObject({ quantidade: 2, closers: 1 })
+  })
+
   it('por marca: sem negócio vira chave null e fica sempre por último', () => {
     const rows = [
       reuniao({ marca: null, id_deal: null, deal_no_funil: false }),

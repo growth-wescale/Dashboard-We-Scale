@@ -12,6 +12,7 @@
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
 import { rowsInLoss, countStage, currentStage, STAGE_ORDER, stageOwnerRole } from '@/lib/metrics'
+import { saiuDoTime } from '@/lib/equipe'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import type { CategoriaMotivo } from '@/constants/motivosPerda'
@@ -187,19 +188,26 @@ export function computeCruzamentos(
 
 export interface RespRow { nome: string; camada: 'SDR' | 'Closer' | '—'; qtd: number; deals: FunnelRow[] }
 
-export function computeResponsaveis(perdas: FunnelRow[]): RespRow[] {
-  const bucket = new Map<string, { camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
+/**
+ * Uma linha por pessoa E camada: quem perde como SDR e como Closer (ex.: a
+ * Bruna, Closer que aparece como SDR em negócio que voltou pro No Show) vira
+ * duas linhas, senão tudo caía na camada do primeiro negócio. Quem saiu do
+ * time (`inativos`) fica fora da lista; as perdas dele seguem nos totais.
+ */
+export function computeResponsaveis(perdas: FunnelRow[], inativos?: ReadonlySet<string>): RespRow[] {
+  const bucket = new Map<string, { nome: string; camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
   for (const p of perdas) {
     const stage = currentStage(p)
     const camada: 'SDR' | 'Closer' | '—' = stage ? (stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer') : '—'
     const nome = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
-    if (!nome) continue
-    const cur = bucket.get(nome) ?? { camada, deals: [] }
+    if (!nome || saiuDoTime(nome, inativos)) continue
+    const chave = `${camada}|${nome}`
+    const cur = bucket.get(chave) ?? { nome, camada, deals: [] }
     cur.deals.push(p)
-    bucket.set(nome, cur)
+    bucket.set(chave, cur)
   }
-  return [...bucket.entries()]
-    .map(([nome, v]) => ({ nome, camada: v.camada, qtd: v.deals.length, deals: v.deals }))
+  return [...bucket.values()]
+    .map(v => ({ nome: v.nome, camada: v.camada, qtd: v.deals.length, deals: v.deals }))
     .sort((a, b) => b.qtd - a.qtd)
 }
 

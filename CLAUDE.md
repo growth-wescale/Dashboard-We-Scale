@@ -351,6 +351,16 @@ no funil Odonto Legacy (`deal_snapshot.id_funil = 68b84341646c55001ed64e4f`)
 sem Marca vira `'Odonto Legacy'` em `vw_funil_vendas` e em
 `vw_funil_etapas_v2.marca_deal` — o funil é exclusivo da marca.
 
+**Quem saiu do time não aparece nas visões por pessoa.** Pessoa com
+`nome_cargo_foto.ativo = false` não vira linha nas tabelas de SDR e Closer da
+Performance, na tabela "Por Closer" do MeetRox, na "Perda por responsável" nem
+nas opções dos filtros de SDR e Closer, em nenhum período (nem no mês em que
+ela trabalhou). As vendas, etapas e perdas dela seguem nos cards, nos totais e
+por marca, e o nome dela segue na lista de negócios dos pop-ups. Regra única em
+`src/lib/equipe.ts`. Tirar alguém do time = `ativo = false` no cadastro, sem
+mexer em código. A Campanha de Metas não usa essa regra: lá o piloto é quem tem
+meta no mês.
+
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
 
@@ -367,6 +377,7 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
+src/lib/equipe.ts             quem saiu do time (`nome_cargo_foto.ativo`): some das visões por pessoa
 src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
 src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
 src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
@@ -740,6 +751,40 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-20 (3) — Quem saiu do time some das tabelas, gráficos e filtros por pessoa
+
+Pedido do chefe do Junior: a tabela de Closers da Performance mostrava Rômulo,
+Aurélio Briano e Giullia com tudo zerado em outubro. A tabela criava uma linha
+pra qualquer pessoa do cadastro com algum negócio na base, e ninguém lia
+`nome_cargo_foto.ativo` (já `false` pros três, e pra Danilo e Cristhian
+Stefanes).
+
+Regra nova na seção 4. Onde vale: tabelas SDR/Closer da Performance (e o popup
+por pessoa dos cards, que lê as mesmas linhas), tabela "Por Closer" do MeetRox
+(a linha Total e os cards seguem com tudo; o "N closers" dos cards conta só o
+time), "Perda por responsável" da Análise de Perda e as opções de SDR/Closer da
+barra na Visão Macro, Performance, Análise de Perda e Linha do Tempo. Fica de
+fora: lista de negócios e mini-gráficos "Por SDR/Por Closer" dos pop-ups
+(detalhe do negócio, onde o nome vale) e a Campanha de Metas (piloto = quem tem
+meta no mês; em outubro só gente ativa tem meta).
+
+Efeito: a soma das linhas pode ficar abaixo do card. Set/26: card Fechamentos
+13, tabela 10 (Aurélio fora). Out/26: card 7, tabela 3, mas aqui nenhuma é de
+quem saiu: 3 vendas do Scale Partner sem Closer e 1 da Vanessa Daniel (Odonto
+Legacy, cargo SDR, nunca entrou na tabela de Closers).
+
+**Junto, bug antigo da "Perda por responsável":** a lista agrupava só pelo nome
+e usava a camada do primeiro negócio. A Bruna, com perdas como Closer e como
+SDR (negócios que voltaram pro No Show com ela de SDR), aparecia numa linha só
+"SDR 21" e sumia da aba Closer. Agora é uma linha por pessoa e camada: set/26
+Bruna Closer 11 e SDR 10.
+
+Verificado: build + 766 testes (7 novos) + oxlint sem aviso novo, e visto
+renderizado com dado real (rota sem login só numa cópia de prévia): out/26
+Closers = Jéssica, Bruna, Douglas, Thaina, Paula; set/26 sem Aurélio na tabela,
+no MeetRox (R1 total segue 61) e no filtro de Closer; Perda por responsável de
+set/26 sem Aurélio e Rômulo (3 perdas de Closer cada).
 
 ### 2026-10-20 (2) — Login ganha "Esqueci minha senha"
 

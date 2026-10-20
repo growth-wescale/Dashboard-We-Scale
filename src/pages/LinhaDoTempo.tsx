@@ -10,6 +10,7 @@ import { DealCardKanban } from '@/components/timeline/DealCardKanban'
 import { MultiSelect, labelStyle } from '@/components/ui/MultiSelect'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
+import { useNomesInativos } from '@/hooks/useRosterVendas'
 import { buildScopeFilter, stageLabel, toWindow } from '@/lib/metrics'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { funilFilterOptions, dealNaJanela } from '@/lib/funilFilterOptions'
@@ -71,6 +72,7 @@ export function LinhaDoTempo() {
   // Sempre carrega o recorte inteiro da origem — marca filtrada no cliente
   // (via `scope`), igual às outras abas de Vendas.
   const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
+  const inativos = useNomesInativos()
 
   const scope = useMemo(
     () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
@@ -79,8 +81,8 @@ export function LinhaDoTempo() {
   const win = useMemo(() => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))), [ranges])
   const cohort = viewModes.funnelView === 'cohort'
   const opcoes = useMemo(
-    () => funilFilterOptions({ rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort],
+    () => funilFilterOptions({ rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, inativos }),
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, inativos],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),

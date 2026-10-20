@@ -2,6 +2,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow } from '@/lib/metrics'
 import { STAGE_DATE_FIELD, STAGE_ORDER, isInWindow } from '@/lib/metrics'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
+import { saiuDoTime } from '@/lib/equipe'
 
 export interface FunilFilterOptionsInput {
   rows: FunnelRow[]
@@ -13,6 +14,8 @@ export interface FunilFilterOptionsInput {
   closers: string[]
   /** true no modo "Deals criados no período" (safra) — só o MQL conta como "na janela". */
   cohort: boolean
+  /** Quem saiu do time (`nomesInativos`) não aparece nas opções de SDR e Closer. */
+  inativos?: ReadonlySet<string>
 }
 
 export interface FunilFilterOptions {
@@ -41,7 +44,7 @@ export function dealNaJanela(row: FunnelRow, win: PeriodWindow, cohort: boolean)
  * Compartilhado entre Visão Macro e Performance.
  */
 export function funilFilterOptions(input: FunilFilterOptionsInput): FunilFilterOptions {
-  const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort } = input
+  const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, inativos } = input
 
   const subFonteDe = (r: FunnelRow) => normalizeSubFonte(r.utm_source, r.sub_fonte_crm)
   const fonteDe = (r: FunnelRow) => normalizeFonteMacro(r.fonte_macro)
@@ -52,12 +55,13 @@ export function funilFilterOptions(input: FunilFilterOptionsInput): FunilFilterO
   const okSdr = (r: FunnelRow) => !sdrs.length || sdrs.includes(r.nome_sdr ?? '')
   const okCloser = (r: FunnelRow) => !closers.length || closers.includes(r.nome_closer ?? '')
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))]
+  const doTime = (xs: string[]) => uniq(xs).filter(n => !saiuDoTime(n, inativos))
 
   return {
     marcas: uniq(naJanela.filter(r => okFonte(r) && okSub(r) && okSdr(r) && okCloser(r)).map(r => r.marca ?? '')),
     fontes: uniq(naJanela.filter(r => okMarca(r) && okSub(r) && okSdr(r) && okCloser(r)).map(fonteDe)),
     subFontes: uniq(naJanela.filter(r => okMarca(r) && okFonte(r) && okSdr(r) && okCloser(r)).map(subFonteDe)),
-    sdrs: uniq(naJanela.filter(r => okMarca(r) && okFonte(r) && okSub(r) && okCloser(r)).map(r => r.nome_sdr ?? '')),
-    closers: uniq(naJanela.filter(r => okMarca(r) && okFonte(r) && okSub(r) && okSdr(r)).map(r => r.nome_closer ?? '')),
+    sdrs: doTime(naJanela.filter(r => okMarca(r) && okFonte(r) && okSub(r) && okCloser(r)).map(r => r.nome_sdr ?? '')),
+    closers: doTime(naJanela.filter(r => okMarca(r) && okFonte(r) && okSub(r) && okSdr(r)).map(r => r.nome_closer ?? '')),
   }
 }

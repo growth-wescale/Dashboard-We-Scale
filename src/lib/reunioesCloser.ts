@@ -143,10 +143,10 @@ export interface LinhaReunioes {
 
 export type DimensaoReunioes = 'closer' | 'marca'
 
-/** Chave da linha de uma reunião na dimensão escolhida. Por Closer, quem saiu
- *  do time (`inativos`) vira a linha `EX_INTEGRANTES`. */
-export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes, inativos?: ReadonlySet<string>): string | null {
-  return dim === 'closer' ? nomeNaVisao(r.closer, inativos) : r.marca
+/** Chave da linha de uma reunião na dimensão escolhida. Por Closer, quem não é
+ *  do time (`equipe`, os ativos do cadastro) vira a linha `EX_INTEGRANTES`. */
+export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes, equipe?: ReadonlySet<string>): string | null {
+  return dim === 'closer' ? nomeNaVisao(r.closer, equipe) : r.marca
 }
 
 /**
@@ -154,15 +154,15 @@ export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes, inativos?: 
  * reuniões tipadas. Linha só com reuniões sem tipo vai para o fim — ela não
  * tem o que mostrar nas colunas R1–R5, mas some se for descartada. Na visão
  * por marca, "sem negócio vinculado" (chave nula) fica sempre por último.
- * Na visão por Closer, quem saiu do time (`inativos`) entra somado na linha
+ * Na visão por Closer, quem não é do time (`equipe`) entra somado na linha
  * `EX_INTEGRANTES`, também por último.
  */
 export function agruparReunioes(
-  rows: readonly ReuniaoRow[], dim: DimensaoReunioes, inativos?: ReadonlySet<string>,
+  rows: readonly ReuniaoRow[], dim: DimensaoReunioes, equipe?: ReadonlySet<string>,
 ): LinhaReunioes[] {
   const grupos = new Map<string | null, { porTipo: ContagemPorTipo; semTipo: number; dur: number[]; nota: number[] }>()
   for (const r of rows) {
-    const chave = chaveDaReuniao(r, dim, inativos)
+    const chave = chaveDaReuniao(r, dim, equipe)
     let g = grupos.get(chave)
     if (!g) {
       g = { porTipo: zeroPorTipo(), semTipo: 0, dur: [], nota: [] }

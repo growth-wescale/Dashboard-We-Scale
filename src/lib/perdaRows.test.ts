@@ -204,7 +204,7 @@ describe('computeResponsaveis', () => {
       r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'SAL', nome_closer: 'Giullia' }),
       r({ id_lead: 'c', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_closer: 'Douglas' }),
     ]
-    const resps = computeResponsaveis(perdas, new Set(['romulo', 'giullia']))
+    const resps = computeResponsaveis(perdas, new Set(['douglas']))
     expect(resps.map(x => [x.nome, x.camada, x.qtd])).toEqual([['Ex-integrantes', 'Closer', 2], ['Douglas', 'Closer', 1]])
     expect(resps[0].exIntegrantes).toBe(true)
   })

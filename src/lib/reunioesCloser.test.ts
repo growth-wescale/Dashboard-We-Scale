@@ -132,11 +132,11 @@ describe('agruparReunioes', () => {
       reuniao({ closer: 'Aurélio Briano', marca: 'Viva' }),
       reuniao({ closer: 'Rômulo', marca: 'Viva' }),
     ]
-    const inativos = new Set(['aurelio briano', 'romulo'])
-    const linhas = agruparReunioes(rows, 'closer', inativos)
+    const equipe = new Set(['douglas'])
+    const linhas = agruparReunioes(rows, 'closer', equipe)
     expect(linhas.map(l => [l.chave, l.total])).toEqual([['Douglas', 1], ['Ex-integrantes', 2]])
-    expect(chaveDaReuniao(rows[1], 'closer', inativos)).toBe('Ex-integrantes')
-    expect(agruparReunioes(rows, 'marca', inativos)[0]).toMatchObject({ chave: 'Viva', total: 3 })
+    expect(chaveDaReuniao(rows[1], 'closer', equipe)).toBe('Ex-integrantes')
+    expect(agruparReunioes(rows, 'marca', equipe)[0]).toMatchObject({ chave: 'Viva', total: 3 })
   })
 
   it('por marca: sem negócio vira chave null e fica sempre por último', () => {

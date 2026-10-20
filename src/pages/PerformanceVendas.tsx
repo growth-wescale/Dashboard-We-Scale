@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download, Users, Handshake, Timer, Info } from 'lucide-react'
+import { Download, Users, UserX, Handshake, Timer, Info } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
@@ -19,11 +19,11 @@ import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
 import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
-import { EX_INTEGRANTES, nomesInativos } from '@/lib/equipe'
+import { DICA_EX_INTEGRANTES, EX_INTEGRANTES, equipeAtiva } from '@/lib/equipe'
 import { useReunioesCloser } from '@/hooks/useReunioesCloser'
 import { filtrarReunioes } from '@/lib/reunioesCloser'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
-import type { SdrRow, CloserRow } from '@/lib/performanceRows'
+import type { SdrRow, CloserRow, GrupoLinha } from '@/lib/performanceRows'
 import { buildPersonMetaRows, buildPersonSimplesRows, buildPersonPeriodoRows, fracaoMetaMensal } from '@/lib/metaBreakdown'
 import type { PessoasBreakdown } from '@/components/ui/MetaBreakdownDrawer'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
@@ -163,15 +163,17 @@ function Avatar({ nome, accent }: { nome: string; accent: string }) {
   )
 }
 
-/** Linha que soma quem saiu do time: sem posição, sem iniciais, nome em itálico. */
-function NomeExIntegrantes({ accent }: { accent: string }) {
+/** Linha de soma (Ex-integrantes / Sem SDR / Sem Closer): sem posição, sem iniciais, em itálico. */
+function NomeGrupo({ grupo, nome, accent }: { grupo: GrupoLinha; nome: string; accent: string }) {
+  const Icone = grupo === 'ex-integrantes' ? Users : UserX
+  const dica = grupo === 'ex-integrantes' ? DICA_EX_INTEGRANTES : 'Soma dos negócios sem responsável atribuído'
   return (
-    <span title="Soma de quem saiu do time" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>
+    <span title={dica} style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>
       <span style={{
         width: 30, height: 30, borderRadius: '50%', border: `1px dashed ${accent}88`,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ws-surface)',
-      }}><Users size={14} style={{ color: accent }} /></span>
-      {EX_INTEGRANTES}
+      }}><Icone size={14} style={{ color: accent }} /></span>
+      {nome}
     </span>
   )
 }
@@ -254,8 +256,8 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
         )}
         {rows.map((r, i) => (
           <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
-            {r.exIntegrantes ? <span /> : <RankNum i={i} accent={SDR_ACCENT} />}
-            {r.exIntegrantes ? <NomeExIntegrantes accent={SDR_ACCENT} /> : (
+            {r.grupo ? <span /> : <RankNum i={i} accent={SDR_ACCENT} />}
+            {r.grupo ? <NomeGrupo grupo={r.grupo} nome={r.nome} accent={SDR_ACCENT} /> : (
               <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
                 <Avatar nome={r.nome} accent={SDR_ACCENT} />{r.nome}
               </span>
@@ -300,8 +302,8 @@ function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean 
         )}
         {rows.map((r, i) => (
           <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
-            {r.exIntegrantes ? <span /> : <RankNum i={i} accent={CLOSER_ACCENT} />}
-            {r.exIntegrantes ? <NomeExIntegrantes accent={CLOSER_ACCENT} /> : (
+            {r.grupo ? <span /> : <RankNum i={i} accent={CLOSER_ACCENT} />}
+            {r.grupo ? <NomeGrupo grupo={r.grupo} nome={r.nome} accent={CLOSER_ACCENT} /> : (
               <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
                 <Avatar nome={r.nome} accent={CLOSER_ACCENT} />{r.nome}
               </span>
@@ -415,7 +417,7 @@ export function PerformanceVendas() {
   const { data: rows, error: rowsError, loading } = useFunilVendas(origem)
   const { data: eventos } = useFunilEventos({ enabled: true, origem })
   const { data: roster } = useRosterVendas()
-  const inativos = useMemo(() => nomesInativos(roster), [roster])
+  const equipe = useMemo(() => equipeAtiva(roster), [roster])
   const { data: reunioesBase, loading: reunioesLoading, error: reunioesError } = useReunioesCloser()
 
   const scope = useMemo(
@@ -447,9 +449,9 @@ export function PerformanceVendas() {
   const opcoes = useMemo(
     () => funilFilterOptions({
       rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers,
-      cohort: viewModes.funnelView === 'cohort', inativos,
+      cohort: viewModes.funnelView === 'cohort', equipe,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, inativos],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, equipe],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),
@@ -548,7 +550,7 @@ export function PerformanceVendas() {
     const def = CARD_DEF[cardAberto]
     const periodo = def.papel === 'SDR' ? mapaSdr(sdrRows, def.campo) : mapaCloser(closerRows, def.campo)
     const metaDaPessoa = (nome: string) => { const m = findMeta(metasPessoa, nome, def.papel); return m ? def.metaDe!(m) : 0 }
-    // A linha Ex-integrantes leva a soma das metas de quem saiu do time.
+    // A linha Ex-integrantes leva a soma das metas de quem não está ativo no cadastro.
     const metaMensalPorNome = def.metaDe
       ? (nome: string) => nome === EX_INTEGRANTES
         ? roster.filter(r => !r.ativo).reduce((s, r) => s + metaDaPessoa(r.nome), 0)
@@ -595,7 +597,7 @@ export function PerformanceVendas() {
 
     const nota = [
       notaMeta,
-      `Por ${def.papel} soma pelo responsável atribuído ao negócio — negócios sem ${def.papel} não entram, então pode dar um pouco menos que o card.`,
+      `Por ${def.papel} soma pelo responsável atribuído ao negócio; negócio sem ${def.papel} entra em “Sem ${def.papel}”. Com meta por pessoa, aparece só quem tem meta.`,
     ].filter(Boolean).join(' ')
 
     return {
@@ -849,7 +851,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR fora do cadastro, não entra nela, então a soma das linhas pode ficar abaixo do card. Quem saiu do time entra somado na linha “Ex-integrantes”. Com um SDR filtrado, os dois batem.
+            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio e a soma das linhas fecha com os cards: quem saiu do time entra somado em “Ex-integrantes” e negócio sem SDR em “Sem SDR”.
           </p>
 
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
@@ -915,7 +917,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído. Quem saiu do time entra somado na linha “Ex-integrantes”.
+            Mesma observação da seção de SDR: a tabela credita cada etapa e venda ao Closer do negócio e fecha com os cards — quem saiu do time entra em “Ex-integrantes” e negócio sem Closer em “Sem Closer”.
           </p>
 
           <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />
@@ -925,7 +927,7 @@ export function PerformanceVendas() {
           </div>
 
           <ReunioesMeetroxSection reunioes={reunioes} loading={reunioesLoading} origem={origem}
-            subtitulo={`${scopeLabel} · ${subtitlePeriodo}`} accent={CLOSER_ACCENT} inativos={inativos} />
+            subtitulo={`${scopeLabel} · ${subtitlePeriodo}`} accent={CLOSER_ACCENT} equipe={equipe} />
 
           <div style={{ marginTop: 32 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>

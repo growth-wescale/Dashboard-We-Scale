@@ -17,7 +17,7 @@ import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
-import { useNomesInativos } from '@/hooks/useRosterVendas'
+import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
 import { computeEtapaAtual, dealsInEtapaAtual } from '@/lib/aging'
 import type { EtapaLeadtimeAgg } from '@/lib/aging'
@@ -393,7 +393,7 @@ export function FunilVendas() {
   // (via `scope`), igual Fonte/SDR. Filtrar 1 marca no servidor colapsava a
   // lista de "marcas com dado" e escondia/reexibia marcas conforme a seleção.
   const { data: rows, loading, error } = useFunilVendas(origem)
-  const inativos = useNomesInativos()
+  const equipe = useEquipeAtiva()
   const { data: curMedia } = useMediaData({ dataInicio: range.start, dataFim: range.end })
   const { data: prevMedia } = useMediaData({ dataInicio: prev.start, dataFim: prev.end })
 
@@ -472,9 +472,9 @@ export function FunilVendas() {
       rows, win,
       marcasParaEscopo,
       fontes, subFontes, sdrs, closers,
-      cohort: viewModes.funnelView === 'cohort', inativos,
+      cohort: viewModes.funnelView === 'cohort', equipe,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, inativos],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, equipe],
   )
 
   const fontesDisponiveis = opcoesFiltro.fontes

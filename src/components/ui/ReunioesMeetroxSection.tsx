@@ -18,7 +18,7 @@ import {
 import type { OrigemComercial } from '@/lib/funnelTypes'
 import { marcaLabel, BRAND_ACCENT } from '@/constants/brands'
 import { rdDealUrl } from '@/lib/rd'
-import { EX_INTEGRANTES } from '@/lib/equipe'
+import { DICA_EX_INTEGRANTES, EX_INTEGRANTES } from '@/lib/equipe'
 import { nf, pct } from '@/lib/format'
 
 const COR_TIPO = Object.fromEntries(TIPOS_REUNIAO.map(t => [t.tipo, t.cor])) as Record<TipoReuniao, string>
@@ -147,10 +147,10 @@ const COLS = '36px minmax(150px, 1.3fr) repeat(5, 60px) 62px minmax(130px, 1fr) 
 
 interface Selecao { titulo: string; reunioes: ReuniaoRow[] }
 
-function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, inativos }: {
+function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, equipe }: {
   linhas: LinhaReunioes[]
   dim: DimensaoReunioes
-  inativos?: ReadonlySet<string>
+  equipe?: ReadonlySet<string>
   accent: string
   reunioes: ReuniaoRow[]
   onAbrir: (s: Selecao) => void
@@ -161,7 +161,7 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, i
   ) as Record<TipoReuniao, number>, [linhas])
 
   const nomeDaLinha = (chave: string | null) => (dim === 'marca' ? (chave ? marcaLabel(chave) : SEM_MARCA) : (chave ?? '—'))
-  const daLinha = (chave: string | null) => reunioes.filter(r => chaveDaReuniao(r, dim, inativos) === chave)
+  const daLinha = (chave: string | null) => reunioes.filter(r => chaveDaReuniao(r, dim, equipe) === chave)
 
   const th = (txt: React.ReactNode, align: 'left' | 'right' | 'center' = 'right', title?: string) => (
     <span title={title} style={{ textAlign: align, cursor: title ? 'help' : undefined }}>{txt}</span>
@@ -205,7 +205,7 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, i
                 fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums',
               }}>
                 <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 15, color: accent }}>{agrupada ? '' : `${i + 1}º`}</span>
-                <span title={agrupada && l.chave ? 'Soma de quem saiu do time' : undefined}
+                <span title={agrupada && l.chave ? DICA_EX_INTEGRANTES : undefined}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, color: agrupada ? 'var(--ws-text-secondary)' : 'var(--ws-text-primary)', minWidth: 0 }}>
                   {corMarca && <span style={{ width: 8, height: 8, borderRadius: '50%', background: corMarca, flexShrink: 0 }} />}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: agrupada ? 'italic' : undefined }}>{nome}</span>
@@ -370,16 +370,16 @@ interface Props {
   /** "Consolidado · Setembro 2026" — vai no subtítulo do popup. */
   subtitulo: string
   accent: string
-  /** Quem saiu do time: somado na linha Ex-integrantes da visão por Closer. */
-  inativos?: ReadonlySet<string>
+  /** Quem é do time; os outros somam na linha Ex-integrantes da visão por Closer. */
+  equipe?: ReadonlySet<string>
 }
 
-export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, accent, inativos }: Props) {
+export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, accent, equipe }: Props) {
   const [dim, setDim] = useState<DimensaoReunioes>('closer')
   const [selecao, setSelecao] = useState<Selecao | null>(null)
 
   const resumo = useMemo(() => resumirReunioes(reunioes), [reunioes])
-  const linhas = useMemo(() => agruparReunioes(reunioes, dim, inativos), [reunioes, dim, inativos])
+  const linhas = useMemo(() => agruparReunioes(reunioes, dim, equipe), [reunioes, dim, equipe])
   const vazio = reunioes.length === 0
 
   return (
@@ -420,7 +420,7 @@ export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, a
             </div>
 
             <TabelaReunioes linhas={linhas} dim={dim} accent={accent} reunioes={reunioes}
-              onAbrir={setSelecao} resumoGeral={resumo} inativos={inativos} />
+              onAbrir={setSelecao} resumoGeral={resumo} equipe={equipe} />
 
             {resumo.semTipo > 0 && (
               <button onClick={() => setSelecao({ titulo: 'Reuniões sem tipo', reunioes: reunioes.filter(r => !r.tipo) })}

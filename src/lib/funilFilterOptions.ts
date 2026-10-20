@@ -14,8 +14,8 @@ export interface FunilFilterOptionsInput {
   closers: string[]
   /** true no modo "Deals criados no período" (safra) — só o MQL conta como "na janela". */
   cohort: boolean
-  /** Quem saiu do time (`nomesInativos`) não aparece nas opções de SDR e Closer. */
-  inativos?: ReadonlySet<string>
+  /** Quem é do time (`equipeAtiva`): os outros nomes não aparecem nas opções de SDR e Closer. */
+  equipe?: ReadonlySet<string>
 }
 
 export interface FunilFilterOptions {
@@ -44,7 +44,7 @@ export function dealNaJanela(row: FunnelRow, win: PeriodWindow, cohort: boolean)
  * Compartilhado entre Visão Macro e Performance.
  */
 export function funilFilterOptions(input: FunilFilterOptionsInput): FunilFilterOptions {
-  const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, inativos } = input
+  const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, equipe } = input
 
   const subFonteDe = (r: FunnelRow) => normalizeSubFonte(r.utm_source, r.sub_fonte_crm)
   const fonteDe = (r: FunnelRow) => normalizeFonteMacro(r.fonte_macro)
@@ -55,7 +55,7 @@ export function funilFilterOptions(input: FunilFilterOptionsInput): FunilFilterO
   const okSdr = (r: FunnelRow) => !sdrs.length || sdrs.includes(r.nome_sdr ?? '')
   const okCloser = (r: FunnelRow) => !closers.length || closers.includes(r.nome_closer ?? '')
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))]
-  const doTime = (xs: string[]) => uniq(xs).filter(n => !saiuDoTime(n, inativos))
+  const doTime = (xs: string[]) => uniq(xs).filter(n => !saiuDoTime(n, equipe))
 
   return {
     marcas: uniq(naJanela.filter(r => okFonte(r) && okSub(r) && okSdr(r) && okCloser(r)).map(r => r.marca ?? '')),

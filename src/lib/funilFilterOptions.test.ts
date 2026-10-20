@@ -91,6 +91,21 @@ describe('funilFilterOptions', () => {
   })
 })
 
+describe('funilFilterOptions · quem saiu do time', () => {
+  it('não aparece nas opções de SDR e Closer, mesmo com deal na janela', () => {
+    const rows = [
+      row({ nome_sdr: 'Xayane', nome_closer: 'Douglas', data_novo_mql: '2026-08-10' }),
+      row({ nome_sdr: 'Giullia', nome_closer: 'Rômulo', data_novo_mql: '2026-08-11' }),
+    ]
+    const inativos = new Set(['giullia', 'romulo'])
+    const out = funilFilterOptions({ rows, win, ...base, cohort: false, inativos })
+    expect(out.sdrs).toEqual(['Xayane'])
+    expect(out.closers).toEqual(['Douglas'])
+    // o deal deles segue valendo pras outras listas
+    expect(out.marcas).toEqual(['Oral Unic'])
+  })
+})
+
 describe('dealNaJanela', () => {
   const win = toWindow(null, null, [{ from: '2026-08-01', to: '2026-08-31' }])
   const row = { data_novo_mql: '2026-07-20T12:00:00Z', data_sal: '2026-08-10T12:00:00Z' } as unknown as FunnelRow

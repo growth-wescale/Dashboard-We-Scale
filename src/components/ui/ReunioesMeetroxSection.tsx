@@ -365,14 +365,16 @@ interface Props {
   /** "Consolidado · Setembro 2026" — vai no subtítulo do popup. */
   subtitulo: string
   accent: string
+  /** Quem saiu do time: fora das linhas por Closer e da contagem de closers. */
+  inativos?: ReadonlySet<string>
 }
 
-export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, accent }: Props) {
+export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, accent, inativos }: Props) {
   const [dim, setDim] = useState<DimensaoReunioes>('closer')
   const [selecao, setSelecao] = useState<Selecao | null>(null)
 
-  const resumo = useMemo(() => resumirReunioes(reunioes), [reunioes])
-  const linhas = useMemo(() => agruparReunioes(reunioes, dim), [reunioes, dim])
+  const resumo = useMemo(() => resumirReunioes(reunioes, inativos), [reunioes, inativos])
+  const linhas = useMemo(() => agruparReunioes(reunioes, dim, inativos), [reunioes, dim, inativos])
   const vazio = reunioes.length === 0
 
   return (

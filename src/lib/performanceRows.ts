@@ -53,8 +53,10 @@ function eventosPorCiclo(
   return out
 }
 
+/** Quem está no time hoje, no cargo pedido. Quem saiu não vira linha, nem em
+ *  mês passado: as vendas dele seguem nos cards, só não aparecem por pessoa. */
 function rosterSet(roster: MembroRoster[], cargos: MembroRoster['cargo'][]): Set<string> {
-  return new Set(roster.filter(r => cargos.includes(r.cargo)).map(r => key(r.nome)))
+  return new Set(roster.filter(r => r.ativo && cargos.includes(r.cargo)).map(r => key(r.nome)))
 }
 
 export function buildSdrRows(

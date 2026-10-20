@@ -188,6 +188,24 @@ describe('computeResponsaveis', () => {
     expect(porNome.get('Xayane')).toMatchObject({ camada: 'SDR', qtd: 1 })
   })
 
+  it('mesma pessoa perdendo como SDR e como Closer vira duas linhas', () => {
+    const perdas = [
+      r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'No Show', nome_sdr: 'Bruna', nome_closer: 'Bruna' }),
+      r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_sdr: 'Xayane', nome_closer: 'Bruna' }),
+      r({ id_lead: 'c', status_atual: 'Perdido', etapa_funil: 'SAL', nome_sdr: 'Xayane', nome_closer: 'Bruna' }),
+    ]
+    const resps = computeResponsaveis(perdas)
+    expect(resps.filter(x => x.nome === 'Bruna').map(x => [x.camada, x.qtd])).toEqual([['Closer', 2], ['SDR', 1]])
+  })
+
+  it('quem saiu do time fica fora da lista', () => {
+    const perdas = [
+      r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_closer: 'Rômulo' }),
+      r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_closer: 'Douglas' }),
+    ]
+    expect(computeResponsaveis(perdas, new Set(['romulo'])).map(x => x.nome)).toEqual(['Douglas'])
+  })
+
   it('ignora deal sem etapa corrente resolvível', () => {
     const perdas = [r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Etapa Desconhecida', nome_sdr: 'Xayane' })]
     expect(computeResponsaveis(perdas)).toEqual([])

@@ -13,6 +13,7 @@ import type { OrigemComercial } from '@/lib/funnelTypes'
 import { isInWindow, type EventSource, type PeriodWindow } from '@/lib/metrics'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import { toLocalYearMonth } from '@/lib/dateUtils'
+import { saiuDoTime } from '@/lib/equipe'
 
 export type TipoReuniao = 'R1' | 'R2' | 'R3' | 'R4' | 'R5'
 
@@ -152,11 +153,16 @@ export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes): string | n
  * reuniões tipadas. Linha só com reuniões sem tipo vai para o fim — ela não
  * tem o que mostrar nas colunas R1–R5, mas some se for descartada. Na visão
  * por marca, "sem negócio vinculado" (chave nula) fica sempre por último.
+ * Na visão por Closer, quem saiu do time (`inativos`) não vira linha — as
+ * reuniões dele seguem na linha de Total e nos cards.
  */
-export function agruparReunioes(rows: readonly ReuniaoRow[], dim: DimensaoReunioes): LinhaReunioes[] {
+export function agruparReunioes(
+  rows: readonly ReuniaoRow[], dim: DimensaoReunioes, inativos?: ReadonlySet<string>,
+): LinhaReunioes[] {
   const grupos = new Map<string | null, { porTipo: ContagemPorTipo; semTipo: number; dur: number[]; nota: number[] }>()
   for (const r of rows) {
     const chave = chaveDaReuniao(r, dim)
+    if (dim === 'closer' && saiuDoTime(chave, inativos)) continue
     let g = grupos.get(chave)
     if (!g) {
       g = { porTipo: zeroPorTipo(), semTipo: 0, dur: [], nota: [] }
@@ -189,7 +195,7 @@ export interface ResumoTipo {
   quantidade: number
   duracaoMedia: number | null
   notaMedia: number | null
-  /** Closers distintos que fizeram esse tipo no recorte. */
+  /** Closers distintos do time atual que fizeram esse tipo no recorte. */
   closers: number
 }
 
@@ -202,8 +208,9 @@ export interface ResumoReunioes {
   notaMedia: number | null
 }
 
-/** Totais por tipo para os cards do topo do bloco. */
-export function resumirReunioes(rows: readonly ReuniaoRow[]): ResumoReunioes {
+/** Totais por tipo para os cards do topo do bloco. Quem saiu do time conta na
+ *  quantidade de reuniões, mas não no número de closers. */
+export function resumirReunioes(rows: readonly ReuniaoRow[], inativos?: ReadonlySet<string>): ResumoReunioes {
   const porTipo = TIPOS_REUNIAO.map(({ tipo }) => {
     const doTipo = rows.filter(r => r.tipo === tipo)
     return {
@@ -211,7 +218,7 @@ export function resumirReunioes(rows: readonly ReuniaoRow[]): ResumoReunioes {
       quantidade: doTipo.length,
       duracaoMedia: media(doTipo.flatMap(r => (r.duracao_min != null ? [r.duracao_min] : []))),
       notaMedia: media(doTipo.flatMap(r => (r.ai_score != null ? [r.ai_score] : []))),
-      closers: new Set(doTipo.map(r => r.closer)).size,
+      closers: new Set(doTipo.filter(r => !saiuDoTime(r.closer, inativos)).map(r => r.closer)).size,
     }
   })
   const tipadas = rows.filter(r => r.tipo)

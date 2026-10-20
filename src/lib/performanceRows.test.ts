@@ -189,3 +189,28 @@ describe('contagem por evento (igual aos cards)', () => {
     expect(buildCloserRows(rows, win, [], roster, 'deals', { eventos, modes })[0].cof).toBe(1)
   })
 })
+
+describe('quem saiu do time', () => {
+  const rosterComInativo: MembroRoster[] = [
+    ...roster,
+    { nome: 'Rômulo', cargo: 'Closer', foto: null, ativo: false },
+    { nome: 'Vanessa', cargo: 'SDR', foto: null, ativo: false },
+  ]
+
+  it('não vira linha de Closer, nem com venda na janela nem zerado', () => {
+    const rows = [
+      r({ id_lead: 'a', nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-10', valor_contrato: 50_000 }),
+      r({ id_lead: 'b', nome_closer: 'Rômulo', status_atual: 'Ganho', data_venda: '2026-08-12', valor_contrato: 70_000 }),
+      r({ id_lead: 'c', nome_closer: 'Rômulo', data_reuniao_realizada: '2026-03-01' }), // só fora da janela
+    ]
+    expect(buildCloserRows(rows, win, [], rosterComInativo).map(x => x.nome)).toEqual(['Douglas'])
+  })
+
+  it('não vira linha de SDR', () => {
+    const rows = [
+      r({ id_lead: 'a', nome_sdr: 'Xayane', data_novo_mql: '2026-08-05' }),
+      r({ id_lead: 'b', nome_sdr: 'Vanessa', data_novo_mql: '2026-08-06' }),
+    ]
+    expect(buildSdrRows(rows, win, [], rosterComInativo).map(x => x.nome)).toEqual(['Xayane'])
+  })
+})

@@ -80,7 +80,7 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
               background: cellBg, border,
               opacity: q.tier === 'low' ? 0.85 : 1,
             }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: numColor, lineHeight: 1 }}>{q.pct}%</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: numColor, lineHeight: 1 }}>{q.pct.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%</div>
               <div style={{ fontSize: 11.5, color: 'var(--ws-text-primary)', marginTop: 4, lineHeight: 1.3 }}>
                 {prefix} <b style={{ color: PURPLE }}>{middleWord}</b> {suffix}
               </div>
@@ -96,7 +96,7 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
         borderRadius: 6, borderLeft: '3px solid #cbd5e1',
       }}>
         {c.amostraPeriodo
-          ? `Perfil de ${c.sampleN} cadastros únicos de ${c.amostraPeriodo}, excluindo três testes. Percentuais apenas da amostra, não dos ${c.total} membros ativos. Distribuição de origens dos membros não informada.`
+          ? `Perfil de ${c.sampleN} contatos únicos de ${c.amostraPeriodo}, após excluir ${c.testesExcluidos ?? 0} cadastros de teste. ${c.criterioPerfil ?? ''} Percentuais apenas dos cadastros analisados, não dos ${c.total} membros ativos. Distribuição de origens dos membros não informada.`
           : `Perfil observado em ${c.sampleN} cadastros únicos do sample (${Math.round(c.sampleN / c.total * 100)}% do total). % aplicáveis ao total.`}
       </div>
 

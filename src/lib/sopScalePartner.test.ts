@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { partnerBuyer, partnerEventCounts, partnerSalesInPeriod, type SopPartnerSale } from './sopScalePartner'
+import { partnerEventCounts, partnerSalesInPeriod, type SopPartnerSale } from './sopScalePartner'
 import type { Lead } from './types'
 
 const sale = (patch: Partial<SopPartnerSale> = {}): SopPartnerSale => ({
-  id_lead: 'deal-a', ciclo: 1, marca: 'Scale Partner', nome_negociacao: 'Scale Partner - Pessoa A',
+  id_lead: 'deal-a', ciclo: 1, marca: 'Scale Partner',
   status_atual: 'Ganho', data_venda: '2026-10-09T18:00:00Z', valor_contrato: 2997, utm_source: 'instagram', ...patch,
 })
 
@@ -21,17 +21,6 @@ describe('Scale Partner exclusivo S&OP', () => {
     const rows = [sale(), sale({ id_lead: 'b', valor_contrato: null, utm_source: null })]
     expect(partnerSalesInPeriod(rows, '2026-10-01', '2026-10-19', 'Digital · Pago')).toHaveLength(1)
     expect(partnerSalesInPeriod(rows, '2026-10-01', '2026-10-19').reduce((sum, r) => sum + (r.valor_contrato ?? 0), 0)).toBe(2997)
-  })
-  it('associa contato por ID CRM; empresa ausente fica explícita', () => {
-    expect(partnerBuyer(sale(), []).nome).toBe('Pessoa A')
-    expect(partnerBuyer(sale(), []).empresa).toBe('Não informada')
-    expect(partnerBuyer(sale(), [{ nome: 'Pessoa', empresa: 'Empresa A', crm_deal_id: 'outro' }]).empresa).toBe('Não informada')
-    expect(partnerBuyer(sale(), [{ nome: 'Pessoa A', empresa: 'Empresa A', crm_deal_id: 'deal-a' }]).empresa).toBe('Empresa A')
-  })
-  it('usa empresa no nome da negociação só com prefixo exato do contato e informa essa origem', () => {
-    const contacts = [{ nome: 'Pessoa A', empresa: null, crm_deal_id: 'deal-a' }]
-    expect(partnerBuyer(sale({ nome_negociacao: 'Pessoa A - Empresa A' }), contacts)).toMatchObject({ empresa: 'Empresa A', empresaNaNegociacao: true })
-    expect(partnerBuyer(sale({ nome_negociacao: 'Pessoa B - Empresa A' }), contacts).empresa).toBe('Não informada')
   })
   it('usa adset/UTM confirmadas sem jogar ADV+, Saúde/Beleza ou ausências em geral', () => {
     const lead = (dados_extras: Record<string, unknown>) => ({ dados_extras }) as Lead

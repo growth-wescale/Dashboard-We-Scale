@@ -8,7 +8,8 @@ vi.mock('@/hooks/useMissaoResumo', () => ({ useMissaoResumo: mocks.hook }))
 import { MissaoImpossivel, MissaoPainel } from './MissaoImpossivel'
 import { pacingTrimestre } from '@/lib/missaoMetas'
 
-const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [], metas: [], etapas: [], midia: [] }
+const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [],
+  metas: ['Inpot', 'Eletrovias', 'Lisô Laser'].map(marca => ({ mes_referencia: '2026-10-01', marca, funcao: 'Closer', meta_qtd_vendas: marca === 'Lisô Laser' ? 2 : 3, meta_financeira: null, meta_sql: null, meta_volume_sal: null })), etapas: [], midia: [] }
 describe('Missão: apresentação e isolamento', () => {
   it('marca pacing mensal e anual, e CP-MQL usa referência de eficiência', () => {
     const lead: NonNullable<DadosMissao['leads']>[number] = { id: 'a', dia: '2026-10-01', marca: 'Inpot', email: 'teste', telefone: null, dados_extras: { lead_type: 'MQL' }, nome: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, row_hash: null, criado_em: '2026-10-01T12:00:00Z' }
@@ -28,9 +29,13 @@ describe('Missão: apresentação e isolamento', () => {
   it('MQL com meta mostra percentual; sem meta mantém barra neutra sem zero fictício', () => {
     const lead: NonNullable<DadosMissao['leads']>[number] = { id: 'a', dia: '2026-10-01', marca: 'Inpot', email: 'teste', telefone: null, dados_extras: { lead_type: 'MQL' }, nome: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, row_hash: null, criado_em: '2026-10-01T12:00:00Z' }
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, leads: [lead], metasMql: [{ marca: 'Inpot', valor_meta: 2 }] } }))
-    expect(html).toContain('0,61% atingidos')
-    expect(html).not.toContain('Percentual de MQL pendente')
+    expect(html).toContain('0,59% atingidos')
+    expect(html).not.toContain('meta pendente')
     expect(html).toContain('esperado pelos dias transcorridos do trimestre')
+    const pendente = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, metas: [] } }))
+    expect(pendente).toContain('meta pendente')
+    expect(pendente).toContain('falta completar a meta de vendas dos Closers deste mês')
+    expect(pendente).not.toContain('/ 164'); expect(pendente).not.toContain('/ 757'); expect(pendente).not.toContain('/ 96')
   })
   it('preserva os dois placares e mostra nove cards mensais sem vendas por marca', () => {
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados }))
@@ -40,7 +45,17 @@ describe('Missão: apresentação e isolamento', () => {
     expect((html.match(/<article/g) ?? []).length).toBe(9)
     expect(html).toContain('MQL e CP-MQL · Inpot')
     expect(html).toContain('SQL · reuniões agendadas'); expect(html).toContain('>SAL<')
-    expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('/ 164'); expect(html).toContain('/ 757'); expect(html).toContain('/ 96')
+    expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('/ 170'); expect(html).toContain('/ 310'); expect(html).toContain('/ 180')
+    expect(html).toContain('Taxas do print: MQL → SQL 23% · SQL → SAL 39% · SAL → Venda 20%')
+    expect(html).toContain('São referências de planejamento, não conversões observadas no CRM')
+    expect(html).toContain('base: 3 vendas cadastradas no mês')
+  })
+  it('metas não diminuem com vendas realizadas; zero não divide por zero', () => {
+    const venda = { id_lead: 'ganho', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100, quantidade_unidades: 1, data_venda: '2026-10-02' }
+    const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, vendas: [venda] } }))
+    expect(html).toContain('/ 170'); expect(html).toContain('100,00')
+    const zero = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, metas: dados.metas.map(m => ({ ...m, meta_qtd_vendas: 0 })) } }))
+    expect(zero).toContain('Meta 0'); expect(zero).not.toMatch(/NaN|Infinity|meta pendente/)
   })
   it('nega acesso antes de iniciar leitura', () => {
     mocks.acesso = false; mocks.hook.mockClear()

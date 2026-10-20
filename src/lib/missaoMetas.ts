@@ -38,9 +38,12 @@ export interface DadosMissao {
 }
 
 export const CP_MQL_MISSAO: Record<string, number> = { Inpot: 220, Eletrovias: 37, 'Lisô Laser': 300 }
-// Metas aprovadas por Gabriel para esta página, sem publicar no cadastro global.
-export const MQL_MISSAO: Record<string, readonly number[]> = {
-  Inpot: [164, 163, 82], Eletrovias: [757, 756, 541], 'Lisô Laser': [96, 96, 48],
+// Taxas entre etapas do print aprovado em 20/10, exclusivas desta página.
+// Não são as taxas observadas no CRM nem a âncora direta MQL → Venda.
+export const TAXAS_FUNIL_MISSAO: Readonly<Record<string, { mqlSql: number; sqlSal: number; salVenda: number }>> = {
+  Inpot: { mqlSql: 23, sqlSal: 39, salVenda: 20 },
+  Eletrovias: { mqlSql: 10, sqlSal: 36, salVenda: 28 },
+  'Lisô Laser': { mqlSql: 15, sqlSal: 30, salVenda: 28 },
 }
 
 /** Mesmo dedupe/classificação dos KPIs de Marketing, dentro de cada marca. */
@@ -48,11 +51,7 @@ export function captacaoMissao(dados: DadosMissao, marca: string) {
   const inicio = dados.hoje.slice(0, 7) + '-01'
   const leads = (dados.leads ?? []).filter(r => r.marca === marca && r.dia >= inicio && r.dia <= dados.hoje)
   const mql = deduplicateLeads(leads).filter(isLeadMql).length
-  const registros = (dados.metasMql ?? []).filter(r => r.marca === marca)
-  const indice = MESES_MISSAO.indexOf(inicio as typeof MESES_MISSAO[number])
-  const metaMql = indice >= 0 && MQL_MISSAO[marca]
-    ? MQL_MISSAO[marca][indice]
-    : registros.length === 1 ? numeroMeta(registros[0].valor_meta) : null
+  const metaMql = funilInversoMissao(dados.metas, marca, inicio).mql
   const investimento = FRENTES_MISSAO.find(f => f.marca === marca)?.investimento ?? 0
   const gasto = pacingMissao(dados.midia, marca, investimento, dados.hoje).gasto
   return { mql, metaMql, cpmql: mql > 0 ? gasto / mql : null, metaCpMql: CP_MQL_MISSAO[marca] }
@@ -76,6 +75,22 @@ export function metaCadastrada(rows: MetaMissaoRow[], marca: string, meses: read
   }
   parcial = Math.round(parcial * 100) / 100
   return { valor: faltantes.length ? null : parcial, parcial, faltantes }
+}
+
+/** Parte das vendas cadastradas, sem escrever metas ou descontar o realizado.
+ * Arredonda cada etapa para cima para suportar a quantidade inteira seguinte. */
+export function funilInversoMissao(rows: MetaMissaoRow[], marca: string, mes: string) {
+  const vendas = metaCadastrada(rows, marca, [mes], 'meta_qtd_vendas')
+  const taxas = TAXAS_FUNIL_MISSAO[marca]
+  const vigente = MESES_MISSAO.some(m => m === mes)
+  if (!vigente || !taxas || vendas.valor === null) {
+    return { vendas, taxas, mql: null, sql: null, sal: null }
+  }
+  // Percentuais inteiros evitam a divisão por frações como 0,28.
+  const sal = Math.ceil(vendas.valor * 100 / taxas.salVenda)
+  const sql = Math.ceil(sal * 100 / taxas.sqlSal)
+  const mql = Math.ceil(sql * 100 / taxas.mqlSql)
+  return { vendas, taxas, mql, sql, sal }
 }
 
 function noPeriodo(data: string | null, inicio: string, fim: string) {

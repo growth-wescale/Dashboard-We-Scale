@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captacaoMissao, etapasMissao, metaCadastrada, MESES_MISSAO, pacingMissao, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
+import { captacaoMissao, etapasMissao, funilInversoMissao, metaCadastrada, MESES_MISSAO, pacingMissao, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
 import type { Lead } from './types'
 
 const meta: MetaMissaoRow = { mes_referencia: '2026-10-01', marca: 'Inpot', funcao: 'Closer', meta_financeira: 1000, meta_qtd_vendas: 2, meta_sql: null, meta_volume_sal: null }
@@ -8,15 +8,12 @@ const venda: VendaMissaoRow = { id_lead: 'teste', ciclo: 1, marca: 'Inpot', stat
 describe('Missão: metas publicadas sem alterações comerciais', () => {
   it('MQL preserva dedupe, classificação, marca e período; CP-MQL é razão dos totais', () => {
     const lead = { id: 'a', dia: '2026-10-02', marca: 'Inpot', email: 'exemplo', telefone: null, dados_extras: { lead_type: 'MQL' } } as unknown as Lead
-    const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '', vendas: [], metas: [], etapas: [],
+    const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '', vendas: [], metas: [meta], etapas: [],
       leads: [lead, { ...lead, id: 'b' }, { ...lead, id: 'c', email: 'outro', dados_extras: { lead_type_original: 'MQL' } }, { ...lead, id: 'd', email: 'lead', dados_extras: null }, { ...lead, id: 'e', dia: '2026-09-30' }],
       metasMql: [{ marca: 'Inpot', valor_meta: 100 }], midia: [{ id: 'm', dia: '2026-10-02', marca: 'Inpot', canal: 'meta', spend_brl: 440 }] }
-    expect(captacaoMissao(dados, 'Inpot')).toEqual({ mql: 2, metaMql: 164, cpmql: 220, metaCpMql: 220 })
-    expect(captacaoMissao(dados, 'Eletrovias')).toEqual({ mql: 0, metaMql: 757, cpmql: null, metaCpMql: 37 })
-    expect(captacaoMissao({ ...dados, metasMql: [{ marca: 'Inpot', valor_meta: 0 }] }, 'Inpot').metaMql).toBe(164)
-    for (const [marca, valores] of Object.entries({ Inpot: [164, 163, 82], Eletrovias: [757, 756, 541], 'Lisô Laser': [96, 96, 48] })) {
-      expect(MESES_MISSAO.map(hoje => captacaoMissao({ ...dados, hoje }, marca).metaMql)).toEqual(valores)
-    }
+    expect(captacaoMissao(dados, 'Inpot')).toEqual({ mql: 2, metaMql: 114, cpmql: 220, metaCpMql: 220 })
+    expect(captacaoMissao(dados, 'Eletrovias')).toEqual({ mql: 0, metaMql: null, cpmql: null, metaCpMql: 37 })
+    expect(captacaoMissao({ ...dados, metasMql: [{ marca: 'Inpot', valor_meta: 0 }] }, 'Inpot').metaMql).toBe(114)
     expect(captacaoMissao({ ...dados, hoje: '2027-01-01', metasMql: [] }, 'Inpot').metaMql).toBeNull()
   })
   it('não apresenta outubro como uma meta completa de Q4', () => {
@@ -37,6 +34,57 @@ describe('Missão: metas publicadas sem alterações comerciais', () => {
   })
   it('Q4 completo soma os três meses cadastrados, sem ratear receita', () => {
     expect(metaCadastrada(MESES_MISSAO.map(m => ({ ...meta, mes_referencia: m })), 'Inpot', MESES_MISSAO, 'meta_financeira').valor).toBe(3000)
+  })
+})
+
+describe('Missão: funil inverso aprovado em 20/10, exclusivo desta página', () => {
+  it.each([
+    ['Inpot', 3, 15, 39, 170],
+    ['Eletrovias', 3, 11, 31, 310],
+    ['Lisô Laser', 2, 8, 27, 180],
+  ])('%s usa as taxas entre etapas, não a âncora direta MQL → Venda', (marca, vendas, sal, sql, mql) => {
+    const rows = [{ ...meta, marca, meta_qtd_vendas: vendas }]
+    const original = structuredClone(rows)
+    const r = funilInversoMissao(rows, marca, '2026-10-01')
+    expect({ sal: r.sal, sql: r.sql, mql: r.mql }).toEqual({ sal, sql, mql })
+    expect(r.vendas.valor).toBe(vendas)
+    expect(rows).toEqual(original)
+    expect(r.sal! * r.taxas!.salVenda / 100).toBeGreaterThanOrEqual(vendas)
+    expect(r.sql! * r.taxas!.sqlSal / 100).toBeGreaterThanOrEqual(r.sal!)
+    expect(r.mql! * r.taxas!.mqlSql / 100).toBeGreaterThanOrEqual(r.sql!)
+  })
+  it('soma Closers da marca/mês antes de arredondar e ignora metas SDR publicadas', () => {
+    const rows = [meta, { ...meta, meta_qtd_vendas: 1 },
+      { ...meta, funcao: 'SDR', meta_qtd_vendas: 99, meta_sql: 999, meta_volume_sal: '999' },
+      { ...meta, marca: 'Eletrovias', meta_qtd_vendas: 99 },
+      { ...meta, mes_referencia: '2026-11-01', meta_qtd_vendas: 99 }]
+    const r = funilInversoMissao(rows, 'Inpot', '2026-10-01')
+    expect(r.vendas.valor).toBe(3)
+    expect([r.sal, r.sql, r.mql]).toEqual([15, 39, 170])
+  })
+  it('respeita metas diferentes por mês, sem ratear a receita ou repetir outubro', () => {
+    const rows = MESES_MISSAO.map((mes, i) => ({ ...meta, mes_referencia: mes, meta_qtd_vendas: i + 1 }))
+    expect(MESES_MISSAO.map(m => funilInversoMissao(rows, 'Inpot', m).mql)).toEqual([57, 114, 170])
+    const r = funilInversoMissao([meta], 'Inpot', '2026-11-01')
+    expect([r.mql, r.sql, r.sal]).toEqual([null, null, null])
+  })
+  it.each([null, -1, NaN, Infinity])('parcela inválida %s não calcula alvo parcial', valor => {
+    const r = funilInversoMissao([meta, { ...meta, meta_qtd_vendas: valor }], 'Inpot', '2026-10-01')
+    expect(r.vendas.valor).toBeNull()
+    expect([r.mql, r.sql, r.sal]).toEqual([null, null, null])
+  })
+  it('ausência não vira zero nem usa uma marca sem taxas; zero explícito é válido', () => {
+    for (const r of [funilInversoMissao([], 'Inpot', '2026-10-01'),
+      funilInversoMissao([{ ...meta, marca: 'Viva' }], 'Viva', '2026-10-01'),
+      funilInversoMissao([{ ...meta, mes_referencia: '2027-01-01' }], 'Inpot', '2027-01-01')]) {
+      expect([r.mql, r.sql, r.sal]).toEqual([null, null, null])
+    }
+    const zero = funilInversoMissao([{ ...meta, meta_qtd_vendas: 0 }], 'Inpot', '2026-10-01')
+    expect([zero.mql, zero.sql, zero.sal]).toEqual([0, 0, 0])
+  })
+  it('não gera uma unidade a mais por divisão em ponto flutuante', () => {
+    const r = funilInversoMissao([{ ...meta, marca: 'Eletrovias', meta_qtd_vendas: 7 }], 'Eletrovias', '2026-10-01')
+    expect([r.sal, r.sql, r.mql]).toEqual([25, 70, 700])
   })
 })
 

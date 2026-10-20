@@ -18,6 +18,7 @@ import {
 import type { OrigemComercial } from '@/lib/funnelTypes'
 import { marcaLabel, BRAND_ACCENT } from '@/constants/brands'
 import { rdDealUrl } from '@/lib/rd'
+import { EX_INTEGRANTES } from '@/lib/equipe'
 import { nf, pct } from '@/lib/format'
 
 const COR_TIPO = Object.fromEntries(TIPOS_REUNIAO.map(t => [t.tipo, t.cor])) as Record<TipoReuniao, string>
@@ -146,9 +147,10 @@ const COLS = '36px minmax(150px, 1.3fr) repeat(5, 60px) 62px minmax(130px, 1fr) 
 
 interface Selecao { titulo: string; reunioes: ReuniaoRow[] }
 
-function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral }: {
+function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, inativos }: {
   linhas: LinhaReunioes[]
   dim: DimensaoReunioes
+  inativos?: ReadonlySet<string>
   accent: string
   reunioes: ReuniaoRow[]
   onAbrir: (s: Selecao) => void
@@ -159,7 +161,7 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral }:
   ) as Record<TipoReuniao, number>, [linhas])
 
   const nomeDaLinha = (chave: string | null) => (dim === 'marca' ? (chave ? marcaLabel(chave) : SEM_MARCA) : (chave ?? '—'))
-  const daLinha = (chave: string | null) => reunioes.filter(r => chaveDaReuniao(r, dim) === chave)
+  const daLinha = (chave: string | null) => reunioes.filter(r => chaveDaReuniao(r, dim, inativos) === chave)
 
   const th = (txt: React.ReactNode, align: 'left' | 'right' | 'center' = 'right', title?: string) => (
     <span title={title} style={{ textAlign: align, cursor: title ? 'help' : undefined }}>{txt}</span>
@@ -195,15 +197,18 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral }:
             const nome = nomeDaLinha(l.chave)
             const doTipo = (tipo: TipoReuniao | null) => daLinha(l.chave).filter(r => r.tipo === tipo)
             const corMarca = dim === 'marca' && l.chave ? (BRAND_ACCENT[l.chave] ?? null) : null
+            // Sem negócio (por marca) e Ex-integrantes (por Closer): sem posição, em itálico.
+            const agrupada = l.chave === null || (dim === 'closer' && l.chave === EX_INTEGRANTES)
             return (
               <div key={l.chave ?? '∅'} style={{
                 display: 'grid', gridTemplateColumns: COLS, columnGap: 8, padding: '11px 12px', alignItems: 'center',
                 fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums',
               }}>
-                <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 15, color: accent }}>{l.chave === null ? '' : `${i + 1}º`}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8, color: l.chave ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)', minWidth: 0 }}>
+                <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 15, color: accent }}>{agrupada ? '' : `${i + 1}º`}</span>
+                <span title={agrupada && l.chave ? 'Soma de quem saiu do time' : undefined}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, color: agrupada ? 'var(--ws-text-secondary)' : 'var(--ws-text-primary)', minWidth: 0 }}>
                   {corMarca && <span style={{ width: 8, height: 8, borderRadius: '50%', background: corMarca, flexShrink: 0 }} />}
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: l.chave ? undefined : 'italic' }}>{nome}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: agrupada ? 'italic' : undefined }}>{nome}</span>
                 </span>
                 {TIPOS_REUNIAO.map(t => (
                   <CelulaTipo key={t.tipo} n={l.porTipo[t.tipo]} max={maxPorTipo[t.tipo]} cor={t.cor}
@@ -365,7 +370,7 @@ interface Props {
   /** "Consolidado · Setembro 2026" — vai no subtítulo do popup. */
   subtitulo: string
   accent: string
-  /** Quem saiu do time: fora das linhas por Closer e da contagem de closers. */
+  /** Quem saiu do time: somado na linha Ex-integrantes da visão por Closer. */
   inativos?: ReadonlySet<string>
 }
 
@@ -373,7 +378,7 @@ export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, a
   const [dim, setDim] = useState<DimensaoReunioes>('closer')
   const [selecao, setSelecao] = useState<Selecao | null>(null)
 
-  const resumo = useMemo(() => resumirReunioes(reunioes, inativos), [reunioes, inativos])
+  const resumo = useMemo(() => resumirReunioes(reunioes), [reunioes])
   const linhas = useMemo(() => agruparReunioes(reunioes, dim, inativos), [reunioes, dim, inativos])
   const vazio = reunioes.length === 0
 
@@ -415,7 +420,7 @@ export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, a
             </div>
 
             <TabelaReunioes linhas={linhas} dim={dim} accent={accent} reunioes={reunioes}
-              onAbrir={setSelecao} resumoGeral={resumo} />
+              onAbrir={setSelecao} resumoGeral={resumo} inativos={inativos} />
 
             {resumo.semTipo > 0 && (
               <button onClick={() => setSelecao({ titulo: 'Reuniões sem tipo', reunioes: reunioes.filter(r => !r.tipo) })}

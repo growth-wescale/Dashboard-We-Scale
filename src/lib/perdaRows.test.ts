@@ -198,12 +198,15 @@ describe('computeResponsaveis', () => {
     expect(resps.filter(x => x.nome === 'Bruna').map(x => [x.camada, x.qtd])).toEqual([['Closer', 2], ['SDR', 1]])
   })
 
-  it('quem saiu do time fica fora da lista', () => {
+  it('quem saiu do time entra somado na linha Ex-integrantes', () => {
     const perdas = [
       r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_closer: 'Rômulo' }),
-      r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_closer: 'Douglas' }),
+      r({ id_lead: 'b', status_atual: 'Perdido', etapa_funil: 'SAL', nome_closer: 'Giullia' }),
+      r({ id_lead: 'c', status_atual: 'Perdido', etapa_funil: 'Diagnóstico', nome_closer: 'Douglas' }),
     ]
-    expect(computeResponsaveis(perdas, new Set(['romulo'])).map(x => x.nome)).toEqual(['Douglas'])
+    const resps = computeResponsaveis(perdas, new Set(['romulo', 'giullia']))
+    expect(resps.map(x => [x.nome, x.camada, x.qtd])).toEqual([['Ex-integrantes', 'Closer', 2], ['Douglas', 'Closer', 1]])
+    expect(resps[0].exIntegrantes).toBe(true)
   })
 
   it('ignora deal sem etapa corrente resolvível', () => {

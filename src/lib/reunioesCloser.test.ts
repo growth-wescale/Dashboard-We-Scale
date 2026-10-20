@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toWindow } from '@/lib/metrics'
 import {
-  agruparReunioes, filtrarReunioes, resumirReunioes,
+  agruparReunioes, chaveDaReuniao, filtrarReunioes, resumirReunioes,
   type FiltroReunioes, type ReuniaoRow,
 } from './reunioesCloser'
 
@@ -126,17 +126,17 @@ describe('agruparReunioes', () => {
     expect(linhas[2]).toMatchObject({ total: 0, semTipo: 1, duracaoMedia: null, notaMedia: null })
   })
 
-  it('por Closer, quem saiu do time não vira linha; por marca, a reunião dele conta', () => {
+  it('por Closer, quem saiu do time entra somado na linha Ex-integrantes, por último', () => {
     const rows = [
       reuniao({ closer: 'Douglas', marca: 'Viva' }),
       reuniao({ closer: 'Aurélio Briano', marca: 'Viva' }),
+      reuniao({ closer: 'Rômulo', marca: 'Viva' }),
     ]
-    const inativos = new Set(['aurelio briano'])
-    expect(agruparReunioes(rows, 'closer', inativos).map(l => l.chave)).toEqual(['Douglas'])
-    expect(agruparReunioes(rows, 'marca', inativos)[0]).toMatchObject({ chave: 'Viva', total: 2 })
-    const resumo = resumirReunioes(rows, inativos)
-    expect(resumo.total).toBe(2)
-    expect(resumo.porTipo[0]).toMatchObject({ quantidade: 2, closers: 1 })
+    const inativos = new Set(['aurelio briano', 'romulo'])
+    const linhas = agruparReunioes(rows, 'closer', inativos)
+    expect(linhas.map(l => [l.chave, l.total])).toEqual([['Douglas', 1], ['Ex-integrantes', 2]])
+    expect(chaveDaReuniao(rows[1], 'closer', inativos)).toBe('Ex-integrantes')
+    expect(agruparReunioes(rows, 'marca', inativos)[0]).toMatchObject({ chave: 'Viva', total: 3 })
   })
 
   it('por marca: sem negócio vira chave null e fica sempre por último', () => {

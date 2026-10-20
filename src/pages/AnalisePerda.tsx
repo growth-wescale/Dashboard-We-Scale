@@ -411,7 +411,7 @@ export function AnalisePerda() {
             </div>
           </div>
           {respFiltrados.slice(0, 10).map(r => (
-            <BarRow key={r.nome}
+            <BarRow key={`${r.camada}|${r.nome}`}
               label={r.nome}
               subLabel={r.camada !== '—' ? r.camada : undefined}
               value={r.qtd}

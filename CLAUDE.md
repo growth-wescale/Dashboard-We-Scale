@@ -351,15 +351,17 @@ no funil Odonto Legacy (`deal_snapshot.id_funil = 68b84341646c55001ed64e4f`)
 sem Marca vira `'Odonto Legacy'` em `vw_funil_vendas` e em
 `vw_funil_etapas_v2.marca_deal` — o funil é exclusivo da marca.
 
-**Quem saiu do time não aparece nas visões por pessoa.** Pessoa com
-`nome_cargo_foto.ativo = false` não vira linha nas tabelas de SDR e Closer da
-Performance, na tabela "Por Closer" do MeetRox, na "Perda por responsável" nem
-nas opções dos filtros de SDR e Closer, em nenhum período (nem no mês em que
-ela trabalhou). As vendas, etapas e perdas dela seguem nos cards, nos totais e
-por marca, e o nome dela segue na lista de negócios dos pop-ups. Regra única em
-`src/lib/equipe.ts`. Tirar alguém do time = `ativo = false` no cadastro, sem
-mexer em código. A Campanha de Metas não usa essa regra: lá o piloto é quem tem
-meta no mês.
+**Quem saiu do time não aparece pelo nome nas visões por pessoa, mas os
+números dele continuam na soma.** Pessoa com `nome_cargo_foto.ativo = false`
+entra numa linha só, **"Ex-integrantes"** (sem nome, sem posição no ranking,
+sempre por último), nas tabelas de SDR e Closer da Performance (com a soma das
+metas de quem saiu), na tabela "Por Closer" do MeetRox, na "Perda por
+responsável" e no mini-gráfico "Por SDR/Por Closer" dos pop-ups. A linha some
+quando está zerada no período (era o que poluía a tela). Nas opções dos filtros
+de SDR e Closer da barra o nome não aparece. Na tabela de negócios dos pop-ups
+o nome continua nas colunas SDR e Closer. Regra única em `src/lib/equipe.ts`.
+Tirar alguém do time = `ativo = false` no cadastro, sem mexer em código. A
+Campanha de Metas não usa essa regra: lá o piloto é quem tem meta no mês.
 
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
@@ -377,7 +379,7 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
-src/lib/equipe.ts             quem saiu do time (`nome_cargo_foto.ativo`): some das visões por pessoa
+src/lib/equipe.ts             quem saiu do time (`nome_cargo_foto.ativo`): vira a linha "Ex-integrantes" nas visões por pessoa
 src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
 src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
 src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
@@ -752,6 +754,39 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-20 (4) — Quem saiu do time volta pra soma, numa linha "Ex-integrantes"
+
+Correção da entrada (3), pedida pelo Junior: os números de quem saiu têm que
+continuar na soma; só o nome não pode aparecer. A (3) tinha tirado a pessoa
+inteira, e em outubro isso mudou números que o chefe notou ("outubro tá
+diferente?"): saíram da tabela de Closers 1 Diagnóstico e 1 SAL do Aurélio, e
+da "Perda por responsável" as 3 perdas dele em etapa de Closer.
+
+Agora quem saiu entra numa linha só, "Ex-integrantes", com os números e a meta
+somados, sem posição no ranking, por último, e que some quando está zerada
+(regra na seção 4). Vale nas tabelas SDR/Closer e no popup por pessoa dos
+cards da Performance, na tabela "Por Closer" do MeetRox, na "Perda por
+responsável" e no mini-gráfico "Por SDR/Por Closer" dos pop-ups de deals. A
+tabela de negócios dos pop-ups segue com o nome nas colunas SDR e Closer. A
+soma das tabelas volta a ser a mesma de antes da (3). A diferença que sobra
+entre tabela e card (set/26: 2 vendas; out/26: 4) já existia: venda do Scale
+Partner sem Closer e a venda da Vanessa Daniel como Closer (cargo SDR).
+
+Junto: o popup de "Perda por responsável" usava `key={r.nome}`, que repetia
+depois da separação por camada (Bruna SDR e Closer); agora a chave é camada +
+nome.
+
+Visto em produção, sem relação com a mudança: às 14:47 de 20/10 a primeira
+página de `vw_funil_etapas_v2` voltou 500 pra um usuário do dashboard. Nesse
+caso os cards e o funil por evento ficam zerados até recarregar ou até o
+polling de 5 min.
+
+Verificado: build + 768 testes + oxlint sem aviso novo, e visto renderizado com
+dado real (cópia de prévia sem login): set/26 Closers com "Ex-integrantes" Diag
+6, SAL 2, COF 4, 1 venda R$ 69,9 mil (meta R$ 247,7 mil); out/26 "Ex-integrantes"
+Diag 1, SAL 1 e, na Perda por responsável, Closer 3; pop-up de Fechamentos de
+set/26 com a barra "Ex-integrantes 1" e "Aurélio Briano" na coluna Closer.
+
 ### 2026-10-20 (3) — Quem saiu do time some das tabelas, gráficos e filtros por pessoa
 
 Pedido do chefe do Junior: a tabela de Closers da Performance mostrava Rômulo,
@@ -769,7 +804,7 @@ fora: lista de negócios e mini-gráficos "Por SDR/Por Closer" dos pop-ups
 (detalhe do negócio, onde o nome vale) e a Campanha de Metas (piloto = quem tem
 meta no mês; em outubro só gente ativa tem meta).
 
-Efeito: a soma das linhas pode ficar abaixo do card. Set/26: card Fechamentos
+(Desfeito na entrada (4): os números de quem saiu voltaram pra soma.) Efeito: a soma das linhas pode ficar abaixo do card. Set/26: card Fechamentos
 13, tabela 10 (Aurélio fora). Out/26: card 7, tabela 3, mas aqui nenhuma é de
 quem saiu: 3 vendas do Scale Partner sem Closer e 1 da Vanessa Daniel (Odonto
 Legacy, cargo SDR, nunca entrou na tabela de Closers).

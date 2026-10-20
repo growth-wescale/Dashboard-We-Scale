@@ -3,6 +3,8 @@ import { ExternalLink, X } from 'lucide-react'
 import { stageOwnerRole, type StageDeal, type StageKey } from '@/lib/metrics'
 import { rdDealUrl } from '@/lib/rd'
 import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
+import { useNomesInativos } from '@/hooks/useRosterVendas'
+import { nomeNaVisao } from '@/lib/equipe'
 import { nf, money } from '@/lib/format'
 import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
 import { MultiSelect, labelStyle } from './MultiSelect'
@@ -75,10 +77,15 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   const ownerRole = ownerRoleProp ?? (stage ? stageOwnerRole(stage) : 'sdr')
   const ownerLabel = ownerRole === 'closer' ? 'Closer' : 'SDR'
   const responsavelFilterKey = ownerRole === 'closer' ? 'closer' : 'sdr'
-  // Mesma regra: sem corte por "Outros" — todo SDR/Closer real aparece.
+  // Mesma regra: sem corte por "Outros" — todo SDR/Closer real aparece. Quem
+  // saiu do time vira uma barra "Ex-integrantes" (o nome fica só na tabela).
+  const inativos = useNomesInativos()
   const porResponsavel = useMemo(
-    () => breakdownPorCategoria(deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent),
-    [deals, accent, ownerRole],
+    () => breakdownPorCategoria(
+      deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent,
+      nome => nomeNaVisao(nome, inativos),
+    ),
+    [deals, accent, ownerRole, inativos],
   )
 
   return (

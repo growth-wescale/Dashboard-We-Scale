@@ -97,8 +97,8 @@ describe('funilFilterOptions · quem saiu do time', () => {
       row({ nome_sdr: 'Xayane', nome_closer: 'Douglas', data_novo_mql: '2026-08-10' }),
       row({ nome_sdr: 'Giullia', nome_closer: 'Rômulo', data_novo_mql: '2026-08-11' }),
     ]
-    const inativos = new Set(['giullia', 'romulo'])
-    const out = funilFilterOptions({ rows, win, ...base, cohort: false, inativos })
+    const equipe = new Set(['xayane', 'douglas'])
+    const out = funilFilterOptions({ rows, win, ...base, cohort: false, equipe })
     expect(out.sdrs).toEqual(['Xayane'])
     expect(out.closers).toEqual(['Douglas'])
     // o deal deles segue valendo pras outras listas

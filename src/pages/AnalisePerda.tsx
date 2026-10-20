@@ -9,7 +9,7 @@ import { PerdaDealsDrawer } from '@/components/ui/PerdaDealsDrawer'
 import { SCard, KTile } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
-import { useNomesInativos } from '@/hooks/useRosterVendas'
+import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { buildScopeFilter, toWindow, mqlWord, stageLabel } from '@/lib/metrics'
 import type { OrigemComercial, StageKey } from '@/lib/metrics'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
@@ -172,7 +172,7 @@ export function AnalisePerda() {
   // Sempre carrega o recorte inteiro da origem — marca filtrada no cliente
   // (via `scope`), igual Fonte/SDR. Ver comentário em FunilVendas.
   const { data: rows, error: rowsError } = useFunilVendas(origem)
-  const inativos = useNomesInativos()
+  const equipe = useEquipeAtiva()
 
   const scope = useMemo(
     () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
@@ -187,9 +187,9 @@ export function AnalisePerda() {
   const opcoes = useMemo(
     () => funilFilterOptions({
       rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers,
-      cohort: viewModes.funnelView === 'cohort', inativos,
+      cohort: viewModes.funnelView === 'cohort', equipe,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, inativos],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, equipe],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),
@@ -209,7 +209,7 @@ export function AnalisePerda() {
   const evitavel = useMemo(() => computeEvitavel(perdas), [perdas])
   const etapas = useMemo(() => computeEtapas(perdas), [perdas])
   const cruz = useMemo(() => computeCruzamentos(perdas), [perdas])
-  const resps = useMemo(() => computeResponsaveis(perdas, inativos), [perdas, inativos])
+  const resps = useMemo(() => computeResponsaveis(perdas, equipe), [perdas, equipe])
   const marcas = useMemo(() => computeMarcas(perdas, scoped, win, viewModes), [perdas, scoped, win, viewModes])
 
   const [motivoTab, setMotivoTab] = useState<'todos' | 'processo' | 'mercado'>('todos')

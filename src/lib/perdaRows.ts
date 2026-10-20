@@ -195,17 +195,17 @@ export interface RespRow {
 /**
  * Uma linha por pessoa E camada: quem perde como SDR e como Closer (ex.: a
  * Bruna, Closer que aparece como SDR em negócio que voltou pro No Show) vira
- * duas linhas, senão tudo caía na camada do primeiro negócio. Quem saiu do
- * time (`inativos`) entra somado na linha `EX_INTEGRANTES` da camada.
+ * duas linhas, senão tudo caía na camada do primeiro negócio. Quem não é do
+ * time (`equipe`, os ativos do cadastro) entra somado em `EX_INTEGRANTES`.
  */
-export function computeResponsaveis(perdas: FunnelRow[], inativos?: ReadonlySet<string>): RespRow[] {
+export function computeResponsaveis(perdas: FunnelRow[], equipe?: ReadonlySet<string>): RespRow[] {
   const bucket = new Map<string, { nome: string; camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
   for (const p of perdas) {
     const stage = currentStage(p)
     const camada: 'SDR' | 'Closer' | '—' = stage ? (stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer') : '—'
     const nomeDeal = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
     if (!nomeDeal) continue
-    const nome = nomeNaVisao(nomeDeal, inativos)
+    const nome = nomeNaVisao(nomeDeal, equipe)
     const chave = `${camada}|${nome}`
     const cur = bucket.get(chave) ?? { nome, camada, deals: [] }
     cur.deals.push(p)

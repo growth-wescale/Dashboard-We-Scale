@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { EX_INTEGRANTES, chavePessoa, nomeNaVisao, nomesInativos, saiuDoTime } from '@/lib/equipe'
+import { EX_INTEGRANTES, chavePessoa, equipeAtiva, nomeNaVisao, saiuDoTime } from '@/lib/equipe'
 import type { MembroRoster } from '@/hooks/useRosterVendas'
 
 const roster: MembroRoster[] = [
@@ -14,19 +14,20 @@ describe('equipe', () => {
     expect(chavePessoa(null)).toBe('')
   })
 
-  it('só quem tem ativo = false saiu do time', () => {
-    const inativos = nomesInativos(roster)
-    expect(saiuDoTime('Aurélio Briano', inativos)).toBe(true)
-    expect(saiuDoTime('ROMULO', inativos)).toBe(true)
-    expect(saiuDoTime('Douglas', inativos)).toBe(false)
-    // fora do cadastro não é "inativo"
-    expect(saiuDoTime('Fulano', inativos)).toBe(false)
+  it('fora do time = inativo ou fora do cadastro', () => {
+    const equipe = equipeAtiva(roster)
+    expect(saiuDoTime('Aurélio Briano', equipe)).toBe(true)
+    expect(saiuDoTime('ROMULO', equipe)).toBe(true)
+    expect(saiuDoTime('Fulano', equipe)).toBe(true)
+    expect(saiuDoTime('douglas', equipe)).toBe(false)
+    // nome vazio não é pessoa
+    expect(saiuDoTime('  ', equipe)).toBe(false)
   })
 
-  it('nomeNaVisao troca só quem saiu pela linha Ex-integrantes', () => {
-    const inativos = nomesInativos(roster)
-    expect(nomeNaVisao('Rômulo', inativos)).toBe(EX_INTEGRANTES)
-    expect(nomeNaVisao('Douglas', inativos)).toBe('Douglas')
+  it('nomeNaVisao troca quem não é do time pela linha Ex-integrantes', () => {
+    const equipe = equipeAtiva(roster)
+    expect(nomeNaVisao('Rômulo', equipe)).toBe(EX_INTEGRANTES)
+    expect(nomeNaVisao('Douglas', equipe)).toBe('Douglas')
   })
 
   it('sem cadastro carregado ninguém some', () => {

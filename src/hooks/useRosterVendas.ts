@@ -1,15 +1,18 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
-import { nomesInativos } from '@/lib/equipe'
+import { equipeAtiva } from '@/lib/equipe'
 
 export type CargoVendas = 'SDR' | 'Closer' | 'SDR/Closer'
 
 export interface MembroRoster {
   nome: string
-  cargo: CargoVendas
+  /** SDR, Closer, SDR/Closer, ou outro (Gestor, Sistema…): a lista traz o
+   *  cadastro inteiro, pra quem saiu de qualquer cargo sumir pelo nome. */
+  cargo: CargoVendas | (string & {}) | null
   foto: string | null
   /** `nome_cargo_foto.ativo`. Quem saiu continua na lista (foto e cargo valem
-   *  pra meses passados), mas não aparece nas visões por pessoa: ver `nomesInativos`. */
+   *  pra meses passados), mas só quem está ativo aparece pelo nome nas visões
+   *  por pessoa: ver `equipeAtiva`. */
   ativo: boolean
 }
 
@@ -23,7 +26,6 @@ async function fetchRoster(): Promise<{ rows: MembroRoster[]; error: string | nu
   const { data, error } = await supabaseVendas
     .from('nome_cargo_foto')
     .select('nome, cargo, foto, ativo')
-    .in('cargo', ['SDR', 'Closer', 'SDR/Closer'])
     .order('nome', { ascending: true })
 
   if (error) return { rows: [], error: error.message }
@@ -63,8 +65,8 @@ export function useRosterVendas(): UseRosterResult {
   return { data, loading, error }
 }
 
-/** Nomes de quem saiu do time, pra esconder das tabelas, gráficos e filtros por pessoa. */
-export function useNomesInativos(): ReadonlySet<string> {
+/** Quem é do time hoje (ativo no cadastro): só esses aparecem pelo nome nas tabelas, gráficos e filtros por pessoa. */
+export function useEquipeAtiva(): ReadonlySet<string> {
   const { data } = useRosterVendas()
-  return useMemo(() => nomesInativos(data), [data])
+  return useMemo(() => equipeAtiva(data), [data])
 }

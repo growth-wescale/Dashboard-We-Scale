@@ -351,17 +351,23 @@ no funil Odonto Legacy (`deal_snapshot.id_funil = 68b84341646c55001ed64e4f`)
 sem Marca vira `'Odonto Legacy'` em `vw_funil_vendas` e em
 `vw_funil_etapas_v2.marca_deal` — o funil é exclusivo da marca.
 
-**Quem saiu do time não aparece pelo nome nas visões por pessoa, mas os
-números dele continuam na soma.** Pessoa com `nome_cargo_foto.ativo = false`
-entra numa linha só, **"Ex-integrantes"** (sem nome, sem posição no ranking,
-sempre por último), nas tabelas de SDR e Closer da Performance (com a soma das
-metas de quem saiu), na tabela "Por Closer" do MeetRox, na "Perda por
-responsável" e no mini-gráfico "Por SDR/Por Closer" dos pop-ups. A linha some
-quando está zerada no período (era o que poluía a tela). Nas opções dos filtros
-de SDR e Closer da barra o nome não aparece. Na tabela de negócios dos pop-ups
-o nome continua nas colunas SDR e Closer. Regra única em `src/lib/equipe.ts`.
-Tirar alguém do time = `ativo = false` no cadastro, sem mexer em código. A
-Campanha de Metas não usa essa regra: lá o piloto é quem tem meta no mês.
+**Só quem é do time aparece pelo nome nas visões por pessoa, e as tabelas
+por pessoa fecham com os cards.** "Do time" = ativo em `nome_cargo_foto`
+(o hook lê o cadastro inteiro, de qualquer cargo). Quem não é (inativo, ou
+fora do cadastro) entra numa linha só, **"Ex-integrantes"** (sem nome, sem
+posição, por último, com a soma das metas de quem saiu), nas tabelas de SDR e
+Closer da Performance, no popup por pessoa dos cards, na tabela "Por Closer"
+do MeetRox, na "Perda por responsável" e no mini-gráfico "Por SDR/Por Closer"
+dos pop-ups; e fica fora das opções dos filtros de SDR/Closer. Nas tabelas da
+Performance, negócio sem responsável entra em **"Sem SDR"/"Sem Closer"**, e
+pessoa ativa fora do cargo da tabela aparece pelo nome (Vanessa e Sarah fechando
+como Closer, Bruna e Douglas como SDR). Com isso cada coluna da tabela soma o
+card, inclusive com "Deals criados no período" (venda pela safra do MQL, igual
+`countSales`). Linhas de grupo e de pessoa fora do cargo só aparecem com número
+no período. O nome continua na tabela de negócios dos pop-ups. Regra em
+`src/lib/equipe.ts` + `classificador` de `performanceRows.ts`. Pessoa nova tem
+que entrar no cadastro, senão cai em "Ex-integrantes". A Campanha de Metas não
+usa essa regra: lá o piloto é quem tem meta no mês.
 
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
@@ -379,7 +385,7 @@ src/lib/funnelTypes.ts        tipos de vw_funil_vendas
 src/lib/funilFilterOptions.ts opções cruzadas de Marca/Fonte/Sub-fonte (compartilhado Visão Macro + Performance)
 src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitmoCard)
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
-src/lib/equipe.ts             quem saiu do time (`nome_cargo_foto.ativo`): vira a linha "Ex-integrantes" nas visões por pessoa
+src/lib/equipe.ts             quem é do time (`nome_cargo_foto.ativo`); o resto vira a linha "Ex-integrantes" nas visões por pessoa
 src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
 src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
 src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
@@ -753,6 +759,37 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-20 (5) — Tabelas de SDR e Closer fecham com os cards
+
+Pedido do Junior, na sequência da (4): a tabela por pessoa da Performance tem que
+somar o mesmo que o card. Antes ficavam de fora: negócio sem SDR/Closer, pessoa
+atuando fora do cargo do cadastro (Vanessa e Sarah como Closer, Bruna, Jéssica e
+Douglas como SDR) e nome fora do cadastro de SDR/Closer (Alberto Faria, gestor
+inativo; "Gabriel Limas" num negócio de teste). E com "Deals criados no
+período" a coluna de vendas olhava a data da venda, não a safra do MQL como o
+card.
+
+Agora: "Sem SDR"/"Sem Closer" (sem posição, por último), pessoa ativa fora do
+cargo pelo nome (só com número no período), e "não é do time" passou a ser
+"não está ativo no cadastro" em todo o dashboard (`equipeAtiva` no lugar de
+`nomesInativos`; `useRosterVendas` lê o cadastro inteiro). Isso joga Alberto e
+nomes fora do cadastro em "Ex-integrantes", e tira esses nomes dos filtros, do
+MeetRox, da Perda por responsável e do mini-gráfico dos pop-ups. Venda da
+tabela usa `matchesStage(…, 'Fechamento', …)`, a mesma trava do card.
+
+Cards, funil, conversões e totais nunca dependeram disso: sempre contaram todo
+negócio, com ou sem responsável. Só a tabela por pessoa deixava parte de fora.
+
+Verificado na tela com dado real (cópia de prévia sem login), coluna a coluna,
+tabela = card: out/26 SDR 754/79/43/29 e Closer 43/29/8/7/R$ 378,5 mil; set/26
+Closer 92/55/32/13/R$ 661,9 mil; set/26 com "Deals criados no período" Closer
+74/36/14/9/R$ 272,7 mil e SDR 1.345/134/74/36. Build + 771 testes + oxlint.
+
+**Visto no caminho, não corrigido:** a 1ª página de `vw_funil_etapas_v2` volta
+500 de vez em quando (2 vezes em 24h em produção, ~0,15% das chamadas; 2 vezes
+nos testes locais). O hook não tenta de novo, então o funil por evento fica
+zerado até recarregar ou até o polling de 5 min.
 
 ### 2026-10-20 (4) — Quem saiu do time volta pra soma, numa linha "Ex-integrantes"
 

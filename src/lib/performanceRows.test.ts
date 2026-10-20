@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
-import { DEFAULT_VIEW_MODES, toWindow, type FunnelEventRow } from '@/lib/metrics'
+import { DEFAULT_VIEW_MODES, countSales, toWindow, type FunnelEventRow } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { MembroRoster } from '@/hooks/useRosterVendas'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
@@ -59,12 +59,12 @@ describe('buildSdrRows', () => {
     expect(row.mqlToSql).toBeCloseTo(200, 5) // 2/1
   })
 
-  it('ignora quem não está no roster de SDR e status Excluído', () => {
+  it('ignora status Excluído; nome fora do cadastro entra em Ex-integrantes', () => {
     const rows = [
       r({ nome_sdr: 'Fantasma', data_agendamento_reuniao_sql: '2026-08-10' }),
       r({ nome_sdr: 'Xayane', status_atual: 'Excluído', data_agendamento_reuniao_sql: '2026-08-10' }),
     ]
-    expect(buildSdrRows(rows, win, metasSdr, roster)).toEqual([])
+    expect(buildSdrRows(rows, win, metasSdr, roster).map(x => [x.nome, x.sql])).toEqual([['Ex-integrantes', 1]])
   })
 
   it('agrega mesma pessoa com casing diferente em uma linha, preservando casing original', () => {
@@ -209,7 +209,7 @@ describe('quem saiu do time', () => {
     ]
     const out = buildCloserRows(rows, win, metas, rosterComInativo)
     expect(out.map(x => x.nome)).toEqual(['Douglas', 'Ex-integrantes'])
-    expect(out[1]).toMatchObject({ exIntegrantes: true, rr: 1, ganhos: 1, faturamento: 70_000, metaFinanceira: 140_000, pctAting: 50 })
+    expect(out[1]).toMatchObject({ grupo: 'ex-integrantes', rr: 1, ganhos: 1, faturamento: 70_000, metaFinanceira: 140_000, pctAting: 50 })
     // a soma das linhas não perde ninguém
     expect(out.reduce((s, x) => s + x.faturamento, 0)).toBe(120_000)
   })
@@ -229,6 +229,58 @@ describe('quem saiu do time', () => {
     ]
     const out = buildSdrRows(rows, win, [], rosterComInativo)
     expect(out.map(x => x.nome)).toEqual(['Xayane', 'Ex-integrantes'])
-    expect(out[1]).toMatchObject({ exIntegrantes: true, mql: 1, sql: 1 })
+    expect(out[1]).toMatchObject({ grupo: 'ex-integrantes', mql: 1, sql: 1 })
+  })
+})
+
+describe('a tabela fecha com o card', () => {
+  const rosterTime: MembroRoster[] = [
+    { nome: 'Xayane', cargo: 'SDR', foto: null, ativo: true },
+    { nome: 'Sarah Padilha', cargo: 'SDR', foto: null, ativo: true },
+    { nome: 'Douglas', cargo: 'Closer', foto: null, ativo: true },
+    { nome: 'Paula', cargo: 'Closer', foto: null, ativo: true },
+    { nome: 'Rômulo', cargo: 'Closer', foto: null, ativo: false },
+    { nome: 'Alberto', cargo: 'Gestor', foto: null, ativo: false },
+  ]
+  const venda = (p: Partial<FunnelRow>) => r({ status_atual: 'Ganho', data_venda: '2026-08-10', valor_contrato: 10_000, ...p })
+
+  it('sem Closer, Closer fora do cargo, quem saiu e quem não está no cadastro entram na soma', () => {
+    const rows = [
+      venda({ id_lead: 'a', nome_closer: 'Douglas' }),
+      venda({ id_lead: 'b', nome_closer: null }),
+      venda({ id_lead: 'c', nome_closer: 'Sarah Padilha' }), // SDR fechando (IDA)
+      venda({ id_lead: 'd', nome_closer: 'Rômulo' }),
+      venda({ id_lead: 'e', nome_closer: 'Alberto' }), // inativo de outro cargo
+      venda({ id_lead: 'g', nome_closer: 'Gabriel' }), // fora do cadastro
+      r({ id_lead: 'f', nome_closer: 'Paula', data_reuniao_realizada: '2026-03-01' }), // só fora da janela
+    ]
+    const out = buildCloserRows(rows, win, [], rosterTime)
+    // Paula é do cargo: aparece mesmo zerada; ranking primeiro, grupos no fim
+    expect(out.map(x => [x.nome, x.ganhos, x.grupo ?? null])).toEqual([
+      ['Douglas', 1, null], ['Sarah Padilha', 1, null], ['Paula', 0, null],
+      ['Ex-integrantes', 3, 'ex-integrantes'], ['Sem Closer', 1, 'sem-responsavel'],
+    ])
+    expect(out.reduce((s, x) => s + x.ganhos, 0)).toBe(countSales(rows, win, DEFAULT_VIEW_MODES))
+  })
+
+  it('SDR do cargo zerado aparece; fora do cargo zerado não', () => {
+    const rows = [
+      r({ id_lead: 'a', nome_sdr: 'Xayane', data_novo_mql: '2026-08-05' }),
+      r({ id_lead: 'b', nome_sdr: 'Douglas', data_novo_mql: '2026-03-05' }), // Closer como SDR, fora da janela
+      r({ id_lead: 'c', nome_sdr: null, data_novo_mql: '2026-08-06' }),
+    ]
+    const out = buildSdrRows(rows, win, [], rosterTime)
+    expect(out.map(x => [x.nome, x.mql])).toEqual([['Xayane', 1], ['Sem SDR', 1]])
+  })
+
+  it('com "Deals criados no período" a venda segue a safra do MQL, como o card', () => {
+    const modes = { ...DEFAULT_VIEW_MODES, funnelView: 'cohort' as const }
+    const rows = [
+      venda({ id_lead: 'a', nome_closer: 'Douglas', data_novo_mql: '2026-08-02', data_venda: '2026-09-10' }),
+      venda({ id_lead: 'b', nome_closer: 'Douglas', data_novo_mql: '2026-07-01', data_venda: '2026-08-10' }),
+    ]
+    const out = buildCloserRows(rows, win, [], rosterTime, 'deals', { eventos: [], modes })
+    expect(out.find(x => x.nome === 'Douglas')?.ganhos).toBe(1)
+    expect(countSales(rows, win, modes)).toBe(1)
   })
 })

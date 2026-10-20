@@ -12,7 +12,7 @@
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
 import { rowsInLoss, countStage, currentStage, STAGE_ORDER, stageOwnerRole } from '@/lib/metrics'
-import { saiuDoTime } from '@/lib/equipe'
+import { EX_INTEGRANTES, nomeNaVisao } from '@/lib/equipe'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import type { CategoriaMotivo } from '@/constants/motivosPerda'
@@ -186,28 +186,36 @@ export function computeCruzamentos(
   return { motivos, etapas, celulas }
 }
 
-export interface RespRow { nome: string; camada: 'SDR' | 'Closer' | '—'; qtd: number; deals: FunnelRow[] }
+export interface RespRow {
+  nome: string; camada: 'SDR' | 'Closer' | '—'; qtd: number; deals: FunnelRow[]
+  /** Linha `EX_INTEGRANTES`: soma de quem saiu do time. */
+  exIntegrantes?: boolean
+}
 
 /**
  * Uma linha por pessoa E camada: quem perde como SDR e como Closer (ex.: a
  * Bruna, Closer que aparece como SDR em negócio que voltou pro No Show) vira
  * duas linhas, senão tudo caía na camada do primeiro negócio. Quem saiu do
- * time (`inativos`) fica fora da lista; as perdas dele seguem nos totais.
+ * time (`inativos`) entra somado na linha `EX_INTEGRANTES` da camada.
  */
 export function computeResponsaveis(perdas: FunnelRow[], inativos?: ReadonlySet<string>): RespRow[] {
   const bucket = new Map<string, { nome: string; camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
   for (const p of perdas) {
     const stage = currentStage(p)
     const camada: 'SDR' | 'Closer' | '—' = stage ? (stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer') : '—'
-    const nome = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
-    if (!nome || saiuDoTime(nome, inativos)) continue
+    const nomeDeal = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
+    if (!nomeDeal) continue
+    const nome = nomeNaVisao(nomeDeal, inativos)
     const chave = `${camada}|${nome}`
     const cur = bucket.get(chave) ?? { nome, camada, deals: [] }
     cur.deals.push(p)
     bucket.set(chave, cur)
   }
   return [...bucket.values()]
-    .map(v => ({ nome: v.nome, camada: v.camada, qtd: v.deals.length, deals: v.deals }))
+    .map(v => ({
+      nome: v.nome, camada: v.camada, qtd: v.deals.length, deals: v.deals,
+      ...(v.nome === EX_INTEGRANTES ? { exIntegrantes: true } : {}),
+    }))
     .sort((a, b) => b.qtd - a.qtd)
 }
 

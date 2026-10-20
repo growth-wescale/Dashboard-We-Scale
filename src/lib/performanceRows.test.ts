@@ -197,20 +197,38 @@ describe('quem saiu do time', () => {
     { nome: 'Vanessa', cargo: 'SDR', foto: null, ativo: false },
   ]
 
-  it('não vira linha de Closer, nem com venda na janela nem zerado', () => {
+  it('entra somado numa linha Ex-integrantes, por último, com a meta de quem saiu', () => {
     const rows = [
       r({ id_lead: 'a', nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-10', valor_contrato: 50_000 }),
       r({ id_lead: 'b', nome_closer: 'Rômulo', status_atual: 'Ganho', data_venda: '2026-08-12', valor_contrato: 70_000 }),
-      r({ id_lead: 'c', nome_closer: 'Rômulo', data_reuniao_realizada: '2026-03-01' }), // só fora da janela
+      r({ id_lead: 'c', nome_closer: 'Rômulo', data_reuniao_realizada: '2026-08-20' }),
+    ]
+    const metas: MetaAgregada[] = [
+      ...metasCloser,
+      { nome: 'Rômulo', funcao: 'Closer', metaSql: 0, metaAgendamento: 0, metaReuniao: 0, metaCof: 0, metaFinanceira: 140_000, metaQtdVendas: 0, metaSal: 0 },
+    ]
+    const out = buildCloserRows(rows, win, metas, rosterComInativo)
+    expect(out.map(x => x.nome)).toEqual(['Douglas', 'Ex-integrantes'])
+    expect(out[1]).toMatchObject({ exIntegrantes: true, rr: 1, ganhos: 1, faturamento: 70_000, metaFinanceira: 140_000, pctAting: 50 })
+    // a soma das linhas não perde ninguém
+    expect(out.reduce((s, x) => s + x.faturamento, 0)).toBe(120_000)
+  })
+
+  it('a linha Ex-integrantes some quando está zerada no período', () => {
+    const rows = [
+      r({ id_lead: 'a', nome_closer: 'Douglas', status_atual: 'Ganho', data_venda: '2026-08-10', valor_contrato: 50_000 }),
+      r({ id_lead: 'b', nome_closer: 'Rômulo', data_reuniao_realizada: '2026-03-01' }), // só fora da janela
     ]
     expect(buildCloserRows(rows, win, [], rosterComInativo).map(x => x.nome)).toEqual(['Douglas'])
   })
 
-  it('não vira linha de SDR', () => {
+  it('SDR que saiu também entra na linha Ex-integrantes', () => {
     const rows = [
       r({ id_lead: 'a', nome_sdr: 'Xayane', data_novo_mql: '2026-08-05' }),
-      r({ id_lead: 'b', nome_sdr: 'Vanessa', data_novo_mql: '2026-08-06' }),
+      r({ id_lead: 'b', nome_sdr: 'Vanessa', data_novo_mql: '2026-08-06', data_agendamento_reuniao_sql: '2026-08-07' }),
     ]
-    expect(buildSdrRows(rows, win, [], rosterComInativo).map(x => x.nome)).toEqual(['Xayane'])
+    const out = buildSdrRows(rows, win, [], rosterComInativo)
+    expect(out.map(x => x.nome)).toEqual(['Xayane', 'Ex-integrantes'])
+    expect(out[1]).toMatchObject({ exIntegrantes: true, mql: 1, sql: 1 })
   })
 })

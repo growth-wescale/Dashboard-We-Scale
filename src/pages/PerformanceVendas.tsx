@@ -19,7 +19,7 @@ import { useMetasPerformance, findMeta } from '@/hooks/useMetasPerformance'
 import { metasConversao, type MetasConversao } from '@/lib/metaConversao'
 import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
-import { nomesInativos } from '@/lib/equipe'
+import { EX_INTEGRANTES, nomesInativos } from '@/lib/equipe'
 import { useReunioesCloser } from '@/hooks/useReunioesCloser'
 import { filtrarReunioes } from '@/lib/reunioesCloser'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
@@ -163,6 +163,19 @@ function Avatar({ nome, accent }: { nome: string; accent: string }) {
   )
 }
 
+/** Linha que soma quem saiu do time: sem posição, sem iniciais, nome em itálico. */
+function NomeExIntegrantes({ accent }: { accent: string }) {
+  return (
+    <span title="Soma de quem saiu do time" style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-secondary)', fontStyle: 'italic' }}>
+      <span style={{
+        width: 30, height: 30, borderRadius: '50%', border: `1px dashed ${accent}88`,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ws-surface)',
+      }}><Users size={14} style={{ color: accent }} /></span>
+      {EX_INTEGRANTES}
+    </span>
+  )
+}
+
 function RankNum({ i, accent }: { i: number; accent: string }) {
   return (
     <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 15, color: accent, fontVariantNumeric: 'tabular-nums' }}>
@@ -241,10 +254,12 @@ function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
         )}
         {rows.map((r, i) => (
           <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
-            <RankNum i={i} accent={SDR_ACCENT} />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
-              <Avatar nome={r.nome} accent={SDR_ACCENT} />{r.nome}
-            </span>
+            {r.exIntegrantes ? <span /> : <RankNum i={i} accent={SDR_ACCENT} />}
+            {r.exIntegrantes ? <NomeExIntegrantes accent={SDR_ACCENT} /> : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
+                <Avatar nome={r.nome} accent={SDR_ACCENT} />{r.nome}
+              </span>
+            )}
             <span style={{ textAlign: 'right' }}>{nf(r.mql)}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sql)}</span>
             <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
@@ -285,10 +300,12 @@ function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean 
         )}
         {rows.map((r, i) => (
           <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
-            <RankNum i={i} accent={CLOSER_ACCENT} />
-            <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
-              <Avatar nome={r.nome} accent={CLOSER_ACCENT} />{r.nome}
-            </span>
+            {r.exIntegrantes ? <span /> : <RankNum i={i} accent={CLOSER_ACCENT} />}
+            {r.exIntegrantes ? <NomeExIntegrantes accent={CLOSER_ACCENT} /> : (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
+                <Avatar nome={r.nome} accent={CLOSER_ACCENT} />{r.nome}
+              </span>
+            )}
             <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
             <span style={{ textAlign: 'right' }}>{nf(r.sal)}</span>
             <span style={{ textAlign: 'right' }}>{nf(r.cof)}</span>
@@ -530,8 +547,12 @@ export function PerformanceVendas() {
     if (!cardAberto) return null
     const def = CARD_DEF[cardAberto]
     const periodo = def.papel === 'SDR' ? mapaSdr(sdrRows, def.campo) : mapaCloser(closerRows, def.campo)
+    const metaDaPessoa = (nome: string) => { const m = findMeta(metasPessoa, nome, def.papel); return m ? def.metaDe!(m) : 0 }
+    // A linha Ex-integrantes leva a soma das metas de quem saiu do time.
     const metaMensalPorNome = def.metaDe
-      ? (nome: string) => { const m = findMeta(metasPessoa, nome, def.papel); return m ? def.metaDe!(m) : 0 }
+      ? (nome: string) => nome === EX_INTEGRANTES
+        ? roster.filter(r => !r.ativo).reduce((s, r) => s + metaDaPessoa(r.nome), 0)
+        : metaDaPessoa(nome)
       : null
 
     let pessoas: PessoasBreakdown | null = null
@@ -583,7 +604,7 @@ export function PerformanceVendas() {
       formatter: def.dinheiro ? moneyK : nfCeil,
       accent: def.papel === 'SDR' ? SDR_ACCENT : CLOSER_ACCENT,
     }
-  }, [cardAberto, sdrRows, closerRows, sdrRowsHoje, closerRowsHoje, metasPessoa, mesUnico, fimJanela,
+  }, [cardAberto, sdrRows, closerRows, sdrRowsHoje, closerRowsHoje, metasPessoa, roster, mesUnico, fimJanela,
     periodMode, ranges, range.start, scoped, eventos, win, viewModes, mqlLbl, unidadeSufixo])
 
   // ── Leadtime em horário comercial (aba SDR) ─────────────────────────────────
@@ -828,7 +849,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR que saiu do time, não entra nela, então a soma das linhas pode ficar abaixo do card. Com um SDR filtrado, os dois batem.
+            Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio — negócio sem SDR, ou com SDR fora do cadastro, não entra nela, então a soma das linhas pode ficar abaixo do card. Quem saiu do time entra somado na linha “Ex-integrantes”. Com um SDR filtrado, os dois batem.
           </p>
 
           <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
@@ -894,7 +915,7 @@ export function PerformanceVendas() {
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
-            Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído. Quem saiu do time não aparece na tabela, mas as vendas dele seguem nos cards.
+            Mesma observação da seção de SDR: cards por evento (Visão Macro), tabela somada pelo Closer atribuído. Quem saiu do time entra somado na linha “Ex-integrantes”.
           </p>
 
           <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />

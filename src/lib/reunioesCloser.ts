@@ -13,7 +13,7 @@ import type { OrigemComercial } from '@/lib/funnelTypes'
 import { isInWindow, type EventSource, type PeriodWindow } from '@/lib/metrics'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
 import { toLocalYearMonth } from '@/lib/dateUtils'
-import { saiuDoTime } from '@/lib/equipe'
+import { EX_INTEGRANTES, nomeNaVisao } from '@/lib/equipe'
 
 export type TipoReuniao = 'R1' | 'R2' | 'R3' | 'R4' | 'R5'
 
@@ -143,9 +143,10 @@ export interface LinhaReunioes {
 
 export type DimensaoReunioes = 'closer' | 'marca'
 
-/** Chave da linha de uma reunião na dimensão escolhida. */
-export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes): string | null {
-  return dim === 'closer' ? r.closer : r.marca
+/** Chave da linha de uma reunião na dimensão escolhida. Por Closer, quem saiu
+ *  do time (`inativos`) vira a linha `EX_INTEGRANTES`. */
+export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes, inativos?: ReadonlySet<string>): string | null {
+  return dim === 'closer' ? nomeNaVisao(r.closer, inativos) : r.marca
 }
 
 /**
@@ -153,16 +154,15 @@ export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes): string | n
  * reuniões tipadas. Linha só com reuniões sem tipo vai para o fim — ela não
  * tem o que mostrar nas colunas R1–R5, mas some se for descartada. Na visão
  * por marca, "sem negócio vinculado" (chave nula) fica sempre por último.
- * Na visão por Closer, quem saiu do time (`inativos`) não vira linha — as
- * reuniões dele seguem na linha de Total e nos cards.
+ * Na visão por Closer, quem saiu do time (`inativos`) entra somado na linha
+ * `EX_INTEGRANTES`, também por último.
  */
 export function agruparReunioes(
   rows: readonly ReuniaoRow[], dim: DimensaoReunioes, inativos?: ReadonlySet<string>,
 ): LinhaReunioes[] {
   const grupos = new Map<string | null, { porTipo: ContagemPorTipo; semTipo: number; dur: number[]; nota: number[] }>()
   for (const r of rows) {
-    const chave = chaveDaReuniao(r, dim)
-    if (dim === 'closer' && saiuDoTime(chave, inativos)) continue
+    const chave = chaveDaReuniao(r, dim, inativos)
     let g = grupos.get(chave)
     if (!g) {
       g = { porTipo: zeroPorTipo(), semTipo: 0, dur: [], nota: [] }
@@ -182,8 +182,8 @@ export function agruparReunioes(
     notaMedia: media(g.nota),
   }))
   return linhas.sort((a, b) =>
-    // "sem negócio vinculado" (marca nula) sempre por último: não é uma marca
-    (a.chave === null ? 1 : 0) - (b.chave === null ? 1 : 0)
+    // "sem negócio vinculado" (marca nula) e Ex-integrantes sempre por último: não são uma marca/pessoa
+    (a.chave === null || a.chave === EX_INTEGRANTES ? 1 : 0) - (b.chave === null || b.chave === EX_INTEGRANTES ? 1 : 0)
     || b.total - a.total
     || b.semTipo - a.semTipo
     || (a.chave ?? '').localeCompare(b.chave ?? '', 'pt-BR'),
@@ -195,7 +195,7 @@ export interface ResumoTipo {
   quantidade: number
   duracaoMedia: number | null
   notaMedia: number | null
-  /** Closers distintos do time atual que fizeram esse tipo no recorte. */
+  /** Closers distintos que fizeram esse tipo no recorte. */
   closers: number
 }
 
@@ -208,9 +208,8 @@ export interface ResumoReunioes {
   notaMedia: number | null
 }
 
-/** Totais por tipo para os cards do topo do bloco. Quem saiu do time conta na
- *  quantidade de reuniões, mas não no número de closers. */
-export function resumirReunioes(rows: readonly ReuniaoRow[], inativos?: ReadonlySet<string>): ResumoReunioes {
+/** Totais por tipo para os cards do topo do bloco. */
+export function resumirReunioes(rows: readonly ReuniaoRow[]): ResumoReunioes {
   const porTipo = TIPOS_REUNIAO.map(({ tipo }) => {
     const doTipo = rows.filter(r => r.tipo === tipo)
     return {
@@ -218,7 +217,7 @@ export function resumirReunioes(rows: readonly ReuniaoRow[], inativos?: Readonly
       quantidade: doTipo.length,
       duracaoMedia: media(doTipo.flatMap(r => (r.duracao_min != null ? [r.duracao_min] : []))),
       notaMedia: media(doTipo.flatMap(r => (r.ai_score != null ? [r.ai_score] : []))),
-      closers: new Set(doTipo.filter(r => !saiuDoTime(r.closer, inativos)).map(r => r.closer)).size,
+      closers: new Set(doTipo.map(r => r.closer)).size,
     }
   })
   const tipadas = rows.filter(r => r.tipo)

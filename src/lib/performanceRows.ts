@@ -4,6 +4,7 @@ import { dealKey, eventsInStage, isInWindow, saleUnits } from '@/lib/metrics'
 import type { MembroRoster } from '@/hooks/useRosterVendas'
 import type { MetaAgregada } from '@/hooks/useMetasPerformance'
 import { findMeta } from '@/hooks/useMetasPerformance'
+import { EX_INTEGRANTES } from '@/lib/equipe'
 
 export interface SdrRow {
   nome: string
@@ -11,6 +12,8 @@ export interface SdrRow {
   metaSql: number
   pctAting: number
   mqlToSql: number
+  /** Linha `EX_INTEGRANTES`: soma de quem saiu do time, sem posição no ranking. */
+  exIntegrantes?: boolean
 }
 
 export interface CloserRow {
@@ -22,6 +25,8 @@ export interface CloserRow {
   metaFinanceira: number
   pctAting: number
   winRate: number
+  /** Linha `EX_INTEGRANTES`: soma de quem saiu do time, sem posição no ranking. */
+  exIntegrantes?: boolean
 }
 
 const key = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
@@ -53,10 +58,24 @@ function eventosPorCiclo(
   return out
 }
 
-/** Quem está no time hoje, no cargo pedido. Quem saiu não vira linha, nem em
- *  mês passado: as vendas dele seguem nos cards, só não aparecem por pessoa. */
 function rosterSet(roster: MembroRoster[], cargos: MembroRoster['cargo'][]): Set<string> {
-  return new Set(roster.filter(r => r.ativo && cargos.includes(r.cargo)).map(r => key(r.nome)))
+  return new Set(roster.filter(r => cargos.includes(r.cargo)).map(r => key(r.nome)))
+}
+
+/**
+ * Quem saiu do time (`ativo = false`) não tem linha com nome: os números dele
+ * entram numa linha só, `EX_INTEGRANTES`, sempre por último e sem posição.
+ * Assim a soma da tabela é a mesma de antes. A linha some quando está zerada.
+ */
+const EX_KEY = '#ex-integrantes'
+
+function exDoCargo(roster: MembroRoster[], cargos: MembroRoster['cargo'][]) {
+  const membros = roster.filter(r => !r.ativo && cargos.includes(r.cargo))
+  return { chaves: new Set(membros.map(r => key(r.nome))), nomes: membros.map(r => r.nome) }
+}
+
+function ordenarComEx<T extends { exIntegrantes?: boolean }>(linhas: T[], cmp: (a: T, b: T) => number): T[] {
+  return linhas.sort((a, b) => Number(!!a.exIntegrantes) - Number(!!b.exIntegrantes) || cmp(a, b))
 }
 
 export function buildSdrRows(
@@ -64,6 +83,7 @@ export function buildSdrRows(
   contagem?: ContagemPorEvento,
 ): SdrRow[] {
   const valid = rosterSet(roster, ['SDR', 'SDR/Closer'])
+  const ex = exDoCargo(roster, ['SDR', 'SDR/Closer'])
   const ev = contagem && {
     sql: eventosPorCiclo(contagem, 'Reunião Agendada SQL', win),
     rr: eventosPorCiclo(contagem, 'Diagnóstico', win),
@@ -76,7 +96,7 @@ export function buildSdrRows(
     if (r.status_atual === 'Excluído') continue
     const nome = r.nome_sdr?.trim()
     if (!nome || !valid.has(key(nome))) continue
-    const normalized = key(nome)
+    const normalized = ex.chaves.has(key(nome)) ? EX_KEY : key(nome)
     const cur = bucket.get(normalized) ?? { mql: 0, sql: 0, rr: 0, sal: 0 }
     if (isInWindow(r.data_novo_mql, win)) cur.mql++
     if (ev) {
@@ -90,19 +110,24 @@ export function buildSdrRows(
       if (isInWindow(r.data_sal, win)) cur.sal++
     }
     bucket.set(normalized, cur)
-    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nome)
+    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, normalized === EX_KEY ? EX_INTEGRANTES : nome)
   }
 
-  return Array.from(bucket.entries()).map(([normalized, v]) => {
+  const linhas = Array.from(bucket.entries()).map(([normalized, v]): SdrRow => {
+    const exIntegrantes = normalized === EX_KEY
     const nome = nomeOriginal.get(normalized)!
-    const metaSql = findMeta(metas, nome, 'SDR')?.metaSql ?? 0
+    const metaSql = exIntegrantes
+      ? ex.nomes.reduce((s, n) => s + (findMeta(metas, n, 'SDR')?.metaSql ?? 0), 0)
+      : findMeta(metas, nome, 'SDR')?.metaSql ?? 0
     return {
       nome, ...v,
       metaSql,
       pctAting: metaSql > 0 ? (v.sql / metaSql) * 100 : 0,
       mqlToSql: v.mql > 0 ? (v.sql / v.mql) * 100 : 0,
+      ...(exIntegrantes ? { exIntegrantes: true } : {}),
     }
-  }).sort((a, b) => b.pctAting - a.pctAting || b.sql - a.sql)
+  }).filter(l => !l.exIntegrantes || l.mql + l.sql + l.rr + l.sal + l.metaSql > 0)
+  return ordenarComEx(linhas, (a, b) => b.pctAting - a.pctAting || b.sql - a.sql)
 }
 
 export function buildCloserRows(
@@ -111,6 +136,7 @@ export function buildCloserRows(
   contagem?: ContagemPorEvento,
 ): CloserRow[] {
   const valid = rosterSet(roster, ['Closer', 'SDR/Closer'])
+  const ex = exDoCargo(roster, ['Closer', 'SDR/Closer'])
   const ev = contagem && {
     rr: eventosPorCiclo(contagem, 'Diagnóstico', win),
     sal: eventosPorCiclo(contagem, 'SAL', win),
@@ -123,7 +149,7 @@ export function buildCloserRows(
     if (r.status_atual === 'Excluído') continue
     const nome = r.nome_closer?.trim()
     if (!nome || !valid.has(key(nome))) continue
-    const normalized = key(nome)
+    const normalized = ex.chaves.has(key(nome)) ? EX_KEY : key(nome)
     const cur = bucket.get(normalized) ?? { rr: 0, sal: 0, cof: 0, ganhos: 0, faturamento: 0 }
     if (ev) {
       const k = dealKey(r)
@@ -142,17 +168,22 @@ export function buildCloserRows(
       cur.faturamento += r.valor_contrato ?? 0
     }
     bucket.set(normalized, cur)
-    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nome)
+    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, normalized === EX_KEY ? EX_INTEGRANTES : nome)
   }
 
-  return Array.from(bucket.entries()).map(([normalized, v]) => {
+  const linhas = Array.from(bucket.entries()).map(([normalized, v]): CloserRow => {
+    const exIntegrantes = normalized === EX_KEY
     const nome = nomeOriginal.get(normalized)!
-    const metaFinanceira = findMeta(metas, nome, 'Closer')?.metaFinanceira ?? 0
+    const metaFinanceira = exIntegrantes
+      ? ex.nomes.reduce((s, n) => s + (findMeta(metas, n, 'Closer')?.metaFinanceira ?? 0), 0)
+      : findMeta(metas, nome, 'Closer')?.metaFinanceira ?? 0
     return {
       nome, ...v,
       metaFinanceira,
       pctAting: metaFinanceira > 0 ? (v.faturamento / metaFinanceira) * 100 : 0,
       winRate: v.rr > 0 ? (v.ganhos / v.rr) * 100 : 0,
+      ...(exIntegrantes ? { exIntegrantes: true } : {}),
     }
-  }).sort((a, b) => b.pctAting - a.pctAting || b.faturamento - a.faturamento)
+  }).filter(l => !l.exIntegrantes || l.rr + l.sal + l.cof + l.ganhos + l.faturamento + l.metaFinanceira > 0)
+  return ordenarComEx(linhas, (a, b) => b.pctAting - a.pctAting || b.faturamento - a.faturamento)
 }

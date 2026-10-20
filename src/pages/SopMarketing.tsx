@@ -5,6 +5,8 @@ import { useMediaData } from '@/hooks/useMediaData'
 import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useSopVendasFunil as useVendasFunil } from '@/hooks/useSopVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
+import { useSopScalePartnerSales } from '@/hooks/useSopScalePartnerSales'
+import { partnerBuyer, partnerEventCounts, partnerSalesInPeriod, type SopPartnerSale, type SopPartnerContact } from '@/lib/sopScalePartner'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { DealCardKanban } from '@/components/timeline/DealCardKanban'
@@ -813,6 +815,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
   const isWeScale = slide.marca === 'We Scale'
+  const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale })
+  const partnerSales = useMemo(() => partnerSalesInPeriod(partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte), [partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte])
+  const partnerRevenue = partnerSales.reduce((total, sale) => total + (sale.valor_contrato ?? 0), 0)
 
   // Odonto Legacy usa MTD completo (Junior 15/09: "pode puxar sempre MTD").
   // Comparativo = Agosto fechado (mês inteiro). Outras marcas seguem MTD-vs-MTD.
@@ -909,7 +914,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading
+    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading
   useEffect(() => {
     if (allLoaded) onReady?.()
   }, [allLoaded, onReady])
@@ -1351,9 +1356,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         ] satisfies KpiCard[]
         : [
             { label: 'INVEST.', value: fmtBRL(mtdInvest) },
-            { label: 'LEADS', value: String(mtdLeads.length), extra: { label: 'FONTE', value: 'Base Marketing' } },
+            { label: 'LEADS', value: String(mtdLeads.length) },
             { label: 'MQL', value: String(mtdMql) },
             { label: 'CP-MQL', value: mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
+            { label: 'VENDAS', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : String(partnerSales.length) },
+            { label: 'RECEITA', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : partnerRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
           ] satisfies KpiCard[]
       : kpiCardsAll
 
@@ -1510,7 +1517,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             {dates.isClosed
               ? `Mês fechado · ${dates.mtdLabel}`
               : isWeScale
-              ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Base Marketing · ${dates.mtdLabel}`
+              ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Acumulado · ${dates.mtdLabel}`
               : `Semana · ${effectiveWeeks.at(-1)?.label}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
@@ -1524,7 +1531,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
                 {card.label}
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1, marginBottom: 6 }}>
+              <div style={{ fontSize: isWeScale && card.label === 'RECEITA' ? 'clamp(16px, 1.7vw, 26px)' : 28, fontWeight: 700, color: 'var(--ws-text-primary)', lineHeight: 1.1, marginBottom: 6 }}>
                 {card.value}
               </div>
               {(card.semAnt || card.mtdAnt) && (
@@ -1836,7 +1843,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={monthKeyCur === '2026-10' ? COMUNIDADE_LEGACY_OUTUBRO : COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
-          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel} beautyConnectionLeads={weScaleSnapshot?.mtd.beautyConnection.leads ?? 0} />
+          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel}
+            sales={partnerSales} contacts={partnerSalesRes.contacts} loading={partnerSalesRes.loading}
+            error={partnerSalesRes.error} contactError={partnerSalesRes.contactError} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
@@ -1893,25 +1902,11 @@ function colTitle(accent: string): React.CSSProperties {
 // ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
 // Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
 // Funil Inverso, que não faz sentido enquanto o funil de Eventos no CRM não tem deals.
-const WE_SCALE_EVENTOS: Array<{ label: string; adsetIncludes: string[] }> = [
-  { label: 'Scale Partner Odonto', adsetIncludes: ['ODONTOLOGIA'] },
-  // LLK é o adset "genérico" do Scale Partner (não vinculado a nicho).
-  { label: 'Scale Partner (geral)', adsetIncludes: ['LLK'] },
-]
-
-function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads }: { leads: Lead[]; accent: string; monthLabel: string; beautyConnectionLeads: number }) {
-  const contagemDigital = WE_SCALE_EVENTOS.map(evento => {
-    const rows = leads.filter(l => {
-      const adset = String(l.dados_extras?.adset ?? '').toUpperCase()
-      return evento.adsetIncludes.some(needle => adset.includes(needle))
-    })
-    return { label: evento.label, n: rows.length, rows }
-  })
-  // Beauty Connection: leads de evento físico — não estão no banco We Scale
-  const contagem: Array<{ label: string; n: number; rows: Lead[] }> = [
-    { label: 'Beauty Connection (evento)', n: beautyConnectionLeads, rows: [] },
-    ...contagemDigital,
-  ]
+function WeScaleMqlPorEvento({ leads, accent, monthLabel, sales, contacts, loading, error, contactError }: {
+  leads: Lead[]; accent: string; monthLabel: string; sales: SopPartnerSale[]; contacts: SopPartnerContact[]
+  loading: boolean; error: string | null; contactError: string | null
+}) {
+  const contagem = partnerEventCounts(leads)
   const total = contagem.reduce((s, e) => s + e.n, 0)
   const max = Math.max(...contagem.map(e => e.n), 1)
   const fmtDia = (dia: string) => {
@@ -1922,7 +1917,7 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
     <div style={{ ...cardStyle, overflowY: 'auto' }}>
       <div style={{ marginBottom: 10, flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
         <div style={colTitle(accent)}>Leads mapeados por evento — {monthLabel}</div>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} leads mapeados</div>
+        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} leads no período</div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {contagem.map(e => {
@@ -1940,6 +1935,27 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
             </div>
           )
         })}
+      </div>
+      <div style={{ marginTop: 14, borderTop: '1px solid #e2e8f0', paddingTop: 10 }}>
+        <div style={colTitle(accent)}>Compradores — {monthLabel}</div>
+        {loading ? <p style={{ fontSize: 12 }}>Carregando vendas...</p>
+          : error ? <p role="alert" style={{ fontSize: 12, color: '#b91c1c' }}>Não foi possível carregar as vendas: {error}</p>
+          : sales.length === 0 ? <p style={{ fontSize: 12 }}>Nenhuma venda registrada no período e fonte selecionados.</p>
+          : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginTop: 6 }}>
+            <thead><tr style={{ textAlign: 'left', color: 'var(--ws-text-secondary)' }}>
+              <th style={{ padding: '4px 6px' }}>Comprador / negociação</th><th style={{ padding: '4px 6px' }}>Empresa</th>
+            </tr></thead>
+            <tbody>{sales.map(sale => {
+              const buyer = partnerBuyer(sale, contacts)
+              return <tr key={`${sale.id_lead}:${sale.ciclo}`} style={{ borderTop: '1px solid #e2e8f0' }}>
+                <td style={{ padding: '6px', overflowWrap: 'anywhere' }}>{buyer.nome}</td>
+                <td style={{ padding: '6px', overflowWrap: 'anywhere' }}>{buyer.empresa}{buyer.empresaNaNegociacao && <span style={{ display: 'block', fontSize: 9, color: 'var(--ws-text-secondary)' }}>Informada no nome da negociação</span>}</td>
+              </tr>
+            })}</tbody>
+          </table>}
+        {contactError && <p role="alert" style={{ fontSize: 11, color: '#b45309' }}>{contactError}</p>}
+        {!loading && !error && sales.some(sale => sale.valor_contrato == null) && <p style={{ fontSize: 11, color: '#b45309' }}>Há venda sem valor de contrato; ela conta nas vendas, mas não acrescenta receita.</p>}
+        <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 5 }}>Vendas pela data da venda no CRM. Sem empresa cadastrada: “Não informada”.</div>
       </div>
       {/* Lista detalhada de leads por evento */}
       <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1974,7 +1990,7 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, beautyConnectionLeads 
         ))}
       </div>
       <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Fonte: formulário nativo Meta · agrupado por adset (<b>ODONTOLOGIA</b> → Scale Partner Odonto, <b>LLK</b> → Scale Partner geral). Beauty Connection = evento físico (leads fora do banco We Scale).
+        Origem do evento: adset ou UTM preservada do RD (<b>ODONTOLOGIA</b> → Odonto; <b>LLK</b> → geral). Demais origens ficam sem evento identificado até confirmação.
       </div>
     </div>
   )

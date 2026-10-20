@@ -67,9 +67,13 @@ export function DefinirSenha() {
             <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ws-text-primary)', marginTop: 24 }}>Link expirado ou já usado</div>
             <p style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--ws-text-secondary)', margin: '8px 0 20px' }}>
               {linkAuth.erro ? 'Esse link de e-mail não vale mais. ' : ''}
-              Peça a um administrador do dashboard pra enviar um convite novo.
+              Se era um link de redefinir senha, peça um novo. Se era um convite, peça a um
+              administrador do dashboard pra enviar outro.
             </p>
-            <Link to="/login" style={{ fontSize: 14, fontWeight: 600, color: 'var(--ws-vinho-a)' }}>Ir para o login</Link>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <Link to="/esqueci-senha" style={{ fontSize: 14, fontWeight: 600, color: 'var(--ws-vinho-a)' }}>Pedir link novo</Link>
+              <Link to="/login" style={{ fontSize: 14, fontWeight: 600, color: 'var(--ws-vinho-a)' }}>Ir para o login</Link>
+            </div>
           </>
         ) : (
           <>

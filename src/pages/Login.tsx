@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -121,9 +121,18 @@ export function Login() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
-              Senha
-            </label>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ws-text-primary)' }}>
+                Senha
+              </label>
+              <Link
+                to="/esqueci-senha"
+                state={{ email }}
+                style={{ fontSize: 12, fontWeight: 500, color: 'var(--ws-vinho-a)', whiteSpace: 'nowrap' }}
+              >
+                Esqueci minha senha
+              </Link>
+            </div>
             <input
               type="password"
               value={password}

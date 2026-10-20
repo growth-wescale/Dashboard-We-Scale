@@ -387,7 +387,7 @@ src/lib/metaRitmo.ts          ritmo acumulado + meta do dia (usado pelo MetaRitm
 src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
 src/lib/equipe.ts             quem é do time (`nome_cargo_foto.ativo`); o resto vira a linha "Ex-integrantes" nas visões por pessoa
 src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
-src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página) — exige ORDEM TOTAL na query
+src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página), repete página que falha — exige ORDEM TOTAL na query
 src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
@@ -760,6 +760,26 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-20 (6) — Consulta paginada tenta de novo quando o banco falha
+
+Pedido do Junior. A 1ª página de `vw_funil_etapas_v2` (a que também pede
+`count=exact`) às vezes estoura o `statement_timeout` de 3 s do role anon
+(`57014`, 500 no PostgREST): 2 vezes em 24h em produção (~0,15% das chamadas),
+uma delas às 14:47 de 20/10. O hook não repetia, então cards por evento e funil
+ficavam zerados até recarregar. Pode ter sido o "deu problema no dash?" do chefe.
+
+`buscarTodasPaginas` (`paginacao.ts`) agora tenta cada página até 3 vezes
+(`tentativas`), com pausa de 800 ms × repetição (`pausaMs`). Na 1ª página a
+repetição vai sem a contagem, que é a parte pesada, e a paginação segue em
+lotes. Exceção na busca também é repetida. Vale para os três hooks que usam a
+função: `useFunilEventos`, `useFunilVendas` e `useReunioesCloser`. Só depois de
+3 falhas seguidas o erro chega à tela.
+
+Verificado: 775 testes (6 novos em `paginacao.test.ts`) + build + oxlint; e na
+tela com dado real, forçando 500 nas 2 primeiras chamadas de eventos: a 3ª deu
+certo, a carga seguiu e os cards fecharam com os mesmos números da carga sem
+falha (set/26, safra: SQL 134, Diagnóstico 74, SAL 36).
+
 ### 2026-10-20 (5) — Tabelas de SDR e Closer fecham com os cards
 
 Pedido do Junior, na sequência da (4): a tabela por pessoa da Performance tem que
@@ -786,10 +806,8 @@ tabela = card: out/26 SDR 754/79/43/29 e Closer 43/29/8/7/R$ 378,5 mil; set/26
 Closer 92/55/32/13/R$ 661,9 mil; set/26 com "Deals criados no período" Closer
 74/36/14/9/R$ 272,7 mil e SDR 1.345/134/74/36. Build + 771 testes + oxlint.
 
-**Visto no caminho, não corrigido:** a 1ª página de `vw_funil_etapas_v2` volta
-500 de vez em quando (2 vezes em 24h em produção, ~0,15% das chamadas; 2 vezes
-nos testes locais). O hook não tenta de novo, então o funil por evento fica
-zerado até recarregar ou até o polling de 5 min.
+**Visto no caminho:** a 1ª página de `vw_funil_etapas_v2` volta 500 de vez em
+quando. Corrigido na entrada (6).
 
 ### 2026-10-20 (4) — Quem saiu do time volta pra soma, numa linha "Ex-integrantes"
 

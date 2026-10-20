@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { buscarTodasPaginas, type BuscarPagina } from '@/lib/paginacao'
 
 /** Fonte falsa: `total` linhas numeradas, fatiadas por range como o PostgREST. */
-function fonteFalsa(total: number, opts: { erroNaPagina?: number } = {}) {
+function fonteFalsa(total: number, opts: { erroNaPagina?: number; falhasAntes?: number } = {}) {
+  let falhasRestantes = opts.falhasAntes ?? Infinity
   const chamadas: { de: number; ate: number; contar: boolean }[] = []
   let emVoo = 0
   let picoEmVoo = 0
@@ -14,7 +15,8 @@ function fonteFalsa(total: number, opts: { erroNaPagina?: number } = {}) {
     // tem que continuar sendo a da paginação, não a de chegada.
     await new Promise(r => setTimeout(r, Math.max(0, 20 - de / 10)))
     emVoo--
-    if (opts.erroNaPagina !== undefined && de === opts.erroNaPagina * 10) {
+    if (opts.erroNaPagina !== undefined && de === opts.erroNaPagina * 10 && falhasRestantes > 0) {
+      falhasRestantes--
       return { rows: [], error: 'falhou' }
     }
     const rows: number[] = []
@@ -82,15 +84,49 @@ describe('buscarTodasPaginas', () => {
     expect(r.rows).toEqual(seq(35))
   })
 
-  it('erro em qualquer página devolve o erro e nenhuma linha', async () => {
+  it('erro que persiste em qualquer página devolve o erro e nenhuma linha', async () => {
     const f = fonteFalsa(57, { erroNaPagina: 3 })
-    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4 })
+    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4, pausaMs: 0 })
     expect(r).toEqual({ rows: [], error: 'falhou' })
+    // tentou a página 3 três vezes
+    expect(f.chamadas.filter(c => c.de === 30)).toHaveLength(3)
   })
 
-  it('erro na primeira página', async () => {
+  it('erro que persiste na primeira página: 3 tentativas, depois devolve o erro', async () => {
     const f = fonteFalsa(57, { erroNaPagina: 0 })
-    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4 })
+    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4, pausaMs: 0 })
+    expect(r).toEqual({ rows: [], error: 'falhou' })
+    expect(f.chamadas).toHaveLength(3)
+  })
+
+  it('erro passageiro na primeira página: repete sem a contagem e traz tudo', async () => {
+    const f = fonteFalsa(57, { erroNaPagina: 0, falhasAntes: 1 })
+    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4, pausaMs: 0 })
+    expect(r).toEqual({ rows: seq(57), error: null })
+    expect(f.chamadas.slice(0, 2).map(c => [c.de, c.contar])).toEqual([[0, true], [0, false]])
+  })
+
+  it('erro passageiro numa página do meio: repete só ela e traz tudo', async () => {
+    const f = fonteFalsa(57, { erroNaPagina: 3, falhasAntes: 2 })
+    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4, pausaMs: 0 })
+    expect(r).toEqual({ rows: seq(57), error: null })
+    expect(f.chamadas.filter(c => c.de === 30)).toHaveLength(3)
+    expect(f.chamadas.filter(c => c.de === 20)).toHaveLength(1)
+  })
+
+  it('exceção na busca conta como erro e também é repetida', async () => {
+    let n = 0
+    const buscar: BuscarPagina<number> = async (de, ate) => {
+      if (n++ === 0) throw new Error('rede caiu')
+      return { rows: Array.from({ length: Math.min(ate, 4) - de + 1 }, (_, i) => de + i), error: null }
+    }
+    const r = await buscarTodasPaginas(buscar, { tamanhoPagina: 10, concorrencia: 2, pausaMs: 0 })
+    expect(r).toEqual({ rows: seq(5), error: null })
+  })
+
+  it('tentativas: 1 não repete', async () => {
+    const f = fonteFalsa(57, { erroNaPagina: 0, falhasAntes: 1 })
+    const r = await buscarTodasPaginas(f.buscar, { tamanhoPagina: 10, concorrencia: 4, tentativas: 1 })
     expect(r).toEqual({ rows: [], error: 'falhou' })
     expect(f.chamadas).toHaveLength(1)
   })

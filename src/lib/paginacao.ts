@@ -11,6 +11,13 @@
  * empatada). OFFSET sobre ordem com empate devolve páginas que se sobrepõem:
  * com `order=dia` só, set/26 Inbound vinha com 81 eventos duplicados e 81
  * faltando, em série ou em paralelo.
+ *
+ * Erro passageiro não pode zerar a tela até alguém recarregar. O mais comum é
+ * o `statement timeout` (3 s do role anon) na 1ª página de `vw_funil_etapas_v2`,
+ * a que também conta o total: em 20/10 aconteceu em produção e o funil por
+ * evento ficou zerado. Cada página tenta de novo (`tentativas`), com pausa
+ * crescente; na 1ª página a repetição vai sem a contagem, que é a parte pesada,
+ * e a paginação segue em lotes.
  */
 
 export interface PaginaBuscada<T> {
@@ -27,6 +34,26 @@ export interface OpcoesPaginacao {
   tamanhoPagina: number
   /** Máximo de requests simultâneos. */
   concorrencia: number
+  /** Tentativas por página, contando a primeira (1 = não repete). Padrão 3. */
+  tentativas?: number
+  /** Pausa antes de repetir, vezes o número da repetição. Padrão 800 ms. */
+  pausaMs?: number
+}
+
+async function comTentativas<T>(
+  buscar: (tentativa: number) => Promise<PaginaBuscada<T>>, tentativas: number, pausaMs: number,
+): Promise<PaginaBuscada<T>> {
+  let ultima: PaginaBuscada<T> = { rows: [], error: 'nenhuma tentativa' }
+  for (let t = 0; t < Math.max(1, tentativas); t++) {
+    if (t > 0 && pausaMs > 0) await new Promise(r => setTimeout(r, pausaMs * t))
+    try {
+      ultima = await buscar(t)
+    } catch (e) {
+      ultima = { rows: [], error: e instanceof Error ? e.message : String(e) }
+    }
+    if (!ultima.error) return ultima
+  }
+  return ultima
 }
 
 async function emParalelo<T>(indices: number[], limite: number, fn: (i: number) => Promise<T>): Promise<T[]> {
@@ -44,10 +71,12 @@ async function emParalelo<T>(indices: number[], limite: number, fn: (i: number) 
 
 export async function buscarTodasPaginas<T>(
   buscar: BuscarPagina<T>,
-  { tamanhoPagina, concorrencia }: OpcoesPaginacao,
+  { tamanhoPagina, concorrencia, tentativas = 3, pausaMs = 800 }: OpcoesPaginacao,
 ): Promise<{ rows: T[]; error: string | null }> {
-  const pagina = (i: number, contar: boolean) =>
-    buscar(i * tamanhoPagina, i * tamanhoPagina + tamanhoPagina - 1, contar)
+  const pagina = (i: number, contar: boolean) => comTentativas(
+    t => buscar(i * tamanhoPagina, i * tamanhoPagina + tamanhoPagina - 1, contar && t === 0),
+    tentativas, pausaMs,
+  )
 
   const primeira = await pagina(0, true)
   if (primeira.error) return { rows: [], error: primeira.error }

@@ -9,14 +9,10 @@ Alteração restrita à folha Scale Partner em `SopMarketing.tsx`.
   nessa folha, com cache isolado e recorte pela data da venda em Brasília.
 - Somente status Ganho e marcas Scale Partner/We Scale. Chave negócio/ciclo;
   criação anterior ao mês não impede contabilizar uma venda no mês.
-- Lista de compradores abaixo da distribuição por evento usa exatamente o
-  mesmo recorte/fonte das novas métricas. Complemento de nome/empresa é
-  lido em Marketing somente pelos IDs CRM dos ganhos, sem consulta de contatos
-  em massa. Falha complementar mantém os ganhos e informa a limitação.
-- Sem empresa disponível, “Não informada”. Empresa contida explicitamente
-  no nome da negociação só é separada quando o nome cadastrado do contato
-  é seu prefixo exato; essa origem é identificada na tabela. Nenhum dado pessoal
-  é fixado no código ou incluído neste documento.
+- Revisão aprovada em 20/10: seção de compradores removida da tela e do PDF.
+  O complemento de nome/empresa e a consulta de identificação em Marketing
+  também foram retirados. Vendas e receita preservadas, com os mesmos filtros.
+  A chave de cache foi versionada para não reaproveitar a estrutura anterior.
 - Beauty Connection removido apenas do quadro de eventos. Os snapshots
   históricos e os respectivos indicadores anteriores não são reescritos.
 - Mapeamento usa adset ou utm_term preservada do RD: ODONTOLOGIA e LLK.
@@ -26,10 +22,12 @@ Alteração restrita à folha Scale Partner em `SopMarketing.tsx`.
   o alerta visível em caso de falha. Venda sem valor não acrescenta receita.
 
 Sem escrita em banco, migração, nova permissão, dependência ou alteração de
-hooks compartilhados, Legacy, Vendas, metas e demais folhas.
+hooks compartilhados ou páginas de Vendas/metas. A revisão de metas e
+comunidade da folha Legacy está documentada separadamente em
+`sop-legacy-comunidade-2026-10-20.md`.
 
 Verificação: testes unitários de período, fuso, status, fonte, dedupe,
-identidade, mapeamento, cancelamento, paginação e falhas; build/lint e
+mapeamento, cancelamento, paginação e falhas; build/lint e
 conferência visual local a 1440/1024px e exportação PDF de nove folhas com
 dados fictícios (folha Scale Partner revisada). Não equivale a deploy ou QA
 autenticado com dados reais. Publicação depende de PR e merge.

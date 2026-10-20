@@ -1,5 +1,7 @@
 export interface ComunidadeLegacy {
   amostraPeriodo?: string
+  testesExcluidos?: number
+  criterioPerfil?: string
   ate: string
   total: number
   origens: { label: string; n: number; pct: number }[]
@@ -13,16 +15,19 @@ export interface ComunidadeLegacy {
   duplicados?: { leads: number; pico: string }
 }
 
-// Total ativo informado por Gabriel em 13/10. Perfil é somente a amostra
-// enviada (01–06/10), sem os três testes; não extrapolar para os 186 membros.
+// Total ativo informado por Gabriel em 20/10. A lista é só para qualidade:
+// 420 linhas, sete testes excluídos e 384 contatos únicos, usando a resposta
+// mais recente por contato (aprovado inclusive nos quatro casos divergentes).
+// Não extrapolar o perfil dos cadastros para os 192 membros ativos.
 export const COMUNIDADE_LEGACY_OUTUBRO: ComunidadeLegacy = {
-  ate: '13/10', total: 186, sampleN: 24, amostraPeriodo: '01–06/10/2026',
+  ate: '20/10', total: 192, sampleN: 384, amostraPeriodo: '04/08–20/10/2026',
+  testesExcluidos: 7, criterioPerfil: 'Última resposta por contato, conforme aprovação de 20/10.',
   origens: [],
   quadrantes: [
-    { tier: 'ok', pct: 25, label: 'Dentista com clínica', aprox: '6 cadastros da amostra' },
-    { tier: 'mid', pct: 16.67, label: 'Dentista sem clínica', aprox: '4 cadastros da amostra' },
-    { tier: 'low', pct: 16.67, label: 'Não-dentista com clínica', aprox: '4 cadastros da amostra' },
-    { tier: 'low', pct: 41.67, label: 'Não-dentista sem clínica', aprox: '10 cadastros da amostra' },
+    { tier: 'ok', pct: 19.27, label: 'Dentista com clínica', aprox: '74 contatos da lista analisada' },
+    { tier: 'mid', pct: 23.44, label: 'Dentista sem clínica', aprox: '90 contatos da lista analisada' },
+    { tier: 'low', pct: 4.95, label: 'Não-dentista com clínica', aprox: '19 contatos da lista analisada' },
+    { tier: 'low', pct: 52.34, label: 'Não-dentista sem clínica', aprox: '201 contatos da lista analisada' },
   ],
 }
 

@@ -6,7 +6,7 @@ import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useSopVendasFunil as useVendasFunil } from '@/hooks/useSopVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
 import { useSopScalePartnerSales } from '@/hooks/useSopScalePartnerSales'
-import { partnerBuyer, partnerEventCounts, partnerSalesInPeriod, type SopPartnerSale, type SopPartnerContact } from '@/lib/sopScalePartner'
+import { partnerEventCounts, partnerSalesInPeriod } from '@/lib/sopScalePartner'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { DealCardKanban } from '@/components/timeline/DealCardKanban'
@@ -1306,7 +1306,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           mtdAnt: deltaLabel(receitaCur, receitaPrev),
           extra: {
             label: `META ${mesLabelUpper}/${String(mesLblY).slice(-2)}`,
-            value: metaReceita > 0 ? fmtBRL(metaReceita) : '—',
+            value: metaReceita > 0 ? metaReceita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—',
             subtext: metaReceita > 0
               ? `${fmtBRL(receitaMtd)} MTD · ${pctReceita}% atingido`
               : undefined,
@@ -1844,8 +1844,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           <ComunidadeLegacyPanel data={monthKeyCur === '2026-10' ? COMUNIDADE_LEGACY_OUTUBRO : COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
           <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel}
-            sales={partnerSales} contacts={partnerSalesRes.contacts} loading={partnerSalesRes.loading}
-            error={partnerSalesRes.error} contactError={partnerSalesRes.contactError} />
+            loading={partnerSalesRes.loading} error={partnerSalesRes.error}
+            missingSaleValue={partnerSales.some(sale => sale.valor_contrato == null)} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
@@ -1902,9 +1902,9 @@ function colTitle(accent: string): React.CSSProperties {
 // ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
 // Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
 // Funil Inverso, que não faz sentido enquanto o funil de Eventos no CRM não tem deals.
-function WeScaleMqlPorEvento({ leads, accent, monthLabel, sales, contacts, loading, error, contactError }: {
-  leads: Lead[]; accent: string; monthLabel: string; sales: SopPartnerSale[]; contacts: SopPartnerContact[]
-  loading: boolean; error: string | null; contactError: string | null
+function WeScaleMqlPorEvento({ leads, accent, monthLabel, loading, error, missingSaleValue }: {
+  leads: Lead[]; accent: string; monthLabel: string
+  loading: boolean; error: string | null; missingSaleValue: boolean
 }) {
   const contagem = partnerEventCounts(leads)
   const total = contagem.reduce((s, e) => s + e.n, 0)
@@ -1936,27 +1936,8 @@ function WeScaleMqlPorEvento({ leads, accent, monthLabel, sales, contacts, loadi
           )
         })}
       </div>
-      <div style={{ marginTop: 14, borderTop: '1px solid #e2e8f0', paddingTop: 10 }}>
-        <div style={colTitle(accent)}>Compradores — {monthLabel}</div>
-        {loading ? <p style={{ fontSize: 12 }}>Carregando vendas...</p>
-          : error ? <p role="alert" style={{ fontSize: 12, color: '#b91c1c' }}>Não foi possível carregar as vendas: {error}</p>
-          : sales.length === 0 ? <p style={{ fontSize: 12 }}>Nenhuma venda registrada no período e fonte selecionados.</p>
-          : <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, marginTop: 6 }}>
-            <thead><tr style={{ textAlign: 'left', color: 'var(--ws-text-secondary)' }}>
-              <th style={{ padding: '4px 6px' }}>Comprador / negociação</th><th style={{ padding: '4px 6px' }}>Empresa</th>
-            </tr></thead>
-            <tbody>{sales.map(sale => {
-              const buyer = partnerBuyer(sale, contacts)
-              return <tr key={`${sale.id_lead}:${sale.ciclo}`} style={{ borderTop: '1px solid #e2e8f0' }}>
-                <td style={{ padding: '6px', overflowWrap: 'anywhere' }}>{buyer.nome}</td>
-                <td style={{ padding: '6px', overflowWrap: 'anywhere' }}>{buyer.empresa}{buyer.empresaNaNegociacao && <span style={{ display: 'block', fontSize: 9, color: 'var(--ws-text-secondary)' }}>Informada no nome da negociação</span>}</td>
-              </tr>
-            })}</tbody>
-          </table>}
-        {contactError && <p role="alert" style={{ fontSize: 11, color: '#b45309' }}>{contactError}</p>}
-        {!loading && !error && sales.some(sale => sale.valor_contrato == null) && <p style={{ fontSize: 11, color: '#b45309' }}>Há venda sem valor de contrato; ela conta nas vendas, mas não acrescenta receita.</p>}
-        <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 5 }}>Vendas pela data da venda no CRM. Sem empresa cadastrada: “Não informada”.</div>
-      </div>
+      {error && <p role="alert" style={{ fontSize: 12, color: '#b91c1c' }}>Não foi possível carregar as vendas: {error}</p>}
+      {!loading && !error && missingSaleValue && <p style={{ fontSize: 11, color: '#b45309' }}>Há venda sem valor de contrato; ela conta nas vendas, mas não acrescenta receita.</p>}
       {/* Lista detalhada de leads por evento */}
       <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {contagem.filter(e => e.rows.length > 0).map(e => (

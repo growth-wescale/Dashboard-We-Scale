@@ -3,7 +3,7 @@ import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
 import { BRAND_ACCENT } from '@/constants/brands'
 import { daysInMonth, fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
-import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, metaCadastrada, orcamentoMensalMissao, pacingMissao, pacingTrimestre, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
+import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, funilInversoMissao, orcamentoMensalMissao, pacingMissao, pacingTrimestre, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
 import './missaoImpossivel.css'
 
 const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -41,16 +41,16 @@ function Placar({ titulo, meta, inicio, dados }: { titulo: string; meta: number;
   </section>
 }
 
-function Indicador({ label, atual, meta, moeda = false, referencia }: { label: string; atual: number; meta: ReturnType<typeof metaCadastrada>; moeda?: boolean; referencia: number }) {
-  const format = moeda ? money : numero
+function Indicador({ label, atual, meta, referencia }: { label: string; atual: number; meta: number | null; referencia: number }) {
+  const format = numero
   return <div className="missao-indicador">
     <div className="missao-indicador-titulo"><span>{label}</span>
-      <span className="missao-indicador-valores"><strong>{format(atual)}</strong><span>/ {meta.valor === null ? 'meta pendente' : format(meta.valor)}</span></span>
+      <span className="missao-indicador-valores"><strong>{format(atual)}</strong><span>/ {meta === null ? 'meta pendente' : format(meta)}</span></span>
     </div>
-    {meta.valor !== null ? <>
-      <Progresso atual={atual} meta={meta.valor} label={label} referencia={referencia} />
-      <div className="missao-indicador-legenda"><span>{meta.valor > 0 ? `${pct(atual / meta.valor * 100)} atingidos` : 'Meta 0'}</span><span>{atual > meta.valor ? 'Acima da meta' : 'Falta atingir'}: {format(Math.abs(meta.valor - atual))}</span></div>
-    </> : <>{label === 'MQL' && <><div className="missao-track" aria-hidden="true" /><p className="missao-footnote">Percentual de MQL pendente · meta mensal não cadastrada.</p></>}<p className="missao-aviso">Cadastrado até agora: {format(meta.parcial)}. Falta completar: {meta.faltantes.map(shortMonth).join(', ')}. Total e atingimento pendentes.</p></>}
+    {meta !== null ? <>
+      <Progresso atual={atual} meta={meta} label={label} referencia={referencia} />
+      <div className="missao-indicador-legenda"><span>{meta > 0 ? `${pct(atual / meta * 100)} atingidos` : 'Meta 0'}</span><span>{atual > meta ? 'Acima da meta' : 'Falta atingir'}: {format(Math.abs(meta - atual))}</span></div>
+    </> : <><div className="missao-track" aria-hidden="true" /><p className="missao-aviso">Meta pendente: falta completar a meta de vendas dos Closers deste mês. Atingimento não calculável.</p></>}
   </div>
 }
 
@@ -60,13 +60,14 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
   const captacao = captacaoMissao(dados, frente.marca)
   const pacing = pacingMissao(dados.midia, frente.marca, frente.investimento, dados.hoje)
   const etapas = etapasMissao(dados.etapas, frente.marca, mes, dados.hoje)
-  const meta = (campo: Parameters<typeof metaCadastrada>[3], meses: readonly string[]) => metaCadastrada(dados.metas, frente.marca, meses, campo)
+  const funil = funilInversoMissao(dados.metas, frente.marca, mes)
   return <div className="missao-coluna-marca" style={{ '--missao-marca-accent': BRAND_ACCENT[frente.marca] } as React.CSSProperties}>
     <header className="missao-marca-cabecalho"><h3><span aria-hidden="true" />{frente.marca}</h3><p className="missao-muted">{money(frente.investimento)} de mídia no trimestre</p></header>
     {noTrimestre && <>
       <article className="missao-marca missao-marca-compacta" aria-label={`MQL e CP-MQL · ${frente.marca}`}>
       <h4 className="missao-subtitulo">MQL e CP-MQL · {monthLabelLong(mes)}</h4>
-      <Indicador label="MQL" atual={captacao.mql} meta={{ valor: captacao.metaMql, parcial: 0, faltantes: [mes] }} referencia={referencia} />
+      <Indicador label="MQL" atual={captacao.mql} meta={captacao.metaMql} referencia={referencia} />
+      {funil.vendas.valor !== null && <p className="missao-footnote">Meta pelo funil inverso · base: {numero(funil.vendas.valor)} vendas cadastradas no mês.</p>}
       <div className="missao-indicador"><div className="missao-indicador-titulo"><span>CP-MQL</span><strong>{captacao.cpmql === null ? '—' : money(captacao.cpmql)}</strong></div>
         <p className="missao-footnote">Meta ≤ {money(captacao.metaCpMql)}</p>
         {captacao.cpmql !== null && <><Progresso atual={captacao.metaCpMql} meta={captacao.cpmql > 0 ? captacao.cpmql : captacao.metaCpMql} label={`Eficiência do CP-MQL · ${frente.marca}`} referencia={1} /><p className="missao-footnote">{pct(captacao.cpmql <= captacao.metaCpMql ? 100 : captacao.metaCpMql / captacao.cpmql * 100)} de eficiência em relação à meta · menor custo é melhor. Traço: 100% de eficiência.</p></>}
@@ -75,9 +76,10 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
       <article className="missao-marca missao-marca-compacta" aria-label={`SQL e SAL · ${frente.marca}`}>
       <h4 className="missao-subtitulo">SQL e SAL · mês vigente</h4>
       <div className="missao-reunioes-compactas">
-        <Indicador label="SQL · reuniões agendadas" atual={etapas.sql} meta={meta('meta_sql', [mes])} referencia={referencia} />
-        <Indicador label="SAL" atual={etapas.sal} meta={meta('meta_volume_sal', [mes])} referencia={referencia} />
+        <Indicador label="SQL · reuniões agendadas" atual={etapas.sql} meta={funil.sql} referencia={referencia} />
+        <Indicador label="SAL" atual={etapas.sal} meta={funil.sal} referencia={referencia} />
       </div>
+      {funil.taxas && <p className="missao-footnote">Taxas do print: MQL → SQL {pct(funil.taxas.mqlSql)} · SQL → SAL {pct(funil.taxas.sqlSal)} · SAL → Venda {pct(funil.taxas.salVenda)}.</p>}
       <p className="missao-footnote">SAL é a referência de realizada nesta página. Não altera a etapa Reunião Realizada/Diagnóstico do CRM.</p>
       </article>
     </>}
@@ -118,8 +120,9 @@ export function MissaoPainel({ dados }: { dados: DadosMissao }) {
     </section>
     <Plano />
     <details className="missao-metodologia"><summary>Fontes e critérios dos indicadores</summary>
-      <p>Metas já cadastradas em Configuração das Metas: unidades e faturamento somam as parcelas dos Closers; SQL e SAL, as dos SDRs. O planejamento do funil, inclusive o funil inverso quando configurado, é respeitado. Esta página não recalcula nem altera essas metas. Meses sem cadastro ficam pendentes, sem projetar outubro nos meses seguintes.</p>
-      <p>MQL usa leads do mês da base Marketing, com a classificação e deduplicação dos KPIs do dashboard. Metas MQL aprovadas somente para esta Missão (outubro / novembro / dezembro): Inpot 164 / 163 / 82; Eletrovias 757 / 756 / 541; Lisô Laser 96 / 96 / 48. CP-MQL é investimento dividido pelos MQLs; sem MQL não é calculável. Metas de custo aprovadas para a missão: Inpot R$ 220, Eletrovias R$ 37 e Lisô Laser R$ 300. Consultas adicionais são sequenciais, limitadas e exclusivas desta página.</p>
+      <p>Metas mensais de MQL, SQL e SAL calculadas apenas nesta página pelo funil inverso, a partir da soma das metas de vendas cadastradas para os Closers da marca no mês. SAL = vendas ÷ taxa SAL → Venda; SQL = SAL ÷ taxa SQL → SAL; MQL = SQL ÷ taxa MQL → SQL. Cada etapa é arredondada para cima antes da anterior. Não descontamos as vendas realizadas da meta mensal. Cadastro ausente ou incompleto mantém os três alvos pendentes; zero explícito é respeitado, sem repetir outubro nos meses seguintes.</p>
+      <p>Taxas entre etapas do print, aprovadas em 20/10: Inpot 23% / 39% / 20%; Eletrovias 10% / 36% / 28%; Lisô Laser 15% / 30% / 28%, respectivamente MQL → SQL / SQL → SAL / SAL → Venda. São referências de planejamento, não conversões observadas no CRM. A âncora direta MQL → Venda e as antigas metas fixas MQL não entram no cálculo. As configurações comerciais e as metas das outras páginas não são alteradas.</p>
+      <p>MQL realizado usa leads do mês da base Marketing, com a classificação e deduplicação dos KPIs do dashboard. CP-MQL é investimento dividido pelos MQLs; sem MQL não é calculável. Metas de custo preservadas: Inpot R$ 220, Eletrovias R$ 37 e Lisô Laser R$ 300. Consultas continuam sequenciais, limitadas e exclusivas desta página, sem novas leituras para o funil inverso.</p>
       <p>Receita considera apenas negócios Ganhos, pela data da venda em Brasília. Soma o valor de cada contrato uma vez por ciclo, sem multiplicar por unidades. Unidades seguem o dashboard de Vendas: quantidade informada ou uma unidade quando não preenchida/válida.</p>
       <p>SQL e SAL contam negócios únicos por ciclo que têm a data consolidada da respectiva etapa no mês vigente, até hoje. SQL é reunião agendada. SAL é usada como referência de realizada apenas nesta tela; não substitui Diagnóstico. Não contamos reentradas nem somamos eventos de handoff SDR–Closer. Negócios criados antes do mês também entram se avançaram ou venderam nele.</p>
       <p>CRM: Supabase de Expansão. Investimento: Supabase de Marketing. Leitura sequencial e limitada, sem histórico completo de eventos e sem atualização automática. O cache dura 15 minutos; Atualizar permite nova leitura com intervalo mínimo de um minuto. Falhas e limites não viram zero.</p>

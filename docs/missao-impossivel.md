@@ -15,10 +15,48 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
+### Regra vigente aprovada em 20/10/2026 — funil inverso local
+
+Somente as metas dos cards MQL e SQL/SAL passam a ser calculadas nesta página.
+A base é a soma de `meta_qtd_vendas` dos Closers da marca no mês vigente,
+já lida de `DB_Metas_Performance`. Não usar as metas de fechamento da imagem
+no lugar desse cadastro. Não descontar vendas realizadas do alvo mensal.
+
+| Marca | MQL → SQL | SQL → SAL | SAL → Venda |
+|---|---:|---:|---:|
+| Inpot | 23% | 39% | 20% |
+| Eletrovias | 10% | 36% | 28% |
+| Lisô Laser | 15% | 30% | 28% |
+
+São as referências entre etapas do print, aprovadas por Gabriel, não taxas
+observadas no CRM. Não combinar com a âncora direta MQL → Venda, que diverge
+do produto das etapas. Não reutilizar as referências de pré-vendas (20%/23%).
+
+Cálculo: `SAL = ceil(vendas × 100 / SAL→Venda)`;
+`SQL = ceil(SAL × 100 / SQL→SAL)`;
+`MQL = ceil(SQL × 100 / MQL→SQL)`.
+Arredondar cada etapa para cima antes de calcular a anterior, para que cada
+alvo inteiro sustente o seguinte. Exemplo de teste, não meta imposta: para
+3 vendas Inpot, 15 SAL / 39 SQL / 170 MQL; para 3 Eletrovias, 11 / 31 / 310;
+para 2 Lisô, 8 / 27 / 180.
+
+Meta mensal ausente ou qualquer parcela Closer inválida mantém MQL/SQL/SAL
+pendentes; não usar parcial como alvo, nem repetir outubro nos outros meses.
+Zero cadastrado é válido. Metas SDR publicadas não são os alvos destes cards,
+mas continuam intactas no banco e nas demais páginas. Os realizados e suas
+fontes/deduplicação não mudam; CP-MQL permanece gasto/MQL com custos-alvo
+220/37/300 reais. Não estimar novas metas financeiras nem ajustar orçamento.
+Placares anual/Q4, OKRs, pacing, receitas, Campanha, TV, S&OP e Vendas intactos.
+Sem consultas adicionais, escritas no banco ou alterações em hooks globais.
+
+### Histórico — metas MQL fixas, superadas pelo funil inverso acima
+
 Metas MQL específicas desta página aprovadas em 08/10, out/nov/dez:
 Inpot 164/163/82 (409); Eletrovias 757/756/541 (2.054);
-Lisô Laser 96/96/48 (240). Prevalecem nesta missão sobre o cadastro global,
-sem gravar banco ou alterar metas de outras páginas.
+Lisô Laser 96/96/48 (240). Usadas na versão anterior; não são fallback para
+cadastro ausente na regra vigente de 20/10.
+
+### Regras preservadas e origem histórica dos cards
 
 Em 08/10, aprovado marcador visual de pacing somente no placar Q4:
 proporção inclusiva dos dias de 01/10 a 31/12 (92 dias), limitada a 0–100%.
@@ -36,15 +74,13 @@ somando R$ 238.000. Sem alteração de metas comerciais ou banco.
   MQL/CP-MQL, SQL/SAL e pacing de investimento, todos do mês vigente.
   Vendas/faturamento por marca foram retirados; os dois placares fixos não mudam.
 - MQL: classificação/dedupe de `leadUtils` por marca, dentro do mês. Meta de
-  volume vem do cadastro mensal Marketing `metas` (`metrica=mql`); falta ou
-  duplicidade de cadastro fica pendente. CP-MQL = gasto/MQL, indisponível sem
+  volume segue o funil inverso vigente acima. CP-MQL = gasto/MQL, indisponível sem
   MQL; custos-alvo aprovados: Inpot 220, Eletrovias 37, Lisô Laser 300 reais.
   Eficiência do custo = meta/realizado, limitada a 100% quando dentro da meta;
   o valor real e diferença continuam visíveis, inclusive custo zero válido.
-- Metas vêm de `DB_Metas_Performance`: soma das parcelas Closer para
-  unidades/receita e SDR para SQL/SAL. Reutiliza o planejamento publicado
-  pelo motor comercial, inclusive funil inverso quando configurado. Não
-  recalcula metas com as taxas de outra estratégia nem escreve nesse espelho.
+- Base de vendas vem de `DB_Metas_Performance`: soma das parcelas Closer por
+  marca/mês. Derivação local MQL/SQL/SAL aprovada em 20/10 descrita acima.
+  Nunca escreve nesse espelho nem modifica o motor comercial compartilhado.
 - Falta de qualquer mês/parcela: meta total e percentual pendentes, soma
   parcial explicitamente rotulada. Zero cadastrado é diferente de null.
   Não repetir outubro em novembro/dezembro. Na leitura de 07/10 havia metas
@@ -97,6 +133,14 @@ sessão da aba, não proteção global do banco entre múltiplos usuários.
 
 ## Verificação e limites
 
+- Revisão de 20/10: build e lint sem erros, 757 testes aprovados. Prévia local
+  com dados fictícios em 1440/1024/390px, nove cards sem overflow da página,
+  15 marcadores e estados de metas pendentes/zero conferidos em navegador
+  isolado. Não é QA autenticado nem leitura dos alvos comerciais atuais.
+- A revisão altera somente `missaoMetas` e a apresentação da Missão, mais
+  seus testes/este contrato. Loader, cache, fontes, consultas e clientes de
+  banco permanecem inalterados; nenhuma escrita no banco ou mudança de metas
+  compartilhadas. Merge/deploy e QA autenticado são gates separados.
 - Testes puros de datas, metas incompletas, roles, ganho/dedupe/unidades,
   SQL/SAL, pacing, erro, paginação limitada, cancelamento e cache. Renderização
   React sem navegador valida conteúdo, acesso, falha e período fora da missão.

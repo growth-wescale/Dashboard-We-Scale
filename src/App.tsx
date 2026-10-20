@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { GuardaRota, PortaoDeAcesso } from '@/components/AcessoGuard'
 import { AcessoProvider } from '@/contexts/AcessoContext'
 import { DefinirSenha } from '@/pages/DefinirSenha'
+import { EsqueciSenha } from '@/pages/EsqueciSenha'
 import { linkAuth } from '@/lib/supabase'
 import { SharedFiltersProvider } from '@/contexts/SharedFiltersContext'
 
@@ -125,6 +126,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/definir-senha" element={<DefinirSenha />} />
+        <Route path="/esqueci-senha" element={<EsqueciSenha />} />
         {/* Modo TV da Campanha de Metas: tela cheia, sem menu. Mesmo login e a
             mesma permissão da aba (permissaoDaRota casa pelo prefixo /gp-setembro). */}
         <Route

@@ -667,7 +667,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 - [x] ~~Segmentações "Entrada Chatbot - <marca>" sem uso~~ — seguem em uso: a automação da COF continua disparando por elas (decisão de 19/10)
 - [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
 - [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
-- [ ] **E-mail de convite usa o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora. Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
+- [ ] **E-mail de convite e de "Esqueci minha senha" usam o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora (o mesmo limite vale pros dois fluxos; estourou, a tela de esqueci senha pede pra esperar). Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
 
 - [ ] **Closer com cargo SDR puro contamina o filtro/eleição de `nome_sdr`** — o inverso do fix de 04/09 (que travou o lado Closer). Medido: 568 ciclos com `nome_sdr` = nome de Closer ativo (Rômulo 216, Jéssica 181, Giullia 97, Douglas 49, Aurélio Briano 23), concentrados em funis legados (`Odonto Scale`, `Get it`, `Inpot`/`Lisô Laser` como nome de funil — não a marca). Pode ser fato histórico real (closer atual trabalhou como SDR antes da reforma de funis de agosto), não necessariamente bug — precisa validar caso a caso com o Junior antes de aplicar a mesma trava, que aqui teria bloqueio muito mais amplo
 - [ ] **Views de Expansão comparam funil por NOME, não por ID** — renomear
@@ -740,6 +740,34 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-20 (2) — Login ganha "Esqueci minha senha"
+
+Pedido do Junior. Link "Esqueci minha senha" ao lado do rótulo Senha no login
+(leva o e-mail já digitado) → tela nova **`/esqueci-senha`**
+(`src/pages/EsqueciSenha.tsx`), que chama `supabase.auth.resetPasswordForEmail`
+no Supabase de **Marketing** com `redirectTo = <origem>/definir-senha`. O link do
+e-mail cai na `/definir-senha` que já existia pro convite (`linkAuth.tipo =
+'recovery'` abre a sessão e a tela pede a senha nova; `RedirecionaLinkDeEmail`
+cobre o caso de o Supabase devolver pra Site URL em vez de `/definir-senha`).
+
+- Confirmação é **sempre a mesma**, exista a conta ou não (o Supabase já responde
+  200 pra e-mail sem conta): a tela não revela quem tem acesso.
+- Erros em `mensagemErroRecuperacao` (`src/lib/recuperarSenha.ts`, testado):
+  limite de envio (429 / `over_email_send_rate_limit`) pede pra esperar; falha de
+  rede; resto genérico.
+- Link expirado/usado na `/definir-senha` agora oferece "Pedir link novo" além de
+  "peça outro convite ao administrador".
+- Conta desativada no controle de acessos continua sem entrar: o Supabase pode
+  mandar o e-mail, mas o usuário segue `banned` e o `PortaoDeAcesso` desloga.
+
+Sem mudança de banco nem de Edge Function. Verificado: `npm run build` + `npx
+vitest run` (722 testes, 4 novos) + oxlint, em worktree fora do OneDrive; telas
+vistas no navegador com a chamada ao `/recover` interceptada (sucesso, 429 e link
+expirado), sem disparar e-mail real. **Não testado de ponta a ponta com e-mail de
+verdade.** Se o link cair na página errada, conferir em Auth → URL Configuration
+do Supabase de Marketing se a Site URL é o domínio do dashboard e se
+`/definir-senha` está em Redirect URLs (pendência da seção 8).
 
 ### 2026-10-19 (4) — Distribuição nas 10 marcas e caixa reserva contra queda
 

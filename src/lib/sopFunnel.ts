@@ -18,7 +18,7 @@ export function countSopSqlDeals(
   const scopedIds = new Set(rows.map(row => String(row.id_lead)))
   const ids = new Set(
     rows
-      .filter(row => inPeriod(row.data_sql, start, end))
+      .filter(row => inPeriod(row.data_sql, start, end, row.marca))
       .map(row => String(row.id_lead)),
   )
 

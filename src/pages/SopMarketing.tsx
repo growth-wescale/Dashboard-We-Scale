@@ -1,13 +1,14 @@
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Download } from 'lucide-react'
-import { useMediaData } from '@/hooks/useMediaData'
+import { useMarketingMediaData as useMediaData } from '@/hooks/useMediaData'
 import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useSopVendasFunil as useVendasFunil } from '@/hooks/useSopVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
 import { useSopScalePartnerSales } from '@/hooks/useSopScalePartnerSales'
 import { partnerEventCounts, partnerSalesInPeriod } from '@/lib/sopScalePartner'
-import { useFunilVendas } from '@/hooks/useFunilVendas'
+import { useMarketingFunilVendas as useFunilVendas } from '@/hooks/useMarketingFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { DealCardKanban } from '@/components/timeline/DealCardKanban'
 import { stageLabel, toWindow, type FunnelEventRow } from '@/lib/metrics'
@@ -253,21 +254,21 @@ function unidadesVendidas(r: VwMarketingFunil): number {
 function buildFunnel(rows: VwMarketingFunil[], sqlEvents: FunnelEventRow[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
-    mql:              d.filter(r => inPeriod(r.data_mql, di, df)).length,
-    tentando_contato: d.filter(r => inPeriod(r.data_tentando_contato, di, df)).length,
-    contato_efetivo:  d.filter(r => inPeriod(r.data_contato_efetivo, di, df)).length,
+    mql:              d.filter(r => inPeriod(r.data_mql, di, df, r.marca)).length,
+    tentando_contato: d.filter(r => inPeriod(r.data_tentando_contato, di, df, r.marca)).length,
+    contato_efetivo:  d.filter(r => inPeriod(r.data_contato_efetivo, di, df, r.marca)).length,
     sql:              countSopSqlDeals(d, sqlEvents, di, df),
-    diag:             d.filter(r => inPeriod(r.data_diagnostico, di, df)).length,
-    sal:              d.filter(r => inPeriod(r.data_sal, di, df)).length,
-    oportunidade:     d.filter(r => inPeriod(r.data_oportunidade, di, df)).length,
+    diag:             d.filter(r => inPeriod(r.data_diagnostico, di, df, r.marca)).length,
+    sal:              d.filter(r => inPeriod(r.data_sal, di, df, r.marca)).length,
+    oportunidade:     d.filter(r => inPeriod(r.data_oportunidade, di, df, r.marca)).length,
     fech: d
-      .filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
+      .filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca))
       .reduce((sum, r) => sum + unidadesVendidas(r), 0),
     perdido: {
-      mql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_mql, di, df) && !inPeriod(r.data_sql, di, df)).length,
-      sql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_diagnostico, di, df)).length,
-      diagnostico: d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_diagnostico, di, df) && !inPeriod(r.data_sal, di, df)).length,
-      sal:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df)).length,
+      mql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_mql, di, df, r.marca) && !inPeriod(r.data_sql, di, df, r.marca)).length,
+      sql:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df, r.marca) && !inPeriod(r.data_diagnostico, di, df, r.marca)).length,
+      diagnostico: d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_diagnostico, di, df, r.marca) && !inPeriod(r.data_sal, di, df, r.marca)).length,
+      sal:         d.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df, r.marca)).length,
     },
   }
 }
@@ -772,7 +773,7 @@ interface SopSlideProps {
   onMonthModeChange: (mode: string) => void
   customStart: string; onCustomStartChange: (v: string) => void
   customEnd: string;   onCustomEndChange:   (v: string) => void
-  onReady?: () => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
+  onReady?: (error?: string) => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
 }
 
 function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
@@ -905,6 +906,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const { data: metas } = metasRes
   const { data: sqlEvents } = sqlEventsRes
 
+  const partnerReadError = isWeScale ? [mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
+  const partnerKpiPending = isWeScale && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
+
   // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
   const allLoaded =
     !mediaAllStd.loading && !mediaPrevStd.loading &&
@@ -916,8 +920,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     !crmWeekRes.loading && !crmPriorRes.loading &&
     !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading
   useEffect(() => {
-    if (allLoaded) onReady?.()
-  }, [allLoaded, onReady])
+    if (allLoaded) onReady?.(partnerReadError || undefined)
+  }, [allLoaded, onReady, partnerReadError])
 
   const applyF = useCallback((rows: VwMarketingFunil[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -1193,7 +1197,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // usado no extra pra comparar com a meta mensal, que vive num plano diferente
   // da janela de 7d — meta é mensal por natureza.
   const somaGanhos = useCallback((rows: VwMarketingFunil[], di: string, df: string) =>
-    rows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df))
+    rows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca))
         .reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
   , [])
   const receitaCur   = useMemo(() => somaGanhos(crmCur,   mtdCurStart,     mtdCurEnd),     [somaGanhos, crmCur,   mtdCurStart,     mtdCurEnd])
@@ -1355,10 +1359,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         ] satisfies KpiCard[]
         : [
-            { label: 'INVEST.', value: fmtBRL(mtdInvest) },
-            { label: 'LEADS', value: String(mtdLeads.length) },
-            { label: 'MQL', value: String(mtdMql) },
-            { label: 'CP-MQL', value: mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
+            { label: 'INVEST.', value: partnerKpiPending ? '—' : fmtBRL(mtdInvest) },
+            { label: 'LEADS', value: partnerKpiPending ? '—' : String(mtdLeads.length) },
+            { label: 'MQL', value: partnerKpiPending ? '—' : String(mtdMql) },
+            { label: 'CP-MQL', value: !partnerKpiPending && mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
             { label: 'VENDAS', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : String(partnerSales.length) },
             { label: 'RECEITA', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : partnerRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
           ] satisfies KpiCard[]
@@ -1504,6 +1508,11 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
         </button>
       </div>
+
+      {isWeScale && <QueryErrorBanner errors={[partnerReadError ?? null]} />}
+      {isWeScale && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true' && <div style={{ fontSize: 9, color: 'var(--ws-text-secondary)', marginBottom: 5 }}>
+        Marketing Partner · ouro · MQL comercial por contato, datas do CRM. Setembro: cobertura histórica parcial. Vendas permanece na fonte atual nas páginas comerciais.
+      </div>}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>
@@ -2073,14 +2082,14 @@ const DIAGNOSTICO_PLUS = new Set<string>([
   'Diagnóstico', 'SAL', 'Oportunidade COF', 'Comitê', 'Pré-Contrato', 'Fechamento',
 ])
 
-function SopKanbanSlide({ onPrev, onNext, dates, onReady }: { onPrev: () => void; onNext: () => void; dates: DateRanges; onReady?: () => void }) {
-  const { data: rowsInbound, loading: loadingIn } = useFunilVendas('Inbound')
-  const { data: rowsProsp, loading: loadingPr } = useFunilVendas('Prospecção Ativa')
+function SopKanbanSlide({ onPrev, onNext, dates, onReady }: { onPrev: () => void; onNext: () => void; dates: DateRanges; onReady?: (error?: string) => void }) {
+  const { data: rowsInbound, loading: loadingIn, error: errorIn } = useFunilVendas('Inbound')
+  const { data: rowsProsp, loading: loadingPr, error: errorPr } = useFunilVendas('Prospecção Ativa')
   const agora = useMemo(() => new Date(), [])
 
   useEffect(() => {
-    if (!loadingIn && !loadingPr) onReady?.()
-  }, [loadingIn, loadingPr, onReady])
+    if (!loadingIn && !loadingPr) onReady?.(errorIn || errorPr || undefined)
+  }, [loadingIn, loadingPr, errorIn, errorPr, onReady])
   const [limites, setLimites] = useState<Record<string, number>>({})
   const [modo, setModo] = useState<'diagnostico' | 'completo'>('diagnostico')
 
@@ -2242,9 +2251,9 @@ export function SopMarketing() {
   }
 
   // Promise resolver setada por downloadPDF a cada slide; SopSlide dispara via onReady
-  const readyResolverRef = useRef<(() => void) | null>(null)
-  const handleSlideReady = useCallback(() => {
-    readyResolverRef.current?.()
+  const readyResolverRef = useRef<((error?: string) => void) | null>(null)
+  const handleSlideReady = useCallback((error?: string) => {
+    readyResolverRef.current?.(error)
     readyResolverRef.current = null
   }, [])
 
@@ -2275,16 +2284,21 @@ export function SopMarketing() {
 
         // Aguarda o SopSlide/SopKanbanSlide sinalizar que todos os fetches terminaram (via onReady).
         // Timeout de 30s por slide como fallback.
-        await new Promise<void>((resolve) => {
-          readyResolverRef.current = resolve
-          setExportingIdx(i)
-          setTimeout(() => {
-            if (readyResolverRef.current) {
-              console.warn(`[downloadPDF] timeout aguardando slide ${i + 1}`)
+        await new Promise<void>((resolve, reject) => {
+          const finish = (error?: string) => {
+            clearTimeout(timer)
+            if (error) reject(new Error(error)); else resolve()
+          }
+          readyResolverRef.current = finish
+          const timer = setTimeout(() => {
+            if (readyResolverRef.current === finish) {
               readyResolverRef.current = null
-              resolve()
+              const partner = slides[i]?.marca === 'We Scale' || i === slides.length
+              if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
+              else resolve()
             }
           }, 30000)
+          setExportingIdx(i)
         })
 
         // Frame extra pra Charts/SVG terminarem o layout depois do último setState

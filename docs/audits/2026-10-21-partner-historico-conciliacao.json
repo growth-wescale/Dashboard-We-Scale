@@ -1,0 +1,9 @@
+{
+  "manual_only_september": 11,
+  "reasons": {
+    "marca_atual_distinta_de_partner": 9,
+    "sem_negocio_correspondente_na_ouro": 1,
+    "fora_da_populacao_comercial_admitida": 1
+  },
+  "note": "Nenhum contato, nome, ID ou payload persistido; cruzamento por hash salgado em memória."
+}

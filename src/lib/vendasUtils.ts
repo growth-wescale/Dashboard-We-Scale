@@ -13,10 +13,12 @@ export function inPeriod(
   dateStr: string | null | undefined,
   start: string | undefined,
   end: string | undefined,
+  marca?: string | null,
 ): boolean {
   if (!dateStr) return false
   const d = new Date(dateStr).getTime()
-  const s = start ? new Date(start).getTime() : 0
+  const partner = marca === 'We Scale' || marca === 'Scale Partner'
+  const s = start ? new Date(partner ? `${start}T00:00:00-03:00` : start).getTime() : 0
   const e = end ? new Date(end + 'T23:59:59').getTime() : Date.now()
   return d >= s && d <= e
 }

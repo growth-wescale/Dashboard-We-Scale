@@ -1,3 +1,4 @@
+import { PartnerSourceNote } from '@/components/PartnerSourceNote'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
 import { Login } from '@/pages/Login'
@@ -121,7 +122,7 @@ function RedirecionaLinkDeEmail() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.VITE_APP_BASENAME || undefined}>
       <RedirecionaLinkDeEmail />
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -157,7 +158,7 @@ export default function App() {
                       não pode resetar o recorte que o usuário escolheu. */}
                   <SharedFiltersProvider>
                     <AppLayout>
-                      <RoutedContent />
+                      <><PartnerSourceNote /><RoutedContent /></>
                     </AppLayout>
                   </SharedFiltersProvider>
                 </PortaoDeAcesso>

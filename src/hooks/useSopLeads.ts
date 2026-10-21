@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { marketingDataClient, partnerMarketingCacheScope } from '@/lib/partnerMarketingSources'
 import { useConsultaFiltrada } from './useConsultaFiltrada'
 import type { Lead, Marca } from '@/lib/types'
 
@@ -15,7 +15,7 @@ export function useSopLeads({ marca, dataInicio, dataFim }: { marca: Marca; data
   const fetch = useCallback(async (signal: AbortSignal) => {
     const rows: Lead[] = []
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await supabase.from('leads').select('*')
+      const { data, error } = await marketingDataClient().from('leads').select('*')
         .in('marca', marcasLeadsSop(marca)).gte('dia', dataInicio).lte('dia', dataFim)
         .order('dia', { ascending: false }).order('id', { ascending: true })
         .range(from, from + 999).abortSignal(signal)
@@ -27,5 +27,5 @@ export function useSopLeads({ marca, dataInicio, dataFim }: { marca: Marca; data
       if (!data || data.length < 1000) return rows
     }
   }, [marca, dataInicio, dataFim])
-  return useConsultaFiltrada(JSON.stringify(['sop:leads', marca, dataInicio, dataFim]), fetch, true)
+  return useConsultaFiltrada(JSON.stringify(['sop:leads' + partnerMarketingCacheScope(), marca, dataInicio, dataFim]), fetch, true)
 }

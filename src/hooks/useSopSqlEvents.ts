@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useConsultaFiltrada } from './useConsultaFiltrada'
-import { supabaseVendas } from '@/lib/supabaseVendas'
+import { marketingCrmClient, partnerMarketingCacheScope } from '@/lib/partnerMarketingSources'
 import type { FunnelEventRow } from '@/lib/metrics'
 
 interface Filters {
@@ -17,7 +17,7 @@ export function useSopSqlEvents({ dataInicio, dataFim, enabled = true }: Filters
     const rows: FunnelEventRow[] = []
     for (let from = 0; ; from += PAGE_SIZE) {
       if (signal.aborted) throw new Error('Consulta cancelada.')
-      const { data, error } = await supabaseVendas
+      const { data, error } = await marketingCrmClient()
         .from('vw_funil_etapas_v2')
         .select(COLS)
         .eq('etapa_canonica', 'Reunião Agendada SQL')
@@ -39,7 +39,7 @@ export function useSopSqlEvents({ dataInicio, dataFim, enabled = true }: Filters
   }, [dataInicio, dataFim])
 
   return useConsultaFiltrada(
-    JSON.stringify(['expansao:sop_sql_events', dataInicio, dataFim]),
+    JSON.stringify(['expansao:sop_sql_events' + partnerMarketingCacheScope(), dataInicio, dataFim]),
     fetch,
     enabled,
   )

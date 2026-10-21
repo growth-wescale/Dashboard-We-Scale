@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { marketingDataClient, partnerMarketingCacheScope } from '@/lib/partnerMarketingSources'
 import { useConsultaFiltrada } from './useConsultaFiltrada'
 import type { Lead, Marca } from '@/lib/types'
 
-interface Filters { marca?: Marca; dataInicio?: string; dataFim?: string; enabled?: boolean }
+interface Filters { partnerOuro?: boolean; marca?: Marca; dataInicio?: string; dataFim?: string; enabled?: boolean }
 
-export function useLeads({ marca, dataInicio, dataFim, enabled = true }: Filters = {}) {
+export function useLeads({ marca, dataInicio, dataFim, enabled = true, partnerOuro = false }: Filters = {}) {
   const fetch = useCallback(async (signal: AbortSignal) => {
     const rows: Lead[] = []
     for (let from = 0; ; from += 1000) {
@@ -13,7 +13,7 @@ export function useLeads({ marca, dataInicio, dataFim, enabled = true }: Filters
       // Ordem total e estável: `dia` sozinho empata centenas de registros e o
       // OFFSET pode repetir/pular linhas entre páginas. Isso fazia S&OP e
       // Visão Geral divergirem no mesmo período conforme o range consultado.
-      let q = supabase.from('leads').select('*')
+      let q = marketingDataClient(partnerOuro).from('leads').select('*')
         .order('dia', { ascending: false })
         .order('id', { ascending: true })
         .range(from, from + 999)
@@ -26,6 +26,11 @@ export function useLeads({ marca, dataInicio, dataFim, enabled = true }: Filters
       rows.push(...((data ?? []) as Lead[]))
       if (!data || data.length < 1000) return rows
     }
-  }, [marca, dataInicio, dataFim])
-  return useConsultaFiltrada(JSON.stringify(['marketing:leads', marca, dataInicio, dataFim]), fetch, enabled)
+  }, [marca, dataInicio, dataFim, partnerOuro])
+  return useConsultaFiltrada(JSON.stringify(['marketing:leads' + partnerMarketingCacheScope(partnerOuro), marca, dataInicio, dataFim]), fetch, enabled)
+}
+
+/** Parcela Partner da ouro apenas nos consumidores de Marketing que optam. */
+export function useMarketingLeads(filters: Filters = {}) {
+  return useLeads({ ...filters, partnerOuro: true })
 }

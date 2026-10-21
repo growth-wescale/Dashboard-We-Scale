@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useConsultaFiltrada } from './useConsultaFiltrada'
-import { supabaseVendas } from '@/lib/supabaseVendas'
+import { marketingCrmClient, partnerMarketingCacheScope } from '@/lib/partnerMarketingSources'
 
 export interface VwMarketingFunil {
   id_lead: string
@@ -56,7 +56,7 @@ async function fetchVendasRows(filters: Filters, signal: AbortSignal): Promise<V
     const from = page * PAGE_SIZE
     const to = from + PAGE_SIZE - 1
 
-    let q = supabaseVendas
+    let q = marketingCrmClient()
       .from('vw_marketing_funil')
       .select('*')
       .order('data_criacao_negociacao', { ascending: false })
@@ -96,5 +96,5 @@ async function fetchVendasRows(filters: Filters, signal: AbortSignal): Promise<V
 export function useVendasFunil(filters: Filters = {}): UseVendasFunilResult {
   const { marca, dataInicio, dataFim, enabled = true } = filters
   const fetch = useCallback((signal: AbortSignal) => fetchVendasRows({ marca, dataInicio, dataFim }, signal), [marca, dataInicio, dataFim])
-  return useConsultaFiltrada(JSON.stringify(['expansao:marketing_funil', marca, dataInicio, dataFim]), fetch, enabled)
+  return useConsultaFiltrada(JSON.stringify(['expansao:marketing_funil' + partnerMarketingCacheScope(), marca, dataInicio, dataFim]), fetch, enabled)
 }

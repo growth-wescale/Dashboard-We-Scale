@@ -1,0 +1,82 @@
+{
+  "status": "applied",
+  "scope": "two_new_partner_owned_read_views_only",
+  "counts": {
+    "inbound": 81,
+    "sem_origem": 0,
+    "tarefas_atrasadas": 151
+  },
+  "facts_unchanged": true,
+  "shared_catalog_unchanged": true,
+  "fact_updates": 0,
+  "before": {
+    "fato_midia_campanha_dia": {
+      "n": 14417,
+      "checksum": "9ce90fff3adc1366774a253381762194"
+    },
+    "fato_midia_anuncio_dia": {
+      "n": 76493,
+      "checksum": "b229fba1c58277964ce54cadcfe58a80"
+    },
+    "fato_captacao": {
+      "n": 36867,
+      "checksum": "55800e83e3c2e4669d725b5aaf9e0c61"
+    },
+    "fato_etapa_evento": {
+      "n": 36557,
+      "checksum": "bdb220ed37dd2b81557b9e95a90eb541"
+    },
+    "fato_negocio_estado_atual": {
+      "n": 11082,
+      "checksum": "9eccc73ffa29ad5908784e34a717ee8b"
+    },
+    "fato_interacao_comercial": {
+      "n": 102989,
+      "checksum": "b85b0271685ecb32fa090e89d2d81d41"
+    },
+    "fato_crm_evento_negocio": {
+      "n": 84317,
+      "checksum": "208fe0e7463660b5d5729170f75c4a0f"
+    },
+    "fato_negocio_ciclo": {
+      "n": 11185,
+      "checksum": "050c84e8dedcab91fcd0d6fcf9e01026"
+    }
+  },
+  "after": {
+    "fato_midia_campanha_dia": {
+      "n": 14417,
+      "checksum": "9ce90fff3adc1366774a253381762194"
+    },
+    "fato_midia_anuncio_dia": {
+      "n": 76493,
+      "checksum": "b229fba1c58277964ce54cadcfe58a80"
+    },
+    "fato_captacao": {
+      "n": 36867,
+      "checksum": "55800e83e3c2e4669d725b5aaf9e0c61"
+    },
+    "fato_etapa_evento": {
+      "n": 36557,
+      "checksum": "bdb220ed37dd2b81557b9e95a90eb541"
+    },
+    "fato_negocio_estado_atual": {
+      "n": 11082,
+      "checksum": "9eccc73ffa29ad5908784e34a717ee8b"
+    },
+    "fato_interacao_comercial": {
+      "n": 102989,
+      "checksum": "b85b0271685ecb32fa090e89d2d81d41"
+    },
+    "fato_crm_evento_negocio": {
+      "n": 84317,
+      "checksum": "208fe0e7463660b5d5729170f75c4a0f"
+    },
+    "fato_negocio_ciclo": {
+      "n": 11185,
+      "checksum": "050c84e8dedcab91fcd0d6fcf9e01026"
+    }
+  },
+  "ddl_sha256": "018a6749b5532b12cc3c5b4d8d53676efed8b43db4218b53c0af0a20d94b51e3",
+  "time_utc": "2026-10-21 16:17:47.416694-03:00"
+}

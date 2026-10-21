@@ -1,0 +1,34 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({ nativeMarketing: { from: 'marketing-original', auth: { getSession: vi.fn(async () => ({ data: { session: { access_token: 'marketing-session' } } })) } }, nativeSales: { from: 'vendas-original' }, create: vi.fn((_url: string, _key: string, _options: Record<string, unknown>) => ({ isolated: true })) }))
+vi.mock('@supabase/supabase-js', () => ({ createClient: mocks.create }))
+vi.mock('./supabase', () => ({ supabase: mocks.nativeMarketing }))
+vi.mock('./supabaseVendas', () => ({ supabaseVendas: mocks.nativeSales }))
+afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); mocks.create.mockClear() })
+
+describe('clientes da ouro exclusivos de Marketing', () => {
+  it('flag desligada preserva os clientes e as chaves originais', async () => {
+    vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'false')
+    const s = await import('./partnerMarketingSources')
+    expect(s.marketingDataClient()).toBe(mocks.nativeMarketing)
+    expect(s.marketingCrmClient()).toBe(mocks.nativeSales)
+    expect(s.partnerMarketingCacheScope()).toBe('')
+    expect(mocks.create).not.toHaveBeenCalled()
+  })
+  it('ativar Marketing não muda os consumidores sem opt-in nem seus caches', async () => {
+    vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'true')
+    const s = await import('./partnerMarketingSources')
+    expect(s.marketingDataClient(false)).toBe(mocks.nativeMarketing)
+    expect(s.marketingCrmClient(false)).toBe(mocks.nativeSales)
+    expect(s.partnerMarketingCacheScope(false)).toBe('')
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(s.marketingDataClient()).not.toBe(mocks.nativeMarketing)
+    expect(s.marketingCrmClient()).not.toBe(mocks.nativeSales)
+    expect(s.partnerMarketingCacheScope()).toContain('marketing')
+    expect(mocks.create).toHaveBeenCalledTimes(2)
+    const marketingOptions = mocks.create.mock.calls[0][2]
+    const salesOptions = mocks.create.mock.calls[1][2]
+    expect(await (marketingOptions.accessToken as () => Promise<string>)()).toBe('marketing-session')
+    expect(salesOptions.accessToken).toBeUndefined()
+  })
+})

@@ -1,0 +1,111 @@
+{
+  "commercial_definition": "data_novo_mql por contato CRM, email normalizado, depois dedupe na janela",
+  "windows": [
+    {
+      "start": "2026-09-01",
+      "end": "2026-09-30",
+      "current": 53,
+      "ouro": 43,
+      "common": 42,
+      "only_current": 11,
+      "only_ouro": 1,
+      "different_day": 9,
+      "current_only_days": [
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-07",
+        "2026-09-16",
+        "2026-09-25",
+        "2026-09-25",
+        "2026-09-25",
+        "2026-09-27",
+        "2026-09-27",
+        "2026-09-27"
+      ],
+      "ouro_only_days": [
+        "2026-09-11"
+      ]
+    },
+    {
+      "start": "2026-10-01",
+      "end": "2026-10-20",
+      "current": 22,
+      "ouro": 21,
+      "common": 21,
+      "only_current": 1,
+      "only_ouro": 0,
+      "different_day": 1,
+      "current_only_days": [
+        "2026-10-20"
+      ],
+      "ouro_only_days": []
+    },
+    {
+      "start": "2026-10-01",
+      "end": "2026-10-21",
+      "current": 22,
+      "ouro": 22,
+      "common": 22,
+      "only_current": 0,
+      "only_ouro": 0,
+      "different_day": 2,
+      "current_only_days": [],
+      "ouro_only_days": []
+    },
+    {
+      "start": "2026-10-01",
+      "end": "2026-10-07",
+      "current": 9,
+      "ouro": 9,
+      "common": 9,
+      "only_current": 0,
+      "only_ouro": 0,
+      "different_day": 0,
+      "current_only_days": [],
+      "ouro_only_days": []
+    },
+    {
+      "start": "2026-10-08",
+      "end": "2026-10-14",
+      "current": 4,
+      "ouro": 4,
+      "common": 4,
+      "only_current": 0,
+      "only_ouro": 0,
+      "different_day": 0,
+      "current_only_days": [],
+      "ouro_only_days": []
+    },
+    {
+      "start": "2026-10-15",
+      "end": "2026-10-20",
+      "current": 9,
+      "ouro": 8,
+      "common": 8,
+      "only_current": 1,
+      "only_ouro": 0,
+      "different_day": 1,
+      "current_only_days": [
+        "2026-10-20"
+      ],
+      "ouro_only_days": []
+    },
+    {
+      "start": "2026-10-21",
+      "end": "2026-10-21",
+      "current": 0,
+      "ouro": 1,
+      "common": 0,
+      "only_current": 0,
+      "only_ouro": 1,
+      "different_day": 0,
+      "current_only_days": [],
+      "ouro_only_days": [
+        "2026-10-21"
+      ]
+    }
+  ],
+  "row_count": 80,
+  "unidentified": 0
+}

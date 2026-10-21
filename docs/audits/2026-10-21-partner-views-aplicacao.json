@@ -1,0 +1,195 @@
+{
+  "mode": "apply",
+  "new_views": [
+    "vw_scale_partner_mql_comercial",
+    "vw_scale_partner_dashboard_ciclos",
+    "vw_scale_partner_dashboard_midia",
+    "vw_scale_partner_dashboard_identidades",
+    "vw_scale_partner_dashboard_tarefas",
+    "vw_scale_partner_dashboard_timeline"
+  ],
+  "counts": {
+    "vw_scale_partner_mql_comercial": 80,
+    "vw_scale_partner_dashboard_ciclos": 81,
+    "vw_scale_partner_dashboard_midia": 1267,
+    "vw_scale_partner_dashboard_identidades": 85,
+    "vw_scale_partner_dashboard_tarefas": 179,
+    "vw_scale_partner_dashboard_timeline": 304
+  },
+  "readonly_role": "dashboard_scale_partner_ro",
+  "accessible_objects": [
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_dashboard_ciclos",
+      "can_read": true,
+      "can_write": false
+    },
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_dashboard_identidades",
+      "can_read": true,
+      "can_write": false
+    },
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_dashboard_midia",
+      "can_read": true,
+      "can_write": false
+    },
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_dashboard_tarefas",
+      "can_read": true,
+      "can_write": false
+    },
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_dashboard_timeline",
+      "can_read": true,
+      "can_write": false
+    },
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_mql_comercial",
+      "can_read": true,
+      "can_write": false
+    },
+    {
+      "schema": "ouro",
+      "object": "vw_scale_partner_passagens",
+      "can_read": true,
+      "can_write": false
+    }
+  ],
+  "fact_updates": 0,
+  "facts_and_dimensions_unchanged": true,
+  "before": {
+    "fato_midia_campanha_dia": {
+      "n": 14417,
+      "checksum": "9ce90fff3adc1366774a253381762194"
+    },
+    "fato_midia_anuncio_dia": {
+      "n": 76493,
+      "checksum": "b229fba1c58277964ce54cadcfe58a80"
+    },
+    "fato_captacao": {
+      "n": 36867,
+      "checksum": "55800e83e3c2e4669d725b5aaf9e0c61"
+    },
+    "fato_etapa_evento": {
+      "n": 36557,
+      "checksum": "bdb220ed37dd2b81557b9e95a90eb541"
+    },
+    "fato_negocio_estado_atual": {
+      "n": 11082,
+      "checksum": "9eccc73ffa29ad5908784e34a717ee8b"
+    },
+    "fato_interacao_comercial": {
+      "n": 102989,
+      "checksum": "b85b0271685ecb32fa090e89d2d81d41"
+    },
+    "fato_crm_evento_negocio": {
+      "n": 84317,
+      "checksum": "208fe0e7463660b5d5729170f75c4a0f"
+    },
+    "fato_negocio_ciclo": {
+      "n": 11185,
+      "checksum": "050c84e8dedcab91fcd0d6fcf9e01026"
+    },
+    "dim_anuncio": {
+      "n": 2375955,
+      "checksum": "b9a08031cb9cffea865522585611024f"
+    },
+    "dim_campanha": {
+      "n": 329,
+      "checksum": "51adf2360b935d5b95da6981628eb083"
+    },
+    "dim_conta": {
+      "n": 29,
+      "checksum": "a0566ca4862b6cfa6f7e6952d5ce4cd0"
+    },
+    "dim_funil_etapa": {
+      "n": 197,
+      "checksum": "fce173905743c0d093a8f5096e5f9aec"
+    },
+    "dim_marca": {
+      "n": 66,
+      "checksum": "f114bd6ae8c752ccd6d3202c7f7b94f0"
+    },
+    "dim_origem": {
+      "n": 5641,
+      "checksum": "a5c167be84f7708d3401af52e55e4bb0"
+    },
+    "dim_responsavel": {
+      "n": 43,
+      "checksum": "b9528168fc11158245496875a483dcd6"
+    }
+  },
+  "after": {
+    "fato_midia_campanha_dia": {
+      "n": 14417,
+      "checksum": "9ce90fff3adc1366774a253381762194"
+    },
+    "fato_midia_anuncio_dia": {
+      "n": 76493,
+      "checksum": "b229fba1c58277964ce54cadcfe58a80"
+    },
+    "fato_captacao": {
+      "n": 36867,
+      "checksum": "55800e83e3c2e4669d725b5aaf9e0c61"
+    },
+    "fato_etapa_evento": {
+      "n": 36557,
+      "checksum": "bdb220ed37dd2b81557b9e95a90eb541"
+    },
+    "fato_negocio_estado_atual": {
+      "n": 11082,
+      "checksum": "9eccc73ffa29ad5908784e34a717ee8b"
+    },
+    "fato_interacao_comercial": {
+      "n": 102989,
+      "checksum": "b85b0271685ecb32fa090e89d2d81d41"
+    },
+    "fato_crm_evento_negocio": {
+      "n": 84317,
+      "checksum": "208fe0e7463660b5d5729170f75c4a0f"
+    },
+    "fato_negocio_ciclo": {
+      "n": 11185,
+      "checksum": "050c84e8dedcab91fcd0d6fcf9e01026"
+    },
+    "dim_anuncio": {
+      "n": 2375955,
+      "checksum": "b9a08031cb9cffea865522585611024f"
+    },
+    "dim_campanha": {
+      "n": 329,
+      "checksum": "51adf2360b935d5b95da6981628eb083"
+    },
+    "dim_conta": {
+      "n": 29,
+      "checksum": "a0566ca4862b6cfa6f7e6952d5ce4cd0"
+    },
+    "dim_funil_etapa": {
+      "n": 197,
+      "checksum": "fce173905743c0d093a8f5096e5f9aec"
+    },
+    "dim_marca": {
+      "n": 66,
+      "checksum": "f114bd6ae8c752ccd6d3202c7f7b94f0"
+    },
+    "dim_origem": {
+      "n": 5641,
+      "checksum": "a5c167be84f7708d3401af52e55e4bb0"
+    },
+    "dim_responsavel": {
+      "n": 43,
+      "checksum": "b9528168fc11158245496875a483dcd6"
+    }
+  },
+  "owned_catalog_unchanged": true,
+  "model_hash": "a611cd99bca5a5d9b5394491f4a846b3d286c9e89dc2491d08f49fc01f1b2075",
+  "ddl_sha256": "1700fb5f92747d3bf08a1947b8e2e659979071cf419549afd7a50c4a97620085",
+  "time_utc": "2026-10-21 18:59:28.847882+00:00",
+  "committed": true
+}

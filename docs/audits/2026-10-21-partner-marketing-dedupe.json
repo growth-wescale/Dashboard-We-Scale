@@ -1,0 +1,345 @@
+{
+  "failures": 0,
+  "cases": [
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Odonto Legacy",
+      "before_leads": 49,
+      "after_leads": 49,
+      "before_mql": 1,
+      "after_mql": 1,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Eletrovias",
+      "before_leads": 1256,
+      "after_leads": 1256,
+      "before_mql": 302,
+      "after_mql": 302,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "B2Case",
+      "before_leads": 495,
+      "after_leads": 495,
+      "before_mql": 219,
+      "after_mql": 219,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Inpot",
+      "before_leads": 339,
+      "after_leads": 339,
+      "before_mql": 106,
+      "after_mql": 106,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Lisô Laser",
+      "before_leads": 128,
+      "after_leads": 128,
+      "before_mql": 99,
+      "after_mql": 99,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Odonto Scale",
+      "before_leads": 359,
+      "after_leads": 359,
+      "before_mql": 280,
+      "after_mql": 280,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Oral Unic",
+      "before_leads": 287,
+      "after_leads": 287,
+      "before_mql": 59,
+      "after_mql": 59,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Viva",
+      "before_leads": 64,
+      "after_leads": 64,
+      "before_mql": 51,
+      "after_mql": 51,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-09-30",
+      "brand": "Instituto do Autismo",
+      "before_leads": 44,
+      "after_leads": 44,
+      "before_mql": 43,
+      "after_mql": 43,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Eletrovias",
+      "before_leads": 1061,
+      "after_leads": 1061,
+      "before_mql": 382,
+      "after_mql": 382,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Oral Unic",
+      "before_leads": 114,
+      "after_leads": 114,
+      "before_mql": 5,
+      "after_mql": 5,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Lisô Laser",
+      "before_leads": 54,
+      "after_leads": 54,
+      "before_mql": 41,
+      "after_mql": 41,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Odonto Legacy",
+      "before_leads": 53,
+      "after_leads": 53,
+      "before_mql": 53,
+      "after_mql": 53,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Viva",
+      "before_leads": 50,
+      "after_leads": 50,
+      "before_mql": 40,
+      "after_mql": 40,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "B2Case",
+      "before_leads": 184,
+      "after_leads": 184,
+      "before_mql": 68,
+      "after_mql": 68,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Inpot",
+      "before_leads": 272,
+      "after_leads": 272,
+      "before_mql": 82,
+      "after_mql": 82,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-20",
+      "brand": "Odonto Scale",
+      "before_leads": 51,
+      "after_leads": 51,
+      "before_mql": 51,
+      "after_mql": 51,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Eletrovias",
+      "before_leads": 1077,
+      "after_leads": 1077,
+      "before_mql": 388,
+      "after_mql": 388,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Lisô Laser",
+      "before_leads": 55,
+      "after_leads": 55,
+      "before_mql": 42,
+      "after_mql": 42,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Inpot",
+      "before_leads": 286,
+      "after_leads": 286,
+      "before_mql": 85,
+      "after_mql": 85,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "B2Case",
+      "before_leads": 199,
+      "after_leads": 199,
+      "before_mql": 76,
+      "after_mql": 76,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Odonto Scale",
+      "before_leads": 52,
+      "after_leads": 52,
+      "before_mql": 52,
+      "after_mql": 52,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Viva",
+      "before_leads": 51,
+      "after_leads": 51,
+      "before_mql": 41,
+      "after_mql": 41,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Odonto Legacy",
+      "before_leads": 57,
+      "after_leads": 57,
+      "before_mql": 57,
+      "after_mql": 57,
+      "unchanged": true
+    },
+    {
+      "from": "2026-10-01",
+      "to": "2026-10-21",
+      "brand": "Oral Unic",
+      "before_leads": 117,
+      "after_leads": 117,
+      "before_mql": 5,
+      "after_mql": 5,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Eletrovias",
+      "before_leads": 2320,
+      "after_leads": 2320,
+      "before_mql": 687,
+      "after_mql": 687,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Lisô Laser",
+      "before_leads": 182,
+      "after_leads": 182,
+      "before_mql": 141,
+      "after_mql": 141,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Inpot",
+      "before_leads": 617,
+      "after_leads": 617,
+      "before_mql": 188,
+      "after_mql": 188,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "B2Case",
+      "before_leads": 687,
+      "after_leads": 687,
+      "before_mql": 292,
+      "after_mql": 292,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Odonto Scale",
+      "before_leads": 408,
+      "after_leads": 408,
+      "before_mql": 329,
+      "after_mql": 329,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Viva",
+      "before_leads": 115,
+      "after_leads": 115,
+      "before_mql": 92,
+      "after_mql": 92,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Odonto Legacy",
+      "before_leads": 105,
+      "after_leads": 105,
+      "before_mql": 58,
+      "after_mql": 58,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Oral Unic",
+      "before_leads": 401,
+      "after_leads": 401,
+      "before_mql": 64,
+      "after_mql": 64,
+      "unchanged": true
+    },
+    {
+      "from": "2026-09-01",
+      "to": "2026-10-21",
+      "brand": "Instituto do Autismo",
+      "before_leads": 44,
+      "after_leads": 44,
+      "before_mql": 43,
+      "after_mql": 43,
+      "unchanged": true
+    }
+  ]
+}

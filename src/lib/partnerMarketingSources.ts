@@ -1,0 +1,39 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { supabase } from './supabase'
+import { supabaseVendas } from './supabaseVendas'
+import { createPartnerOuroFetch } from './partnerOuroFetch'
+
+// Clientes exclusivos de Marketing. Os clientes compartilhados de Vendas e
+// Marketing continuam nativos, inclusive para mídia/CAC/ROAS de Vendas.
+let marketing: SupabaseClient | undefined
+let crm: SupabaseClient | undefined
+const enabled = import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
+export function partnerMarketingCacheScope(optIn = true) {
+  return enabled && optIn ? ':partner-ouro:marketing:v1' : ''
+}
+function client(source: 'marketing' | 'vendas') {
+  const vendas = source === 'vendas'
+  return createClient(
+    vendas ? import.meta.env.VITE_SUPABASE_VENDAS_URL : import.meta.env.VITE_SUPABASE_URL,
+    vendas ? import.meta.env.VITE_SUPABASE_VENDAS_ANON_KEY : import.meta.env.VITE_SUPABASE_ANON_KEY,
+    {
+      // RLS de Marketing exige o mesmo usuário do cliente original. O JWT
+      // desse projeto nunca é enviado ao Supabase de Expansão.
+      ...(!vendas ? { accessToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null } : {}),
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: createPartnerOuroFetch({
+        source, origin: vendas ? import.meta.env.VITE_SUPABASE_VENDAS_URL : import.meta.env.VITE_SUPABASE_URL,
+        token: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
+        route: () => window.location.pathname.replace(import.meta.env.VITE_APP_BASENAME || '', '') || '/',
+      }) },
+    },
+  )
+}
+export function marketingDataClient(optIn = true): SupabaseClient {
+  if (!enabled || !optIn) return supabase
+  return marketing ??= client('marketing')
+}
+export function marketingCrmClient(optIn = true): SupabaseClient {
+  if (!enabled || !optIn) return supabaseVendas
+  return crm ??= client('vendas')
+}

@@ -1,3 +1,5 @@
+import { attributePartnerCampaigns } from '@/lib/partnerCampaignAttribution'
+import type { Ad, AdSet, Campaign } from '@/lib/campaignTypes'
 /* Saúde da Marca — real Supabase data + mock generators for Social/Criativos/Públicos */
 import { useState, useMemo, Fragment, useRef, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
@@ -7,12 +9,12 @@ import { StatusPill } from '@/components/ui/StatusPill'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { PageTop } from '@/components/ui/PageTop'
 import { useMarcaSelecionada } from '@/components/AppLayout'
-import { useMediaData } from '@/hooks/useMediaData'
+import { useMarketingMediaData as useMediaData } from '@/hooks/useMediaData'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
-import { useLeads } from '@/hooks/useLeads'
+import { useMarketingLeads as useLeads } from '@/hooks/useLeads'
 import { useAdCreatives } from '@/hooks/useAdCreatives'
 import type { AdCreativePreview } from '@/hooks/useAdCreatives'
 import type { MediaDailyRaw, Lead, Meta } from '@/lib/types'
@@ -72,12 +74,12 @@ type BrandData = {
 function computeFunnelLosses(crm: VwMarketingFunil[], di: string, df: string) {
   const active = crm.filter(r => r.status_atual !== 'Excluído')
   const perdido = {
-    mql:         active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_mql, di, df) && !inPeriod(r.data_sql, di, df)).length,
-    sql:         active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_diagnostico, di, df)).length,
-    diagnostico: active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_diagnostico, di, df) && !inPeriod(r.data_sal, di, df)).length,
-    sal:         active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df)).length,
+    mql:         active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_mql, di, df, r.marca) && !inPeriod(r.data_sql, di, df, r.marca)).length,
+    sql:         active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df, r.marca) && !inPeriod(r.data_diagnostico, di, df, r.marca)).length,
+    diagnostico: active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_diagnostico, di, df, r.marca) && !inPeriod(r.data_sal, di, df, r.marca)).length,
+    sal:         active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df, r.marca)).length,
   }
-  const valorTotal = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
+  const valorTotal = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
   return { perdido, valorTotal }
 }
 
@@ -90,10 +92,10 @@ function computeBrand(
   const leads   = uniqueLeads.length
   const mql     = uniqueLeads.filter(isLeadMql).length
   const active  = crm.filter(r => r.status_atual !== 'Excluído')
-  const sql        = active.filter(r => inPeriod(r.data_sql, di, df)).length
-  const diagnostico = active.filter(r => inPeriod(r.data_diagnostico, di, df)).length
-  const sal        = active.filter(r => inPeriod(r.data_sal, di, df)).length
-  const fech       = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length
+  const sql        = active.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
+  const diagnostico = active.filter(r => inPeriod(r.data_diagnostico, di, df, r.marca)).length
+  const sal        = active.filter(r => inPeriod(r.data_sal, di, df, r.marca)).length
+  const fech       = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).length
   const cpmql   = mql > 0 ? Math.round(invest / mql) : 0
   const cpsql   = sql > 0 ? Math.round(invest / sql) : 0
   const metaRow = metas.find(m => m.metrica === 'mql')
@@ -106,9 +108,7 @@ function computeBrand(
   return { key: def.key, label: def.label, accent: def.accent, leads, mql, sql, diagnostico, sal, fech, invest, cpmql, cpsql, meta: metaPct, status, mqlMetaVal, investMetaVal, investMetaPct }
 }
 
-interface Ad { id: string; name: string; type?: string; spend: number; impressions: number; clicks: number; ctr: number; mql: number; cpmql: number; hue: number; preview?: AdCreativePreview }
-interface AdSet { id: string; name: string; publico: string; spend: number; impressions: number; clicks: number; ctr: number; cpm: number; mql: number; sql: number; cpmql: number; freq: number; ads: Ad[] }
-interface Campaign { id: string; name: string; status: string; objetivo: string; spend: number; impressions: number; clicks: number; ctr: number; cpm: number; cpc: number; lpv: number; leads: number; mql: number; sql: number; cpmql: number; cpsql: number; adsets: AdSet[] }
+
 
 function buildCampaigns(media: MediaDailyRaw[], totalMql: number, totalSql: number, totalLeadsReal: number, marca: string, adCreativesByName?: Map<string, AdCreativePreview>): Campaign[] {
   const totalMediaLeads = media.reduce((s, r) => s + r.leads, 0)
@@ -340,7 +340,7 @@ function KTile({ label, value, delta, invert, style }: { label: string; value: s
   )
 }
 
-function MiniFunnel({ stages }: { stages: { label: string; value: number; perdido?: number; fmt?: (v:number)=>string }[] }) {
+function MiniFunnel({ stages, safeRates = false }: { safeRates?: boolean; stages: { label: string; value: number; perdido?: number; fmt?: (v:number)=>string }[] }) {
   const max = stages[0].value || 1
   const logMax = Math.log(max + 1)
   return (
@@ -350,7 +350,7 @@ function MiniFunnel({ stages }: { stages: { label: string; value: number; perdid
         const conv = i>0 ? s.value/stages[i-1].value : 1
         return (
           <div key={s.label}>
-            {i>0 && <div style={{ display:'flex', alignItems:'center', gap:8, padding:'3px 0 3px 168px', color:'var(--ws-text-secondary)', fontSize:11.5 }}><span style={{opacity:0.6}}>↓</span>{(conv*100).toFixed(1)}%</div>}
+            {i>0 && <div style={{ display:'flex', alignItems:'center', gap:8, padding:'3px 0 3px 168px', color:'var(--ws-text-secondary)', fontSize:11.5 }}><span style={{opacity:0.6}}>{safeRates && conv > 1 ? '↑' : '↓'}</span>{safeRates && !Number.isFinite(conv) ? '—' : `${(conv*100).toFixed(1)}%`}</div>}
             <div style={{ display:'flex', alignItems:'center', gap:14 }}>
               <div style={{ width:154, flex:'0 0 auto', fontSize:13, color:'var(--ws-text-secondary)', textAlign:'right' }}>{s.label}</div>
               <div style={{ flex:1, height:34, background:'var(--ws-bg)', borderRadius:8, overflow:'hidden' }}>
@@ -792,7 +792,7 @@ function CampaignTable({ campaigns, on }: { campaigns:Campaign[]; on:Record<stri
   const [exA, setExA] = useState<Record<string,boolean>>({})
   const [sort, setSort] = useState<{k:string;dir:number}>({ k:'spend', dir:-1 })
   const cols = CAMP_COLS.filter((c)=>on[c.k])
-  const val = (row: any, k: string) => { const c=CAMP_COLS.find((x)=>x.k===k)!; return row[k]===undefined||row[k]===null?'—':c.fmt(row[k]) }
+  const val = (row: any, k: string) => { if (row.commercialAttribution && (k === 'cpmql' || k === 'cpsql') && (row.attributionOnly || !row[k === 'cpmql' ? 'mql' : 'sql'])) return '—'; const c=CAMP_COLS.find((x)=>x.k===k)!; return row[k]===undefined||row[k]===null?'—':c.fmt(row[k]) }
   const kCamp = sort.k as keyof Campaign
   const sorted = [...campaigns].sort((a, b) => {
     const va = Number(a[kCamp] ?? 0), vb = Number(b[kCamp] ?? 0)
@@ -1287,7 +1287,7 @@ function SaudeCampanhas({ b: _b, campaigns, daily: _daily, dataInicio: _dataInic
   const [on, setOn] = useState<Record<string,boolean>>(DEFAULT_ON)
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
   const visible = campaigns.filter((c)=>showPaused||c.status==='ativa')
-  const active = campaigns.filter((c)=>c.status==='ativa'); const paused = campaigns.length-active.length
+  const active = campaigns.filter((c)=>c.status==='ativa' && !c.attributionOnly); const paused = campaigns.filter(c=>c.status!=='ativa' && !c.attributionOnly).length
   const tableVisible = selectedCampaignId ? visible.filter(c => c.id === selectedCampaignId) : visible
   const selectedCampaignName = selectedCampaignId ? campaigns.find(c => c.id === selectedCampaignId)?.name : null
   const agg = campaigns.reduce((a,c)=>({spend:a.spend+c.spend,impressions:a.impressions+c.impressions,clicks:a.clicks+c.clicks,mql:a.mql+c.mql,sql:a.sql+c.sql}),{spend:0,impressions:0,clicks:0,mql:0,sql:0})
@@ -1337,6 +1337,7 @@ function SaudeCampanhas({ b: _b, campaigns, daily: _daily, dataInicio: _dataInic
         </SCard>
         <TopCampaigns campaigns={active} />
       </div>
+      {campaigns.some(c => c.commercialAttribution) && <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>MQL e SQL comerciais atribuídos pelas UTMs disponíveis; sem correspondência exata permanecem sem atribuição. Leads de mídia são os informados pelos anúncios, com outro critério e data.</p>}
       <MqlUtmTable leads={mqlLeads} campaigns={campaigns} />
     </div>
   )
@@ -1351,7 +1352,7 @@ function SaudeConjuntos({ b: _b, campaigns }: { b: BrandData; campaigns: Campaig
     { k:'spend', h:'Investimento', num:true, fmt:money }, { k:'impressions', h:'Impressões', num:true, fmt:fmtK },
     { k:'ctr', h:'CTR', num:true, fmt:(v)=>v+'%' }, { k:'cpm', h:'CPM', num:true, fmt:money2 },
     { k:'mql', h:'MQL', num:true, fmt:fmt }, { k:'sql', h:'SQL', num:true, fmt:fmt },
-    { k:'cpmql', h:'CP-MQL', num:true, fmt:money },
+    { k:'cpmql', h:'CP-MQL', num:true, render:r=>r.commercialAttribution && (r.attributionOnly || !r.mql) ? '—' : money(r.cpmql) },
   ]
   const scatterPts = sets.filter(s=>s.mql>0).map((s)=>({ x:s.cpmql, y:s.mql, size:s.spend, label:s.name.split(' ')[0], id:s.id }))
   const totSpend=sets.reduce((a,s)=>a+s.spend,0), totMql=sets.reduce((a,s)=>a+s.mql,0)
@@ -1360,7 +1361,7 @@ function SaudeConjuntos({ b: _b, campaigns }: { b: BrandData; campaigns: Campaig
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
-        <KTile label="Conjuntos ativos" value={fmt(sets.length)} />
+        <KTile label="Conjuntos ativos" value={fmt(sets.filter(s=>!s.attributionOnly).length)} />
         <KTile label="Investimento" value={money(totSpend)} />
         <KTile label="MQLs" value={fmt(totMql)} />
         <KTile label="CP-MQL médio" value={money(totSpend/Math.max(1,totMql))} invert />
@@ -1407,14 +1408,14 @@ function SaudeAnuncios({ b: _b, campaigns }: { b: BrandData; campaigns: Campaign
     )},
     { k:'spend', h:'Investimento', num:true, fmt:money }, { k:'impressions', h:'Impressões', num:true, fmt:fmtK },
     { k:'clicks', h:'Cliques', num:true, fmt:fmt }, { k:'ctr', h:'CTR', num:true, fmt:(v)=>v+'%' },
-    { k:'mql', h:'MQL', num:true, fmt:fmt }, { k:'cpmql', h:'CP-MQL', num:true, fmt:money },
+    { k:'mql', h:'MQL', num:true, fmt:fmt }, { k:'cpmql', h:'CP-MQL', num:true, render:r=>r.commercialAttribution && (r.attributionOnly || !r.mql) ? '—' : money(r.cpmql) },
   ]
   const totSpend=ads.reduce((a,x)=>a+x.spend,0), totMql=ads.reduce((a,x)=>a+x.mql,0)
   const totClicks=ads.reduce((a,x)=>a+x.clicks,0), totImp=ads.reduce((a,x)=>a+x.impressions,0)
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
-        <KTile label="Anúncios ativos" value={fmt(ads.length)} />
+        <KTile label="Anúncios ativos" value={fmt(ads.filter(s=>!s.attributionOnly).length)} />
         <KTile label="Investimento" value={money(totSpend)} />
         <KTile label="CTR médio" value={(totImp>0?totClicks/totImp*100:0).toFixed(2)+'%'} />
         <KTile label="CP-MQL médio" value={money(totSpend/Math.max(1,totMql))} invert />
@@ -1643,7 +1644,7 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
   const [channelDrawer, setChannelDrawer] = useState<{ open: boolean; leads: Lead[] }>({ open: false, leads: [] })
   const funnelData=acqFunnel.stages.map((s)=>({ ...s, fmt:fmtK }))
   const losses = useMemo(() => computeFunnelLosses(crmData, di, df), [crmData, di, df])
-  const valorTotal = useMemo(() => crmAllData.filter(r => r.status_atual !== 'Excluído' && r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0), [crmAllData, di, df])
+  const valorTotal = useMemo(() => crmAllData.filter(r => r.status_atual !== 'Excluído' && r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0), [crmAllData, di, df])
 
   const dInvest = bCompare ? computeDeltaPct(b.invest, bCompare.invest) : null
   const dLeads  = bCompare ? computeDeltaPct(b.leads,  bCompare.leads)  : null
@@ -1753,7 +1754,7 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
               </div>
             ))}
           </div>
-          <MiniFunnel stages={funnelData} />
+          <MiniFunnel safeRates={b.key === 'we-scale'} stages={funnelData} />
         </SCard>
         <SCard>
           <CardTitle
@@ -1780,7 +1781,7 @@ function SMOverview({ b, bCompare, compareLabel, compareEnabled, channels, acqFu
 
         <SCard>
           <CardTitle title="Funil da marca" sub="Conversão MQL → SQL → Diagnóstico → SAL" />
-          <MiniFunnel stages={[
+          <MiniFunnel safeRates={b.key === 'we-scale'} stages={[
             { label:'MQL',        value:b.mql, perdido:losses.perdido.mql },
             { label:'SQL',        value:b.sql, perdido:losses.perdido.sql },
             { label:'Diagnóstico',value:b.diagnostico, perdido:losses.perdido.diagnostico },
@@ -1948,8 +1949,13 @@ export function SaudeDaMarca() {
   )
   const { previewByName: adCreativesByName, loading: creativesLoading, error: creativesError } = useAdCreatives(activeAdNames)
   const campaigns = useMemo(
-    () => buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesByName),
-    [activeMediaData, b.mql, b.sql, b.leads, marca, adCreativesByName],
+    () => {
+      const built = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesByName)
+      return b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
+        ? attributePartnerCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)))
+        : built
+    },
+    [activeMediaData, b.key, b.mql, b.sql, b.leads, marca, adCreativesByName, mqlLeads, crmData, dataInicio, dataFim],
   )
   const daily = buildDailySeries(activeMediaData)
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)

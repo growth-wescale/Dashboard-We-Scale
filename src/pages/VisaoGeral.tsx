@@ -7,11 +7,11 @@ import { Badge } from '@/components/ui/Badge'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { Button } from '@/components/ui/Button'
 import { PageTop } from '@/components/ui/PageTop'
-import { useMediaData } from '@/hooks/useMediaData'
+import { useMarketingMediaData as useMediaData } from '@/hooks/useMediaData'
 import { useVendasFunil } from '@/hooks/useVendasFunil'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
-import { useLeads } from '@/hooks/useLeads'
+import { useMarketingLeads as useLeads } from '@/hooks/useLeads'
 import { useMetas } from '@/hooks/useMetas'
 import type { MediaDailyRaw, Lead, Meta, Marca } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
@@ -87,15 +87,15 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
   const vis    = mRows.reduce((s, r) => s + r.impressoes, 0)
   const lpv    = mRows.reduce((s, r) => s + r.lpv, 0)
   const mql    = uniqueLeads.filter(isLeadMql).length
-  const sql    = active.filter(r => inPeriod(r.data_sql, di, df)).length
-  const sal    = active.filter(r => inPeriod(r.data_sal, di, df)).length
-  const fech   = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length
+  const sql    = active.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
+  const sal    = active.filter(r => inPeriod(r.data_sal, di, df, r.marca)).length
+  const fech   = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).length
   // Regra: deal contado como "SQL perdido no período" se virou SQL DENTRO da janela
   // e NÃO chegou a SAL na mesma janela. Se avançou pra SAL fora do range, não é
   // "perdido no SQL" — permanece contado como SQL do período, mas não distorce KPI SAL.
-  const sqlPerdido = active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_sal, di, df)).length
-  const salPerdido = active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df)).length
-  const valorTotal = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
+  const sqlPerdido = active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df, r.marca) && !inPeriod(r.data_sal, di, df, r.marca)).length
+  const salPerdido = active.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sal, di, df, r.marca)).length
+  const valorTotal = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
   return {
     invest, leads, vis, lpv, mql, sql, sal, fech,
     cpmql: mql > 0 ? Math.round(invest / mql) : 0,
@@ -124,14 +124,14 @@ function computeBrands(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketin
     const invest = mRows.reduce((s, r) => s + r.spend_brl, 0)
     const leads  = uniqueLeads.length
     const mql    = uniqueLeads.filter(isLeadMql).length
-    const sql    = cRows.filter(r => inPeriod(r.data_sql, di, df)).length
+    const sql    = cRows.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
     const cpmql  = mql > 0 ? Math.round(invest / mql) : 0
     const cpsql  = sql > 0 ? Math.round(invest / sql) : 0
-    const sqlPerdido = cRows.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df) && !inPeriod(r.data_sal, di, df)).length
-    const valorTotal = cRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
+    const sqlPerdido = cRows.filter(r => r.status_atual === 'Perdido' && inPeriod(r.data_sql, di, df, r.marca) && !inPeriod(r.data_sal, di, df, r.marca)).length
+    const valorTotal = cRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
 
     // Vendas realizadas (deals Ganhos com data_venda dentro do período)
-    const vendas = cRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df)).length
+    const vendas = cRows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).length
     const metaVenda = getMetaVendas(marca, mesKey)
     const atingPct = metaVenda && metaVenda > 0 ? (vendas / metaVenda) * 100 : null
 

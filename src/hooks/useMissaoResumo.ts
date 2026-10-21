@@ -1,3 +1,4 @@
+import { marketingDataClient } from '@/lib/partnerMarketingSources'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { supabaseVendas } from '@/lib/supabaseVendas'
@@ -25,7 +26,7 @@ export function useMissaoResumo() {
   useEffect(() => {
     if (!session?.user.id) return
     let active = true
-    const lease = cache.acquire(key, signal => consultarMissao(supabaseVendas, supabase, pedido.hoje, signal), pedido.versao > 0)
+    const lease = cache.acquire(key, signal => consultarMissao(supabaseVendas, marketingDataClient(), pedido.hoje, signal), pedido.versao > 0)
     setState({ key, data: null, error: null, loading: true })
     setBloqueado(true)
     const timer = setTimeout(() => { if (active) setBloqueado(false) }, MISSAO_INTERVALO)

@@ -1510,9 +1510,6 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       </div>
 
       {isWeScale && <QueryErrorBanner errors={[partnerReadError ?? null]} />}
-      {isWeScale && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true' && <div style={{ fontSize: 9, color: 'var(--ws-text-secondary)', marginBottom: 5 }}>
-        Marketing Partner · ouro · MQL comercial por contato, datas do CRM. Setembro: cobertura histórica parcial. Vendas permanece na fonte atual nas páginas comerciais.
-      </div>}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>

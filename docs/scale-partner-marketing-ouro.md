@@ -64,3 +64,7 @@ PR #263 criado em rascunho pela interface autenticada do GitHub após as integra
 ## Ativação aprovada — 21/10
 
 Gabriel autorizou publicar somente Marketing, aceitando temporariamente os detalhes de perfil sem informação. CI e deploy passam a construir com `VITE_PARTNER_OURO_ENABLED=true`; a flag continua false quando omitida para permitir rollback. `VITE_APP_BASENAME` não é definido em produção. Merge/deploy/QA vivo devem ser confirmados separadamente. Lista de cobertura: [campos a disponibilizar na ouro](scale-partner-ouro-campos-pendentes.md).
+
+## Apresentação e conferência do export — 21/10
+
+O aviso técnico global e o rodapé de migração da S&OP são retirados por causarem interpretação de erro mesmo com consulta bem-sucedida. O timestamp de registro mais recente não é exibido como estado de sincronização. Contratos/limites continuam nesta documentação; falhas reais seguem explícitas. Saúde Partner diferencia carregamento de indicadores vazios. Conciliação somente leitura com o export RD das 20:08: mesmos24 negócios,22 contatos,24 IDs/contatos/emails/dias/estados correspondentes; três linhas de outras marcas fora do recorte. Detalhes no relatório `docs/audits/2026-10-21-partner-export-rd-conciliacao.md`. A remoção do aviso não altera população ou resolve a cobertura de perfil.

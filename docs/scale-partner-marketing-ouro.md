@@ -55,8 +55,12 @@ Conferência autenticada, PDF, CI/PR/merge/deploy e ativação final devem const
 
 ## Conferência de perfil e PDF — 21/10
 
-A ouro consultada ainda não preenche UF, cidade ou formulário em nenhum dos 187 candidatos Partner nem nas 80 ocorrências do contrato comercial. Empresa também não é exposta nesse contrato. O provider não usa a base manual para completar esses campos: a tabela de contatos de Marketing/PDF passa a mostrá-los sem informação. Isso é uma limitação real da cobertura, não um pedido para editar fatos. A decisão de publicar com essa perda de detalhe deve ser explícita; o PR permanece rascunho/desativado até o fechamento.
+A ouro consultada ainda não preenche UF ou cidade nos 187 candidatos Partner, nem UF/cidade/formulário nas 80 ocorrências do contrato comercial. Empresa também não é exposta nesse contrato. O provider não usa a base manual para completar esses campos: a tabela de contatos de Marketing/PDF passa a mostrá-los sem informação. Isso é uma limitação real da cobertura, não um pedido para editar fatos. Gabriel autorizou em 21/10 publicar as métricas com esses campos sem informação. O aceite permite ativar somente Marketing; não autoriza nova alteração de fatos. Enriquecimento posterior deve seguir o contrato de cobertura adjacente.
 
 PDF autenticado de nove páginas conferido: Partner 22 MQLs, três vendas e receita R$7.494; origem/limite histórico presentes. As outras sete folhas de marcas e Kanban renderizam. O formato existente de quadros roláveis permanece: o PDF captura a parte visível dos contatos/colunas e não constitui uma exportação integral de todas as linhas. Não foi feita reestruturação de paginação.
 
 PR #263 criado em rascunho pela interface autenticada do GitHub após as integrações negarem a criação. Base local principal/main remota e9cb48f; primeiro commit local/remoto/PR 36fd295 idênticos, CI de branch e PR aprovados. Alinhamento realizado sem incorporar outros PRs nem publicar.
+
+## Ativação aprovada — 21/10
+
+Gabriel autorizou publicar somente Marketing, aceitando temporariamente os detalhes de perfil sem informação. CI e deploy passam a construir com `VITE_PARTNER_OURO_ENABLED=true`; a flag continua false quando omitida para permitir rollback. `VITE_APP_BASENAME` não é definido em produção. Merge/deploy/QA vivo devem ser confirmados separadamente. Lista de cobertura: [campos a disponibilizar na ouro](scale-partner-ouro-campos-pendentes.md).

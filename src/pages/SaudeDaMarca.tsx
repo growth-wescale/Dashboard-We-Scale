@@ -87,7 +87,8 @@ function computeBrand(
   media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], metas: Meta[],
   def: typeof BRAND_DEFS[0], di: string, df: string
 ): BrandData {
-  const invest  = media.reduce((s, r) => s + r.spend_brl, 0)
+  const rawInvest = media.reduce((s, r) => s + r.spend_brl, 0)
+  const invest = def.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true' ? Math.round(rawInvest * 100) / 100 : rawInvest
   const uniqueLeads = deduplicateLeads(leadRows)
   const leads   = uniqueLeads.length
   const mql     = uniqueLeads.filter(isLeadMql).length
@@ -869,6 +870,7 @@ function CampaignTable({ campaigns, on }: { campaigns:Campaign[]; on:Record<stri
 }
 
 function CampEfficiencyFunnel({ campaigns }: { campaigns: Campaign[] }) {
+  const commercial = campaigns.some(c => c.commercialAttribution)
   const impressions = campaigns.reduce((s, c) => s + c.impressions, 0)
   const clicks      = campaigns.reduce((s, c) => s + c.clicks, 0)
   const lpvs        = campaigns.reduce((s, c) => s + c.lpv, 0)
@@ -884,14 +886,14 @@ function CampEfficiencyFunnel({ campaigns }: { campaigns: Campaign[] }) {
     { label: 'Impressões',    value: impressions },
     { label: 'Out. Clicks',   value: clicks },
     { label: 'Landing Pages', value: lpvs },
-    { label: 'Leads',         value: leads },
-    { label: 'MQL',           value: mql },
+    { label: commercial ? 'Leads mídia' : 'Leads', value: leads },
+    { label: commercial ? 'MQL comercial' : 'MQL', value: mql },
   ]
   const rates = [
     { label: 'CTR',          val: impressions > 0 ? (clicks / impressions * 100).toFixed(2) + '%' : '—' },
     { label: 'Connect Rate', val: connectRate !== null ? connectRate.toFixed(2) + '%' : '—' },
     { label: 'Conv. LP',     val: lpvs > 0 ? (leads / lpvs * 100).toFixed(2) + '%' : '—' },
-    { label: 'Qualificação', val: leads > 0 ? (mql / leads * 100).toFixed(2) + '%' : '—' },
+    { label: commercial ? 'Critérios distintos' : 'Qualificação', val: !commercial && leads > 0 ? (mql / leads * 100).toFixed(2) + '%' : '—' },
   ]
 
   const max = impressions || 1
@@ -1299,7 +1301,7 @@ function SaudeCampanhas({ b: _b, campaigns, daily: _daily, dataInicio: _dataInic
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:16, marginBottom:16 }}>
         <KTile label="Impressões" value={fmtK(agg.impressions)} />
         <KTile label="Cliques no link" value={fmtK(agg.clicks)} />
-        <KTile label="Investimento" value={money(agg.spend)} />
+        <KTile label="Investimento" value={money(campaigns.some(c=>c.commercialAttribution) ? Math.round(agg.spend * 100) / 100 : agg.spend)} />
         <KTile label="CPM" value={money2(cpm)} invert />
         <KTile label="CPC" value={money2(cpc)} invert />
         <KTile label="CTR" value={ctr.toFixed(2)+'%'} />
@@ -1362,7 +1364,7 @@ function SaudeConjuntos({ b: _b, campaigns }: { b: BrandData; campaigns: Campaig
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
         <KTile label="Conjuntos ativos" value={fmt(sets.filter(s=>!s.attributionOnly).length)} />
-        <KTile label="Investimento" value={money(totSpend)} />
+        <KTile label="Investimento" value={money(campaigns.some(c=>c.commercialAttribution) ? Math.round(totSpend * 100) / 100 : totSpend)} />
         <KTile label="MQLs" value={fmt(totMql)} />
         <KTile label="CP-MQL médio" value={money(totSpend/Math.max(1,totMql))} invert />
       </div>
@@ -1416,7 +1418,7 @@ function SaudeAnuncios({ b: _b, campaigns }: { b: BrandData; campaigns: Campaign
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16, marginBottom:24 }}>
         <KTile label="Anúncios ativos" value={fmt(ads.filter(s=>!s.attributionOnly).length)} />
-        <KTile label="Investimento" value={money(totSpend)} />
+        <KTile label="Investimento" value={money(campaigns.some(c=>c.commercialAttribution) ? Math.round(totSpend * 100) / 100 : totSpend)} />
         <KTile label="CTR médio" value={(totImp>0?totClicks/totImp*100:0).toFixed(2)+'%'} />
         <KTile label="CP-MQL médio" value={money(totSpend/Math.max(1,totMql))} invert />
       </div>

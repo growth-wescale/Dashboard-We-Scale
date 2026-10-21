@@ -52,3 +52,11 @@ Instalação inicial 21/10 15:59 BRT: seis novas views de leitura e role restrit
 Matriz sobre extratos sanitizados: 648 cenários de outras marcas preservados, 72 cenários Partner Performance e dez Aging/Atual; análise de contrato não ativa Vendas. Dedupe consolidado: 34 comparações marca/janela sem diferenças nas demais marcas. Evidências em `docs/audits/2026-10-21-partner-*.json`. Comparação da prévia com a produção confirmou, no mesmo filtro de sete marcas/outubro/unidades, receita R$578,4 mil, 20 fechamentos, 671 MQL, 79 SQL, 33 No-show, CAC R$4.445 e ROAS6,5x. Novas entradas regulares podem alterar contagens após esse instante.
 
 Conferência autenticada, PDF, CI/PR/merge/deploy e ativação final devem constar separadamente no relatório de entrega; build/teste não comprovam publicação.
+
+## Conferência de perfil e PDF — 21/10
+
+A ouro consultada ainda não preenche UF, cidade ou formulário em nenhum dos 187 candidatos Partner nem nas 80 ocorrências do contrato comercial. Empresa também não é exposta nesse contrato. O provider não usa a base manual para completar esses campos: a tabela de contatos de Marketing/PDF passa a mostrá-los sem informação. Isso é uma limitação real da cobertura, não um pedido para editar fatos. A decisão de publicar com essa perda de detalhe deve ser explícita; o PR permanece rascunho/desativado até o fechamento.
+
+PDF autenticado de nove páginas conferido: Partner 22 MQLs, três vendas e receita R$7.494; origem/limite histórico presentes. As outras sete folhas de marcas e Kanban renderizam. O formato existente de quadros roláveis permanece: o PDF captura a parte visível dos contatos/colunas e não constitui uma exportação integral de todas as linhas. Não foi feita reestruturação de paginação.
+
+PR #263 criado em rascunho pela interface autenticada do GitHub após as integrações negarem a criação. Base local principal/main remota e9cb48f; primeiro commit local/remoto/PR 36fd295 idênticos, CI de branch e PR aprovados. Alinhamento realizado sem incorporar outros PRs nem publicar.

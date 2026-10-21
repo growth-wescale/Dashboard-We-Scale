@@ -1963,6 +1963,9 @@ export function SaudeDaMarca() {
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)
   const acqFunnel = buildAcqFunnel(b, activeMediaData)
   const loading = mediaLoading || crmLoading || leadsLoading || creativesLoading
+  const partnerOuro = b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
+  const partnerDataPending = partnerOuro && (mediaLoading || crmLoading || leadsLoading)
+  const partnerDataFailed = partnerOuro && !!(mediaError || crmError || leadsError)
 
   const periodLabel = useMemo(() => {
     if (range.start.slice(0, 7) === range.end.slice(0, 7)) return monthLabel(range.start)
@@ -2054,9 +2057,9 @@ export function SaudeDaMarca() {
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
       {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}
       <QueryErrorBanner errors={[mediaError, crmError, leadsError, metasError, creativesError]} scope="Saúde da Marca" />
-      <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
+      {partnerDataPending ? <div role="status" style={{ padding: '24px 0', color: 'var(--ws-text-secondary)' }}>Carregando dados…</div> : !partnerDataFailed && <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
         {body}
-      </div>
+      </div>}
       <MqlDrawer open={mqlDrawerOpen} onClose={() => setMqlDrawerOpen(false)} leads={mqlLeads} />
     </div>
   )

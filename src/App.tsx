@@ -1,4 +1,3 @@
-import { PartnerSourceNote } from '@/components/PartnerSourceNote'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
 import { Login } from '@/pages/Login'
@@ -158,7 +157,7 @@ export default function App() {
                       não pode resetar o recorte que o usuário escolheu. */}
                   <SharedFiltersProvider>
                     <AppLayout>
-                      <><PartnerSourceNote /><RoutedContent /></>
+                      <RoutedContent />
                     </AppLayout>
                   </SharedFiltersProvider>
                 </PortaoDeAcesso>

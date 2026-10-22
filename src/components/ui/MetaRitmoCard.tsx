@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { SCard } from '@/components/ui/v2'
 import { computeRitmo } from '@/lib/metaRitmo'
 import { pct } from '@/lib/format'
@@ -18,11 +19,13 @@ export interface MetaRitmoCardProps {
   granularity?: 'daily' | 'monthly'
   /** Abre o popup de desdobramento por pessoa quando presente. */
   onClick?: () => void
+  /** Conteúdo extra embaixo do número (ex.: receita We Scale × marcas). */
+  rodape?: ReactNode
 }
 
 export function MetaRitmoCard({
   label, realizado, metaMensal, mesKey, fimJanela, formatter, accent,
-  granularity = 'daily', onClick,
+  granularity = 'daily', onClick, rodape,
 }: MetaRitmoCardProps) {
   if (metaMensal <= 0) {
     return (
@@ -31,6 +34,7 @@ export function MetaRitmoCard({
         <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 26, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
           {formatter(realizado)}
         </div>
+        {rodape}
       </SCard>
     )
   }
@@ -47,6 +51,7 @@ export function MetaRitmoCard({
           Meta do mês <b style={{ color: 'var(--ws-text-primary)' }}>{formatter(metaMensal)}</b>
           <span style={{ marginLeft: 6, fontWeight: 600, color: accent }}>({pctMes.toFixed(1)}%)</span>
         </div>
+        {rodape}
         <div aria-hidden style={{ height: 2, marginTop: 4, background: `color-mix(in srgb, ${accent} 25%, transparent)`, borderRadius: 2 }} />
       </SCard>
     )
@@ -86,6 +91,7 @@ export function MetaRitmoCard({
         </div>
       )}
 
+      {rodape && <div style={{ marginTop: 8 }}>{rodape}</div>}
       <div aria-hidden style={{ height: 2, marginTop: 10, background: `color-mix(in srgb, ${accent} 25%, transparent)`, borderRadius: 2 }} />
     </SCard>
   )

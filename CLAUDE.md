@@ -72,6 +72,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
 | `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
+| `vw_repasse_taxa` | 1 linha por versão × marca do **repasse da taxa de franquia** (% que fica com a We Scale; o resto vai pra marca). Tabelas `repasse_taxa_versao`/`repasse_taxa_marca`, imutáveis. Ver regra "Repasse da taxa de franquia" na seção 4 |
 
 `vw_marketing_funil` é a view **antiga**, sem nenhuma aba de Vendas
 consumindo ela mais (Análise de Perda migrou em 04/09). Não usar em código
@@ -372,6 +373,18 @@ usa essa regra: lá o piloto é quem tem meta no mês.
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
 
+**Repasse da taxa de franquia: vale a versão da DATA DA VENDA.** Em algumas
+marcas só parte da taxa fica com a We Scale (Inpot 60%, Eletrovias 70%; o resto
+vai pra marca). As % vivem em versões imutáveis com data "vale a partir de"
+(`vw_repasse_taxa`); cada venda usa a de maior vigência ≤ `data_venda` em
+Brasília, e venda anterior à 1ª versão usa a 1ª. Versão nova só pode começar
+depois da última, então nunca reescreve histórico antes dela. Marca sem %
+cadastrada conta 100% We Scale. **Metas continuam sobre a taxa cheia**
+(`meta_financeira` é bruta), e "Receita" segue sendo a taxa cheia em todo
+lugar; o valor We Scale/Marca aparece ao lado. Configuração: aba "Repasse das
+taxas" em Configuração das Metas (`/metas?aba=repasse`), escrita só pela Edge
+Function `gravar-repasse` com `acao.repasse-editar`.
+
 ---
 
 ## 5. Arquitetura da aba Visão Macro
@@ -415,6 +428,10 @@ src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
 src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer) — sem consumidor desde 01/10/2026
 src/hooks/useReunioesCloser.ts    lê vw_closer_reunioes inteira (sem filtro de data — recorte em reunioesCloser.ts)
+src/lib/repasse.ts                repasse da taxa de franquia: versão vigente na data da venda + divisão We Scale × marca (puro, testado)
+src/hooks/useRepasseTaxas.ts      lê vw_repasse_taxa; publicarRepasse() grava pela Edge Function gravar-repasse
+src/components/ui/DivisaoReceita.tsx  linha "We Scale / Marcas" dos cards de receita + bloco com quebra por marca
+src/components/metas/RepasseTaxas.tsx aba "Repasse das taxas" da Configuração das Metas (em vigor, histórico, versão nova)
 src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
 ```
 
@@ -670,6 +687,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Repasse da taxa: Odonto Legacy, Scale Partner e Instituto do Autismo sem %** — contam 100% We Scale por falta de cadastro (22/10). Confirmar com o Junior e publicar a V2 se alguma tiver repasse pra marca
 - [ ] **Distribuição de leads: sobras da virada.** As 10 marcas estão em `ativo` (19/10) e a
   caixa reserva está no ar. Falta: (1) a "OdontoScale > CRM (Limpo)" (LP antiga,
   `odontoscale_multistep`) **segue ativa** de propósito até o Gabriel trocar a LP, porque a
@@ -759,6 +777,33 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-22 — Receita dividida entre We Scale e marca (repasse versionado)
+
+Pedido do Junior: em algumas marcas só parte da taxa de franquia fica com a We
+Scale (Oral Unic, B2Case, Lisô Laser e Viva 100%; Inpot 60%; Eletrovias 70%).
+Venda de R$ 100 mil na Inpot = taxa R$ 100 mil, We Scale R$ 60 mil, marca
+R$ 40 mil. E as % mudam com o tempo sem poder reescrever o passado.
+
+**Banco (Expansão):** `repasse_taxa_versao` + `repasse_taxa_marca` (imutáveis por
+trigger, RLS sem policy), RPC `publicar_repasse_versao` (só `service_role`, exige
+vigência depois da última versão e motivo), view `vw_repasse_taxa`. V1 com as %
+acima, valendo desde 01/01/2025. Edge Function nova `gravar-repasse`
+(`verify_jwt` desligado, valida sessão do Marketing + `acao.repasse-editar`). SQL:
+`docs/sql/2026-10-22-repasse-taxa-franquia.sql`. Regra na seção 4.
+
+**Onde aparece:** Visão Macro (card "Receita no período" com We Scale/Marcas
+embaixo; card novo "We Scale × Marcas" ao lado da Meta, com quebra por marca;
+popup da receita com colunas We Scale e Marca por venda) e Performance › Closer
+(card "Receita gerada"). Configuração na aba nova "Repasse das taxas" de
+Configuração das Metas: o que vale hoje, histórico com o que cada versão mudou e
+o período de vendas que cada uma cobre, e "Nova versão". Metas, tabela de
+Closers, Campanha de Metas e Análise de Perda seguem na taxa cheia.
+
+Verificado: build + 814 testes (8 novos em `repasse.test.ts`) + oxlint; visto
+renderizado com dado real numa rota de prévia sem login (fora do commit):
+out/26 Inbound R$ 597.858 = We Scale R$ 424.848 + marcas R$ 173.010, igual ao
+SQL, marca a marca (Eletrovias 324.450/139.050, Inpot 50.940/33.960).
 
 ### 2026-10-20 (6) — Consulta paginada tenta de novo quando o banco falha
 

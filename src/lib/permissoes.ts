@@ -42,6 +42,7 @@ export const ACOES: readonly DefAcao[] = [
   { chave: 'acao.metas-publicar', label: 'Publicar e ativar metas', descricao: 'Na Configuração das Metas: publicar uma versão nova e trocar a versão ativa do mês.' },
   { chave: 'acao.okrs-editar',    label: 'Atualizar OKRs',          descricao: 'Mudar o valor atual dos OKRs em Meta & OKRs.' },
   { chave: 'acao.assistente-ia',  label: 'Usar o assistente IA',    descricao: 'Chat flutuante que responde com dados de todas as marcas.' },
+  { chave: 'acao.repasse-editar', label: 'Alterar repasse das taxas', descricao: 'Na Configuração das Metas: publicar uma versão nova do quanto da taxa de franquia fica com a We Scale e quanto vai pra marca.' },
   { chave: 'acao.distribuicao-editar', label: 'Configurar distribuição de leads', descricao: 'Na aba Distribuição de Leads: publicar regras, barreira de MQL e disponibilidade dos SDRs.' },
   { chave: PERM_GERENCIAR_USUARIOS, label: 'Gerenciar usuários e papéis', descricao: 'Convidar, desativar e dar qualquer acesso a qualquer pessoa. Na prática, é ser administrador.' },
 ]

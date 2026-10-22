@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { ArrowRight, Check, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { PageTop } from '@/components/ui/PageTop'
 import { marcaLabel } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
@@ -15,6 +16,7 @@ import { EditorMarca } from '@/components/metas/EditorMarca'
 import { PainelMarcas } from '@/components/metas/PainelMarcas'
 import { PassoSemanas } from '@/components/metas/PassoSemanas'
 import { PassoRevisarPublicar } from '@/components/metas/PassoRevisarPublicar'
+import { RepasseTaxas } from '@/components/metas/RepasseTaxas'
 import {
   MESES_LABEL, bannerStyle, cardStyle, fmtBRL, fmtDec, fmtInt, ghostButtonStyle, infoBoxStyle,
   nomeMes, nomeMesMinusculo, pillStyle, primaryButtonStyle, secondaryButtonStyle, smallButtonStyle,
@@ -47,7 +49,12 @@ function fmtDataHora(iso: string): string {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+type AbaConfig = 'metas' | 'repasse'
+
 export function HubMetas() {
+  // ?aba=repasse abre direto o repasse das taxas (link do card de receita).
+  const [params, setParams] = useSearchParams()
+  const aba: AbaConfig = params.get('aba') === 'repasse' ? 'repasse' : 'metas'
   const [mes, setMes] = useState(mesPadrao)
   const [rascunho, setRascunho] = useState<RascunhoConfig | null>(() => carregarRascunho(mesPadrao()))
   const [montando, setMontando] = useState(false)
@@ -110,10 +117,16 @@ export function HubMetas() {
     <div ref={topoRef} style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 48px', maxWidth: 1200, margin: '0 auto', scrollMarginTop: 80 }}>
       <PageTop
         title="Configuração das Metas"
-        subtitle="Monte a meta do mês marca a marca: informe as vendas e o sistema calcula o funil e a meta de cada pessoa"
+        subtitle={aba === 'repasse'
+          ? 'Quanto da taxa de franquia de cada venda fica com a We Scale e quanto vai pra marca, com histórico de versões'
+          : 'Monte a meta do mês marca a marca: informe as vendas e o sistema calcula o funil e a meta de cada pessoa'}
       />
 
-      {montando && rascunho ? (
+      {!montando && <AbasConfig aba={aba} onMudar={a => setParams(a === 'repasse' ? { aba: 'repasse' } : {}, { replace: true })} />}
+
+      {aba === 'repasse' && !montando ? (
+        <RepasseTaxas />
+      ) : montando && rascunho ? (
         <Montagem
           rascunho={rascunho}
           passo={passo}
@@ -158,6 +171,31 @@ export function HubMetas() {
           }}
         />
       )}
+    </div>
+  )
+}
+
+function AbasConfig({ aba, onMudar }: { aba: AbaConfig; onMudar: (a: AbaConfig) => void }) {
+  const opcoes: { id: AbaConfig; rotulo: string }[] = [
+    { id: 'metas', rotulo: 'Metas do mês' },
+    { id: 'repasse', rotulo: 'Repasse das taxas' },
+  ]
+  return (
+    <div role="tablist" style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--ws-border)', marginBottom: 20 }}>
+      {opcoes.map(o => {
+        const on = o.id === aba
+        return (
+          <button key={o.id} type="button" role="tab" aria-selected={on} onClick={() => onMudar(o.id)}
+            style={{
+              border: 'none', background: 'none', cursor: 'pointer', padding: '10px 14px', marginBottom: -1,
+              fontSize: 14, fontWeight: on ? 600 : 500, fontFamily: 'var(--font-body)',
+              color: on ? 'var(--ws-text-primary)' : 'var(--ws-text-secondary)',
+              borderBottom: `2px solid ${on ? 'var(--brand-accent)' : 'transparent'}`,
+            }}>
+            {o.rotulo}
+          </button>
+        )
+      })}
     </div>
   )
 }

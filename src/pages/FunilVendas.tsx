@@ -19,6 +19,9 @@ import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
+import { useRepasseTaxas } from '@/hooks/useRepasseTaxas'
+import { dividirReceita } from '@/lib/repasse'
+import { DivisaoReceitaBloco, DivisaoReceitaLinha, type DivisaoPorMarca } from '@/components/ui/DivisaoReceita'
 import { computeEtapaAtual, dealsInEtapaAtual } from '@/lib/aging'
 import type { EtapaLeadtimeAgg } from '@/lib/aging'
 import { fmtDias } from '@/components/ui/dealDrawerShared'
@@ -552,6 +555,19 @@ export function FunilVendas() {
     () => rowsInStage(scoped, 'Fechamento', win, viewModes),
     [scoped, win, viewModes],
   )
+  // Receita dividida entre We Scale e marcas, pelo repasse vigente na data de cada venda.
+  const { versoes: repasse } = useRepasseTaxas()
+  const divisaoReceita = useMemo(() => dividirReceita(repasse, ganhosNoPeriodo), [repasse, ganhosNoPeriodo])
+  const divisaoPorMarca = useMemo<DivisaoPorMarca[]>(() => {
+    const porMarca = new Map<string, typeof ganhosNoPeriodo>()
+    for (const r of ganhosNoPeriodo) porMarca.set(r.marca ?? '', [...(porMarca.get(r.marca ?? '') ?? []), r])
+    return [...porMarca.entries()]
+      .map(([marca, vendas]) => {
+        const b = BRAND_LIST.find(x => x.marca === marca)
+        return { label: b?.label ?? marca, accent: b?.accent, divisao: dividirReceita(repasse, vendas) }
+      })
+      .sort((a, b) => b.divisao.total - a.divisao.total)
+  }, [repasse, ganhosNoPeriodo])
   const ganhosPorValor = useMemo(
     () => [...ganhosNoPeriodo].sort((a, b) => (b.valor_contrato ?? 0) - (a.valor_contrato ?? 0)),
     [ganhosNoPeriodo],
@@ -849,7 +865,10 @@ export function FunilVendas() {
       <div className="rs-grid rs-cols-6" style={{ marginBottom: 24, opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
         <MetricCard style={heroStyle} label="Receita no período" value={moneyK(kpis.receita)} delta={delta(kpis.deltas.receita)} deltaLabel={prevLabel} accent={false}
           onClick={() => setPopupKpi('receita')}
-          description={deltasFull && <DeltaSecundario delta={deltasFull.receita} label={`vs. ${prevFullLabel}`} />} />
+          description={<span style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {deltasFull && <DeltaSecundario delta={deltasFull.receita} label={`vs. ${prevFullLabel}`} />}
+            <DivisaoReceitaLinha divisao={divisaoReceita} />
+          </span>} />
         <MetricCard style={metricStyle} label={`Fechamentos${unidadeSufixo}`} value={nf(kpis.fechamentos)} delta={delta(kpis.deltas.fechamentos)} deltaLabel={prevLabel} accent={false}
           onClick={() => setPopupKpi('fechamentos')}
           description={deltasFull && <DeltaSecundario delta={deltasFull.fechamentos} label={`vs. ${prevFullLabel}`} />} />
@@ -934,6 +953,14 @@ export function FunilVendas() {
               <MetaProgresso label="Fechamentos" realizado={kpis.fechamentos} meta={metaSelecionada.metaQtdVendas} formatter={nf} accent={accent} porMarca={quebraPorMarca ? metaFechamentosPorMarca : undefined} />
             </SCard>
           )}
+
+          <SCard style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18, marginBottom: 4 }}>We Scale × Marcas</div>
+              <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>Quanto da taxa de franquia fica com a We Scale e quanto vai pra marca · {scopeLabel}</div>
+            </div>
+            <DivisaoReceitaBloco divisao={divisaoReceita} porMarca={divisaoPorMarca.length > 1 ? divisaoPorMarca : undefined} />
+          </SCard>
         </div>
       </div>
 
@@ -982,6 +1009,7 @@ export function FunilVendas() {
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         deals={ganhosPorValor}
         accent={accent}
+        repasse={repasse}
       />
       <SimpleDealsDrawer
         open={popupKpi === 'fechamentos'}

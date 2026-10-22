@@ -6,6 +6,9 @@ import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
+import { DivisaoReceitaLinha } from '@/components/ui/DivisaoReceita'
+import { useRepasseTaxas } from '@/hooks/useRepasseTaxas'
+import { dividirReceita } from '@/lib/repasse'
 import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { TrapFunnel } from '@/components/ui/TrapFunnel'
@@ -484,6 +487,13 @@ export function PerformanceVendas() {
     receita: sumRevenue(scoped, win, viewModes),
   }), [scoped, eventos, win, viewModes, evOpts])
 
+  // Receita dividida entre We Scale e marcas, pelo repasse vigente na data de cada venda.
+  const { versoes: repasse } = useRepasseTaxas()
+  const divisaoReceita = useMemo(
+    () => dividirReceita(repasse, rowsInStage(scoped, 'Fechamento', win, viewModes)),
+    [repasse, scoped, win, viewModes],
+  )
+
   // Meta só quando o período resolve para exatamente 1 mês.
   const mesUnico = periodMode === 'mes' && periodValues.length === 1 ? periodValues[0] : null
   const fimJanela = ranges[0]?.end ?? range.end
@@ -913,7 +923,8 @@ export function PerformanceVendas() {
               metaMensal={mesUnico ? metaTimeSel.metaFinanceira : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={moneyK} accent={CLOSER_ACCENT}
               granularity="monthly"
-              onClick={() => setCardAberto('closer-receita')} />
+              onClick={() => setCardAberto('closer-receita')}
+              rodape={<div style={{ marginTop: 4 }}><DivisaoReceitaLinha divisao={divisaoReceita} /></div>} />
           </div>
 
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>

@@ -687,7 +687,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Repasse da taxa: Odonto Legacy, Scale Partner e Instituto do Autismo sem %** — contam 100% We Scale por falta de cadastro (22/10). Confirmar com o Junior e publicar a V2 se alguma tiver repasse pra marca
+- [x] ~~Repasse da taxa: Odonto Legacy, Scale Partner e Instituto do Autismo sem %~~ — confirmado pelo Junior em 22/10: 100% We Scale, cadastradas na V1
 - [ ] **Distribuição de leads: sobras da virada.** As 10 marcas estão em `ativo` (19/10) e a
   caixa reserva está no ar. Falta: (1) a "OdontoScale > CRM (Limpo)" (LP antiga,
   `odontoscale_multistep`) **segue ativa** de propósito até o Gabriel trocar a LP, porque a
@@ -804,6 +804,11 @@ Verificado: build + 814 testes (8 novos em `repasse.test.ts`) + oxlint; visto
 renderizado com dado real numa rota de prévia sem login (fora do commit):
 out/26 Inbound R$ 597.858 = We Scale R$ 424.848 + marcas R$ 173.010, igual ao
 SQL, marca a marca (Eletrovias 324.450/139.050, Inpot 50.940/33.960).
+
+Depois do deploy o Junior confirmou Odonto Legacy, Scale Partner e Instituto
+do Autismo em 100% We Scale. As três entraram na V1 (`Odonto Scale`, `We Scale`
+e `Instituto do Autismo`, os nomes canônicos). INSERT direto, porque o trigger
+só barra UPDATE/DELETE e o valor efetivo já era 100%; nenhum número mudou.
 
 ### 2026-10-20 (6) — Consulta paginada tenta de novo quando o banco falha
 

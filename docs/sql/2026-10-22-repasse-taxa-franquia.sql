@@ -94,3 +94,11 @@ from (values ('Oral Unic', 100), ('B2Case', 100), ('Lisô Laser', 100), ('Inpot'
 -- Testes rodados em 22/10 (transação com rollback): publicar V2 com vigência
 -- 2027-01-01 funciona; UPDATE em repasse_taxa_marca é bloqueado; publicar com
 -- vigência ≤ a da última versão é recusado.
+
+-- Mesmo dia, depois do deploy: Junior confirmou 100% We Scale para as três marcas
+-- que estavam sem cadastro. Entraram na V1 (o valor efetivo já era 100%).
+insert into repasse_taxa_marca (versao_id, marca, pct_we_scale)
+select v.id, x.marca, 100 from repasse_taxa_versao v,
+  (values ('Odonto Scale'), ('We Scale'), ('Instituto do Autismo')) as x(marca)
+where v.numero = 1
+on conflict do nothing;

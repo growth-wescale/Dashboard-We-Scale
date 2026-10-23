@@ -191,10 +191,10 @@ describe('currentStage', () => {
     expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: null })).toBeNull()
   })
 
-  it('Odonto Legacy: SQL é a "Reunião Agendada" do próprio funil, nunca a do Closer', () => {
+  it('Odonto Legacy: no Atual contam a "Reunião Agendada" do funil antigo e a do Closer (migração de 24/10)', () => {
     for (const marca of ['Odonto Legacy', 'Odonto Scale']) {
       expect(currentStage({ etapa_funil: 'Reunião Agendada', id_etapa_atual: '68b84341646c55001ed64e53', marca })).toBe('Reunião Agendada SQL')
-      expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89', marca })).toBeNull()
+      expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69b1badfe1def700137f1b89', marca })).toBe('Reunião Agendada SQL')
     }
   })
 
@@ -424,6 +424,21 @@ describe('Reunião Agendada SQL — só a etapa do Closer', () => {
     ]
     const out = eventsInStage(legacy, 'Reunião Agendada SQL', AGOSTO, modes({ eventSource: 'passages' }))
     expect(out.map(e => `${e.id_deal}:${e.id_etapa}`)).toEqual([`L1:${ETAPA_LEGACY}`, `L2:${ETAPA_LEGACY}`])
+  })
+
+  // Migração dos funis (24/10/2026): a partir do corte o Legacy agenda no SDR e o
+  // deal segue pro Closer como as outras marcas. Antes do corte vale a regra de
+  // 21/09 (só a etapa do funil Legacy); o histórico do funil antigo segue contando.
+  it('Odonto Legacy: a etapa do Closer passa a contar a partir do corte da migração', () => {
+    const ETAPA_LEGACY = '68b84341646c55001ed64e53'
+    const OUTUBRO = toWindow(new Set(['2026-10']))
+    const legacy = [
+      evSql('Closer', ETAPA_CLOSER, { id_deal: 'antes', marca_deal: 'Odonto Legacy', dia: '2026-10-10' }),        // não conta
+      evSql('Closer', ETAPA_CLOSER, { id_deal: 'depois', marca_deal: 'Odonto Legacy', dia: '2026-10-24' }),       // conta
+      evSql('Odonto Legacy', ETAPA_LEGACY, { id_deal: 'hist', marca_deal: 'Odonto Legacy', dia: '2026-10-24' }), // conta
+    ]
+    const out = eventsInStage(legacy, 'Reunião Agendada SQL', OUTUBRO, modes({ eventSource: 'passages' }))
+    expect(out.map(e => e.id_deal)).toEqual(['depois', 'hist'])
   })
 
   it('conta a etapa do funil Scale Partner, que não passa pelo Closer', () => {
@@ -827,10 +842,9 @@ describe('stageLabel', () => {
 
 describe('etapasDaMarca', () => {
   const todas = ['MQL', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL', 'Comitê', 'Pré-Contrato'] as const
-  it('só Odonto Legacy: esconde só Comitê (Interesse Reunião e Conexão existem desde 30/09)', () => {
-    const semComite = ['MQL', 'Interesse Reunião', 'Conexão', 'Reunião Agendada SQL', 'Pré-Contrato']
-    expect(etapasDaMarca(todas, ['Odonto Scale'])).toEqual(semComite)
-    expect(etapasDaMarca(todas, ['Odonto Legacy'])).toEqual(semComite)
+  it('só Odonto Legacy: mostra tudo, inclusive Comitê (no Closer desde a migração de 24/10)', () => {
+    expect(etapasDaMarca(todas, ['Odonto Scale'])).toEqual([...todas])
+    expect(etapasDaMarca(todas, ['Odonto Legacy'])).toEqual([...todas])
   })
   it('outra marca ou 2+ marcas: mantém tudo', () => {
     expect(etapasDaMarca(todas, ['Inpot'])).toEqual([...todas])

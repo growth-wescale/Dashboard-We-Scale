@@ -20,6 +20,7 @@ describe('pesoFonte', () => {
     expect(pesoFonte('Inbound')).toBe(1)
     expect(pesoFonte('Indicação')).toBe(1)
     expect(pesoFonte('Parceiro')).toBe(1)
+    expect(pesoFonte('Não identificado')).toBe(1) // opção criada na migração dos funis (10/2026)
     expect(pesoFonte('inbound - Repasse')).toBe(1)
     expect(pesoFonte('Sem Classificação')).toBe(1)
     expect(pesoFonte(null)).toBe(1)

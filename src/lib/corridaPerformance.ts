@@ -65,6 +65,7 @@ const FONTES_UM_PONTO = new Set<string>([
   'parceiro',
   'inbound - repasse',
   'sem classificacao',
+  'nao identificado', // opção criada na migração dos funis de marca (10/2026): sem evidência de fonte
 ])
 
 /**

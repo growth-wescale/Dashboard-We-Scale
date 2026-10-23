@@ -219,7 +219,9 @@ const ETAPAS_AUSENTES_POR_MARCA: Record<string, readonly StageKey[]> = {
   // Interesse Reunião → Conexão → Reunião Agendada → Diagnóstico →
   // Negociação SAL → Documentação. Interesse Reunião e Conexão existem desde
   // 30/09/2026 (antes disso ficam zeradas no histórico da marca).
-  'Odonto Scale': ['Comitê'],
+  // Desde a migração dos funis (24/10/2026) o deal Legacy segue pelo Closer e
+  // passa pelo Comitê como as outras marcas: nenhuma etapa escondida.
+  'Odonto Scale': [],
 }
 
 /** `stages` sem as etapas que não existem no funil, quando há 1 marca só selecionada. */
@@ -471,20 +473,29 @@ const ETAPA_SQL_CLOSER = '69b1badfe1def700137f1b89'
 // handoff pro Closer — então não há evento duplicado a descartar.
 const ETAPA_SQL_SCALE_PARTNER = '6a99b99218a2bb002df8ec61'
 const ETAPA_SQL_ODONTO_LEGACY = '68b84341646c55001ed64e53'
+/**
+ * Migração dos funis de marca (24/10/2026): a partir deste dia o Odonto Legacy
+ * agenda no SDR e o deal segue pro Closer, como as outras marcas. Evento
+ * anterior ao corte segue a regra de 21/09 (só a etapa do funil Legacy);
+ * evento sem data (modo Atual) aceita as duas.
+ */
+export const CORTE_ODONTO_LEGACY = '2026-10-24'
 
 function isOdontoLegacy(marca: string | null | undefined): boolean {
   return normalizeMarcaRaw(marca) === 'Odonto Scale'
 }
 
-/** Ids de etapa aceitos para contar `stage`, dada a marca do deal. `undefined` = sem trava. */
-function idsEtapaObrigatoria(stage: StageKey | null, marca: string | null | undefined): readonly string[] | undefined {
+/** Ids de etapa aceitos para contar `stage`, dada a marca do deal e o dia do evento. `undefined` = sem trava. */
+function idsEtapaObrigatoria(stage: StageKey | null, marca: string | null | undefined, dia?: string | null): readonly string[] | undefined {
   if (stage !== 'Reunião Agendada SQL') return undefined
-  return isOdontoLegacy(marca) ? [ETAPA_SQL_ODONTO_LEGACY] : [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER]
+  if (!isOdontoLegacy(marca)) return [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER]
+  const antesDoCorte = !!dia && (toLocalDate(dia) ?? dia) < CORTE_ODONTO_LEGACY
+  return antesDoCorte ? [ETAPA_SQL_ODONTO_LEGACY] : [ETAPA_SQL_ODONTO_LEGACY, ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER]
 }
 
-/** A etapa não tem trava de funil, ou o id é um dos permitidos para a marca. */
-function etapaPermitida(stage: StageKey | null, idEtapa: string | null | undefined, marca: string | null | undefined): boolean {
-  const ids = idsEtapaObrigatoria(stage, marca)
+/** A etapa não tem trava de funil, ou o id é um dos permitidos para a marca (e o dia, se houver). */
+function etapaPermitida(stage: StageKey | null, idEtapa: string | null | undefined, marca: string | null | undefined, dia?: string | null): boolean {
+  const ids = idsEtapaObrigatoria(stage, marca, dia)
   return !ids || (!!idEtapa && ids.includes(idEtapa))
 }
 
@@ -543,7 +554,7 @@ export function eventsInStage(
 
   const elegiveis = events.filter(e => {
     if (resolveStage(e.etapa_canonica) !== alvo) return false
-    if (!etapaPermitida(alvo, e.id_etapa, e.marca_deal)) return false
+    if (!etapaPermitida(alvo, e.id_etapa, e.marca_deal, e.dia)) return false
     if (cohort) {
       if (!cohort.has(dealKey({ id_lead: e.id_deal, ciclo: e.ciclo }))) return false
     } else if (!isInWindow(e.dia, win)) return false

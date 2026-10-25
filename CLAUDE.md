@@ -778,6 +778,98 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-24 (2) — Migração dos funis de marca, onda 2: Inpot, Lisô Laser, Get It, Rota's e Oral Unic (noite de 24/10)
+
+Mesma mecânica da onda 1, das 20h08 às 23h02 de 24/10 (sábado). **1.807 deals**: os 663 abertos
+viraram perdidos com o motivo **"Funil descontinuado"** antes de mover (decisão do Junior) e os
+1.807 foram para SDR/Closer pela tabela de mapeamento; todos estão em `dashboard_deal_oculto`
+(1.838 ids), então **nenhum entra no dashboard, nas páginas de Marketing nem no relatório diário**
+até o Junior liberar lote a lote (`liberado_em`). Checksum antes × depois: só 2 leads novos da
+noite, zero efeito da migração. Nos 5 funis sobraram só os 31 deals de teste (Inpot 6, Lisô 25).
+
+**Dois achados do RD que obrigaram ajustes na Edge Function (v3 e v4):**
+- O RD valida os campos obrigatórios do deal em **qualquer** PUT: a perda em massa falhou com
+  422 `deal_required_custom_fields` nos 663 abertos (sem Marca/Cidade/Estado/Fonte Macro). A ação
+  `perder` passou a mandar os mesmos campos do plano junto com `win: false`.
+- As etapas do Closer exigem "Closer responsável" e a etapa No Show do SDR tem **questionário
+  obrigatório** (a API recusa o PUT sem resposta). 61 deals de etapas do Closer receberam
+  Closer responsável = dono quando ele é opção do campo (Paula, Jéssica, Douglas), senão
+  **"Não identificado"** (opção nova no campo, 29 deals: dono Xayane ou "Rouglas"); 16 perdidos do
+  No Show da Inpot foram para SDR / Contato Efetivo em vez do No Show. Falha 4xx definitiva sai da
+  fila (`onda2_falha`) em vez de ser repetida a cada lote (`migracao_funis_proximo_lote`).
+
+Os campos preenchidos pelo plano geraram eventos `mudanca_fonte_macro` (1.651) e `mudanca_marca`
+(1.400) nesses deals, todos ocultos. 4 passagens históricas de set/26 do funil Inpot foram
+reingeridas pelo espelho (mesmo fenômeno da onda 1) e ficam: são história real e os deals estão
+ocultos. A cadência 3 (Legacy) seguiu intacta e ganhou 4 leads novos do Legacy durante o sábado
+pelo caminho novo (regra v3 → SDR / Novo MQL → Ingresso → Disparador).
+
+**Fica para o fechamento (Task 8):** SQL consolidado em `docs/sql/`, relatório por lote para a
+liberação, commit da Edge Function v4 e destas notas, e as tarefas manuais do Junior no RD
+(apagar os 6 funis vazios depois dos 31 testes, reapontar/desativar "OdontoScale > CRM (Limpo)",
+remover as opções antigas de "Closer responsável" e a opção "Não identificado" quando os lotes
+forem liberados, avisar o TI sobre os ~2.800 webhooks).
+
+### 2026-10-24 — Migração dos funis de marca, onda 1: Odonto Legacy no SDR/Closer (madrugada de 23→24/10)
+
+Pedido do Junior (23/10): levar todos os deals dos funis Inpot, Lisô Laser, Get It,
+Rota's, Odonto Legacy e Oral Unic para SDR/Closer **sem mudar número nenhum** no
+dashboard, nas páginas de Marketing nem no relatório diário. Desenho em
+`docs/superpowers/specs/2026-10-21-migracao-funis-legados-design.md`, plano em
+`docs/superpowers/plans/2026-10-23-migracao-funis-legados.md`.
+
+**O que entrou na onda 1 (Legacy, 01h36–09h33 de 24/10):** 969 deals do plano + 16
+achados fora do plano (15 perdidos invisíveis e 1 lead novo de 23/10 20h11) = **985
+deals**; o funil Odonto Legacy ficou com 0 deals. Status, `closed_at`, dono e Marca
+iguais ao backup (0 diferenças); 1 `mudanca_funil` por deal; 0 passagem lateral de etapa
+(a Edge Function `migrar-funis` grava a exclusão preventiva em
+`deal_eventos_excluidos_manualmente` antes de o espelho ler o histórico); 0 escrita das
+automações de troca de dono, 0 WhatsApp. Checksum antes × depois
+(`migracao_funis_checksum`/`migracao_funis_diff`): só drift de deals novos da madrugada,
+troca de id de etapa na bateria "atual" com o mesmo total, e dois efeitos aceitos e
+registrados no ledger: o deal Oral Unic `6ad8d76ed9491c000175e4d1` (estava na "Reunião
+Agendada" do Legacy) passa a contar SQL no modo Atual (4→5), e 1 perdido do Legacy ganhou
+SDR Sarah Padilha ("Sem SDR" 9→8).
+
+**Como foi feito.** Disjuntor de webhooks desligado (`webhook_controle.habilitado=false`),
+cron do `REFRESH` da matview suspenso e recriado (jobid 1 → **12**), lotes de 55 pela
+Edge Function `migrar-funis` (`PUT /deals/:id` com `deal_stage_id` + campos obrigatórios
+da etapa, GET de confirmação, exclusão preventiva). Depois do 3º lote os lotes passaram a
+ser disparados por `pg_cron` com `migracao_funis_proximo_lote(acao, onda, max, job)`, que
+só dispara com nenhum request `migrar-funis` na fila do `pg_net`, resposta do anterior já
+gravada e nada aplicado nos últimos 25 s (a função não reserva linha; 2 lotes simultâneos
+repetiriam deals). Log em `_migracao_funis_disparo_log`.
+
+**Cadência e distribuição (Task 5, 21h50 de 23/10):** a cadência 3 (Legacy) só trocou de
+endereço — `cadencia_etapas` 7/8/27 → SDR / Novo MQL · Tentando Contato · Contato
+Efetivo, condições 14/15 reapontadas, condição nova 197 `Marca = Odonto Legacy`,
+`mover_no_disparo_de/para` = Novo MQL → Tentando Contato; régua, templates e WhatsApp
+intactos (85 execuções seguiram ativas). A cadência 13 ("Conexão — Funis SDR e Prospecção
+Ativa") ganhou a condição 198 `Marca ≠ Odonto Legacy`: ela não tinha filtro de marca e
+enrolaria os 16 Legacy abertos em Conexão (achado no teste de 23/10). Regra de distribuição
+do Odonto Legacy v3 (id 59): cria no **SDR / Novo MQL**; o 1º lead já chegou assim na
+madrugada. Backup das linhas em `_migracao_funis_backup_cadencia_20261023`.
+
+**Três consumidores filtram funil pelo NOME e precisaram de ajuste para o número não mudar:**
+- `vw_marketing_funil` (hook `useVendasFunil` das páginas do Gabriel filtra
+  `funil IN (SDR, Closer, Prospecção Ativa, Odonto Scale)`; o Legacy estava **fora** dessas
+  páginas desde o rename de 21/09): deal migrado mostra `funil = _migracao_funis_plano.funil_origem`.
+  Lead novo do Legacy nasce no SDR e **passa a aparecer** no CRM da Visão Geral/S&OP.
+- `relatorio_expansao_metricas` (funis `SDR/Closer/Odonto Scale` por nome): a CTE `lig`
+  ignora ligações de deal migrado feitas antes de 24/10 04h30Z (senão o MTD de outubro
+  ganhava +2.050 ligações); passagens seguem pelo nome do funil do evento. Conferido para
+  22/10: dia 521/4/10/2 e MTD 10.926/102/58/34/9, iguais ao pré-migração.
+- 2 passagens históricas do Legacy (set/26 e mai/26) que o banco nunca tinha e o espelho
+  ingeriu ao reler o histórico foram removidas (backup em
+  `_migracao_funis_backup_eventos_20261023`) e bloqueadas em
+  `deal_eventos_excluidos_manualmente`. Liberar = apagar as 2 exclusões.
+
+Backups das definições anteriores em `_migracao_funis_backup_viewdefs_20261024`.
+**Onda 2** (1.807 deals dos 5 funis de marca; 663 abertos viram perdidos "Funil
+descontinuado" antes de mover; todos entram ocultos em `dashboard_deal_oculto`) agendada
+para a noite de 24/10. Fechamento (SQL em `docs/sql/`, relatório por lote, pendências do
+Junior no RD) fica na Task 8.
+
 ### 2026-10-22 — Receita dividida entre We Scale e marca (repasse versionado)
 
 Pedido do Junior: em algumas marcas só parte da taxa de franquia fica com a We

@@ -4,7 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // `_migracao_funis_plano` e escreve no RD CRM com o token do Vault.
 //
 //   POST ?acao=preparar                      cria o motivo "Funil descontinuado" e reinclui opções nos campos
-//   POST ?acao=perder&onda=onda2&max=55      marca como perdido os abertos da onda (status_origem = open)
+//   POST ?acao=perder&onda=onda2&max=55      marca como perdido os abertos da onda (status_origem = open), com os campos do plano
 //   POST ?acao=mover&onda=onda1&max=55       move de funil, confere com GET e registra a exclusão preventiva
 //   POST ?acao=teste_criar                   cria 4 deals no Funil de teste e as linhas de plano onda=teste
 //   POST ?acao=teste_status                  estado atual dos deals de teste (etapa, funil, win, closed_at, histórico)
@@ -85,7 +85,9 @@ Deno.serve(async (req: Request) => {
       const campos = await call(token, "/custom_fields?for=deal");
       const todos: J[] = Array.isArray(campos.body) ? campos.body : (campos.body?.custom_fields || []);
       const opcoes: Record<string, unknown> = {};
-      for (const [id, extra] of [[CF.closerResp, OPCOES_CLOSER_ANTIGAS], [CF.fonteMacro, [OPCAO_FONTE_NOVA]]] as [string, string[]][]) {
+      // "Não identificado" também em Closer responsável: as etapas do Closer exigem o campo e parte dos deals
+      // migrados tem dono que não é Closer (achado na onda 2, 24/10).
+      for (const [id, extra] of [[CF.closerResp, OPCOES_CLOSER_ANTIGAS.concat([OPCAO_FONTE_NOVA])], [CF.fonteMacro, [OPCAO_FONTE_NOVA]]] as [string, string[]][]) {
         const campo = todos.find((c) => idDe(c) === id);
         if (!campo) throw new Error("campo nao encontrado: " + id);
         const atuais: string[] = campo.opts || [];
@@ -165,11 +167,17 @@ Deno.serve(async (req: Request) => {
       if (!onda) return out({ erro: "onda obrigatoria" }, 400);
       const { data: cfg } = await sb.from("espelho_rd_config").select("valor").eq("chave", "migracao_motivo_perda_id").maybeSingle();
       const motivoId = cfg?.valor; if (!motivoId) throw new Error("rode preparar antes");
-      const { data: plano, error } = await sb.from(PLANO).select("id,id_deal").eq("onda", onda).eq("status_origem", "open").is("perdido_em", null).order("id").limit(max);
+      const { data: plano, error } = await sb.from(PLANO).select("id,id_deal,campos").eq("onda", onda).eq("status_origem", "open").is("perdido_em", null).order("id").limit(max);
       if (error) throw new Error(error.message);
       let ok = 0, falha = 0;
       for (const p of plano || []) {
-        const put = await call(token, "/deals/" + p.id_deal, json("PUT", { deal: { win: false, deal_lost_reason_id: motivoId } }));
+        // O RD valida os campos obrigatórios do deal em qualquer PUT (422 deal_required_custom_fields):
+        // os abertos dos funis de marca não têm Marca/Cidade/Estado/Fonte Macro, então os campos do
+        // plano vão junto com a perda, iguais aos que o `mover` manda (achado na onda 2, 24/10).
+        const campos = p.campos && typeof p.campos === "object" ? Object.entries(p.campos).map(([custom_field_id, value]) => ({ custom_field_id, value })) : [];
+        const corpoPerda: J = { win: false, deal_lost_reason_id: motivoId };
+        if (campos.length) corpoPerda.deal_custom_fields = campos;
+        const put = await call(token, "/deals/" + p.id_deal, json("PUT", { deal: corpoPerda }));
         let g: J = null;
         if (put.status >= 200 && put.status < 300) { await sleep(250); g = (await call(token, "/deals/" + p.id_deal)).body; }
         const perdeu = g && g.win === false && !!g.closed_at;
@@ -186,8 +194,10 @@ Deno.serve(async (req: Request) => {
 
     if (acao === "mover") {
       if (!onda) return out({ erro: "onda obrigatoria" }, 400);
+      // Só a onda 2 exige a perda antes de mover (abertos dos 5 funis de marca);
+      // onda 1 (Legacy) e teste movem o deal aberto como está.
       const { data: plano, error } = await sb.from(PLANO).select("*").eq("onda", onda).is("aplicado_em", null)
-        .or("status_origem.neq.open,perdido_em.not.is.null").order("id").limit(max);
+        .or("status_origem.neq.open,perdido_em.not.is.null,onda.neq.onda2").order("id").limit(max);
       if (error) throw new Error(error.message);
       let ok = 0, falha = 0;
       for (const p of plano || []) {

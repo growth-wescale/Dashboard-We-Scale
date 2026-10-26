@@ -12,7 +12,9 @@ WHERE lead_event_identifier = 'beautyconnection_multistep'
 GROUP BY data_evento;
 
 -- Provisionar a senha por canal seguro fora deste repositório.
-CREATE ROLE dashboard_beauty_ro LOGIN NOINHERIT;
+CREATE ROLE dashboard_beauty_ro LOGIN NOINHERIT CONNECTION LIMIT 5;
+ALTER ROLE dashboard_beauty_ro SET default_transaction_read_only = on;
+REVOKE ALL ON ouro.vw_beauty_inscricoes_dia FROM PUBLIC;
 GRANT CONNECT ON DATABASE oralunic_dw TO dashboard_beauty_ro;
 GRANT USAGE ON SCHEMA ouro TO dashboard_beauty_ro;
 GRANT SELECT ON ouro.vw_beauty_inscricoes_dia TO dashboard_beauty_ro;

@@ -7,6 +7,8 @@ import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useSopVendasFunil as useVendasFunil } from '@/hooks/useSopVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
 import { useSopScalePartnerSales } from '@/hooks/useSopScalePartnerSales'
+import { beautyOuroEnabled, useBeautyInscricoes } from '@/hooks/useBeautyInscricoes'
+import { beautyInscricoesNoPeriodo } from '@/lib/beautyInscricoes'
 import { partnerEventCounts, partnerSalesInPeriod } from '@/lib/sopScalePartner'
 import { useMarketingFunilVendas as useFunilVendas } from '@/hooks/useMarketingFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
@@ -816,6 +818,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
   const isWeScale = slide.marca === 'We Scale'
+  const beautyEnabled = isWeScale && beautyOuroEnabled && dates.monthStart.slice(0, 7) === '2026-10' && !getWeScaleSop('2026-10')
+  const beautyRes = useBeautyInscricoes(beautyEnabled)
+  const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
   const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale })
   const partnerSales = useMemo(() => partnerSalesInPeriod(partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte), [partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte])
   const partnerRevenue = partnerSales.reduce((total, sale) => total + (sale.valor_contrato ?? 0), 0)
@@ -918,10 +923,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading
+    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(partnerReadError || undefined)
-  }, [allLoaded, onReady, partnerReadError])
+    if (allLoaded) onReady?.(partnerReadError || beautyRes.error || undefined)
+  }, [allLoaded, onReady, partnerReadError, beautyRes.error])
 
   const applyF = useCallback((rows: VwMarketingFunil[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -1365,6 +1370,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             { label: 'CP-MQL', value: !partnerKpiPending && mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
             { label: 'VENDAS', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : String(partnerSales.length) },
             { label: 'RECEITA', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : partnerRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+            ...(beautyEnabled ? [{ label: 'BC · INSCRIÇÕES', value: beautyRes.loading || beautyRes.error ? '—' : String(beautyInscricoes) }] : []),
           ] satisfies KpiCard[]
       : kpiCardsAll
 
@@ -1509,7 +1515,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </button>
       </div>
 
-      {isWeScale && <QueryErrorBanner errors={[partnerReadError ?? null]} />}
+      {isWeScale && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error]} />}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>

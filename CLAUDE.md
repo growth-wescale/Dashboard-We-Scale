@@ -687,6 +687,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Bot do WhatsApp do Odonto Legacy no RD Conversas ainda usa as etapas do funil antigo**
+  (Contato Efetivo `6a22e058892e160021c1700c`, Interesse Reunião `6abd312af18c3800295c6771`, Conexão
+  `6abd3149d43c010029ad60b2`). Trocar pelas do SDR: Contato Efetivo `69380917e00ed10014daaa66`,
+  Interesse Reunião `6a29ca1adb44a7001fd4893c`, Conexão `6a3036b47638b0001eedc614`. Enquanto isso,
+  lead do Legacy que responde volta para o funil antigo e sai da cadência (caso da Renata em 26/10).
+  Só depois disso apagar o funil Odonto Legacy no RD
 - [x] ~~Repasse da taxa: Odonto Legacy, Scale Partner e Instituto do Autismo sem %~~ — confirmado pelo Junior em 22/10: 100% We Scale, cadastradas na V1
 - [ ] **Distribuição de leads: sobras da virada.** As 10 marcas estão em `ativo` (19/10) e a
   caixa reserva está no ar. Falta: (1) a "OdontoScale > CRM (Limpo)" (LP antiga,
@@ -777,6 +783,32 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-26 — Revisão da migração no RD; bot do Legacy ainda usa o funil antigo
+
+Revisão pedida pelo Junior na segunda-feira. Os 2.792 deals migrados seguem no SDR/Closer com
+status, fechamento e dono iguais ao backup; nenhum reaberto. Nos funis antigos só sobraram os 31
+deals de teste (Inpot 6, Lisô 25); Get It, Rota's e Oral Unic estão vazios.
+
+**Achado: o bot do WhatsApp do Odonto Legacy no RD Conversas move o deal pelo ID de etapa do funil
+antigo.** A Renata Brito (`6adf3c131dfbb300209c89d7`) nasceu certo no SDR / Novo MQL às 08h40,
+recebeu o 1º WhatsApp da cadência 3 e, 1 min depois, foi parar em "Contato Efetivo" do funil
+Odonto Legacy (`6a22e058892e160021c1700c`). A Limpeza encerrou a cadência dela às 09h00 e fechou
+as 6 tarefas do dia 1. Todo lead do Legacy que responder vai pelo mesmo caminho até o bot ser
+reapontado para as etapas do SDR (pendência na seção 8).
+
+**Renata devolvida (10h31):** execução 3366 da cadência 3 reaberta **antes** do movimento (o
+Ingresso, com reentrada `reinicia`, criaria o ciclo 2 e reenviaria o 1º WhatsApp), deal movido para
+SDR / Contato Efetivo pela `migrar-funis` (linha `onda = 'avulso_20261026'` em
+`_migracao_funis_plano`, com exclusão preventiva da passagem lateral) e as 6 tarefas reabertas pela
+ação nova `reabrir_tarefas` (Edge Function v5). Conferido no RD depois da Limpeza das 10h45:
+etapa, dono Sarah, SDR Responsável, tarefas abertas e só 1 WhatsApp enviado.
+
+**Outros efeitos da migração, tratados na sessão "Leads parados em Novo MQL sem mensagem":** a
+Reconciliação das 06h pedia ao RD todos os deals das etapas da cadência (abertos e fechados) e
+morreu com os ~2.500 perdidos que a migração pôs no SDR; o Junior importou a v2.4 (só abertos).
+Com o disjuntor desligado nas ondas, ~17 leads criados naquelas horas não passaram pelo Ingresso;
+a Reconciliação de 26/10 os está enrolando.
 
 ### 2026-10-26 — Configuração das Metas: cada versão abre os detalhes
 

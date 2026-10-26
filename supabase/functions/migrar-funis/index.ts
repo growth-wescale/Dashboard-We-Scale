@@ -8,6 +8,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //   POST ?acao=mover&onda=onda1&max=55       move de funil, confere com GET e registra a exclusão preventiva
 //   POST ?acao=teste_criar                   cria 4 deals no Funil de teste e as linhas de plano onda=teste
 //   POST ?acao=teste_status                  estado atual dos deals de teste (etapa, funil, win, closed_at, histórico)
+//   POST ?acao=reabrir_tarefas  {task_ids}   reabre tarefas que a Limpeza da cadência fechou (done=false) e confere com GET
 //
 // Regras: nunca muda `user_id`; `PUT` + `GET` por deal; deal fechado tem que
 // continuar fechado (win/closed_at iguais); lote ≤ 55 (o gateway corta em 150 s).
@@ -237,6 +238,24 @@ Deno.serve(async (req: Request) => {
       }
       const { count } = await sb.from(PLANO).select("id", { count: "exact", head: true }).eq("onda", onda).is("aplicado_em", null);
       return out({ acao, onda, processados: (plano || []).length, ok, falha, pendentes: count });
+    }
+
+    if (acao === "reabrir_tarefas") {
+      // Usado quando um deal volta para a cadência depois de a Limpeza ter fechado as tarefas do dia
+      // (ex.: lead do Legacy que o bot do RD Conversas devolveu ao funil antigo em 26/10).
+      const corpo = await req.json().catch(() => ({}));
+      const ids: string[] = Array.isArray(corpo?.task_ids) ? corpo.task_ids.map(String).slice(0, 30) : [];
+      if (!ids.length) return out({ erro: "task_ids obrigatorio" }, 400);
+      const resultado: J[] = [];
+      for (const id of ids) {
+        const put = await call(token, "/tasks/" + id, json("PUT", { task: { done: false } }));
+        await sleep(250);
+        const g = await call(token, "/tasks/" + id);
+        const t = g.body?.task || g.body || {};
+        resultado.push({ id, put: put.status, done: t.done ?? null, subject: t.subject ?? null, date: t.date ?? null, hour: t.hour ?? null });
+        await sleep(300);
+      }
+      return out({ acao, resultado });
     }
 
     return out({ erro: "acao invalida" }, 400);

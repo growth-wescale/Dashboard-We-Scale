@@ -687,6 +687,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Reconciliação da cadência travada não avisa ninguém.** Em 23 e 26/10 a rodada das 06h
+  ficou `em_andamento` sem fim e só se descobriu pelos leads parados no RD (entrada de 26/10).
+  Falta um alerta (ex.: `pg_cron` que avisa no Teams quando a rodada do dia útil não fecha em
+  90 min). Também: os disparos em `erro` do Tallos não têm reenvio automático
 - [ ] **Bot do WhatsApp do Odonto Legacy no RD Conversas ainda usa as etapas do funil antigo**
   (Contato Efetivo `6a22e058892e160021c1700c`, Interesse Reunião `6abd312af18c3800295c6771`, Conexão
   `6abd3149d43c010029ad60b2`). Trocar pelas do SDR: Contato Efetivo `69380917e00ed10014daaa66`,
@@ -783,6 +787,48 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-26 — Cadência: reconciliação diária morria desde a migração de funis; leads sem 1º WhatsApp
+
+Junior viu leads parados em SDR / Novo MQL sem a mensagem do bot (achou que fosse o Supabase
+de Expansão, com a fatura atrasada; **não foi**: espelho, wf_5, distribuição e disparador
+rodaram o fim de semana inteiro).
+
+**Duas falhas em cadeia:**
+- **17 deals criados com o disjuntor de webhooks desligado** (janelas da migração: 23/10 22h →
+  24/10 09h e 24/10 20h–21h; 15 em Novo MQL e 2 que o bot passou pra Interesse Reunião)
+  nunca passaram pelo Ingresso. Nada falhou: o webhook foi descartado de propósito e a
+  **reconciliação das 06h** deveria pegá-los ("enrola quem não tem execução").
+- **A reconciliação morria.** O nó "📥 Buscar Deals Ativos" listava no RD **todos** os deals de
+  cada par funil+etapa (abertos e fechados) e filtrava no código. A migração pôs ~2.500 deals
+  perdidos nas etapas do SDR (Novo MQL foi de ~280 para 1.885 deals): a listagem passou de
+  ~6,8 mil para ~9,3 mil deals (~58 MB, 76% em campos personalizados) e o n8n caía. Sexta
+  (rodada 64) não fechou e hoje (65) morreu na listagem: **nenhuma mensagem/tarefa do dia foi
+  criada para quem já estava na cadência**.
+
+**Correção (n8n, workflow "Cadência - Reconciliação Diária das Tarefas", `ncKVw09sUgIg04FUaMuqP`):**
+v2.5 do nó Buscar: `closed_at=false` na listagem do RD (só abertos: 800 deals em vez de 9,3 mil;
+busca de ~3 min para 49 s) e cada deal guarda só o que a rodada usa (campo personalizado vira
+`{id, label, value}`). A v2.4 (só o filtro) rodou manualmente e travou o n8n no meio (o disparador
+parou de 10h06 a 10h22). JSONs no Downloads do Junior (carregam chaves, **nunca** no repo).
+Rodada 66 (v2.4, interrompida) foi fechada à mão como `concluida` para a trava de 2 h não
+barrar a nova. Rodada 67 (v2.5, manual, 10h31–11h17) fechou sozinha: 800 deals, 1.446 tarefas e
+~340 WhatsApps do dia (o que já tinha passado da hora saiu na hora; o resto às 14h, horário do
+passo), 5 perdidos por fim de régua. A execução das 06h de 26/10 no n8n deu "Error in 5m 1s":
+estouro do tempo-limite de nó de código.
+
+**Recuperação:** os 17 órfãos entraram na cadência com dia 1 = hoje (6 tarefas cada) e 16
+receberam o 1º WhatsApp entre 10h22 e 11h04 (1 lead do Odonto Legacy sem telefone no RD); 2
+leads com o 1º WhatsApp em `erro` no Tallos (23/10 429, 25/10 404) voltaram para a fila e
+saíram. Um lead criado às 11h02 pela distribuição (no meio da rodada) não passou pelo Ingresso:
+execução + 1º WhatsApp inseridos à mão (`cadencia_execucoes` 3396, disparo 6450, mesmo formato da
+reconciliação; as tarefas de ligação do dia 1 entram na rodada de 27/10). Em Novo MQL ficam só 3
+leads sem telefone e 2 que o RD não deixa mover para Tentando Contato por falta de Cidade/Estado
+(`cadencia.mover_etapa_log`, tarefa para a SDR já criada). O bot do Odonto Legacy no RD Conversas
+devolvendo deal ao funil antigo é da sessão da migração (entrada própria).
+
+**Fica:** disparos em `erro` de 20–21/10 (rajada de 429 do Tallos) não são reenviados por ninguém;
+o lead da Viva `6ad7666e…` tem 400 em todos os envios (telefone inválido, provável).
 
 ### 2026-10-26 — Revisão da migração no RD; bot do Legacy ainda usa o funil antigo
 

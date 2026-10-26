@@ -17,6 +17,7 @@ import { PainelMarcas } from '@/components/metas/PainelMarcas'
 import { PassoSemanas } from '@/components/metas/PassoSemanas'
 import { PassoRevisarPublicar } from '@/components/metas/PassoRevisarPublicar'
 import { RepasseTaxas } from '@/components/metas/RepasseTaxas'
+import { DetalheVersao } from '@/components/metas/DetalheVersao'
 import {
   MESES_LABEL, bannerStyle, cardStyle, fmtBRL, fmtDec, fmtInt, ghostButtonStyle, infoBoxStyle,
   nomeMes, nomeMesMinusculo, pillStyle, primaryButtonStyle, secondaryButtonStyle, smallButtonStyle,
@@ -310,6 +311,7 @@ function Inicio({
             {[...versoes].reverse().map(v => (
               <LinhaVersao
                 key={v.id}
+                mes={mes}
                 versao={v}
                 ocupado={ocupadoId === v.id}
                 onAtivar={() => {
@@ -353,46 +355,67 @@ function SeletorMes({ mes, onMudar }: { mes: string; onMudar: (m: string) => voi
   )
 }
 
-function LinhaVersao({ versao: v, ocupado, onAtivar, onRevisao }: {
+function LinhaVersao({ mes, versao: v, ocupado, onAtivar, onRevisao }: {
+  mes: string
   versao: VersaoMeta
   ocupado: boolean
   onAtivar: () => void
   onRevisao: () => void
 }) {
   const podeAtivar = useAcesso().pode('acao.metas-publicar')
+  const [aberta, setAberta] = useState(false)
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '14px 16px', borderRadius: 'var(--radius-sm)',
+      borderRadius: 'var(--radius-sm)',
       border: '1px solid ' + (v.ativa ? 'var(--brand-accent)' : 'var(--ws-border)'),
       background: v.ativa ? 'color-mix(in srgb, var(--brand-accent) 6%, var(--ws-surface))' : 'var(--ws-surface)',
     }}>
-      <span style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 38, height: 38, borderRadius: '50%',
-        fontSize: 13, fontWeight: 700,
-        background: v.ativa ? 'var(--brand-accent)' : 'var(--ws-bg)',
-        color: v.ativa ? 'var(--brand-accent-contrast)' : 'var(--ws-text-secondary)',
-        border: v.ativa ? 'none' : '1px solid var(--ws-border)',
-      }}>V{v.numero}</span>
-      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>{v.rotulo}</span>
-          {v.ativa && <span style={pillStyle('sucesso')}><Check size={11} /> Ativa no dashboard</span>}
-          {v.origem === 'importado' && <span style={pillStyle('neutro')}>importada da planilha</span>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '14px 16px' }}>
+        <button
+          type="button"
+          onClick={() => setAberta(a => !a)}
+          aria-expanded={aberta}
+          title={aberta ? 'Fechar detalhes' : 'Ver todos os detalhes da configuração'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 300px', minWidth: 0, textAlign: 'left',
+            border: 'none', background: 'none', padding: 0, margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer',
+          }}
+        >
+          <ChevronRight size={18} style={{ flexShrink: 0, color: 'var(--ws-text-secondary)', transition: 'transform .15s', transform: aberta ? 'rotate(90deg)' : 'none' }} />
+          <span style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: 38, height: 38, borderRadius: '50%',
+            fontSize: 13, fontWeight: 700,
+            background: v.ativa ? 'var(--brand-accent)' : 'var(--ws-bg)',
+            color: v.ativa ? 'var(--brand-accent-contrast)' : 'var(--ws-text-secondary)',
+            border: v.ativa ? 'none' : '1px solid var(--ws-border)',
+          }}>V{v.numero}</span>
+          <span style={{ display: 'block', flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{v.rotulo}</span>
+              {v.ativa && <span style={pillStyle('sucesso')}><Check size={11} /> Ativa no dashboard</span>}
+              {v.origem === 'importado' && <span style={pillStyle('neutro')}>importada da planilha</span>}
+            </span>
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
+              Publicada em {fmtData(v.publicadoEm)}{v.publicadoPor ? ` · ${v.publicadoPor}` : ''}
+              {v.ativa && v.ativadaEm && ` · ativada em ${fmtData(v.ativadaEm)}`}
+            </span>
+            {v.motivo && <span style={{ display: 'block', fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>{v.motivo}</span>}
+          </span>
+        </button>
+        <div style={{ fontSize: 13, textAlign: 'right', minWidth: 130 }}>
+          <div style={{ fontWeight: 600 }}>{fmtDec(v.totalVendas)} vendas</div>
+          <div style={{ color: 'var(--ws-text-secondary)' }}>{fmtBRL(v.totalFaturamento)}</div>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-          Publicada em {fmtData(v.publicadoEm)}{v.publicadoPor ? ` · ${v.publicadoPor}` : ''}
-          {v.ativa && v.ativadaEm && ` · ativada em ${fmtData(v.ativadaEm)}`}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {!v.ativa && podeAtivar && <button type="button" disabled={ocupado} onClick={onAtivar} style={smallButtonStyle}>{ocupado ? 'Aguarde…' : 'Ativar'}</button>}
+          <button type="button" disabled={ocupado} onClick={onRevisao} style={smallButtonStyle}>{ocupado ? 'Aguarde…' : 'Criar revisão a partir desta'}</button>
         </div>
-        {v.motivo && <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>{v.motivo}</div>}
       </div>
-      <div style={{ fontSize: 13, textAlign: 'right', minWidth: 130 }}>
-        <div style={{ fontWeight: 600 }}>{fmtDec(v.totalVendas)} vendas</div>
-        <div style={{ color: 'var(--ws-text-secondary)' }}>{fmtBRL(v.totalFaturamento)}</div>
-      </div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {!v.ativa && podeAtivar && <button type="button" disabled={ocupado} onClick={onAtivar} style={smallButtonStyle}>{ocupado ? 'Aguarde…' : 'Ativar'}</button>}
-        <button type="button" disabled={ocupado} onClick={onRevisao} style={smallButtonStyle}>{ocupado ? 'Aguarde…' : 'Criar revisão a partir desta'}</button>
-      </div>
+      {aberta && (
+        <div style={{ borderTop: '1px solid var(--ws-border)', padding: '16px', background: 'var(--ws-surface)', borderRadius: '0 0 var(--radius-sm) var(--radius-sm)' }}>
+          <DetalheVersao mes={mes} versao={v} />
+        </div>
+      )}
     </div>
   )
 }

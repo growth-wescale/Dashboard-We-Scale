@@ -810,6 +810,40 @@ morreu com os ~2.500 perdidos que a migração pôs no SDR; o Junior importou a 
 Com o disjuntor desligado nas ondas, ~17 leads criados naquelas horas não passaram pelo Ingresso;
 a Reconciliação de 26/10 os está enrolando.
 
+### 2026-10-26 — Configuração das Metas: cada versão abre os detalhes
+
+Pedido do Junior: pra analisar uma versão publicada, o único jeito era "Criar
+revisão a partir desta", que abre a montagem de uma versão nova. Agora cada
+linha da lista de versões tem uma seta (clicar no título também serve) que abre,
+só pra leitura, três blocos:
+
+- **Funil por marca:** MQL, SQL, Diagnóstico, SAL, Oportunidade, Vendas, taxa de
+  franquia, faturamento e Ligações. Embaixo de cada meta, a conversão pra etapa
+  da direita (Ligações: pro SQL), e "fixo" quando o número foi digitado à mão.
+  Linha de total com as somas, ticket médio ponderado e a conversão só das marcas
+  que têm as duas pontas.
+- **Metas por pessoa:** SDR e Closer, somadas entre as marcas, com o peso da
+  pessoa em cada marca. Versão importada da planilha (setembro) não mostra peso:
+  a divisão veio pronta.
+- **Semanas:** dia da virada e vendas de cada marca por semana, quando a versão
+  distribuiu.
+
+De onde vem cada número (`src/lib/detalheVersaoMeta.ts`, puro, 9 testes): o
+funil é reconstruído da configuração gravada (`buscarEstadoVersao` +
+`rascunhoDeVersao` + `calcularFunil`, o mesmo cálculo da montagem); as metas por
+pessoa vêm de `meta_versao.linhas_espelho`, que é o que a versão grava em
+`DB_Metas_Performance` ao ser ativada (`VersaoMeta.linhasEspelho`, novo). A
+configuração é buscada ao abrir e guardada em memória, já que versão publicada
+não muda.
+
+Conferido contra o banco em todas as 6 versões: em outubro (V1 a V5) o funil de
+cada marca bate exatamente com a soma das metas por pessoa gravadas. Em setembro
+(V1 importada) só difere no arredondamento, porque a planilha tinha metas
+quebradas (Inpot SQL 67,1 aparece como 68, como no resto do dashboard). Visto
+renderizado com dado real numa cópia local sem login (V5 de outubro e V1 de
+setembro), em 1024 px e 375 px, sem rolagem horizontal da página. Build + 824
+testes + oxlint.
+
 ### 2026-10-24 (2) — Migração dos funis de marca, onda 2: Inpot, Lisô Laser, Get It, Rota's e Oral Unic (noite de 24/10)
 
 Mesma mecânica da onda 1, das 20h08 às 23h02 de 24/10 (sábado). **1.807 deals**: os 663 abertos

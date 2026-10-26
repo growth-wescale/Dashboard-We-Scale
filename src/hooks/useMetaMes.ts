@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
-import type { ConfigEtapa, DiaSemana, EtapaMeta, PessoaComFuncao, Semana } from '@/lib/metasEngine'
+import type { ConfigEtapa, DiaSemana, EtapaMeta, LinhaEspelho, PessoaComFuncao, Semana } from '@/lib/metasEngine'
 
 export interface EstadoMesMarca {
   marca: string
@@ -37,6 +37,8 @@ export interface VersaoMeta {
   /** Somados das linhas congeladas do espelho (só Closers carregam venda/faturamento). */
   totalVendas: number
   totalFaturamento: number
+  /** O que a versão grava em `DB_Metas_Performance` ao ser ativada (metas por pessoa × marca). */
+  linhasEspelho: LinhaEspelho[]
 }
 
 export interface EstadoMes {
@@ -75,6 +77,7 @@ async function buscarVersoes(mesReferencia: string): Promise<{ versoes: VersaoMe
       publicadoEm: v.publicado_em, publicadoPor: v.publicado_por,
       ativadaEm: v.ativada_em, ativadaPor: v.ativada_por,
       totalVendas: t.vendas, totalFaturamento: t.faturamento,
+      linhasEspelho: Array.isArray(v.linhas_espelho) ? v.linhas_espelho : [],
     }
   })
   return { versoes, error: null }

@@ -6,6 +6,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //   POST ?acao=preparar                      cria o motivo "Funil descontinuado" e reinclui opções nos campos
 //   POST ?acao=perder&onda=onda2&max=55      marca como perdido os abertos da onda (status_origem = open), com os campos do plano
 //   POST ?acao=mover&onda=onda1&max=55       move de funil, confere com GET e registra a exclusão preventiva
+//   POST ?acao=mover&tabela=avulso&onda=X    o mesmo, lendo `_migracao_funis_avulso` (correção pontual de deal que já tem linha no plano)
 //   POST ?acao=teste_criar                   cria 4 deals no Funil de teste e as linhas de plano onda=teste
 //   POST ?acao=teste_status                  estado atual dos deals de teste (etapa, funil, win, closed_at, histórico)
 //   POST ?acao=reabrir_tarefas  {task_ids}   reabre tarefas que a Limpeza da cadência fechou (done=false) e confere com GET
@@ -15,6 +16,9 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const RD = "https://crm.rdstation.com/api/v1";
 const PLANO = "_migracao_funis_plano";
+// Correções pontuais depois da migração (ex.: lead do Legacy que o bot do RD Conversas devolveu ao
+// funil antigo em 26/10). Mesmo formato do plano; fica separada porque o plano tem 1 linha por deal.
+const AVULSO = "_migracao_funis_avulso";
 const EXCLUSAO = "deal_eventos_excluidos_manualmente";
 const CF = {
   marca: "69600aafd006b100155e4066",
@@ -195,9 +199,10 @@ Deno.serve(async (req: Request) => {
 
     if (acao === "mover") {
       if (!onda) return out({ erro: "onda obrigatoria" }, 400);
+      const tabela = u.searchParams.get("tabela") === "avulso" ? AVULSO : PLANO;
       // Só a onda 2 exige a perda antes de mover (abertos dos 5 funis de marca);
       // onda 1 (Legacy) e teste movem o deal aberto como está.
-      const { data: plano, error } = await sb.from(PLANO).select("*").eq("onda", onda).is("aplicado_em", null)
+      const { data: plano, error } = await sb.from(tabela).select("*").eq("onda", onda).is("aplicado_em", null)
         .or("status_origem.neq.open,perdido_em.not.is.null,onda.neq.onda2").order("id").limit(max);
       if (error) throw new Error(error.message);
       let ok = 0, falha = 0;
@@ -230,14 +235,14 @@ Deno.serve(async (req: Request) => {
             }
           }
         } else resultado = "PUT " + put.status + ": " + JSON.stringify(put.body).slice(0, 1200);
-        await sb.from(PLANO).update({
+        await sb.from(tabela).update({
           aplicado_em: confirmado ? new Date().toISOString() : null, http: put.status, resultado, exclusao_em: exclusaoEm, historico_novo: historicoNovo,
         }).eq("id", p.id);
         if (confirmado) ok++; else falha++;
         await sleep(400);
       }
-      const { count } = await sb.from(PLANO).select("id", { count: "exact", head: true }).eq("onda", onda).is("aplicado_em", null);
-      return out({ acao, onda, processados: (plano || []).length, ok, falha, pendentes: count });
+      const { count } = await sb.from(tabela).select("id", { count: "exact", head: true }).eq("onda", onda).is("aplicado_em", null);
+      return out({ acao, onda, tabela, processados: (plano || []).length, ok, falha, pendentes: count });
     }
 
     if (acao === "reabrir_tarefas") {

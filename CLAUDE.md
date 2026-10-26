@@ -691,12 +691,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   ficou `em_andamento` sem fim e só se descobriu pelos leads parados no RD (entrada de 26/10).
   Falta um alerta (ex.: `pg_cron` que avisa no Teams quando a rodada do dia útil não fecha em
   90 min). Também: os disparos em `erro` do Tallos não têm reenvio automático
-- [ ] **Bot do WhatsApp do Odonto Legacy no RD Conversas ainda usa as etapas do funil antigo**
-  (Contato Efetivo `6a22e058892e160021c1700c`, Interesse Reunião `6abd312af18c3800295c6771`, Conexão
-  `6abd3149d43c010029ad60b2`). Trocar pelas do SDR: Contato Efetivo `69380917e00ed10014daaa66`,
-  Interesse Reunião `6a29ca1adb44a7001fd4893c`, Conexão `6a3036b47638b0001eedc614`. Enquanto isso,
-  lead do Legacy que responde volta para o funil antigo e sai da cadência (caso da Renata em 26/10).
-  Só depois disso apagar o funil Odonto Legacy no RD
+- [x] ~~Bot do WhatsApp do Odonto Legacy no RD Conversas levava o deal ao funil antigo~~ — RESOLVIDO
+  em 26/10 11h20: o bot passou a chamar os webhooks genéricos do n8n, os mesmos das outras marcas
+  (entrada de 26/10). Falta só conferir o 1º lead do Legacy que responder ao bot e então apagar o funil
+  Odonto Legacy no RD. Os 3 workflows `-odonto`/`-os` do n8n da We Scale ficaram sem uso: desativar
 - [x] ~~Repasse da taxa: Odonto Legacy, Scale Partner e Instituto do Autismo sem %~~ — confirmado pelo Junior em 22/10: 100% We Scale, cadastradas na V1
 - [ ] **Distribuição de leads: sobras da virada.** As 10 marcas estão em `ativo` (19/10) e a
   caixa reserva está no ar. Falta: (1) a "OdontoScale > CRM (Limpo)" (LP antiga,
@@ -830,7 +828,7 @@ devolvendo deal ao funil antigo é da sessão da migração (entrada própria).
 **Fica:** disparos em `erro` de 20–21/10 (rajada de 429 do Tallos) não são reenviados por ninguém;
 o lead da Viva `6ad7666e…` tem 400 em todos os envios (telefone inválido, provável).
 
-### 2026-10-26 — Revisão da migração no RD; bot do Legacy ainda usa o funil antigo
+### 2026-10-26 — Revisão da migração no RD; bot do Legacy devolvia o lead ao funil antigo
 
 Revisão pedida pelo Junior na segunda-feira. Os 2.792 deals migrados seguem no SDR/Closer com
 status, fechamento e dono iguais ao backup; nenhum reaberto. Nos funis antigos só sobraram os 31
@@ -855,6 +853,27 @@ Reconciliação das 06h pedia ao RD todos os deals das etapas da cadência (aber
 morreu com os ~2.500 perdidos que a migração pôs no SDR; o Junior importou a v2.4 (só abertos).
 Com o disjuntor desligado nas ondas, ~17 leads criados naquelas horas não passaram pelo Ingresso;
 a Reconciliação de 26/10 os está enrolando.
+
+**Bot reapontado (11h20, com o Junior).** O bot "(OdontoScale) Bot - M1 regiao + CRM" do RD Conversas
+(fluxo `6a68e9f4fe5b930c094ce061`) não guarda ID de etapa: os blocos de requisição chamavam webhooks
+do n8n da We Scale exclusivos do Odonto (`mover-crm-contato-efetivo-odonto`,
+`mover-para-interesse-reuniao-os`, `mover-crm-desqualificado-odonto`), e é dentro desses workflows que
+estão as etapas do funil antigo. Os bots das outras marcas (conferido no da Lisô) chamam os genéricos
+`mover-crm-contato-efetivo`, `mover-crm-interesse-reuniao` e `mover-crm-desqualificado`, que já movem
+no SDR. Os 6 blocos do bot do Legacy passaram para os genéricos, com o mesmo cabeçalho (nome +
+telefone; no "interesse reunião" `periodo: "breve"` no lugar de `motivo: "interesse-reuniao"`, igual
+ao da Lisô). Salvo e conferido recarregando o editor. Desde a migração só 2 deals entraram em funil
+antigo, os dois do Legacy por esse bot; nenhuma outra marca.
+
+**2º caso (Barbara, `6ada0e3e46e91c0001bff942`):** recebeu o WhatsApp do Dia 3 às 10h40, clicou em
+"Quero começar" e o bot a levou ao Contato Efetivo do funil antigo; a Limpeza das 11h00 encerrou a
+execução 3143 e fechou 15 tarefas abertas (Dia 1, Dia 2 e Dia 3). Devolvida para SDR / Contato Efetivo
+às 11h24 pela `migrar-funis` v6, que ganhou `?tabela=avulso`: lê `_migracao_funis_avulso` (mesmo
+formato do plano, que só aceita 1 linha por deal e já tinha a da onda 1). A Limpeza das 11h30 encerrou a
+execução de novo (o espelho só gravou a etapa nova depois dela); às 11h33, com o snapshot já no SDR,
+execução reaberta e as 15 tarefas reabertas com `reabrir_tarefas` (15/15 conferidas por GET). Cuidado que vale para qualquer devolução: reabrir a execução
+**antes** de mover (o Ingresso com reentrada `reinicia` abriria ciclo 2 e reenviaria o 1º WhatsApp) e
+reabrir as tarefas só **depois** de o espelho registrar a etapa nova (senão a Limpeza fecha de novo).
 
 ### 2026-10-26 — Configuração das Metas: cada versão abre os detalhes
 

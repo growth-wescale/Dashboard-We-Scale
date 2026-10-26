@@ -693,13 +693,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   90 min). Também: os disparos em `erro` do Tallos não têm reenvio automático
 - [x] ~~Bot do WhatsApp do Odonto Legacy no RD Conversas levava o deal ao funil antigo~~ — RESOLVIDO
   em 26/10 11h20: o bot passou a chamar os webhooks genéricos do n8n, os mesmos das outras marcas
-  (entrada de 26/10). Falta só conferir o 1º lead do Legacy que responder ao bot e então apagar o funil
-  Odonto Legacy no RD. Os 3 workflows `-odonto`/`-os` do n8n da We Scale ficaram sem uso: desativar
+  (entrada de 26/10). O funil Odonto Legacy foi apagado no RD no mesmo dia. Os 3 workflows
+  `-odonto`/`-os` do n8n da We Scale ficaram sem uso: desativar
 - [x] ~~Repasse da taxa: Odonto Legacy, Scale Partner e Instituto do Autismo sem %~~ — confirmado pelo Junior em 22/10: 100% We Scale, cadastradas na V1
 - [ ] **Distribuição de leads: sobras da virada.** As 10 marcas estão em `ativo` (19/10) e a
   caixa reserva está no ar. Falta: (1) a "OdontoScale > CRM (Limpo)" (LP antiga,
-  `odontoscale_multistep`) **segue ativa** de propósito até o Gabriel trocar a LP, porque a
-  distribuição não conhece esse evento; depois, desativar; (2) IDA: a barreira lê
+  `odontoscale_multistep`, 4 conversões de 20 a 22/10) **segue ativa** porque a distribuição não
+  conhece esse evento; em 26/10 passou a criar o deal no SDR / Novo MQL (antes ia direto para o
+  funil Odonto Legacy, apagado no mesmo dia). Conferir na próxima conversão se o deal chega com
+  Marca = Odonto Legacy e entra na cadência 3; desativar quando o Gabriel trocar a LP; (2) IDA: a barreira lê
   `cf_capital_text` ("Menos de R$ 550k"), confirmar na 1ª conversão; (3) Beauty Connection
   agora grava Marca = "Beauty Connection" no deal (a automação antiga gravava Lisô Laser);
   (4) conferir no RD a segmentação da Oral Unic ("Até R$ 200.000" virou deal na automação
@@ -874,6 +876,24 @@ execução de novo (o espelho só gravou a etapa nova depois dela); às 11h33, c
 execução reaberta e as 15 tarefas reabertas com `reabrir_tarefas` (15/15 conferidas por GET). Cuidado que vale para qualquer devolução: reabrir a execução
 **antes** de mover (o Ingresso com reentrada `reinicia` abriria ciclo 2 e reenviaria o 1º WhatsApp) e
 reabrir as tarefas só **depois** de o espelho registrar a etapa nova (senão a Limpeza fecha de novo).
+
+**Funis antigos apagados no RD (26/10, pelo Junior).** Get It, Rota's, Oral Unic e Lisô Laser
+(com os 25 testes), Inpot (era o funil padrão da conta e o RD recusava apagar: o padrão passou para o
+SDR antes) e Odonto Legacy (depois de a automação "OdontoScale > CRM (Limpo)" ser reapontada para
+SDR / Novo MQL). Conferido pela API: ficaram SDR, Closer, Avaliadores, Prospecção Ativa, Busca de
+Ponto, Repasse, Scale Partner, Beauty Connection e Funil de teste. O banco não depende de os funis
+existirem no RD: `rd_funis_etapas` (mantida à mão, nada a apaga) guarda os nomes que o histórico usa,
+então essas linhas ficam.
+
+**Verificação a fundo antes de apagar.** Checksum `verif_20261026_ref24` e `verif_20261026_ref23`
+contra `onda1_antes` (`migracao_funis_diff`): todos os meses anteriores a outubro idênticos; os
+relatórios de 22/10 (`relatorio_expansao_metricas` dia e mês, `relatorio_sdr_marcas`) idênticos byte
+a byte; em outubro, cada passagem nova corresponde a um evento ingerido depois da foto (105 negócios
+novos, 17 perdas reais, 1 troca de marca feita no RD). Nenhum dos 1.838 ocultos aparece em
+`vw_funil_vendas`, `vw_funil_etapas_v2` ou `vw_marketing_funil`. Os 984 da onda 1 que estão no backup seguem com status,
+dono, marca e Fonte Macro iguais ao backup. Relatório para decidir o que liberar dos ocultos (lê o banco
+ao vivo): https://claude.ai/artifact/Qn1S24XRqq9b1h2A3tzfn4 — os 31 testes já foram apagados no RD, o
+funil descontinuado (663) e Get It/Rota's (marcas fora do dashboard) não devem ser liberados.
 
 ### 2026-10-26 — Configuração das Metas: cada versão abre os detalhes
 

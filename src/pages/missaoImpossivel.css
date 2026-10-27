@@ -54,6 +54,10 @@
 .missao-page th, .missao-page td { padding: 13px 16px; border-bottom: 1px solid var(--ws-border); text-align: right; font-variant-numeric: tabular-nums; }
 .missao-page th:first-child { text-align: left; } .missao-page thead th { color: var(--ws-text-secondary); font-size: 11px; }
 .missao-page tfoot { font-weight: 700; color: var(--brand-accent); }
+.missao-tabela-meta { min-width: 820px; }
+.missao-tabela-meta .missao-meta-total { font-weight: 700; background: color-mix(in srgb, var(--brand-accent) 7%, var(--ws-surface)); }
+.missao-tabela-meta .missao-meta-total td { min-width: 145px; }
+.missao-tabela-meta .missao-meta-total .missao-track { margin: 7px 0 0; }
 .missao-secundarias { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 12px; color: var(--ws-text-secondary); }
 .missao-secundarias strong { display: block; color: var(--ws-text-primary); margin-bottom: 5px; }
 .missao-pacing-track { position: relative; }

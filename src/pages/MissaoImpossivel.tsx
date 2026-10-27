@@ -4,7 +4,7 @@ import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
 import { BRAND_ACCENT } from '@/constants/brands'
 import { daysInMonth, fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
-import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, funilInversoMissao, orcamentoMensalMissao, pacingMissao, pacingTrimestre, projecaoMqlMidia, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
+import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, funilInversoMissao, metaPeriodoMissao, orcamentoMensalMissao, pacingMissao, pacingTrimestre, projecaoMqlMidia, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
 import './missaoImpossivel.css'
 
 const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -102,6 +102,24 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
   </div>
 }
 
+function MetaPeriodo({ dados }: { dados: DadosMissao }) {
+  const { mes, linhas, total } = metaPeriodoMissao(dados)
+  const razao = (realizado: number, meta: number) => meta > 0 ? pct(realizado / meta * 100) : '—'
+  const par = (realizado: number, meta: number, formato: (n: number) => string) => meta > 0 ? `${formato(realizado)} / ${formato(meta)}` : '—'
+  return <section className="missao-section" aria-labelledby="missao-meta-periodo">
+    <h2 id="missao-meta-periodo">Meta do período</h2>
+    <p className="missao-muted">Receita e fechamentos vs. meta cadastrada · {monthLabelLong(mes)} · {linhas.length} marcas do quadro de Vendas.</p>
+    <div className="missao-tabela-scroll" tabIndex={0} role="region" aria-label="Meta do período por marca"><table className="missao-tabela-meta">
+      <thead><tr><th scope="col">Marca</th><th scope="col">Receita · realizado / meta</th><th scope="col">Atingimento</th><th scope="col">Fechamentos · realizado / meta</th><th scope="col">Atingimento</th></tr></thead>
+      <tbody>
+        <tr className="missao-meta-total"><th scope="row">Total das marcas</th><td>{par(total.receita, total.metaReceita, money)}{total.metaReceita > 0 && <Progresso atual={total.receita} meta={total.metaReceita} label="Receita total vs. meta cadastrada" />}</td><td>{razao(total.receita, total.metaReceita)}</td><td>{par(total.fechamentos, total.metaFechamentos, numero)}{total.metaFechamentos > 0 && <Progresso atual={total.fechamentos} meta={total.metaFechamentos} label="Fechamentos totais vs. meta cadastrada" />}</td><td>{razao(total.fechamentos, total.metaFechamentos)}</td></tr>
+        {linhas.map(linha => <tr key={linha.marca}><th scope="row">{linha.marca}</th><td>{par(linha.receita, linha.metaReceita, money)}</td><td>{razao(linha.receita, linha.metaReceita)}</td><td>{par(linha.fechamentos, linha.metaFechamentos, numero)}</td><td>{razao(linha.fechamentos, linha.metaFechamentos)}</td></tr>)}
+      </tbody>
+    </table></div>
+    <p className="missao-footnote">Metas seguem o quadro de Vendas: soma das parcelas Closer cadastradas; “—” indica meta zero ou ausente. Realizado até {fmtBR(dados.hoje)}, pela data da venda.</p>
+  </section>
+}
+
 function Plano() {
   return <section className="missao-section" aria-labelledby="missao-plano">
     <h2 id="missao-plano">Plano de investimento</h2>
@@ -124,6 +142,7 @@ export function MissaoPainel({ dados }: { dados: DadosMissao }) {
       {!noTrimestre && <p role="status" className="missao-aviso">O mês vigente está fora de outubro–dezembro de 2026. Os blocos mensais e o pacing da missão não se aplicam.</p>}
       <div className="missao-marcas">{FRENTES_MISSAO.map(frente => <Marca key={frente.marca} frente={frente} dados={dados} noTrimestre={noTrimestre} />)}</div>
     </section>
+    {noTrimestre && <MetaPeriodo dados={dados} />}
     <Plano />
     <details className="missao-metodologia"><summary>Fontes e critérios dos indicadores</summary>
       <p>Metas mensais de MQL, SQL e SAL calculadas apenas nesta página pelo funil inverso, a partir da soma das metas de vendas cadastradas para os Closers da marca no mês. SAL = vendas ÷ taxa SAL → Venda; SQL = SAL ÷ taxa SQL → SAL; MQL = SQL ÷ taxa MQL → SQL. Cada etapa é arredondada para cima antes da anterior. Não descontamos as vendas realizadas da meta mensal. Cadastro ausente ou incompleto mantém os três alvos pendentes; zero explícito é respeitado, sem repetir outubro nos meses seguintes.</p>

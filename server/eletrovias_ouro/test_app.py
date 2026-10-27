@@ -42,6 +42,25 @@ class Tests(unittest.TestCase):
   s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Eletrovias','dados_extras':{'classification_source':'deal_criado_crm'}}])
   with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
   self.assertEqual(e.exception.code,'commercial_identity_incomplete')
+ def test_accepted_pending_contact_does_not_create_a_person_or_drop_other_rows(self):
+  pending={'id':'pending','dia':'2026-10-15','marca':'Eletrovias','dados_extras':{'classification_source':'deal_criado_crm','lead_type':'MQL','id_deal':'6ad18c51de18d10020db5411'}}
+  identified={'id':'real','dia':'2026-10-16','marca':'Eletrovias','contato_id':'contact','email':'real@example.test','dados_extras':{'classification_source':'deal_criado_crm','lead_type':'MQL'}}
+  unknown={'id':'capture','dia':'2026-10-17','marca':'Eletrovias','dados_extras':{'lead_type':None,'capital':'200000'}}
+  rows=[pending,identified,unknown]
+  s,c=self.service(rows)
+  result=s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(result['rows'],[identified,unknown])
+  self.assertEqual(result['warnings'],[{'code':'accepted_missing_contact','count':1}])
+  self.assertEqual(len(rows),3)
+  self.assertIsNone(result['rows'][1]['dados_extras']['lead_type'])
+ def test_accepted_deal_enters_automatically_when_source_supplies_real_identity(self):
+  row={'id':'pending','dia':'2026-10-15','marca':'Eletrovias','dados_extras':{'classification_source':'deal_criado_crm','lead_type':'MQL','id_deal':'6ad18c51de18d10020db5411'}}
+  s,c=self.service([row])
+  self.assertEqual(s.read({'dataset':'leads','route':'/'},'token')['rows'],[])
+  row.update({'contato_id':'real-contact','telefone':'5511999999999'})
+  result=s.refresh_dataset('leads')
+  self.assertEqual(result['rows'],[row])
+  self.assertEqual(result['warnings'],[])
  def test_other_brands_and_months_are_rejected(self):
   for row in [{'id':'a','dia':'2026-10-10','marca':'We Scale'}, {'id':'a','dia':'2026-09-10','marca':'Eletrovias'}]:
    s,c=self.service([row])

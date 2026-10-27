@@ -1,8 +1,22 @@
-# Eletrovias — preparação Marketing, 27/10/2026
+# Eletrovias — prévia Marketing validada, 27/10/2026
 
-**Preparado, não publicado e não homologado para ativação.** Branch `codex/eletrovias-ouro-preparacao` sobre main `b5b2621`. A flag `VITE_ELETROVIAS_OURO_ENABLED` continua ausente/desligada no deploy. Nenhuma view, role ou gateway foi instalado; nenhum dado do RD, fato do DW, importação ou fonte de Vendas foi alterado.
+**Integração e QA concluídos na prévia; não publicada.** PR288 na branch `codex/eletrovias-ouro-preparacao`, atualizada com a main publicada `55a5125`. Gabriel autorizou avançar enquanto Maicon trata as exceções da origem. A flag `VITE_ELETROVIAS_OURO_ENABLED` está ativa somente na prévia e continua ausente/desligada no deploy. Nenhuma view, role ou gateway definitivo foi instalado; RD, fatos, importações e Vendas não foram alterados.
 
-## Investigação de origem e mídia —27/10, proposta não aplicada
+## Resultado da validação de27/10 — decisão posterior à investigação
+
+- Prévia autenticada no Chrome: Visão Geral, Saúde da Marca (visão geral/campanhas/conjuntos/anúncios), Meta & OKRs/Missão e S&OP conferidas. PDF exportado pelo aplicativo, nove páginas renderizadas/revisadas; Eletrovias é a primeira folha. Fontes de Termos/Social/E-mail/Radar e Esteira continuam nativas.
+- Corte01–27/10, carga observada14:39 BRT: **1.344 contatos,543 MQLs, R$23.820,823190**. MQL consistente nas quatro páginas; CP-MQL R$43,87. Semana19–25: **130 MQLs / R$6.702,168658 / CP-MQL R$51,56**. Investimento encerrado: valores novos são leitura da carga regular, sem nova conciliação ou ajuste.
+- Campanhas/conjuntos/anúncios passam a usar atribuição exata por UTM/ID exclusivamente para Eletrovias no período migrado; removido o rateio de MQL por gasto/leads de mídia nesse recorte.543 conservados em cada nível;325 Fundo,111 Forms,33 Remarketing,74 sem campanha correspondente. Não associar `m_google`, placeholders ou UTMs de outras marcas por suposição.
+- A exceção aceita é somente o deal `6ad18c51de18d10020db5411`: continua como negócio no DW, não vira pessoa fictícia, nem bloqueia os demais contatos. O gateway retorna o aviso técnico agregado `accepted_missing_contact:1`; quando a fonte fornecer contato real + email/telefone, ele entra automaticamente. Qualquer novo deal sem identidade continua bloqueando a resposta para revisão. Nenhuma importação é apagada ou usada como fallback para fechar total.
+- Os casos de Maicon seguem no handoff; não reabertos nesta validação. Há91 contatos sem classificação explícita na fotografia atual; permanecem sem classificação, sem cálculo por capital e sem herdar MQL de outra marca. A lista histórica de89 do handoff mantém o corte e IDs da investigação.
+- Prova autenticada de preservação: ao ligar Eletrovias sobre a mesma leitura de referência, todos os campos/linhas das outras oito marcas de leads e sete marcas de mídia ficaram idênticos. Histórico fora de outubro, consultas de Vendas, clientes e caches nativos cobertos pelos testes; arquivos/fontes comerciais sem diff contra main. Não é nova homologação de todas as telas de Vendas.
+- SQL/SAL/fechamentos de Marketing conservam os critérios existentes: Visão Geral/Saúde/OKRs SQL58; S&OP SQL62 e etapa Fechado17. São medidas preexistentes distintas; não foram convertidas em vendas ganhas nem alteradas para coincidir. Páginas de Vendas intocadas.
+- **935 testes frontend,13 gateway, build com flag de prévia e lint sem erros**. Uma resposta503 transitória no gateway existente de Lisô/Beauty interrompeu a primeira leitura consolidada; leitura posterior200 e QA/PDF final concluídos sem mudar serviço, consulta ou configuração dessa marca. Não é certificação de SLA.
+
+Prévia usa um gateway temporário local autenticado e transações SELECT READ ONLY da projeção proposta. O consumidor final já aponta exclusivamente às duas views ouro; elas ainda não foram instaladas. **Próximo gate: apresentar o resultado; somente após autorização instalar/validar views/role/gateway definitivo e publicar pelo PR.** Não esperar Maicon para esta decisão, não reabrir investimento. PDF/evidências privados em `outputs/audits/eletrovias-qa-20261027.local/`; somente agregados versionados na auditoria.
+
+
+## Histórico — investigação de origem e mídia,27/10
 
 **Investimento encerrado; identidade/cobertura e qualificação da origem permanecem para decisão.** Handoff com IDs e critérios de retorno preparado para Gabriel encaminhar ao Maicon: [casos de Eletrovias](../../docs/handoffs/2026-10-27-eletrovias-maicon.md). Investimento confirmado como encerrado por Gabriel; envio ainda não realizado. Somente SELECT e GET nas APIs. Nenhuma mudança no consumidor, SQL preparado, RD, fatos, outras marcas ou Vendas; nenhum gateway instalado, merge ou deploy. As consultas por email foram explicitamente autorizadas pelo usuário após bloqueio inicial da aprovação automática; só retornaram identificadores técnicos/status, sem atualização de registros.
 
@@ -39,7 +53,7 @@ Os três MQLs atuais foram separados:
 
 A outra divergência de data está explicada: linha9e3000d4… registra nova captação13/10, mas a negociação`6ac6e46d135f580001ec8a2a` e o primeiro formulário condicional são de07/10. Manter data comercial07/10 paraMQL conforme contrato; recaptura13/10 permanece como evento distinto. Não é motivo para deslocar o negócio.
 
-**Mapa finito proposto:**mídia encerrada → origem/TI trata os casos identificados e expõe classificação real da LP → conferir somente esses retornos → uma validação autenticada Marketing/PDF → apresentar resultado e obter aceite antes de ativar. Se houver intenção de publicar com exceções, decidir isso explicitamente; não descartar pessoas ou aplicar fallback silencioso. IDs completos/agregados em `investigation_2026_10_27` da auditoria. Nenhum material foi enviado ao Maicon.
+**Mapa histórico, superado pela autorização de avançar acima:**mídia encerrada → origem/TI trata os casos identificados e expõe classificação real da LP → conferir somente esses retornos → uma validação autenticada Marketing/PDF → apresentar resultado e obter aceite antes de ativar. Se houver intenção de publicar com exceções, decidir isso explicitamente; não descartar pessoas ou aplicar fallback silencioso. IDs completos/agregados em `investigation_2026_10_27` da auditoria. Nenhum material foi enviado ao Maicon.
 
 ## Contrato preparado
 
@@ -82,12 +96,12 @@ A carga automática publicou durante a auditoria:16 das36 ausências iniciais pa
 
 Nomes exatos da referência são usados somente para substituir as linhas dessas campanhas; IDs/contas/plataforma são validados no gateway. Outras campanhas não são absorvidas por semelhança de nome.
 
-## Validação e próximo passo
+## Histórico — validação anterior ao aceite das exceções
 
 Suíte frontend completa,22 testes direcionados,11 testes gateway e build com flag de prévia aprovados. Lint sem erros, com avisos existentes. Cobertura inclui preservação integral de outras marcas/histórico, rotas e clientes de Vendas nativos, paginação, precisão de mídia, autenticação, ausência de identidade e rejeição de contrato/escopo incorreto.
 
-**Telas autenticadas e PDF não homologados nesta entrega.** O controlador perdeu a página da janela isolada e a reabertura não conseguiu controlá-la. Não foi solicitado novo login, pois a identidade incompleta já bloqueia a candidata. O gateway temporário foi encerrado e a prévia voltou às flags anteriores.
+**Na preparação inicial, telas e PDF ainda não estavam homologados. Esse gate foi concluído na validação registrada no topo.** O controlador perdeu a página da janela isolada e a reabertura não conseguiu controlá-la. Não foi solicitado novo login, pois a identidade incompleta já bloqueia a candidata. O gateway temporário foi encerrado e a prévia voltou às flags anteriores.
 
-Mapa inicial, atualizado pela investigação acima: mídia encerrada; resolver origem/identidade/classificação antes da validação final e aceite. Não reabrir auditorias de outras marcas. Rollback futuro do consumo: desabilitar somente a flag Eletrovias e publicar pelo fluxo normal, sem apagar importações/fatos.
+Mapa inicial histórico, superado pela decisão/QA no topo: mídia encerrada; resolver origem/identidade/classificação antes da validação final e aceite. Não reabrir auditorias de outras marcas. Rollback futuro do consumo: desabilitar somente a flag Eletrovias e publicar pelo fluxo normal, sem apagar importações/fatos.
 
 Evidência: [auditoria agregada](../../docs/audits/2026-10-27-eletrovias-ouro.json). Nenhum envio ao TI/Maicon realizado.

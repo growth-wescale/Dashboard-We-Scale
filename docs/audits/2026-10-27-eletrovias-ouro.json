@@ -3575,5 +3575,96 @@
       "Preserve CRM MQL07Oct vs later LP recapture13Oct; recover actual LP23Oct submission separately from06Oct event.",
       "After source/exception decision, one authenticated Marketing/PDF validation; publication remains unapproved."
     ]
+  },
+  "preview_qa_2026_10_27": {
+    "status": "validated_preview_not_published",
+    "base_main": "55a5125",
+    "period": [
+      "2026-10-01",
+      "2026-10-27"
+    ],
+    "source_observed_at": "2026-10-27T14:39:47.630119-03:00",
+    "contacts": 1344,
+    "mql_contacts": 543,
+    "unknown_classification_contacts": 91,
+    "source_rows_served": 1590,
+    "pending_contact_deals": 1,
+    "investment": 23820.82319,
+    "week": {
+      "start": "2026-10-19",
+      "end": "2026-10-25",
+      "mql": 130,
+      "investment": 6702.168658
+    },
+    "campaign_mql": {
+      "Fundo": 325,
+      "Forms": 111,
+      "Remarketing": 33,
+      "unattributed": 74,
+      "Search": 0,
+      "Aquisicao fria": 0
+    },
+    "authenticated_routes": [
+      "/",
+      "/marca",
+      "/okrs",
+      "/sop-marketing"
+    ],
+    "health_tabs": [
+      "overview",
+      "campaigns",
+      "adsets",
+      "ads"
+    ],
+    "other_brand_full_row_parity": {
+      "leads": {
+        "B2Case": 274,
+        "Inpot": 394,
+        "Oral Unic": 163,
+        "Viva": 56,
+        "Lisô Laser": 112,
+        "Odonto Scale": 171,
+        "Beauty Connection": 41,
+        "We Scale": 33
+      },
+      "media_daily_raw": {
+        "Oral Unic": 506,
+        "Inpot": 480,
+        "Viva": 191,
+        "B2Case": 19,
+        "Lisô Laser": 333,
+        "Beauty Connection": 133,
+        "We Scale": 268
+      },
+      "all_identical": true
+    },
+    "pdf": {
+      "pages": 9,
+      "sha256": "d8261a1a2064e11f0f228db2905dae3115862d3f4d64aabf214fc9ce80070b7e",
+      "eletrovias_month_mql": 543,
+      "eletrovias_week_mql": 130,
+      "visual_review": "all_pages_rendered; Eletrovias page inspected in detail",
+      "private_path": "outputs/audits/eletrovias-qa-20261027.local/sop-marketing.pdf"
+    },
+    "validation": {
+      "frontend_tests": 935,
+      "gateway_tests": 13,
+      "build_with_preview_flag": "passed",
+      "lint": "no_errors_existing_warnings"
+    },
+    "known_limits": [
+      "Maicon source exceptions remain separate",
+      "only October 2026 is migrated",
+      "no definitive views/role/gateway installed",
+      "transient Liso gateway 503 recovered without intervention; not a SLA test",
+      "Sales pages unchanged; not a full Sales UI re-audit"
+    ],
+    "mutations": {
+      "rd": false,
+      "dw_facts": false,
+      "other_brands": false,
+      "sales": false,
+      "production_deploy": false
+    }
   }
 }

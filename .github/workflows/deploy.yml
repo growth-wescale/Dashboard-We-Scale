@@ -25,6 +25,7 @@ jobs:
 
       - name: Build
         env:
+          VITE_LEGACY_OURO_ENABLED: 'true'
           VITE_LISO_OURO_ENABLED: 'true'
           VITE_PARTNER_OURO_ENABLED: 'true'
           VITE_BEAUTY_OURO_ENABLED: 'true'

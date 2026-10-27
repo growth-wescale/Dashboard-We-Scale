@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useMediaData } from '@/hooks/useMediaData'
+import { useMarketingMediaData as useMediaData } from '@/hooks/useMediaData'
 import { isMediaOdontoLegacy } from '@/lib/oralUnicMapping'
 import type { MediaDailyRaw } from '@/lib/types'
 

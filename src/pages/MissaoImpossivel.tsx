@@ -42,16 +42,16 @@ function Placar({ titulo, meta, inicio, dados }: { titulo: string; meta: number;
   </section>
 }
 
-function Indicador({ label, atual, meta, referencia }: { label: string; atual: number; meta: number | null; referencia: number }) {
+function Indicador({ label, atual, meta, referencia, projetado = false }: { label: string; atual: number; meta: number | null; referencia: number; projetado?: boolean }) {
   const format = numero
   return <div className="missao-indicador">
     <div className="missao-indicador-titulo"><span>{label}</span>
-      <span className="missao-indicador-valores"><strong>{format(atual)}</strong><span>/ {meta === null ? 'meta pendente' : format(meta)}</span></span>
+      <span className="missao-indicador-valores"><strong>{projetado ? '≈ ' : ''}{format(atual)}</strong><span>/ {meta === null ? 'meta pendente' : format(meta)}</span></span>
     </div>
     {meta !== null ? <>
       <Progresso atual={atual} meta={meta} label={label} referencia={referencia} />
-      <div className="missao-indicador-legenda"><span>{meta > 0 ? `${pct(atual / meta * 100)} atingidos` : 'Meta 0'}</span><span>{atual > meta ? 'Acima da meta' : 'Falta atingir'}: {format(Math.abs(meta - atual))}</span></div>
-    </> : <><div className="missao-track" aria-hidden="true" /><p className="missao-aviso">Meta pendente: falta completar a meta de vendas dos Closers deste mês. Atingimento não calculável.</p></>}
+      <div className="missao-indicador-legenda"><span>{meta > 0 ? `${pct(atual / meta * 100)} ${projetado ? 'da meta total de MQL' : 'atingidos'}` : 'Meta 0'}</span><span>{atual > meta ? 'Acima da meta' : projetado ? 'Faltariam' : 'Falta atingir'}: {format(Math.abs(meta - atual))}</span></div>
+    </> : <><div className="missao-track" aria-hidden="true" /><p className="missao-aviso">{projetado ? 'Meta de MQL pendente: comparação não calculável.' : 'Meta pendente: falta completar a meta de vendas dos Closers deste mês. Atingimento não calculável.'}</p></>}
   </div>
 }
 
@@ -69,16 +69,11 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
       <article className="missao-marca missao-marca-compacta" aria-label={`MQL e CP-MQL · ${frente.marca}`}>
       <h4 className="missao-subtitulo">MQL e CP-MQL · {monthLabelLong(mes)}</h4>
       <Indicador label="MQL" atual={captacao.mql} meta={captacao.metaMql} referencia={referencia} />
-      {projecao && <div className="missao-indicador" aria-label={`Projeção de MQL com mídia paga · ${frente.marca}`}>
-        <div className="missao-indicador-titulo"><span>Projeção com mídia paga</span><span className="missao-indicador-valores"><strong>≈ {numero(projecao.mql)}</strong><span>MQLs no mês</span></span></div>
-        {captacao.metaMql !== null && captacao.metaMql > 0 && <>
-          <Progresso atual={projecao.mql} meta={captacao.metaMql} label={`Projeção de MQL com mídia paga · ${frente.marca}`} referencia={1} />
-          <div className="missao-indicador-legenda"><span>{pct(projecao.mql / captacao.metaMql * 100)} da meta de MQL</span><span>{projecao.mql >= captacao.metaMql ? 'Acima da meta' : 'Faltariam'}: {numero(Math.abs(captacao.metaMql - projecao.mql))}</span></div>
-        </>}
-        <p className="missao-footnote">{money(projecao.orcamento)} de verba mensal ÷ {money(captacao.metaCpMql)} de CP-MQL meta. Estimativa arredondada; não é MQL realizado.</p>
-        {captacao.metaMql === null && <p className="missao-footnote">Comparação com a meta de MQL pendente.</p>}
-      </div>}
       {funil.vendas.valor !== null && <p className="missao-footnote">Meta pelo funil inverso · base: {numero(funil.vendas.valor)} vendas cadastradas no mês.</p>}
+      {projecao && <>
+        <Indicador label="MQL gerados de mídia paga" atual={projecao.mql} meta={captacao.metaMql} referencia={referencia} projetado />
+        <p className="missao-footnote">Projeção mensal: {money(projecao.orcamento)} de investimento projetado ÷ {money(captacao.metaCpMql)} de CP-MQL projetado. Estimativa, não volume realizado.</p>
+      </>}
       <div className="missao-indicador"><div className="missao-indicador-titulo"><span>CP-MQL</span><strong>{captacao.cpmql === null ? '—' : money(captacao.cpmql)}</strong></div>
         <p className="missao-footnote">Meta ≤ {money(captacao.metaCpMql)}</p>
         {captacao.cpmql !== null && <><Progresso atual={captacao.metaCpMql} meta={captacao.cpmql > 0 ? captacao.cpmql : captacao.metaCpMql} label={`Eficiência do CP-MQL · ${frente.marca}`} referencia={1} /><p className="missao-footnote">{pct(captacao.cpmql <= captacao.metaCpMql ? 100 : captacao.metaCpMql / captacao.cpmql * 100)} de eficiência em relação à meta · menor custo é melhor. Traço: 100% de eficiência.</p></>}
@@ -133,7 +128,7 @@ export function MissaoPainel({ dados }: { dados: DadosMissao }) {
     <details className="missao-metodologia"><summary>Fontes e critérios dos indicadores</summary>
       <p>Metas mensais de MQL, SQL e SAL calculadas apenas nesta página pelo funil inverso, a partir da soma das metas de vendas cadastradas para os Closers da marca no mês. SAL = vendas ÷ taxa SAL → Venda; SQL = SAL ÷ taxa SQL → SAL; MQL = SQL ÷ taxa MQL → SQL. Cada etapa é arredondada para cima antes da anterior. Não descontamos as vendas realizadas da meta mensal. Cadastro ausente ou incompleto mantém os três alvos pendentes; zero explícito é respeitado, sem repetir outubro nos meses seguintes.</p>
       <p>Taxas entre etapas do print, aprovadas em 20/10: Inpot 23% / 39% / 20%; Eletrovias 10% / 36% / 28%; Lisô Laser 15% / 30% / 28%, respectivamente MQL → SQL / SQL → SAL / SAL → Venda. São referências de planejamento, não conversões observadas no CRM. A âncora direta MQL → Venda e as antigas metas fixas MQL não entram no cálculo. As configurações comerciais e as metas das outras páginas não são alteradas.</p>
-      <p>MQL realizado usa leads do mês da base Marketing, com a classificação e deduplicação dos KPIs do dashboard. A projeção de MQLs de mídia paga é a verba mensal planejada dividida pelo CP-MQL meta, arredondada ao inteiro mais próximo; compara esse volume estimado com a meta total de MQL, sem substituir o realizado. CP-MQL realizado é investimento dividido pelos MQLs; sem MQL não é calculável. Metas de custo preservadas: Inpot R$ 220, Eletrovias R$ 37 e Lisô Laser R$ 300. Consultas continuam sequenciais, limitadas e exclusivas desta página, sem novas leituras para o funil inverso ou a projeção.</p>
+      <p>MQL realizado usa leads do mês da base Marketing, com a classificação e deduplicação dos KPIs do dashboard. A linha “MQL gerados de mídia paga” é uma projeção: investimento mensal projetado dividido pelo CP-MQL meta, arredondado ao inteiro mais próximo. Usa o mesmo formato visual da linha MQL e compara o volume estimado com a meta total, sem substituir o realizado. CP-MQL realizado é investimento dividido pelos MQLs; sem MQL não é calculável. Metas de custo preservadas: Inpot R$ 220, Eletrovias R$ 37 e Lisô Laser R$ 300. Consultas continuam sequenciais, limitadas e exclusivas desta página, sem novas leituras para o funil inverso ou a projeção.</p>
       <p>Receita considera apenas negócios Ganhos, pela data da venda em Brasília. Soma o valor de cada contrato uma vez por ciclo, sem multiplicar por unidades. Unidades seguem o dashboard de Vendas: quantidade informada ou uma unidade quando não preenchida/válida.</p>
       <p>SQL e SAL contam negócios únicos por ciclo que têm a data consolidada da respectiva etapa no mês vigente, até hoje. SQL é reunião agendada. SAL é usada como referência de realizada apenas nesta tela; não substitui Diagnóstico. Não contamos reentradas nem somamos eventos de handoff SDR–Closer. Negócios criados antes do mês também entram se avançaram ou venderam nele.</p>
       <p>CRM: Supabase de Expansão. Investimento: Supabase de Marketing. Leitura sequencial e limitada, sem histórico completo de eventos e sem atualização automática. O cache dura 15 minutos; Atualizar permite nova leitura com intervalo mínimo de um minuto. Falhas e limites não viram zero.</p>

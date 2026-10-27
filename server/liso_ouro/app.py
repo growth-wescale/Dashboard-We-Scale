@@ -50,7 +50,7 @@ def serialize(value):
 class Service:
  def __init__(self, settings, connect=None, request_json=None):
   self.settings = settings
-  self.slots = threading.BoundedSemaphore(3)
+  self.slots = threading.BoundedSemaphore(1)
   self.cache = {}
   self.cache_lock = threading.Lock()
   if connect is None:
@@ -87,7 +87,7 @@ class Service:
   dataset = body['dataset']
   with self.cache_lock: cached = self.cache.get(dataset)
   if cached:
-   if time.monotonic() - cached[0] > 60: raise GatewayError(503, 'source_refresh_pending')
+   if time.monotonic() - cached[0] > 300: raise GatewayError(503, 'source_refresh_pending')
    return cached[1]
   return self.refresh_dataset(dataset)
 
@@ -148,11 +148,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def maintain_cache(service):
  while True:
-  started = time.monotonic()
+  time.sleep(240)
   for dataset in QUERIES:
    try: service.refresh_dataset(dataset)
    except Exception: pass  # Resposta expirada falha fechada; nunca expor diagnóstico/credencial.
-  time.sleep(max(1, 30 - (time.monotonic() - started)))
 
 
 def main():

@@ -17,7 +17,7 @@ Integração no PR275 em rascunho, sem merge/deploy. Flag `VITE_LISO_OURO_ENABLE
 
 Gateway exclusivo `dashboard-liso-ouro`, sem escrita no container, instalado na VPS. A role `dashboard_liso_ro` tem SELECT apenas nas duas views próprias, sem privilégios administrativos; TLS verify-full e transação READ ONLY conferidos no cluster esperado. Sem alterações em fatos, RD, coletores ou serviços de outras marcas. Anônimo401.
 
-Cache compartilhado de leitura de até60s, preenchido antes de aceitar tráfego e renovado em segundo plano. Cada resposta exige sessão e permissões vivas; cache expirado falha fechado. SELECTs e conteúdo permanecem idênticos. Timeout45s apenas nas conexões deste novo gateway; não altera a configuração do banco ou o limite20s de OKRs. Isso evita que a página aguarde a consulta fria de contatos (~20s). Nove testes do gateway cobrem isolamento, expiração e revogação de acesso.
+Cache compartilhado de leitura de até300s, preenchido antes de aceitar tráfego e renovado em segundo plano após240s, com uma única consulta por vez. Cada resposta exige sessão e permissões vivas; cache expirado falha fechado. SELECTs e conteúdo permanecem idênticos. Timeout45s apenas nas conexões deste novo gateway; não altera a configuração do banco ou o limite20s de OKRs. Isso evita que a página aguarde a consulta fria de contatos (~20s). Nove testes do gateway cobrem isolamento, expiração e revogação de acesso.
 
 Flag Lisô preparada no CI/deploy pelo PR275, aguardando merge e confirmação do deploy. O gate de publicação agora é autorizado pelo usuário; validar UI/PDF no destino após ativação.
 

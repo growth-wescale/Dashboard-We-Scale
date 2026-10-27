@@ -59,7 +59,7 @@ class Tests(unittest.TestCase):
   s,c=self.service([])
   with patch('app.time.monotonic',return_value=100):s.refresh_dataset('leads')
   queries=len(c.queries)
-  with patch('app.time.monotonic',return_value=161):
+  with patch('app.time.monotonic',return_value=401):
    with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
   self.assertEqual(e.exception.code,'source_refresh_pending')
   self.assertEqual(len(c.queries),queries)

@@ -644,5 +644,57 @@
     "maicon_sent": false,
     "pull_request": 283,
     "code_commit": "5fa5929"
+  },
+  "consumer_fix_validation": {
+    "date": "2026-10-27",
+    "base": "68aee37",
+    "branch": "codex/oral-unic-esteira-sop-fix",
+    "state": "prepared_and_validated_not_activated",
+    "changes": [
+      "Esteira uses an Oral-only provider over native reference, separate cache; other Marketing/Sales clients unchanged",
+      "SOP/PDF excludes only mapped Google consultancy campaigns in October when Oral flag enabled; Legacy spend preserved",
+      "Esteira shows loading/error instead of treating failed ouro read as zero"
+    ],
+    "tests": {
+      "files": 82,
+      "passed": 911,
+      "focused": 29,
+      "build_all_marketing_flags_enabled": true,
+      "lint": "no errors; existing warnings"
+    },
+    "ui": {
+      "authenticated": true,
+      "preview_only": true,
+      "esteira_franchise_display_brl": 4131,
+      "health_franchise_display_brl": 4131,
+      "esteira_consultancy_native_brl": 14622.48,
+      "esteira_community_native_brl": 7169.51,
+      "native_preservation": "read-only reference aggregates match Esteira; no Legacy gateway in its media client"
+    },
+    "sop_pdf": {
+      "pages": 9,
+      "month_mql": 19,
+      "week": "2026-10-19/2026-10-25",
+      "week_mql": 5,
+      "week_spend_before_brl": 4610.6,
+      "week_spend_after_brl": 2175.51,
+      "consultancy_removed_from_franchise_only_brl": 2435.09,
+      "week_cpmql_before_brl": 922.12,
+      "week_cpmql_after_brl": 435.1,
+      "legacy_month_mql": 137,
+      "legacy_community_members": 192,
+      "visual_review": "nine pages rendered; Oral and Legacy reviewed individually",
+      "sha256": "cf4fbbd49851b2f02a629de76a0692704f2a57a14e23abce0ac00322bf0bc494"
+    },
+    "preserved": [
+      "RD not accessed",
+      "DW facts/views/gateway unchanged",
+      "Sales sources/rules unchanged",
+      "non-Oral clients unchanged",
+      "community/consultancy sources and historical filters unchanged",
+      "production flag off; no merge/deploy"
+    ],
+    "remaining": "User approval and definitive gateway readiness before activation; three source cases stay with Maicon; no repeated source audit.",
+    "private_artifact": "outputs/audits/oral-unic-qa-20261027.local/sop-marketing-corrigido.pdf"
   }
 }

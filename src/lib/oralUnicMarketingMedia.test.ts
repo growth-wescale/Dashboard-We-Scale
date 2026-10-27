@@ -21,6 +21,29 @@ const rows = [
 const cents = (rs: MediaDailyRaw[]) => rs.reduce((n, r) => n + Math.round(r.spend_brl * 100), 0)
 
 describe('recorte de mídia Oral Unic aprovado, exclusivo de Marketing/outubro', () => {
+  const consultoria = [
+    row('[SEARCH] Intenção - Defesa de Marca', 1080.37, { canal: 'google', conta_id: '9733883995', campanha_id: '24054007136' }),
+    row('[SEARCH] Intenção - Gestão & escala de clínica', 1354.72, { canal: 'google', conta_id: '9733883995', campanha_id: '24054143009' }),
+  ]
+  it('S&OP/PDF exclui os R$2.435,09 de consultoria sem mudar seu bucket ou valores', () => {
+    const week = [row(rows[0].campanha!, 2175.51), ...consultoria]
+    const before = structuredClone(week)
+    expect(cents(week.filter(isOralUnicSopFranchiseMedia))).toBe(217551)
+    expect(cents(week.filter(r => rowBucket(r) === 'Odonto Scale'))).toBe(243509)
+    expect(week).toEqual(before)
+    expect(consultoria.every(r => !isOralUnicSopFranchiseMedia({ ...r, campanha_id: undefined, conta_id: undefined }))).toBe(true)
+  })
+  it('correção S&OP não alcança história, novembro, outra marca, conta ou ID', () => {
+    for (const r of consultoria) {
+      for (const extra of [{dia:'2026-09-21'}, {dia:'2026-11-01'}, {marca:'Lisô Laser'}, {conta_id:'outra'}, {campanha_id:'outro'}]) {
+        expect(isOralUnicSopFranchiseMedia({ ...r, ...extra })).toBe(true)
+      }
+    }
+    expect(isOralUnicSopFranchiseMedia(row('[V4] Aquisição', 50))).toBe(true)
+    flag.enabled = false
+    try { expect(consultoria.every(isOralUnicSopFranchiseMedia)).toBe(true) }
+    finally { flag.enabled = true }
+  })
   it('conserva todo gasto e separa franquia, avaliadores e comunidade sem alterar as linhas', () => {
     const before = structuredClone(rows)
     rows.forEach(Object.freeze)

@@ -1,7 +1,8 @@
 import { oralUnicMediaFront } from '@/lib/oralUnicMarketingMedia'
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { useMediaData } from '@/hooks/useMediaData'
+import { useOralUnicMediaData as useMediaData } from '@/hooks/useMediaData'
+import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import type { MediaDailyRaw } from '@/lib/types'
 import { PageTop } from '@/components/ui/PageTop'
 import { Badge } from '@/components/ui/Badge'
@@ -280,7 +281,7 @@ interface EsteiraOralUnicProps {
 
 export function EsteiraOralUnic({ embedded = false }: EsteiraOralUnicProps = {}) {
   const [range, setRange] = useState(makeMtd)
-  const { data: mediaData, loading } = useMediaData({ marca: 'Oral Unic', dataInicio: range.start, dataFim: range.end })
+  const { data: mediaData, loading, error } = useMediaData({ marca: 'Oral Unic', dataInicio: range.start, dataFim: range.end })
 
   const tree = useMemo(() => buildTree(mediaData, range.end), [mediaData, range.end])
 
@@ -317,7 +318,7 @@ export function EsteiraOralUnic({ embedded = false }: EsteiraOralUnicProps = {})
         </div>
       )}
 
-      <div style={{ opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+      {error ? <QueryErrorBanner errors={[error]} scope="mídia da Oral Unic" /> : loading ? <p>Carregando mídia…</p> : <div>
         {/* Nível 1: Marca (topo da pirâmide) */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
           <div style={{
@@ -361,7 +362,7 @@ export function EsteiraOralUnic({ embedded = false }: EsteiraOralUnicProps = {})
             Sem dados de mídia no período selecionado.
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

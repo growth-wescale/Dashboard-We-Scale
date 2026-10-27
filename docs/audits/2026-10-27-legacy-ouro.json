@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-27",
+  "period": ["2026-10-01", "2026-10-27"],
+  "status": "prepared_not_approved_for_publication",
+  "pr": 276,
+  "read_views_installed": ["ouro.vw_legacy_dashboard_leads", "ouro.vw_legacy_dashboard_midia"],
+  "public_grants": 0,
+  "gateway_production_installed": false,
+  "production_flag_enabled": false,
+  "reference": {"rows": 151, "unique_emails": 109},
+  "candidate": {"rows": 165, "unique_emails": 152, "mql_unique_emails": 132, "unclassified_capture_rows": 20, "media_rows": 239},
+  "comparison": {"reference_contacts_matched": 107, "reference_contacts_missing": 2, "candidate_extra_contacts": 45},
+  "blockers": [
+    {"type": "crm_contact_link_absent", "deal_ids": ["6adfbc05dd0f60002051921b", "6adfc1ea67274300203c2903"], "created_day_brt": "2026-10-26", "pipeline": "Closer", "upstream_normalized_link_also_absent": true},
+    {"type": "capture_not_found", "reference_day": "2026-10-13", "reference_form": "odontoscale_multistep"},
+    {"type": "brand_conflict", "deal_id": "6ace137efe506e002305cff2", "reference_brand": "Odonto Legacy", "gold_brand": "Oral Unic", "reference_mql_approval_date": "2026-10-15"},
+    {"type": "media_not_reconciled_with_platforms", "reference_brl": 14428.188559, "gold_brl": 15961.248559, "difference_brl": 1533.06, "common_day_campaign_differences": 34, "additional_day_campaign_gold_brl": 668.73}
+  ],
+  "validation": {"frontend_tests": 875, "gateway_tests": 11, "build": "passed", "lint": "no_errors_existing_warnings", "numerical_ui_acceptance": "blocked", "pdf_acceptance": "blocked", "routes_visited_authenticated": ["/", "/marca", "/okrs", "/sop-marketing"], "gateway_missing_identity_http": 409},
+  "unchanged": ["RD", "DW facts", "Sales sources and pages", "community constants and source", "manual consultancy snapshot", "revenue targets", "other brands", "production deployment"],
+  "notes": ["Counts are audit aggregates, not approved dashboard KPIs.", "No ad platform verification this round.", "The PDF from the preceding Liso production deployment is not evidence for this change."]
+}

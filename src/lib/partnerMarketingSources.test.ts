@@ -7,6 +7,16 @@ vi.mock('./supabaseVendas', () => ({ supabaseVendas: mocks.nativeSales }))
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); mocks.create.mockClear() })
 
 describe('clientes da ouro exclusivos de Marketing', () => {
+  it('Legacy isolado mantém todos os clientes de Vendas nativos', async () => {
+    vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'false')
+    vi.stubEnv('VITE_LISO_OURO_ENABLED', 'false')
+    vi.stubEnv('VITE_LEGACY_OURO_ENABLED', 'true')
+    const s = await import('./partnerMarketingSources')
+    expect(s.marketingDataClient(false)).toBe(mocks.nativeMarketing)
+    expect(s.marketingCrmClient()).toBe(mocks.nativeSales)
+    expect(s.marketingDataClient()).not.toBe(mocks.nativeMarketing)
+    expect(s.partnerMarketingCacheScope()).toBe(':legacy-ouro:marketing:v1')
+  })
   it('Lisô pode ser preparado sem ativar Partner ou qualquer cliente de Vendas', async () => {
     vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'false')
     vi.stubEnv('VITE_LISO_OURO_ENABLED', 'true')

@@ -1,3 +1,4 @@
+import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
 import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
 import { attributeLisoCampaigns } from '@/lib/lisoCampaignAttribution'
@@ -1857,12 +1858,12 @@ export function SaudeDaMarca() {
 
   // Dados adicionais Odonto Scale — usados pela sub-view Odonto Legacy do Oral Unic
   // (leads/CRM continuam sob marca 'Odonto Scale' no banco de vendas; mídia histórica também)
-  const { data: osLeadsRaw }        = useLeads({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
+  const { data: osLeadsRaw, loading: osLeadsLoading, error: osLeadsError }        = useLeads({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
   const { data: osLeadsCompareRaw } = useLeads({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim, enabled: isOralUnic })
   const { data: osCrmRaw }          = useVendasFunil({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
   const { data: osCrmAllRaw }       = useVendasFunil({ marca: 'Odonto Scale', enabled: isOralUnic })
   const { data: osCrmCompareRaw }   = useVendasFunil({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim, enabled: isOralUnic })
-  const { data: osMediaRaw }        = useMediaData({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
+  const { data: osMediaRaw, loading: osMediaLoading, error: osMediaError }        = useMediaData({ marca: 'Odonto Scale', dataInicio, dataFim, enabled: isOralUnic })
   const { data: osMediaCompareRaw } = useMediaData({ marca: 'Odonto Scale', dataInicio: cmpInicio, dataFim: cmpFim, enabled: isOralUnic })
 
   const isOdontoLegacy = isOralUnic && ouSubView === 'odonto_legacy'
@@ -1956,20 +1957,22 @@ export function SaudeDaMarca() {
   const campaigns = useMemo(
     () => {
       const built = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesByName)
-      if (b.key === 'liso-laser' && lisoOuroEnabled) return attributeLisoCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)), activeMediaData)
+      if ((b.key === 'liso-laser' && lisoOuroEnabled) || (isOdontoLegacy && legacyOuroEnabled)) return attributeLisoCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)), activeMediaData)
       return b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
         ? attributePartnerCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)))
         : built
     },
-    [activeMediaData, b.key, b.mql, b.sql, b.leads, marca, adCreativesByName, mqlLeads, crmData, dataInicio, dataFim],
+    [activeMediaData, b.key, b.mql, b.sql, b.leads, marca, adCreativesByName, mqlLeads, crmData, dataInicio, dataFim, isOdontoLegacy],
   )
   const daily = buildDailySeries(activeMediaData)
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)
   const acqFunnel = buildAcqFunnel(b, activeMediaData)
   const loading = mediaLoading || crmLoading || leadsLoading || creativesLoading
   const partnerOuro = b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
-  const partnerDataPending = (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && (mediaLoading || crmLoading || leadsLoading)
-  const partnerDataFailed = (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && !!(mediaError || crmError || leadsError)
+  const legacyDataPending = legacyOuroEnabled && isOdontoLegacy && (osLeadsLoading || osMediaLoading)
+  const legacyDataFailed = legacyOuroEnabled && isOdontoLegacy && !!(osLeadsError || osMediaError)
+  const partnerDataPending = legacyDataPending || (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && (mediaLoading || crmLoading || leadsLoading)
+  const partnerDataFailed = legacyDataFailed || (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && !!(mediaError || crmError || leadsError)
 
   const periodLabel = useMemo(() => {
     if (range.start.slice(0, 7) === range.end.slice(0, 7)) return monthLabel(range.start)
@@ -2061,7 +2064,7 @@ export function SaudeDaMarca() {
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
       {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}
-      <QueryErrorBanner errors={[mediaError, crmError, leadsError, metasError, creativesError]} scope="Saúde da Marca" />
+      <QueryErrorBanner errors={[mediaError, crmError, leadsError, metasError, creativesError, ...(isOdontoLegacy && legacyOuroEnabled ? [osLeadsError, osMediaError] : [])]} scope="Saúde da Marca" />
       {partnerDataPending ? <div role="status" style={{ padding: '24px 0', color: 'var(--ws-text-secondary)' }}>Carregando dados…</div> : !partnerDataFailed && <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
         {body}
       </div>}

@@ -1,3 +1,4 @@
+import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { BeautyMarketingPanel } from '@/components/marketing/BeautyMarketingPanel'
 import { useBeautyMarketing, lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
@@ -914,8 +915,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const { data: metas } = metasRes
   const { data: sqlEvents } = sqlEventsRes
 
-  const ouroReadRequired = isWeScale || (slide.id === 'liso' && lisoOuroEnabled)
-  const partnerReadError = ouroReadRequired ? [mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
+  const ouroReadRequired = (isOdontoLegacy && legacyOuroEnabled) || isWeScale || (slide.id === 'liso' && lisoOuroEnabled)
+  const partnerReadError = ouroReadRequired ? [...(isOdontoLegacy ? [mediaAllOdl.error, mediaPrevOdl.error] : []), mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
   const partnerKpiPending = ouroReadRequired && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
 
   // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
@@ -1448,6 +1449,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     { label: 'SAL',         count: funnelMtd.sal },
     { label: 'Fechado',     count: fechOverride ?? funnelMtd.fech },
   ]
+
+  if (isOdontoLegacy && legacyOuroEnabled && (!allLoaded || partnerReadError)) {
+    return <div role={partnerReadError ? 'alert' : 'status'} style={{ padding: 36 }}>
+      {partnerReadError ? 'Não foi possível carregar Legacy. Atualize para tentar novamente.' : 'Carregando Legacy…'}
+    </div>
+  }
 
   if (slide.id === 'liso' && lisoOuroEnabled && (!allLoaded || partnerReadError || beautyMarketing.error)) {
     return <div role={partnerReadError || beautyMarketing.error ? 'alert' : 'status'} style={{ padding: 36 }}>
@@ -2308,7 +2315,8 @@ export function SopMarketing() {
             if (readyResolverRef.current === finish) {
               readyResolverRef.current = null
               const partner = slides[i]?.marca === 'We Scale' || i === slides.length
-              if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
+              if (slides[i]?.marca === 'Odonto Scale' && legacyOuroEnabled) reject(new Error('Aguarde o carregamento de Legacy antes de exportar.'))
+              else if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
               else if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
               else resolve()
             }

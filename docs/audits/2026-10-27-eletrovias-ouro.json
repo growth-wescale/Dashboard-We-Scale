@@ -1,0 +1,721 @@
+{
+  "period": [
+    "2026-10-01",
+    "2026-10-27"
+  ],
+  "reference": {
+    "rows": 1358,
+    "people": 1304,
+    "mql_people": 480,
+    "mql_unique_before_dedupe": 481,
+    "unknown": 0
+  },
+  "candidate": {
+    "rows": 1589,
+    "people": 1343,
+    "mql_people": 544,
+    "mql_unique_before_dedupe": 545,
+    "unknown": 89
+  },
+  "candidate_identified_only": {
+    "rows": 1588,
+    "people": 1342,
+    "mql_people": 543,
+    "mql_unique_before_dedupe": 544,
+    "unknown": 89
+  },
+  "query_seconds": {
+    "leads": 21.593,
+    "media": 0.19
+  },
+  "identity": {
+    "reference_normalized": 1304,
+    "gold_normalized": 1343,
+    "common": 1284,
+    "missing": 20,
+    "new": 59,
+    "mql_common": 471,
+    "mql_new": 74,
+    "mql_no_longer": 10,
+    "new_mql_previous_lead": 17,
+    "dates": {
+      "overlap": 1282,
+      "different": 2
+    }
+  },
+  "missing_rows": [
+    {
+      "id": "bb1bfca4-9d41-496b-9bfe-88332be4a3a2",
+      "dia": "2026-10-27",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "c2b04134-462d-4b51-9887-c3cc86a28926",
+      "dia": "2026-10-27",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "697e1e67-cca7-4d74-8d99-ad46aa6d5de5",
+      "dia": "2026-10-26",
+      "mql": true,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "d68a3086-5133-4222-a936-31c27b0d99de",
+      "dia": "2026-10-26",
+      "mql": true,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "de9c18b0-7736-40c3-b270-5f55248aec66",
+      "dia": "2026-10-26",
+      "mql": true,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "2d46cc7a-d097-44d8-a17d-ca9b48dfc550",
+      "dia": "2026-10-25",
+      "mql": true,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "c5d4c88c-9623-4774-8ad8-91523ab2b9a2",
+      "dia": "2026-10-25",
+      "mql": true,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "744677c6-ff60-4497-9de4-2dd431322e84",
+      "dia": "2026-10-24",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "14cc0754-4971-4255-b104-115f2c37e378",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "16906b1d-4ece-4283-8c70-19a16ebd5404",
+      "dia": "2026-10-23",
+      "mql": true,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "3aecebe7-c3fd-42bc-9ce8-9af3c8dc9ee9",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "7445e6a5-9a00-4643-b6ec-2e31efc74137",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "805ff60c-5063-4cf1-9d92-90d15df0bf5b",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "8248b9bc-5013-49f3-989e-0a44f4626b91",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "867fb984-e362-40a7-a097-34fcd74b90dc",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "c41493c6-4f68-4601-a6cb-a5f6c70f29de",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "e890c675-ea80-4874-a022-e8ede94a14b3",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "f7f7155f-9472-449a-9014-8590362b84b0",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "fc1afbd9-d903-4676-a1a0-bf710786f124",
+      "dia": "2026-10-23",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "58e92563-9521-4622-8f50-8a19358fa7a7",
+      "dia": "2026-10-16",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    },
+    {
+      "id": "fd8a1d23-3f9d-4575-991d-3a485eeffa66",
+      "dia": "2026-10-15",
+      "mql": true,
+      "form": null,
+      "deal_id": "6ad18c51de18d10020db5411"
+    },
+    {
+      "id": "553a31b4-f353-4877-b646-c2651be10a0c",
+      "dia": "2026-10-12",
+      "mql": false,
+      "form": "eletrovias_multistep",
+      "deal_id": null
+    }
+  ],
+  "invalid_commercial": [
+    {
+      "id": "eletrovias-crm:2c39897af9648ea59bb2e4492e88f6aa",
+      "dia": "2026-10-15",
+      "deal_id": "6ad18c51de18d10020db5411",
+      "contact_id": null,
+      "has_email": false,
+      "has_phone": false
+    }
+  ],
+  "crm_rows": 536,
+  "crm_deals": 534,
+  "types": {
+    "('deal_criado_crm', 'MQL')": 536,
+    "(None, None)": 120,
+    "(None, 'LEAD')": 919,
+    "(None, 'MQL')": 14
+  },
+  "media": {
+    "('meta', 'ELETROVIAS_FUNDO_LEADS_AON - MQL')": {
+      "reference": 16739.629999999994,
+      "gold": 17679.83,
+      "reference_closed": 16384.849999999995,
+      "gold_closed": 17349.860000000008,
+      "different_closed_days": [
+        "2026-10-26",
+        "2026-10-25",
+        "2026-10-24",
+        "2026-10-23",
+        "2026-10-22",
+        "2026-10-21",
+        "2026-10-20",
+        "2026-10-19",
+        "2026-10-18",
+        "2026-10-17",
+        "2026-10-16",
+        "2026-10-15",
+        "2026-10-14",
+        "2026-10-13",
+        "2026-10-12",
+        "2026-10-11",
+        "2026-10-10",
+        "2026-10-09",
+        "2026-10-08",
+        "2026-10-07",
+        "2026-10-06",
+        "2026-10-05",
+        "2026-10-04",
+        "2026-10-03",
+        "2026-10-02",
+        "2026-10-01"
+      ]
+    },
+    "('meta', 'ELETROVIAS_FORMS_AON - MQL')": {
+      "reference": 2523.540000000001,
+      "gold": 2703.960000000001,
+      "reference_closed": 2437.9300000000007,
+      "gold_closed": 2623.4300000000007,
+      "different_closed_days": [
+        "2026-10-26",
+        "2026-10-25",
+        "2026-10-24",
+        "2026-10-23",
+        "2026-10-22",
+        "2026-10-21",
+        "2026-10-20",
+        "2026-10-19",
+        "2026-10-18",
+        "2026-10-17",
+        "2026-10-16",
+        "2026-10-15",
+        "2026-10-14",
+        "2026-10-13",
+        "2026-10-12",
+        "2026-10-11",
+        "2026-10-10",
+        "2026-10-09",
+        "2026-10-08",
+        "2026-10-07",
+        "2026-10-06",
+        "2026-10-05",
+        "2026-10-04",
+        "2026-10-03",
+        "2026-10-02"
+      ]
+    },
+    "('meta', 'ELETROVIAS_REMARKETING - MQL')": {
+      "reference": 1018.01,
+      "gold": 1057.5300000000002,
+      "reference_closed": 996.54,
+      "gold_closed": 1039.22,
+      "different_closed_days": [
+        "2026-10-26",
+        "2026-10-25",
+        "2026-10-24",
+        "2026-10-23",
+        "2026-10-22",
+        "2026-10-21",
+        "2026-10-20",
+        "2026-10-19",
+        "2026-10-18",
+        "2026-10-17",
+        "2026-10-16",
+        "2026-10-15",
+        "2026-10-14",
+        "2026-10-13",
+        "2026-10-12",
+        "2026-10-11",
+        "2026-10-10",
+        "2026-10-09",
+        "2026-10-08",
+        "2026-10-07",
+        "2026-10-06",
+        "2026-10-05",
+        "2026-10-04",
+        "2026-10-03",
+        "2026-10-02",
+        "2026-10-01"
+      ]
+    },
+    "('meta', '01 - WSL | PERPETUO | ELETRO | ALL | NA | T4-FRIO | IG | MQL | BR | 2026-04-20 | Aquisição fria')": {
+      "reference": 679.8699999999999,
+      "gold": 719.8300000000002,
+      "reference_closed": 679.8699999999999,
+      "gold_closed": 719.8300000000002,
+      "different_closed_days": [
+        "2026-10-21",
+        "2026-10-20",
+        "2026-10-19",
+        "2026-10-18",
+        "2026-10-17",
+        "2026-10-16",
+        "2026-10-15",
+        "2026-10-14",
+        "2026-10-13",
+        "2026-10-12",
+        "2026-10-11",
+        "2026-10-10",
+        "2026-10-09",
+        "2026-10-08",
+        "2026-10-07",
+        "2026-10-06",
+        "2026-10-05",
+        "2026-10-04",
+        "2026-10-03",
+        "2026-10-02",
+        "2026-10-01"
+      ]
+    },
+    "('google', '01 - [Eletrovias] [Ongoing] [MQL] [Search] [Fundo Funil] [Genéricos]')": {
+      "reference": 1262.2837020000002,
+      "gold": 1602.0031899999994,
+      "reference_closed": 1262.2837020000002,
+      "gold_closed": 1560.7980969999994,
+      "different_closed_days": [
+        "2026-10-21",
+        "2026-10-18",
+        "2026-10-17",
+        "2026-10-14",
+        "2026-10-13",
+        "2026-10-05",
+        "2026-10-04",
+        "2026-10-03",
+        "2026-10-02",
+        "2026-10-26",
+        "2026-10-25",
+        "2026-10-24",
+        "2026-10-23",
+        "2026-10-22"
+      ]
+    }
+  },
+  "missing_summary": {
+    "people": 20,
+    "rows": 22,
+    "mql_people": 7,
+    "by_day": {
+      "2026-10-27": 2,
+      "2026-10-26": 3,
+      "2026-10-25": 2,
+      "2026-10-24": 1,
+      "2026-10-23": 11,
+      "2026-10-16": 1,
+      "2026-10-15": 1,
+      "2026-10-12": 1
+    }
+  },
+  "date_changes": [
+    {
+      "reference_ids": [
+        "9e3000d4-abce-445a-bd17-cd675c4d3b44"
+      ],
+      "reference_dates": [
+        "2026-10-13"
+      ],
+      "candidate_dates": [
+        "2026-10-07"
+      ],
+      "deal_ids": [
+        "6ac6e46d135f580001ec8a2a"
+      ]
+    },
+    {
+      "reference_ids": [
+        "823dd4b7-de09-4261-820a-6876c73fe841"
+      ],
+      "reference_dates": [
+        "2026-10-23"
+      ],
+      "candidate_dates": [
+        "2026-10-06"
+      ],
+      "deal_ids": [
+        ""
+      ]
+    }
+  ],
+  "mql_no_longer_present": [
+    {
+      "reference_id": "6b9da848-ab60-4c41-816b-acacecf96c72",
+      "dia": "2026-10-27",
+      "candidate_types": [
+        "None"
+      ]
+    },
+    {
+      "reference_id": "78138be8-2c74-43b6-be2b-ffcae5069446",
+      "dia": "2026-10-23",
+      "candidate_types": [
+        "None"
+      ]
+    },
+    {
+      "reference_id": "823dd4b7-de09-4261-820a-6876c73fe841",
+      "dia": "2026-10-23",
+      "candidate_types": [
+        "None"
+      ]
+    }
+  ],
+  "missing_in_ouro_by_email": [
+    {
+      "id": "14cc0754-4971-4255-b104-115f2c37e378",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "16906b1d-4ece-4283-8c70-19a16ebd5404",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "2d46cc7a-d097-44d8-a17d-ca9b48dfc550",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "3aecebe7-c3fd-42bc-9ce8-9af3c8dc9ee9",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "553a31b4-f353-4877-b646-c2651be10a0c",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "58e92563-9521-4622-8f50-8a19358fa7a7",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "697e1e67-cca7-4d74-8d99-ad46aa6d5de5",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "7445e6a5-9a00-4643-b6ec-2e31efc74137",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "744677c6-ff60-4497-9de4-2dd431322e84",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "805ff60c-5063-4cf1-9d92-90d15df0bf5b",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "8248b9bc-5013-49f3-989e-0a44f4626b91",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "867fb984-e362-40a7-a097-34fcd74b90dc",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "bb1bfca4-9d41-496b-9bfe-88332be4a3a2",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "c2b04134-462d-4b51-9887-c3cc86a28926",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "c41493c6-4f68-4601-a6cb-a5f6c70f29de",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "c5d4c88c-9623-4774-8ad8-91523ab2b9a2",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "d68a3086-5133-4222-a936-31c27b0d99de",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "de9c18b0-7736-40c3-b270-5f55248aec66",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "e890c675-ea80-4874-a022-e8ede94a14b3",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "f7f7155f-9472-449a-9014-8590362b84b0",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "fc1afbd9-d903-4676-a1a0-bf710786f124",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    },
+    {
+      "id": "fd8a1d23-3f9d-4575-991d-3a485eeffa66",
+      "brands": [
+        null
+      ],
+      "matches": 0,
+      "last_date": null,
+      "first_date": null
+    }
+  ],
+  "status": "prepared_not_published",
+  "observed_date": "2026-10-27",
+  "base_commit": "b5b262196b140574bb5f8d0487ec455dd220fef8",
+  "rules": {
+    "mql": "Every CRM deal is MQL; LP observed classification preserved; no capital rule",
+    "grain": "Existing UI dedupe: day descending, ID ascending, email then phone; unidentified deal is not a person",
+    "window": "October 2026 only; comparison 1-27 October BRT",
+    "writes": "No RD, DW fact, view, gateway installation, native import, Sales or production changes"
+  },
+  "coverage_read": [
+    [
+      "unlinked_deal",
+      {
+        "links": 0
+      }
+    ],
+    [
+      "capture_coverage",
+      [
+        {
+          "max": "2026-10-23",
+          "min": "2026-10-01",
+          "rows": 954,
+          "loaded": "2026-10-23T15:39:35.732946-03:00",
+          "lead_mql_observado": false,
+          "lead_event_identifier": "eletrovias_multistep",
+          "lead_classificacao_origem": null
+        },
+        {
+          "max": "2026-10-23",
+          "min": "2026-10-01",
+          "rows": 496,
+          "loaded": "2026-10-23T14:39:21.485203-03:00",
+          "lead_mql_observado": true,
+          "lead_event_identifier": "eletrovias_multistep",
+          "lead_classificacao_origem": null
+        },
+        {
+          "max": "2026-10-27",
+          "min": "2026-10-06",
+          "rows": 291,
+          "loaded": "2026-10-27T13:51:31.791939-03:00",
+          "lead_mql_observado": null,
+          "lead_event_identifier": "eletrovias_multistep",
+          "lead_classificacao_origem": null
+        },
+        {
+          "max": "2026-10-07",
+          "min": "2026-10-07",
+          "rows": 1,
+          "loaded": "2026-10-07T18:48:50.746279-03:00",
+          "lead_mql_observado": null,
+          "lead_event_identifier": "RD Station CRM",
+          "lead_classificacao_origem": null
+        }
+      ]
+    ]
+  ],
+  "refresh_delta": {
+    "initial_missing_people": 36,
+    "final_missing_people": 20,
+    "reason": "An automatic load published during the audit; final snapshot supersedes the initial comparison. No manual intervention."
+  },
+  "validation": {
+    "frontend": "Full Vitest suite passed; 22 focused tests passed",
+    "gateway": "11 unit tests passed",
+    "build": "Passed with Eletrovias flag enabled only for local build",
+    "lint": "Passed with existing warnings",
+    "ui_pdf": "Not validated. Browser controller lost its page; replacement could not own existing isolated Chrome. Gateway contract also rejects one real missing commercial identity.",
+    "production_flag": "Absent/disabled; deployment workflow unchanged"
+  },
+  "media_totals": {
+    "reference": 22223.333702,
+    "gold": 23763.15319,
+    "reference_closed": 21761.473702,
+    "gold_closed": 23293.138097,
+    "difference": 1539.819488,
+    "difference_closed": 1531.664395
+  }
+}

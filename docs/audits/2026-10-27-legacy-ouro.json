@@ -4,14 +4,14 @@
     "2026-10-01",
     "2026-10-27"
   ],
-  "status": "prepared_not_approved_for_publication",
+  "status": "authorized_prepublication_qa_passed",
   "pr": 276,
   "read_views_installed": [
     "ouro.vw_legacy_dashboard_leads",
     "ouro.vw_legacy_dashboard_midia"
   ],
   "public_grants": 0,
-  "gateway_production_installed": false,
+  "gateway_production_installed": true,
   "production_flag_enabled": false,
   "reference": {
     "rows": 151,
@@ -83,8 +83,7 @@
     "community constants and source",
     "manual consultancy snapshot",
     "revenue targets",
-    "other brands",
-    "production deployment"
+    "other brands"
   ],
   "notes": [
     "Counts are audit aggregates, not approved dashboard KPIs.",
@@ -211,7 +210,7 @@
     "investment_closed": true,
     "no_rd_or_facts_mutations": true,
     "marketing_only": true,
-    "qa_and_deploy": "pending",
+    "qa_and_deploy": "authenticated_preview_and_pdf_passed_frontend_deploy_pending",
     "pending_deal_behavior": "Retain source deals; exclude only two explicitly accepted identityless deals from contact payload until linkage arrives. Unknown new identity failures still rejected.",
     "query_validation": {
       "rows": 166,
@@ -228,6 +227,36 @@
       "gateway_tests": 13,
       "build": "passed",
       "multi_brand_requests_bypass_unrelated_gateways": true
+    },
+    "authenticated_qa": {
+      "routes": [
+        "/",
+        "/marca",
+        "/okrs",
+        "/sop-marketing"
+      ],
+      "health_tabs": [
+        "overview",
+        "campaigns",
+        "adsets",
+        "ads"
+      ],
+      "legacy_mql": 137,
+      "community_active_members": 192,
+      "manual_consultancy_revenue_brl": 11964,
+      "pdf_pages": 9,
+      "pdf_visual_review": "passed",
+      "pdf_previous_liso_artifact_reused": false,
+      "gateway": "production service used by local preview",
+      "source_exceptions_resolved": false
     }
-  }
+  },
+  "historical_sections": [
+    "reference",
+    "candidate",
+    "comparison",
+    "blockers",
+    "validation",
+    "read_only_followup"
+  ]
 }

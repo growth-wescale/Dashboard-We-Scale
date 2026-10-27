@@ -1,8 +1,8 @@
-# Legacy — integração ouro em revisão (27/10/2026)
+# Legacy — integração ouro de Marketing (27/10/2026)
 
 PR276: publicação autorizada em27/10 enquanto Maicon resolve quatro exceções de origem. **As seções de conferência anteriores são históricas; não bloqueiam a migração autorizada.** Outubro é o recorte inicial; histórico anterior, comunidade, consultoria manual, RD, fatos do DW, Vendas e demais marcas permanecem preservados. Oral Unic será outra entrega.
 
-## Publicação autorizada — preparação
+## Estado para publicação — validado em27/10/2026
 
 Leitura revisada: qualificação histórica e detalhes do período separados;166/166 linhas idênticas em todas as colunas (EXCEPT ALL bilateral, zero diferenças), candidato9,291s. Mesma regra de pessoas:136 emails MQL+1 contato MQL por telefone=137 na carga atual.878 testes frontend/13 gateway/build aprovados. Consultas in.(...) das demais marcas agora ignoram gateways não relacionados, evitando que uma indisponibilidade contamine a S&OP; fontes e valores permanecem nativos.
 
@@ -10,18 +10,18 @@ Leitura revisada: qualificação histórica e detalhes do período separados;166
 - Apenas os dois negócios sem contato já identificados são aceitos temporariamente: continuam no DW, classificados como negócios MQL, mas não viram contatos fictícios. O gateway devolve contagem técnica das exceções; outros casos inesperados ainda falham fechados. Quando a origem fornecer contato, a atualização normal passa a incluí-los sem novo de-para ou deploy.
 - Captação ausente e conflito Oral Unic seguem na origem, sem apagar importações ou trocar marcas. O total pode mudar quando a ouro receber os ajustes; não há promessa de igualdade por simples soma.
 - Investimento encerrado; não modificar coletores, campanhas, valores ou frequência.
-- Gateway definitivo, QA de Marketing/PDF e publicação ainda serão conferidos nesta entrega.
+- Gateway definitivo instalado e saudável; role SELECT somente nas duas views próprias, zero DML, TLS verify-full, autenticação e cache máximo300s. QA autenticado concluído em Visão Geral, Saúde/Legacy (visão geral, campanhas, conjuntos e anúncios), Meta & OKRs e S&OP. PDF novo de nove páginas exportado e inspecionado visualmente; Legacy137 MQL, comunidade192 e receita manualR$11.964 preservadas. Outros slides carregaram. A publicação do frontend ocorre pelo PR276 após CI; isso não certifica resolução das quatro exceções.
 
 ## Implementado
 
 - Duas views próprias instaladas em `ouro.vw_legacy_dashboard_leads` e `ouro.vw_legacy_dashboard_midia`, sem DML ou alteração de views compartilhadas. PUBLIC sem acesso. O vínculo de contato é exposto pela view ouro a partir dos relacionamentos normalizados existentes; o consumidor consulta somente ouro.
-- Gateway separado, SQL fixo, autenticação/permissões, TLS/role restrita preparados. Gateway definitivo/role **não instalados**. Prévia local usa a API Metabase server-side e a mesma validação de escopo/identidade.
-- `VITE_LEGACY_OURO_ENABLED` desativada por padrão e ausente do deploy. CI compila com flag ativa para testar. Rollback do consumidor: flag falsa.
+- Gateway separado, SQL fixo, autenticação/permissões, TLS/role restrita preparados. Gateway definitivo/role instalados no servidor, com autenticação e permissões equivalentes aos demais gateways. Prévia autenticada validada usando esse gateway definitivo.
+- `VITE_LEGACY_OURO_ENABLED` ativa no workflow de deploy deste PR; padrão local permanece opt-in. CI compila com flag ativa para testar. Rollback do consumidor: flag falsa.
 - Substituição somente de leads Legacy e três campanhas identificadas de outubro. Marca interna de leads `Odonto Scale`; mídia conserva `Oral Unic` para os filtros existentes da conta compartilhada. Comunidade/franquia e outros meses não são substituídos.
 - Saúde conserva campanhas/conjuntos/anúncios com atribuição por IDs exatos e categoria sem atribuição, sem distribuir MQL proporcionalmente ao gasto.
 - Fontes de Vendas, snapshot manual da consultoria, comunidade/qualidade/ativos e metas não modificados.
 
-## Conferência fechada desta rodada
+## Histórico — conferência anterior à autorização de publicação
 
 Corte01–27/10/2026 BRT. Base atual tem151 linhas nos aliases Odonto Scale/Odonto Legacy e109 emails únicos. A projeção candidata tem165 linhas/152 emails únicos;132 emails com MQL. Estes são agregados de auditoria, **não KPIs homologados**: existem dois negócios sem contato, e a deduplicação/qualificação final das telas não foi aceita.
 
@@ -45,7 +45,7 @@ Há também20 linhas de captação sem classificação observada e sem deal vinc
 
 Diferença R$1.533,06. Ambas as fontes têm registros até27/10; não atribuir tudo a um dia de atraso. Há34 combinações dia/canal/campanha em comum com diferença superior aR$0,011, eR$668,73 em combinações adicionais na ouro em22–23/10. Valores somados na precisão original. Esta rodada comparou base atual x ouro; **não reconfirmou as plataformas de anúncios**.
 
-## Validação
+## Histórico — validação inicial
 
 - Build local com flag ativa aprovado;875 testes frontend e11 gateway aprovados.
 - Testes cobrem rotas Vendas não interceptadas, outras marcas, meses anteriores, comunidade/franquia, cliente comercial nativo, paginação e erro de identidade sem fallback silencioso.
@@ -54,7 +54,7 @@ Diferença R$1.533,06. Ambas as fontes têm registros até27/10; não atribuir t
 
 Evidência agregada: `docs/audits/2026-10-27-legacy-ouro.json`; sem nomes, emails, telefones ou segredos.
 
-## Investigação complementar — 27/10, somente leitura
+## Histórico — investigação complementar — 27/10, somente leitura
 
 A referência do usuário é **135 MQLs de01–27/10**. Simulação SELECT corrigindo o filtro mensal antecipado do CRM produz **135 emails MQL**, contra132 da candidata instalada: três captações de outubro têm negócios Legacy qualificados em setembro. População165 linhas, IDs e datas permanecem idênticos; somente três qualificações recuperadas. A proposta remove o filtro mensal antes do vínculo e mantém os filtros finais do período. Não aplicada. Igualdade do agregado não homologa população completa nem UI/PDF.
 

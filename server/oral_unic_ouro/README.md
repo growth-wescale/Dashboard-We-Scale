@@ -4,7 +4,7 @@
 
 ## Recorte aprovado e implementado localmente —27/10
 
-Após autorização de Gabriel, o recorte analítico de Marketing foi ajustado em branch própria `codex/oral-unic-marketing-recorte`, sobre a maine48a4f2. PR279 havia sido incorporado externamente; este ajuste terá PR próprio, sem publicação. O consumo permanece com flag Oral Unic desligada no deploy.
+Após autorização de Gabriel, o recorte analítico de Marketing foi ajustado em branch própria `codex/oral-unic-marketing-recorte`, sobre a maine48a4f2. PR279 havia sido incorporado externamente; este ajuste está no [PR283](https://github.com/growth-wescale/Dashboard-We-Scale/pull/283), em rascunho e sem publicação. O consumo permanece com flag Oral Unic desligada no deploy.
 
 - Mesma regra por linha/mês em Visão Geral e gráfico CP-MQL, Saúde/Franquia e comparação, S&OP/PDF e Comunidade. Mapeamento exato dos cinco IDs auditados; nomes exatos são fallback somente para linhas antigas sem IDs. Restrito à marca Oral Unic e outubro, com histórico e flag desligada preservados.
 - OUF+Google ficam em Franquia. GS/Avaliadores sai do numerador de aquisição/CP-MQL e ganha frente própria na Esteira. As duas CMD ficam em Comunidade; valores continuam presentes no total da marca. Esteira e demais consumidores conservam suas fontes atuais; este ajuste não migra novos conjuntos de dados.

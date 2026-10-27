@@ -641,6 +641,8 @@
       "five_campaign_total": 597075
     },
     "maicon_handoff": "docs/handoffs/2026-10-27-oral-unic-maicon.md",
-    "maicon_sent": false
+    "maicon_sent": false,
+    "pull_request": 283,
+    "code_commit": "5fa5929"
   }
 }

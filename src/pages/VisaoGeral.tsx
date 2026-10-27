@@ -19,7 +19,7 @@ import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUt
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
-import { isComunidadeRow, filterMediaByMarcas, filterMediaByMarca } from '@/lib/visaoGeralMedia'
+import { isOutsideMqlMedia, filterMediaByMarcas, filterMediaByMarca } from '@/lib/visaoGeralMedia'
 import { getMetaVendas } from '@/constants/metasVendas'
 import { MqlVolumeChart } from '@/components/ui/MqlVolumeChart'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
@@ -77,7 +77,7 @@ function funnelFor(scope: Pick<Scope, 'leads' | 'mql' | 'sql' | 'sal' | 'fech'>)
 function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketingFunil[], marcas: string[], di: string, df: string): Scope {
   const setMarcas = new Set(marcas)
   const filtroMarca = (m: string | null) => marcas.length === 0 || (!!m && setMarcas.has(m))
-  const mRows = (marcas.length === 0 ? media.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(media, marcas))
+  const mRows = (marcas.length === 0 ? media.filter(r => !isOutsideMqlMedia(r)) : filterMediaByMarcas(media, marcas))
     .filter(r => VALID_MARCAS.has(r.marca))
   const lRows = leadRows.filter(r => filtroMarca(r.marca)).filter(r => VALID_MARCAS.has(r.marca))
   const cRows = crm.filter(r => filtroMarca(r.marca)).filter(r => r.marca && VALID_MARCAS.has(r.marca))
@@ -162,7 +162,7 @@ function buildSeries(
 ): Record<string, number[]> {
   const setMarcas = new Set(marcas)
   const filtroMarca = (m: string | null) => marcas.length === 0 || (!!m && setMarcas.has(m))
-  const mRows = (marcas.length === 0 ? media.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(media, marcas))
+  const mRows = (marcas.length === 0 ? media.filter(r => !isOutsideMqlMedia(r)) : filterMediaByMarcas(media, marcas))
     .filter(r => VALID_MARCAS.has(r.marca))
   const lRows = leadRows.filter(r => filtroMarca(r.marca)).filter(r => VALID_MARCAS.has(r.marca))
   const cRows = crm.filter(r => filtroMarca(r.marca)).filter(r => r.marca && VALID_MARCAS.has(r.marca))
@@ -875,7 +875,7 @@ export function VisaoGeral() {
 
   function handleExportMedia() {
     if (l1 || mediaError) return
-    const rows = (isConsolidado ? mediaCur.filter(r => !isComunidadeRow(r)) : filterMediaByMarcas(mediaCur, marcasSelecionadas))
+    const rows = (isConsolidado ? mediaCur.filter(r => !isOutsideMqlMedia(r)) : filterMediaByMarcas(mediaCur, marcasSelecionadas))
       .filter(r => VALID_MARCAS.has(r.marca)) as unknown as Record<string, unknown>[]
     downloadCsv(`midia_${scopeLabel}_${range.start}_${range.end}.csv`, rows, MEDIA_COLS)
     setExportMenuOpen(false)

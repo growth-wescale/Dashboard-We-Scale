@@ -601,5 +601,46 @@
     "dw_fact_writes": false,
     "published": false,
     "qa_repeated": false
+  },
+  "marketing_scope_adjustment": {
+    "date": "2026-10-27",
+    "status": "implemented_locally_not_published",
+    "branch": "codex/oral-unic-marketing-recorte",
+    "base_main": "e48a4f2",
+    "source_switches": false,
+    "mql_rule_changes": false,
+    "dw_fact_writes": false,
+    "rd_calls_this_step": false,
+    "sales_diff": false,
+    "scope": {
+      "brand": "Oral Unic",
+      "start": "2026-10-01",
+      "end_exclusive": "2026-11-01",
+      "flag": "VITE_ORAL_UNIC_OURO_ENABLED",
+      "production_flag": false
+    },
+    "surfaces": [
+      "overview",
+      "daily_cp_mql",
+      "health_franchise_and_comparison",
+      "sop_and_pdf_filter",
+      "community",
+      "esteira_assessors"
+    ],
+    "validation": {
+      "frontend_tests": 905,
+      "build": "passed",
+      "lint": "no_errors_existing_warnings",
+      "authenticated_ui": "deferred_by_user",
+      "pdf": "deferred_by_user"
+    },
+    "fixture_cents": {
+      "franchise": 407742,
+      "assessors": 178176,
+      "community": 11157,
+      "five_campaign_total": 597075
+    },
+    "maicon_handoff": "docs/handoffs/2026-10-27-oral-unic-maicon.md",
+    "maicon_sent": false
   }
 }

@@ -2,6 +2,19 @@
 
 **Preparada, não publicada.** Flag `VITE_ORAL_UNIC_OURO_ENABLED` desligada por padrão e ausente do deploy. Views/role/gateway definitivos não instalados. Prévia local autenticada executa SELECTs fixos read-only; produção segue inalterada. Base Git inicial83c5fc0; branch própria `codex/oral-unic-ouro-preparacao` alinhada à main publicadafc4ea45 (PR278). Preparação no [PR279](https://github.com/growth-wescale/Dashboard-We-Scale/pull/279), em rascunho; demais propostas ainda não publicadas de outro chat permanecem separadas.
 
+## Recorte aprovado e implementado localmente —27/10
+
+Após autorização de Gabriel, o recorte analítico de Marketing foi ajustado em branch própria `codex/oral-unic-marketing-recorte`, sobre a maine48a4f2. PR279 havia sido incorporado externamente; este ajuste terá PR próprio, sem publicação. O consumo permanece com flag Oral Unic desligada no deploy.
+
+- Mesma regra por linha/mês em Visão Geral e gráfico CP-MQL, Saúde/Franquia e comparação, S&OP/PDF e Comunidade. Mapeamento exato dos cinco IDs auditados; nomes exatos são fallback somente para linhas antigas sem IDs. Restrito à marca Oral Unic e outubro, com histórico e flag desligada preservados.
+- OUF+Google ficam em Franquia. GS/Avaliadores sai do numerador de aquisição/CP-MQL e ganha frente própria na Esteira. As duas CMD ficam em Comunidade; valores continuam presentes no total da marca. Esteira e demais consumidores conservam suas fontes atuais; este ajuste não migra novos conjuntos de dados.
+- Nenhuma alteração de qualificação MQL, contatos, importações, views, gateway, RD, fatos ou Vendas. A main incorporada já continha alterações de Vendas de outro PR; elas não integram o diff deste ajuste.
+- Testes de conservação: na fotografia já auditada, R$4.077,42 Franquia +R$1.781,76 Avaliadores +R$111,57 Comunidade =R$5.970,75, sem perda/duplicação entre os cinco IDs. O total geral da marca inclui também suas outras campanhas preservadas.
+- 905 testes/build aprovados; lint sem erros (avisos existentes). Validação visual autenticada de Marketing e exportação real do PDF ficam para a próxima etapa solicitada; não foram repetidas nesta entrega.
+- [Handoff para Maicon](../../docs/handoffs/2026-10-27-oral-unic-maicon.md): três casos/cinco IDs, evidências, limites e critério de retorno. Preparado para Gabriel encaminhar; não enviado ao Maicon.
+
+Próximo: retorno de origem/TI sobre os três casos; depois uma única validação Marketing/PDF e aceite antes de publicar. Recorte e conciliação de mídia encerrados, regra CRM criado=MQL preservada.
+
 ## Contrato de origem
 
 - Toda negociação criada no CRM é MQL, conforme confirmação explícita do usuário. A view de leitura expõe essa classificação e a proveniência. Frontend só lê a classificação e agrega; não qualifica por capital, formulário, etapa ou funil.
@@ -47,7 +60,7 @@ Prévia autenticada: Visão Geral e Saúde Oral Unic/Franquia (visão geral, cam
 Próximos gates atualizados pela investigação abaixo: cobertura/identidade da origem, aceite do recorte de mídia e validação final. Valores de mídia já conciliados nas plataformas; instalar/validar views e gateway restritos somente após aceite. Não reabrir qualificação MQL; negócio criado é MQL. Uma validação final após a decisão, sem rodada de ajustes nos fatos. Evidência: `docs/audits/2026-10-27-oral-unic-ouro.json`.
 
 
-## Investigação encerrada em27/10 — proposta antes de aplicar
+## Histórico: investigação de27/10 — proposta apresentada antes do ajuste acima
 
 Somente leitura: base atual, bronze/prata/ouro, GET nas contas RD Marketing/CRM existentes e APIs Meta/Google. Nenhuma escrita RD/fatos, alteração de serviços/campanhas, implementação adicional ou publicação. A versão de consumo do PR continua sendo a preparação anterior; as mudanças de recorte abaixo **não foram aplicadas**. Não repetir auditoria comercial ou QA nesta etapa documental.
 

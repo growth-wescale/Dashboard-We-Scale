@@ -1,5 +1,5 @@
 export const oralUnicOuroEnabled = import.meta.env.VITE_ORAL_UNIC_OURO_ENABLED === 'true'
-// IDs confirmados na ouro; comparação de valores com a base atual, sem homologação nas plataformas.
+// IDs conciliados com Meta/Google em27/10. Fonte e recorte analítico são separados.
 export const ORAL_UNIC_MEDIA = [
   { canal: 'meta', account: '24763396173316651', id: '120249498633040752', names: ['[OUF] FUNDO_MQL_FRANQUIA_NOVA'] },
   { canal: 'meta', account: '24763396173316651', id: '120246002967810752', names: ['[GS][CONV][LEAD] - Avaliadores - 05/06/2026'] },

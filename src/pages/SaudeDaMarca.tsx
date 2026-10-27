@@ -1,3 +1,4 @@
+import { isOralUnicFranchiseMedia, isOralUnicCommunityMedia } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
@@ -36,7 +37,7 @@ import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
 import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
-import { isMediaLegacy, isMediaOdontoLegacy, isMediaFranquia, isMediaV4, isPausedStrategy } from '@/lib/oralUnicMapping'
+import { isMediaOdontoLegacy, isMediaV4, isPausedStrategy } from '@/lib/oralUnicMapping'
 import { isMediaEventoInpot, isMediaFranquiaInpot, isLeadEventoInpot, isCrmEventoInpot } from '@/lib/inpotMapping'
 import { EsteiraOralUnic } from '@/pages/EsteiraOralUnic'
 
@@ -1907,9 +1908,9 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'evento')   return active.filter(r => isMediaEventoInpot(r.campanha))
     if (isInpot && inpSubView === 'franquia') return active.filter(r => isMediaFranquiaInpot(r.campanha))
     if (!isOralUnic || ouSubView === 'geral') return active
-    if (ouSubView === 'franquia')      return active.filter(r => isMediaFranquia(r.campanha))
+    if (ouSubView === 'franquia')      return active.filter(isOralUnicFranchiseMedia)
     if (ouSubView === 'v4')            return active.filter(r => isMediaV4(r.campanha))
-    if (ouSubView === 'legacy')        return active.filter(r => isMediaLegacy(r.campanha))
+    if (ouSubView === 'legacy')        return active.filter(isOralUnicCommunityMedia)
     if (ouSubView === 'odonto_legacy') return [...active.filter(r => isMediaOdontoLegacy(r.campanha)), ...osMediaRaw]
     return active
   }, [mediaData, osMediaRaw, isOralUnic, ouSubView, isInpot, inpSubView])
@@ -1930,9 +1931,9 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'evento')   return active.filter(r => isMediaEventoInpot(r.campanha))
     if (isInpot && inpSubView === 'franquia') return active.filter(r => isMediaFranquiaInpot(r.campanha))
     if (!isOralUnic || ouSubView === 'geral') return active
-    if (ouSubView === 'franquia')      return active.filter(r => isMediaFranquia(r.campanha))
+    if (ouSubView === 'franquia')      return active.filter(isOralUnicFranchiseMedia)
     if (ouSubView === 'v4')            return active.filter(r => isMediaV4(r.campanha))
-    if (ouSubView === 'legacy')        return active.filter(r => isMediaLegacy(r.campanha))
+    if (ouSubView === 'legacy')        return active.filter(isOralUnicCommunityMedia)
     if (ouSubView === 'odonto_legacy') return [...active.filter(r => isMediaOdontoLegacy(r.campanha)), ...osMediaCompareRaw]
     return active
   }, [mediaCompareRaw, osMediaCompareRaw, isOralUnic, ouSubView, isInpot, inpSubView])

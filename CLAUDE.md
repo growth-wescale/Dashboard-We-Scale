@@ -158,9 +158,14 @@ sem filtro; formato legado `leads[]`, identificador em
 `docs/superpowers/specs/2026-10-16-distribuicao-leads-sdr-design.md`.
 
 - **Peso = peso da versão ativa das metas** (`meta_pessoa.peso`), com cadeia
-  de prioridade: versão ativa do mês → última versão ativa da marca →
-  `time_proprio` da regra (só marca sem meta) → `nenhum` (responsável padrão).
-  Função `distribuicao_time_da_marca(marca, em)`.
+  de prioridade: `time_proprio` da regra vigente, **quando preenchido** (vale
+  mesmo com meta publicada, desde 27/10) → versão ativa do mês → última versão
+  ativa da marca → `nenhum` (responsável padrão). Função
+  `distribuicao_time_da_marca(marca, em)`. Em 27/10 só marcas sem meta e a
+  **Lisô Laser** (Bruna 100%, regra v5) têm time próprio; para voltar a Lisô à
+  meta, publicar a regra com o time próprio vazio. O time próprio aceita
+  qualquer cargo (a Bruna é Closer). A Lisô também não tem meta de SDR desde a
+  V6 de outubro (etapas de SDR "sem meta", sem pessoa SDR).
 - **Escolha**: `distribuicao_escolher` minimiza `n_i − p_i × (N+1)/100`
   (empate: maior peso, depois nome), contando só desde `reinicio_em` = o mais
   recente entre ativação da versão, virada do mês e última mudança de
@@ -211,6 +216,31 @@ sem filtro; formato legado `leads[]`, identificador em
   de `docs/sql/2026-10-16-distribuicao-leads.sql`. A função no Marketing foi publicada pelo
   painel (arquivo único `supabase/functions/caixa-reserva-leads/painel-arquivo-unico.ts`), com
   "Verify JWT" desligado: os conectores daqui não acessam o projeto de Marketing.
+
+### Histórico da configuração das cadências (desde 27/10/2026)
+
+Toda criação, alteração e exclusão em `cadencias`, `cadencia_passos`,
+`cadencia_etapas`, `cadencia_condicoes`, `cadencia.templates`,
+`cadencia.disparo_controle`, `motor_config`, `sdr_carteiras`, `feriados` e nas
+tabelas `cadencia.acesso_*` grava uma linha em **`cadencia.config_historico`**
+(trigger `zz_historico_config`): antes, depois, campos alterados, quem
+(`autor_email` da sessão do app, ou `autor_papel` = `service_role`/`postgres`),
+por onde (`origem` = `application_name` + user-agent) e o motivo. Só acréscimo:
+UPDATE/DELETE no histórico são recusados. Leitura humana em
+`cadencia.v_config_historico` (no UPDATE mostra só o que mudou). Em 27/10 cada
+linha existente ganhou um registro `ESTADO_INICIAL` (459 linhas). Mudança feita
+direto no banco deve se identificar na mesma transação:
+`select set_config('cadencia.autor', 'Fulano', true), set_config('cadencia.motivo', '...', true);`.
+SQL: `docs/sql/2026-10-27-cadencia-historico-config.sql`.
+
+**Desligar o WhatsApp automático de uma marca** = tirar a marca de
+`cadencia.disparo_controle.marcas_habilitadas` (o disparador grava `pulado`,
+"marca nao liberada", sem criar tarefa). **Não** desativar os templates da
+marca: marca sem template ativo vira "tarefa para o SDR" (`tarefa_sdr`), uma
+tarefa a mais por dia. Sem o 1º WhatsApp enviado, o deal também não é movido
+sozinho de Novo MQL para Tentando Contato (`mover_no_disparo_*` e
+`mover_pendentes` dependem de um `enviado`). Lisô Laser está fora da lista
+desde 27/10.
 
 ### Event Sourcing dirigido por configuração
 
@@ -299,6 +329,12 @@ eleito):
    instante da perda.
 2. `posse` com dono `SDR/Closer` igual ao Closer eleito — quem faz os dois
    papéis (Vanessa Daniel no Odonto Legacy) aparece nas duas colunas.
+3. `distribuicao` (desde 27/10) — ciclo 1 de deal criado pela distribuição de
+   leads: quem recebeu o lead (`distribuicao_atribuicao`, `atribuido`), de
+   qualquer cargo. Caso de origem: a Bruna (Closer) recebe os leads da Lisô e
+   também fecha; o nome dela era descartado em `posse` por ser igual ao Closer
+   eleito. Ela aparece como SDR **nos negócios dela** sem virar SDR no cadastro
+   (segue `Closer` em `nome_cargo_foto`, sem meta de SDR).
 Deal que nasceu e ficou só com Closer (indicação, franqueado, evento), com
 "SDR Responsável" vazio no RD, continua **sem SDR** — é o dado real.
 
@@ -701,6 +737,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Lisô Laser sem bot e sem dono no RD Conversas (27/10):** o fluxo "(Lisô Laser) Bot - M1 regiao +
+  CRM" foi **despublicado** do número "Lisô Laser 09" (5547991923409), não excluído: segue salvo em
+  Automação de conversas (para religar: ⋮ → Publicar no canal → ligar esse WhatsApp → Salvar). Ele
+  respondia qualquer mensagem fora de atendimento, mexia na etapa do deal pelos webhooks do n8n
+  `mover-crm-*` e jogava na fila do setor "Lisô Laser - Novos MQLs". A Bruna **não vai ter usuário** no
+  RD Conversas (decisão do Junior), então mensagem que chega no número da Lisô cai na fila de espera
+  geral e alguém com acesso precisa atender ou repassar; `cadencia.sdr_carteiras` não se aplica a ela.
+  Em aberto: os 46 deals abertos da Lisô com a Xayane (passar para a Bruna move o MQL desses deals para
+  o nome dela no painel, porque deal aberto em etapa de SDR mostra o dono atual)
 - [ ] **Reconciliação da cadência travada não avisa ninguém.** Em 23 e 26/10 a rodada das 06h
   ficou `em_andamento` sem fim e só se descobriu pelos leads parados no RD (entrada de 26/10).
   Falta um alerta (ex.: `pg_cron` que avisa no Teams quando a rodada do dia útil não fecha em
@@ -801,6 +846,70 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-27 (2) — Lisô Laser sem meta de SDR (V6) e a Bruna como SDR nos negócios dela
+
+Decisão do chefe do Junior: a Xayane não tem mais meta de SDR da Lisô em outubro, mas o que ela fez
+na marca continua contando; a Bruna aparece como SDR nos negócios que ela trabalhar, sem virar SDR.
+
+**Metas:** V6 de outubro (`meta_versao` id 20, ativa), cópia da V5 com as etapas de SDR da Lisô "sem
+meta" e a Xayane fora do time da marca. Closer da Lisô (Bruna, 1 venda) e as outras 6 marcas
+idênticos (md5 conferido). `DB_Metas_Performance` de outubro: 15 → 14 linhas, as 14 iguais às de
+antes. Realizado da Xayane na Lisô em outubro igual antes e depois: 80 MQL, 4 SQL, 1 Diag, 1 SAL. A
+Configuração das Metas aceita marca sem SDR com as etapas "sem meta", então novembro já nasce assim.
+Ativar a V6 reiniciou o contador da distribuição das marcas que seguem a meta (só pesa na
+Eletrovias, 50/50).
+
+**Painel:** `vw_deal_ciclo` ganhou a fonte de SDR `distribuicao` (seção 4). 0 diferenças nos 11.204
+ciclos ao aplicar; testado com rollback: lead distribuído para a Bruna e sem SDR passa a mostrar
+Bruna. SQL: `docs/sql/2026-10-27-liso-sem-sdr-v6-e-sdr-distribuicao.sql`.
+
+**RD Conversas:** o bot "(Lisô Laser) Bot - M1 regiao + CRM" era o fluxo padrão do número da Lisô e
+respondia qualquer mensagem fora de atendimento, mexendo na etapa do deal via n8n. Despublicado do
+número "Lisô Laser 09" (Publicar no canal → desligar → Salvar), sem excluir: o fluxo segue salvo e os
+outros 6 números continuam com o bot deles (conferido pela API). A Bruna não terá usuário no RD
+Conversas; ver pendência na seção 8.
+
+### 2026-10-27 — Lisô Laser sem bot e leads novos só para a Bruna; histórico da configuração das cadências
+
+Pedido do Brunno via Junior: tirar o bot da Lisô Laser (cadência só com tarefas manuais) e mandar
+os leads novos só para a Bruna, mesmo ela sendo Closer, sem afetar as outras marcas. Antes de mexer,
+o Junior pediu histórico de tudo o que muda na configuração das cadências.
+
+**Histórico:** não existia (só `cadencia.templates_historico`, troca de template por marca). Criado
+`cadencia.config_historico` (seção 3), com a foto do estado de 27/10 antes das mudanças abaixo.
+Testado: UPDATE grava só o campo que mudou, mudança só no `atualizado_em` é ignorada, UPDATE no
+histórico é recusado.
+
+**WhatsApp automático da Lisô:** a Lisô usa a cadência 6 ("SDR - Tentativa de Contato", compartilhada
+com B2Case, Inpot, Oral Unic, Eletrovias, Viva e IDA) e a 13 (Conexão). Cada dia tem template do bot
+(`tipo = template`, Tallos `sent_by: 'bot'`) + "Whats manual" + ligações. Mexer nos passos mudaria as
+outras marcas, e desativar os templates da Lisô viraria uma tarefa a mais por dia. Saída: "Liso Laser"
+saiu de `cadencia.disparo_controle.marcas_habilitadas` (registro 461 do histórico). Os disparos da Lisô
+passam a `pulado` ("marca nao liberada"); ligações, pesquisa e WhatsApp manual seguem. Vale para as 47
+execuções ativas da Lisô (46 da Xayane) e para as novas. Efeito colateral: o deal da Lisô não sai mais
+sozinho de Novo MQL para Tentando Contato no 1º envio; quem atende move.
+
+**Distribuição:** o time vinha da meta de outubro (Lisô = Xayane 100%) e o `time_proprio` da regra
+só valia para marca sem meta. Uma versão nova das metas zeraria o contador de todas as marcas e mudaria
+a meta da Xayane. Em vez disso `distribuicao_time_da_marca` passou a dar prioridade ao `time_proprio`
+quando preenchido (seção 3) e a regra da Lisô foi publicada em v5 (id 60), igual à v4 com
+`time_proprio = Bruna 100%`. Conferido: as outras 11 regras com o mesmo time, peso e contador antes e
+depois. Função anterior em `_backup_viewdefs`
+(`fn_distribuicao_time_da_marca_pre_time_proprio_prioritario_20261027`). SQL:
+`docs/sql/2026-10-27-distribuicao-time-proprio-prioritario.sql`.
+
+**Tela de Distribuição:** o editor dizia que o time próprio "só vale para marca sem meta" e só listava
+SDRs (a Bruna não aparecia; reabrir a regra da Lisô mostraria outro nome). Agora o texto explica que o
+time próprio vale no lugar da meta, a lista traz todas as pessoas ativas com usuário no RD (SDRs
+primeiro, cargo entre parênteses) e quem já está no time continua na lista mesmo se sair do cadastro.
+Rótulo da fonte: "time próprio da regra". Build + 879 testes + oxlint; tela não vista renderizada
+(exige login de Administrador).
+
+**RD Conversas:** existe a automação "(Lisô Laser) Bot - M1 regiao + CRM" (WhatsApp); os templates da
+Lisô têm `flow_bot` apontando para um fluxo. A sessão caiu antes de ver o gatilho dela e se a Bruna tem
+carteira e acesso ao canal da Lisô. A Bruna não está em `cadencia.sdr_carteiras`, então a
+`conversas-carteira` não põe os contatos dela na carteira dela (ver pendência).
 
 ### 2026-10-27 — Detalhe da versão: metas de cada pessoa abertas por marca
 

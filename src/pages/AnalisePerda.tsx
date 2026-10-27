@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
@@ -93,6 +93,14 @@ function BarRow({ label, subLabel, value, max, color, right, onClick }: {
   )
 }
 
+/** ~10 linhas visíveis; o resto dos motivos fica na rolagem. */
+const ALTURA_LISTA_MOTIVOS = 510
+
+/** Cabeçalho do heatmap que fica no topo ao rolar a lista de motivos. */
+const cabecalhoFixo: React.CSSProperties = {
+  position: 'sticky', top: 0, zIndex: 1, background: 'var(--ws-surface)', paddingBottom: 6,
+}
+
 function Heatmap({ motivos, etapas, celulas, onCellClick, origem }: {
   motivos: string[]; etapas: EtapaMeta[]; celulas: CruzCel[]
   onCellClick?: (motivo: string, etapa: StageKey) => void
@@ -108,18 +116,18 @@ function Heatmap({ motivos, etapas, celulas, onCellClick, origem }: {
   }
   function color(v: number): string { return v / maxQ > 0.45 ? '#fff' : 'var(--ws-text-primary)' }
 
-  const gridCols = `minmax(180px, 1fr) repeat(${etapas.length}, minmax(70px, 1fr))`
+  const gridCols = `minmax(180px, 1fr) repeat(${etapas.length}, minmax(112px, 1fr))`
 
   return (
-    <div style={{ width: '100%', overflowX: 'auto' }}>
+    <div style={{ width: '100%', overflow: 'auto', maxHeight: ALTURA_LISTA_MOTIVOS }}>
       <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 6, minWidth: 480 }}>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>MOTIVO</div>
+        <div style={{ ...cabecalhoFixo, fontSize: 11, color: 'var(--ws-text-secondary)', letterSpacing: '.05em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>MOTIVO</div>
         {etapas.map(e => (
-          <div key={e.etapa} style={{ fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em', whiteSpace: 'nowrap' }}>{stageLabel(e.etapa, origem)}</div>
+          <div key={e.etapa} style={{ ...cabecalhoFixo, fontSize: 11, color: 'var(--ws-text-secondary)', textAlign: 'center', letterSpacing: '.03em', whiteSpace: 'nowrap' }}>{stageLabel(e.etapa, origem)}</div>
         ))}
         {motivos.map(m => (
-          <>
-            <div key={m} style={{ fontSize: 13, color: 'var(--ws-text-primary)' }}>{m}</div>
+          <Fragment key={m}>
+            <div style={{ fontSize: 13, color: 'var(--ws-text-primary)' }}>{m}</div>
             {etapas.map(e => {
               const v = val(m, e.etapa)
               const clickavel = !!onCellClick && v > 0
@@ -135,7 +143,7 @@ function Heatmap({ motivos, etapas, celulas, onCellClick, origem }: {
                   }}>{v === 0 ? '·' : v}</div>
               )
             })}
-          </>
+          </Fragment>
         ))}
       </div>
     </div>
@@ -340,7 +348,8 @@ export function AnalisePerda() {
               ))}
             </div>
           </div>
-          {motivosFiltrados.slice(0, 10).map(m => (
+          <div style={{ maxHeight: ALTURA_LISTA_MOTIVOS, overflowY: 'auto', paddingRight: 4 }}>
+          {motivosFiltrados.map(m => (
             <BarRow key={m.motivo} label={m.motivo}
               subLabel={m.categoria === 'processo' ? 'PROCESSO' : m.categoria === 'mercado' ? 'MERCADO' : undefined}
               value={m.qtd}
@@ -350,6 +359,7 @@ export function AnalisePerda() {
               onClick={() => setDrawer({ title: m.motivo, subtitle: drawerSubtitle, deals: m.deals })}
             />
           ))}
+          </div>
           {motivosFiltrados.length === 0 && (
             <div style={{ padding: '20px 0', color: 'var(--ws-text-secondary)', fontSize: 13 }}>Sem motivos {motivoTab !== 'todos' ? `de ${motivoTab} ` : ''}no período.</div>
           )}

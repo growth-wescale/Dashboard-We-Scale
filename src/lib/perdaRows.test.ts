@@ -156,7 +156,7 @@ describe('computeEtapas', () => {
 })
 
 describe('computeCruzamentos', () => {
-  it('cruza motivo (top 10) com etapa corrente e carrega os deals de cada célula', () => {
+  it('cruza motivo com etapa corrente e carrega os deals de cada célula', () => {
     const perdas = [
       r({ id_lead: 'a', status_atual: 'Perdido', motivo_perda: 'Sem perfil (fora do ICP)', etapa_funil: 'Diagnóstico' }),
       r({ id_lead: 'b', status_atual: 'Perdido', motivo_perda: 'Sem perfil (fora do ICP)', etapa_funil: 'SAL' }),
@@ -170,6 +170,14 @@ describe('computeCruzamentos', () => {
     expect(celula?.deals.map(d => d.id_lead)).toEqual(['a'])
     const vazia = cruz.celulas.find(c => c.motivo === 'Parou de responder' && c.etapa === 'SAL')
     expect(vazia?.qtd).toBe(0)
+  })
+
+  it('traz todos os motivos, não só os 10 mais frequentes', () => {
+    const perdas = Array.from({ length: 14 }, (_, i) =>
+      r({ id_lead: `d${i}`, status_atual: 'Perdido', motivo_perda: `Motivo ${i}`, etapa_funil: 'Diagnóstico' }))
+    const cruz = computeCruzamentos(perdas)
+    expect(cruz.motivos).toHaveLength(14)
+    expect(cruz.celulas).toHaveLength(14)
   })
 })
 

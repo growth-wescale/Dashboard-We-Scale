@@ -696,5 +696,40 @@
     ],
     "remaining": "User approval and definitive gateway readiness before activation; three source cases stay with Maicon; no repeated source audit.",
     "private_artifact": "outputs/audits/oral-unic-qa-20261027.local/sop-marketing-corrigido.pdf"
+  },
+  "gateway_installation_2026_10_27": {
+    "authorization": "Install validate and publish Marketing only; no RD/facts/Sales; Maicon cases remain separate",
+    "base_main": "53ae9bc",
+    "service": "dashboard-oral-unic-ouro",
+    "read_role": "dashboard_oral_unic_ro",
+    "select_relations": [
+      "ouro.vw_oral_unic_dashboard_leads",
+      "ouro.vw_oral_unic_dashboard_midia"
+    ],
+    "dml_privileges": 0,
+    "fact_writes": 0,
+    "rd_calls": 0,
+    "tls": "verify-full",
+    "readonly_transactions": true,
+    "cache_max_seconds": 300,
+    "source_hourly_schedule_unchanged": true,
+    "anonymous_http": 401,
+    "authenticated_preview": "leads/media200;Franquia29contacts19MQL",
+    "installed_query_parity": {
+      "leads": {
+        "rows": 29,
+        "differences": 0
+      },
+      "media": {
+        "rows": 106,
+        "differences": 0
+      }
+    },
+    "tests": {
+      "frontend": 911,
+      "gateway": 11,
+      "build": "passed"
+    },
+    "production_activation": "pending merge/deploy and authenticated QA"
   }
 }

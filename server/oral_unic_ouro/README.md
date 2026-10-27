@@ -1,6 +1,12 @@
 # Oral Unic — candidata Marketing, 27/10/2026
 
-**Integração desativada em produção.** PR283 incorporou o recorte em68aee37; o deploy automático anterior não habilitou a flag Oral. Views/role/gateway definitivos permanecem apenas preparados. Prévia local autenticada executa SELECTs fixos read-only.
+**Publicação autorizada em 27/10/2026, em validação.** Views e gateway definitivos instalados; ativação incluída no PR285, alinhado à main53ae9bc. RD/fatos/Vendas e fontes das demais marcas preservados. Os três casos continuam com Maicon e não bloqueiam esta publicação.
+
+## Gateway definitivo
+
+Serviço isolado `dashboard-oral-unic-ouro`, endpoint `/api/oral-unic-ouro/v1/read`, role `dashboard_oral_unic_ro`: SELECT apenas em `ouro.vw_oral_unic_dashboard_leads` e `ouro.vw_oral_unic_dashboard_midia`, zero privilégios DML. TLS `verify-full`, transações somente leitura, sessão/permissões Marketing validadas a cada pedido; sem sessão retorna401. Cache máximo5min sobre a carga horária existente; sem alterações no agendamento ou fontes. Container sem root, filesystem somente leitura e limites de CPU/memória.
+
+Rollback do consumo: desabilitar apenas `VITE_ORAL_UNIC_OURO_ENABLED` e reconstruir/publicar pelo fluxo normal, preservando os demais providers. Não remover fatos, importações ou credenciais de outras integrações. Evidência final de ativação e QA será registrada após o deploy.
 
 ## Correções de consumo validadas — 27/10
 

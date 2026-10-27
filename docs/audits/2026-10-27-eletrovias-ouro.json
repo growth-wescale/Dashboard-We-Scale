@@ -3666,5 +3666,87 @@
       "sales": false,
       "production_deploy": false
     }
+  },
+  "publication_2026_10_27": {
+    "status": "gateway_installed_pending_activation",
+    "prepublication_main": "0b6cbf3",
+    "maicon_return_gold_verification": [
+      {
+        "marca": "Oral Unic",
+        "negocio_id": "6ace137efe506e002305cff2",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00",
+        "contact_rows": 1,
+        "identified_rows": 1
+      },
+      {
+        "marca": "Eletrovias",
+        "negocio_id": "6ad18c51de18d10020db5411",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00",
+        "contact_rows": 0,
+        "identified_rows": 0
+      },
+      {
+        "marca": "Eletrovias",
+        "negocio_id": "6adbe687c3de7d002414e087",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00",
+        "contact_rows": 2,
+        "identified_rows": 2
+      },
+      {
+        "marca": "B2Case",
+        "negocio_id": "6adca9d9b19ce6002818a65a",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00"
+      },
+      {
+        "marca": "Odonto Scale",
+        "negocio_id": "6adfbc05dd0f60002051921b",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00",
+        "contact_rows": 0,
+        "identified_rows": 0
+      },
+      {
+        "marca": "Odonto Scale",
+        "negocio_id": "6adfc1ea67274300203c2903",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00",
+        "contact_rows": 0,
+        "identified_rows": 0
+      },
+      {
+        "marca": "Eletrovias",
+        "negocio_id": "6ae0c8d63e139500234f2c0b",
+        "carregado_em": "2026-10-27T16:41:13.393284-03:00",
+        "contact_rows": 1,
+        "identified_rows": 1
+      }
+    ],
+    "rd_rechecked": false,
+    "rd_coherence_source": "Maicon report supplied by user",
+    "lp_reference": {
+      "project": "jmuluoksnlqrvzbcltim",
+      "table": "public.leads",
+      "form": "eletrovias_multistep",
+      "group_a_rows_found": 19,
+      "group_a_forms_match": 19,
+      "group_a_lead_rows": 13,
+      "group_a_mql_rows": 6,
+      "origin_domain": "franquia.eletroviasdobrasil.com.br"
+    },
+    "gateway": {
+      "container": "dashboard-eletrovias-ouro",
+      "select_relations": [
+        "ouro.vw_eletrovias_dashboard_leads",
+        "ouro.vw_eletrovias_dashboard_midia"
+      ],
+      "dml_relations": 0,
+      "anonymous_status": 401,
+      "authenticated_status": 200,
+      "rows_at_initial_read": 1600,
+      "app_sha256": "acbcfbcccadc34b4896200e5da0160cda297f79b2d4e5c42175ac23cb12b3c81"
+    },
+    "tests": {
+      "frontend": 938,
+      "gateway": 13,
+      "build": "passed"
+    }
   }
 }

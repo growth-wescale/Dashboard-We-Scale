@@ -1,6 +1,6 @@
 # Eletrovias — casos de origem para Maicon
 
-Maicon, precisamos fechar a cobertura e a classificação de Eletrovias na ouro antes de ativar Marketing. **Investimento está encerrado e não precisa ser revisto.** O dashboard deve consumir a classificação da origem: toda negociação criada no CRM é MQL; a qualificação da LP deve ser preservada, sem novo cálculo por capital.
+Maicon, precisamos fechar as pendências de cobertura e classificação de Eletrovias na ouro. Gabriel autorizou publicar Marketing enquanto esses casos são tratados em paralelo. **Investimento está encerrado e não precisa ser revisto.** O dashboard deve consumir a classificação da origem: toda negociação criada no CRM é MQL; a qualificação da LP deve ser preservada, sem novo cálculo por capital.
 
 Este encaminhamento reúne os IDs e os retornos esperados. **Não autoriza alterações no RD, fatos do DW, Vendas, demais marcas ou produção.** Se a solução exigir intervenção nesses sistemas, apresentar a ação exata antes de executar. Não criar pessoas, apagar importações, reenviar formulários ou mudar marcas/datas para fechar totais.
 
@@ -12,6 +12,42 @@ Este encaminhamento reúne os IDs e os retornos esperados. **Não autoriza alter
 - **Negócio/contato CRM:** IDs da conta `wescale_principal_crm`.
 - **Contato RD Marketing:** UUID do contato, distinto do contato CRM.
 - **Registro ouro:** `registro_key` de `ouro.vw_leads_candidatos`, no DW `oralunic_dw`. O campo `lead_ocorrencia_id` desse registro aponta para o evento normalizado em `prata.rdm_events`.
+
+## Devolutiva conferida em27/10 — carga ouro16:41 BRT
+
+C1 (`6adbe687c3de7d002414e087`) e C2 (`6ae0c8d63e139500234f2c0b`) já aparecem como **Eletrovias**, com identidade disponível na projeção de Marketing. A outra negociação `6adca9d9b19ce6002818a65a` permanece **B2Case**. O caso de atribuição `6ace137efe506e002305cff2` permanece **Oral Unic**, com contato identificado. Esses pontos de marca/cobertura comercial foram reconferidos somente no DW; a coerência com o RD foi informada por Maicon, sem nova chamada ao RD nesta rodada.
+
+Os três negócios sem contato são **um Eletrovias** (`6ad18c51de18d10020db5411`) e **dois Legacy** (`6adfbc05dd0f60002051921b`, `6adfc1ea67274300203c2903`). A operação precisa identificar os contatos reais; este documento não autoriza criar vínculos no RD. Não contar três pendências de Eletrovias. C1/C2 resolvidos não encerram as pendências de LP abaixo.
+
+### O que são as submissões de LP e de onde extrair
+
+Aqui, “submissão de LP” significa **uma linha de envio do formulário da landing page gravada na base de Marketing**, não o cadastro atual do contato nem uma negociação CRM. Os UUIDs listados são `public.leads.id`; não são `event_uuid` do RD ou recibo de entrega. Um contato pode enviar mais de uma vez.
+
+- Origem consultada: Supabase **Marketing**, projeto `jmuluoksnlqrvzbcltim`, tabela **`public.leads`**. Não é o Supabase Expansão nem um endpoint RD.
+- Formulário: **`eletrovias_multistep`**. Nos19 IDs do grupo A, os19 registros existem nessa tabela, todos com esse formulário;13 linhas Lead e6 MQL. As13 linhas Lead representam11 pessoas, pois há três envios de uma mesma pessoa. `dados_extras.page_origin` aponta para **`franquia.eletroviasdobrasil.com.br`**. Essa leitura confirma o registro armazenado, não entrega ao RD.
+- Extrair por envio: `id`, `dia`, `criado_em`, `marca`, `formulario`, identidade real (`nome`, `email`, `telefone`), `uf`, `cidade`, `utm_source`, `utm_medium`, `utm_campaign` e **`dados_extras` completo**, preservando especialmente `lead_type`, `is_mql`, `submitted_at` quando existir, `page_origin`, `utm_term`, `utm_content` e respostas originais.
+- `dia` é o dia usado na referência; `criado_em` é o timestamp armazenado. Não presumir que ele equivale ao instante do envio, nem converter o fuso sem confirmar o tipo/contrato da origem. `submitted_at` pode faltar. Preservar os três separadamente quando presentes.
+- Solicitação: trazer essa origem para a projeção ouro com ID/proveniência por envio e a classificação **já gravada**. Se houver negócio CRM da marca vinculado de forma comprovada, ele já é MQL. Sem esse vínculo, conservar a classificação original da LP; não recalcular por capital nem copiar a classificação global de outra marca.
+
+Consulta de extração somente leitura, no **Supabase Marketing**, em canal/ambiente restrito porque o resultado contém dados pessoais:
+
+```sql
+SELECT id, dia, criado_em, marca, formulario,
+       nome, email, telefone, uf, cidade,
+       utm_source, utm_medium, utm_campaign, dados_extras
+FROM public.leads
+WHERE marca = 'Eletrovias'
+  AND formulario = 'eletrovias_multistep'
+  AND dia >= DATE '2026-10-01'
+  AND dia < DATE '2026-11-01'
+ORDER BY dia, criado_em, id;
+```
+
+Para rastrear só as exceções, acrescentar `AND id IN (...)` com os IDs do grupo A, C3 e coluna “ID da submissão/base atual” do anexo. Não publicar o resultado bruto em Git, notas ou canais abertos. Não reenviar essas linhas ao RD. Os registros do RD que já estão na ouro podem ser ligados à submissão comprovada; não duplicar eventos nem alterar datas para encaixar correspondências.
+
+C3 continua sendo a linha `823dd4b7-de09-4261-820a-6876c73fe841`, de23/10: a releitura do Supabase confirma `lead_type=MQL` e `is_mql=true`. Ela não deve substituir/redatar o evento RD de06/10. Para os casos de **Oral Unic**, a mesma tabela contém `oralunic_multistep`; usar os cinco IDs do [handoff próprio](2026-10-27-oral-unic-maicon.md), em extração separada por marca. O exemplo `34116817-65e7-4318-ab70-52c28bda1c81` mantém a qualificação MQL original da LP. O caso de marca Oral Unic resolvido acima é distinto dessas lacunas de LP.
+
+As seções seguintes conservam a fotografia inicial e os IDs para rastreio; C1/C2 são históricos resolvidos na conferência acima. Investimento permanece encerrado.
 
 ## 1. Negócio sem contato — confirmar identidade antes de propor vínculo
 
@@ -111,7 +147,7 @@ Para cada ID/caso, informar:
 3. Registro/view e data da carga na ouro, com data e classificação de origem preservadas.
 4. Causa e proposta exata se ainda houver ajuste necessário; responsável e previsão, quando definidos.
 
-O escopo é **somente Eletrovias**. Investimento está encerrado por Gabriel. Nenhum ajuste no RD, fatos do DW, Vendas ou demais marcas, reenvio ou publicação está autorizado por este encaminhamento. Após o retorno, conferir somente os casos delimitados e fazer uma única validação Marketing/PDF antes de qualquer aceite de ativação.
+O escopo é **somente Eletrovias**. Investimento está encerrado por Gabriel. Nenhum ajuste no RD, fatos do DW, Vendas ou demais marcas, reenvio ou publicação está autorizado por este encaminhamento. Conferir somente os casos delimitados quando a origem os disponibilizar. A migração e a validação de Marketing/PDF seguem autorizadas em paralelo; qualquer alteração no RD continua exigindo confirmação específica.
 
 ## Anexo — IDs dos 89 registros para rastrear a classificação
 

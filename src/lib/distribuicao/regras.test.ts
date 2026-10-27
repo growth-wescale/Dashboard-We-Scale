@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { desvios, diffRegra, rotuloFonteTime, textoBarreira, type RegraRow } from './regras'
+import { desvios, diffRegra, opcoesTimeProprio, rotuloFonteTime, textoBarreira, type RegraRow } from './regras'
 
 function regra(p: Partial<RegraRow>): RegraRow {
   return {
@@ -70,8 +70,29 @@ describe('rotuloFonteTime', () => {
   it('traduz a fonte do time', () => {
     expect(rotuloFonteTime('versao_ativa')).toBe('meta do mês')
     expect(rotuloFonteTime('versao_anterior')).toBe('última meta publicada (sem meta neste mês)')
-    expect(rotuloFonteTime('time_proprio')).toBe('time próprio (marca sem meta)')
+    expect(rotuloFonteTime('time_proprio')).toBe('time próprio da regra')
     expect(rotuloFonteTime('nenhum')).toBe('sem SDR elegível')
     expect(rotuloFonteTime(null)).toBe('sem SDR elegível')
+  })
+})
+
+describe('opcoesTimeProprio', () => {
+  const pessoas = [
+    { nome: 'Bruna', cargo: 'Closer', ativo: true, user_id: 'u-bruna' },
+    { nome: 'Xayane', cargo: 'SDR', ativo: true, user_id: 'u-xay' },
+    { nome: 'Vanessa Daniel', cargo: 'SDR/Closer', ativo: true, user_id: 'u-van' },
+    { nome: 'Thiago', cargo: 'SDR', ativo: false, user_id: 'u-thi' },
+    { nome: 'Sem RD', cargo: 'SDR', ativo: true, user_id: null },
+  ]
+  it('lista ativos com usuário no RD, SDRs primeiro, e mostra o cargo de quem não é SDR', () => {
+    expect(opcoesTimeProprio(pessoas, null)).toEqual([
+      { nome: 'Vanessa Daniel', rotulo: 'Vanessa Daniel (SDR/Closer)' },
+      { nome: 'Xayane', rotulo: 'Xayane' },
+      { nome: 'Bruna', rotulo: 'Bruna (Closer)' },
+    ])
+  })
+  it('mantém quem já está no time e saiu do cadastro ativo', () => {
+    const o = opcoesTimeProprio(pessoas, [{ nome: 'Thiago', peso: 100 }])
+    expect(o[o.length - 1]).toEqual({ nome: 'Thiago', rotulo: 'Thiago (fora do cadastro ativo)' })
   })
 })

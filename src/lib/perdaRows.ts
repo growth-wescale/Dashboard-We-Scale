@@ -148,10 +148,11 @@ export function computeEtapas(perdas: FunnelRow[]): EtapaRow[] {
 export interface EtapaMeta { etapa: StageKey; ordem: number }
 export interface CruzCel { motivo: string; etapa: StageKey; qtd: number; deals: FunnelRow[] }
 
+/** Todos os motivos do recorte (sem corte), do mais ao menos frequente. */
 export function computeCruzamentos(
   perdas: FunnelRow[],
 ): { motivos: string[]; etapas: EtapaMeta[]; celulas: CruzCel[] } {
-  const motivos = computeMotivos(perdas).slice(0, 10).map(m => m.motivo)
+  const motivos = computeMotivos(perdas).map(m => m.motivo)
   const motivosSet = new Set(motivos)
 
   const etapasMap = new Map<StageKey, number>()

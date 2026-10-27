@@ -30,7 +30,7 @@ export function createLisoOuroFetch(options: Options): typeof fetch {
     if (!LISO_MARKETING_ROUTES.has(route)) return referenceFetch(input, init)
     const marca = url.searchParams.get('marca')
     // Uma consulta explicitamente de outra marca permanece idêntica.
-    if (marca?.startsWith('eq.') && !['eq.Lisô Laser', 'eq.Beauty Connection'].includes(marca)) return referenceFetch(input, init)
+    if (marca && !filterRows(['Lisô Laser', 'Beauty Connection'].map(marca => ({ marca })), new URLSearchParams({ marca })).length) return referenceFetch(input, init)
     const token = await options.token()
     if (!token) throw new Error('Entre novamente para consultar Lisô e Beauty.')
     if (token !== currentToken) { goldCache.clear(); legacyCache.clear(); currentToken = token }

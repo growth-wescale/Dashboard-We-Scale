@@ -1,4 +1,4 @@
-import { mergePartnerRows, projectRows, type RecordRow } from './partnerOuroQuery'
+import { filterRows, mergePartnerRows, projectRows, type RecordRow } from './partnerOuroQuery'
 
 export const PARTNER_MARKETING_ROUTES = new Set(['/', '/marca', '/sop-marketing', '/okrs', '/copa-b2b'])
 
@@ -39,7 +39,7 @@ export function createPartnerOuroFetch(options: Options): typeof fetch {
     if (!PARTNER_MARKETING_ROUTES.has(route)) return nativeFetch(input, init)
     const marca = url.searchParams.get('marca')
     // Uma consulta explicitamente de outra marca permanece idêntica.
-    if (marca?.startsWith('eq.') && !['eq.We Scale', 'eq.Scale Partner'].includes(marca)) return nativeFetch(input, init)
+    if (marca && !filterRows(['We Scale', 'Scale Partner'].map(marca => ({ marca })), new URLSearchParams({ marca })).length) return nativeFetch(input, init)
     const token = await options.token()
     if (!token) throw new Error('Entre novamente para consultar Scale Partner.')
     if (token !== currentToken) { goldCache.clear(); legacyCache.clear(); currentToken = token }

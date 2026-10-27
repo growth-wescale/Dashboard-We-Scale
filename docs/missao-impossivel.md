@@ -15,6 +15,23 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
+### Meta do período — tabela do quadro de Vendas
+
+Antes do Plano de investimento, a Missão mostra a meta do mês vigente de
+outubro a dezembro para as sete marcas do print: Oral Unic, Inpot,
+Eletrovias, Lisô Laser, B2Case, Viva e Instituto do Autismo. Receita e
+fechamentos aparecem como realizado / meta cadastrada, atingimento e total,
+em tabela. O realizado usa Ganho pela data da venda em Brasília, negócio e
+ciclo únicos, sem multiplicar por unidades. As metas vêm das parcelas Closer
+de `DB_Metas_Performance` no mesmo mês, sem alterar o cadastro. A agregação
+segue o quadro de Vendas: soma somente linhas Closer com colaborador definido;
+valores vazios não acrescentam à soma. Meta zero ou ausente aparece como “—”.
+O realizado total inclui as sete marcas, mesmo as que ainda não têm meta. O
+trimestre e os placares fixos conservam suas regras próprias.
+Reutiliza a leitura de vendas existente e amplia somente o filtro de marcas
+da consulta de metas; os demais recortes de MQL, SQL, SAL e mídia permanecem
+nas três frentes prioritárias.
+
 ### Meta projetada de mídia paga — ajuste de 27/10/2026
 
 No card mensal de MQL, a segunda linha usa o mesmo formato visual da linha
@@ -128,7 +145,7 @@ ou troca de conta. Clientes de conexão e permissões existentes não mudam.
 `consultarMissao` executa **sequencialmente**:
 
 1. Ganhos de 2026 até hoje (ou fim de 2026): até 500 linhas + sentinela.
-2. Metas de out–dez das três prioritárias/SDR/Closer: 200 + sentinela.
+2. Metas de out–dez das sete marcas do quadro/SDR/Closer: 200 + sentinela.
 3. SQL/SAL do mês vigente das três prioritárias: 500 + sentinela.
 4. Mídia das três marcas, mês até hoje, somente colunas necessárias;
    ordenação total `dia,id`, páginas de 500, máximo oito páginas.

@@ -57,6 +57,16 @@ describe('Missão: apresentação e isolamento', () => {
     expect(html).toContain('São referências de planejamento, não conversões observadas no CRM')
     expect(html).toContain('base: 3 vendas cadastradas no mês')
   })
+  it('mostra a tabela de metas das sete marcas antes do plano de investimento', () => {
+    const venda = { id_lead: 'ganho', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100, quantidade_unidades: 1, data_venda: '2026-10-02' }
+    const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, vendas: [venda] } }))
+    expect(html.indexOf('id="missao-meta-periodo"')).toBeLessThan(html.indexOf('id="missao-plano"'))
+    expect(html).toContain('Meta do período')
+    expect(html).toContain('role="region" aria-label="Meta do período por marca"')
+    expect(html).toContain('100,00')
+    expect(html).toContain('>Viva</th><td>—</td>')
+    expect((html.match(/<tr/g) ?? []).length).toBeGreaterThanOrEqual(9)
+  })
   it('no recorte do print, Inpot mostra 108 realizados frente à projeção de 164', () => {
     const metas = dados.metas.map(m => m.marca === 'Inpot' ? { ...m, meta_qtd_vendas: 4 } : m)
     const leads: NonNullable<DadosMissao['leads']> = Array.from({ length: 108 }, (_, i) => ({ id: `lead-${i}`, dia: '2026-10-07', marca: 'Inpot', nome: null, email: `lead-${i}@example.test`, telefone: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, dados_extras: { lead_type: 'MQL' }, row_hash: null, criado_em: '2026-10-07T12:00:00Z' }))

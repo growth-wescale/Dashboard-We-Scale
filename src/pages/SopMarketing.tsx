@@ -31,6 +31,7 @@ import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
+import { PartnerFechamentoSlide } from '@/components/sop/PartnerFechamentoSlide'
 import { COMUNIDADE_LEGACY_ATUAL, COMUNIDADE_LEGACY_OUTUBRO, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
@@ -328,6 +329,7 @@ const SLIDES: SlideConfig[] = [
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
   { id: 'odonto-scale',  label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#7f0c72' },
   { id: 'we-scale',      label: 'Scale Partner', subLabel: 'Eventos',   marca: 'We Scale',     accent: '#7E0E70' },
+  { id: 'we-scale-fechamento', label: 'Scale Partner', subLabel: 'Fechamento', marca: 'We Scale', accent: '#7E0E70' },
 ]
 
 // ── SVG Charts ─────────────────────────────────────────────────────────────────
@@ -781,6 +783,11 @@ interface SopSlideProps {
   customStart: string; onCustomStartChange: (v: string) => void
   customEnd: string;   onCustomEndChange:   (v: string) => void
   onReady?: (error?: string) => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
+}
+
+function SopDeckSlide(props: SopSlideProps) {
+  if (props.slide.id === 'we-scale-fechamento') return <PartnerFechamentoSlide {...props} />
+  return <SopSlide {...props} />
 }
 
 function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
@@ -2392,7 +2399,7 @@ export function SopMarketing() {
             style={{ width: 1920, height: 1080, overflow: 'hidden', background: '#F8F9FB' }}
           >
             {exportingIdx < slides.length ? (
-              <SopSlide
+              <SopDeckSlide
                 key={slides[exportingIdx].id}
                 slide={slides[exportingIdx]} dates={dates}
                 slideIndex={exportingIdx} total={slides.length + 1}
@@ -2435,7 +2442,7 @@ export function SopMarketing() {
           dates={dates}
         />
       ) : (
-        <SopSlide
+        <SopDeckSlide
           key={slide.id} slide={slide} dates={dates}
           slideIndex={idxAtivo} total={slides.length + 1}
           onPrev={() => setActiveSlide(s => (s - 1 + slides.length + 1) % (slides.length + 1))}

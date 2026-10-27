@@ -1,3 +1,4 @@
+import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
 /* Visão Geral — dados reais via Supabase */
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
@@ -986,6 +987,7 @@ export function VisaoGeral() {
         }
       />
 
+      {(isConsolidado || marcasEfetivas.includes('Lisô Laser')) && <BeautyMarketingBlock start={range.start} end={range.end} />}
       <QueryErrorBanner errors={[mediaError, leadsError, crmError]} scope="período selecionado" />
       <QueryErrorBanner errors={[ec1, ec2, ec3]} scope="comparação" />
       {loading ? <p role="status" style={{ padding: '20px 0' }}>Carregando o período selecionado…</p>

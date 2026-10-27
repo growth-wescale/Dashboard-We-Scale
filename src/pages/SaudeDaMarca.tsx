@@ -1,3 +1,6 @@
+import { lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
+import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
+import { attributeLisoCampaigns } from '@/lib/lisoCampaignAttribution'
 import { attributePartnerCampaigns } from '@/lib/partnerCampaignAttribution'
 import type { Ad, AdSet, Campaign } from '@/lib/campaignTypes'
 /* Saúde da Marca — real Supabase data + mock generators for Social/Criativos/Públicos */
@@ -1953,6 +1956,7 @@ export function SaudeDaMarca() {
   const campaigns = useMemo(
     () => {
       const built = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesByName)
+      if (b.key === 'liso-laser' && lisoOuroEnabled) return attributeLisoCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)), activeMediaData)
       return b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
         ? attributePartnerCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)))
         : built
@@ -1964,8 +1968,8 @@ export function SaudeDaMarca() {
   const acqFunnel = buildAcqFunnel(b, activeMediaData)
   const loading = mediaLoading || crmLoading || leadsLoading || creativesLoading
   const partnerOuro = b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
-  const partnerDataPending = partnerOuro && (mediaLoading || crmLoading || leadsLoading)
-  const partnerDataFailed = partnerOuro && !!(mediaError || crmError || leadsError)
+  const partnerDataPending = (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && (mediaLoading || crmLoading || leadsLoading)
+  const partnerDataFailed = (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && !!(mediaError || crmError || leadsError)
 
   const periodLabel = useMemo(() => {
     if (range.start.slice(0, 7) === range.end.slice(0, 7)) return monthLabel(range.start)
@@ -2053,6 +2057,7 @@ export function SaudeDaMarca() {
           </>
         }
       />
+      {activeBrand === 'liso-laser' && <BeautyMarketingBlock start={dataInicio} end={dataFim} />}
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
       {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}

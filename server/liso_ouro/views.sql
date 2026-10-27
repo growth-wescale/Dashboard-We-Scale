@@ -1,7 +1,7 @@
 -- Instalação de contrato de leitura; nenhuma alteração em fatos.
 -- Executar somente em revisão controlada. Aplicativo consulta apenas ouro.
 BEGIN;
-CREATE VIEW ouro.vw_liso_beauty_dashboard_leads AS
+CREATE OR REPLACE VIEW ouro.vw_liso_beauty_dashboard_leads AS
 WITH crm AS (
 -- Contrato Marketing: todo deal criado no CRM é MQL (decisão de27/10).
 -- SELECT somente ouro. Não exige passagem Novo MQL, capital ou status atual.
@@ -10,7 +10,7 @@ WITH atuais AS (
  SELECT DISTINCT ON (conta_id, negocio_id)
   conta_id, negocio_id, funil_id, nome_funil, marca,
   data_criacao_original, data_novo_mql, status_atual, carregado_em,
-  utm_source,utm_medium,utm_campaign
+  utm_source,utm_medium,utm_campaign,utm_content,utm_term
  FROM ouro.negocios_ciclos_dashboard
  WHERE conta_id = 'wescale_principal_crm'
  ORDER BY conta_id, negocio_id, eh_ciclo_atual DESC NULLS LAST,
@@ -57,13 +57,14 @@ WHERE funil_id = '6ab14ed684645500206bee2e'
   l.nome,l.email,l.telefone,f.lead_uf AS uf,f.lead_cidade_texto AS cidade,
   l.utm_source,l.utm_medium,l.utm_campaign,f.lead_formulario_origem AS formulario,
   jsonb_build_object('lead_type','MQL','classification_source','deal_criado_crm',
+   'utm_content',l.utm_content,'utm_term',l.utm_term,'capital',f.lead_capital_texto,
    'id_deal',negocio_id,'contato_id',contato_id,'segmento',segmento,
    'data_criacao_crm',data_criacao_original,'data_referencia',data_mql_proveniencia) AS dados_extras,
   NULL::text AS row_hash,coalesce(data_novo_mql,data_criacao_original) AS criado_em,
   l.contato_id,l.carregado_em
  FROM links l
  LEFT JOIN LATERAL (
-  SELECT f0.lead_uf,f0.lead_cidade_texto,f0.lead_formulario_origem FROM ouro.vw_leads_candidatos f0
+  SELECT f0.lead_uf,f0.lead_cidade_texto,f0.lead_formulario_origem,f0.lead_capital_texto FROM ouro.vw_leads_candidatos f0
   WHERE nullif(lower(trim(f0.lead_email)),'')=l.email
    AND f0.lead_event_identifier=CASE WHEN l.segmento='beauty' THEN 'beautyconnection_multistep' ELSE 'lisolaser_multistep' END
   ORDER BY f0.data_evento_em DESC,f0.registro_key LIMIT 1
@@ -74,7 +75,8 @@ WHERE funil_id = '6ab14ed684645500206bee2e'
   lead_uf AS uf,lead_cidade_texto AS cidade,lead_utm_source AS utm_source,lead_utm_medium AS utm_medium,
   lead_utm_campaign AS utm_campaign,lead_formulario_origem AS formulario,
   jsonb_build_object('lead_type',CASE WHEN EXISTS(SELECT 1 FROM links l WHERE l.segmento='liso' AND (l.negocio_id=f.negocio_id OR (nullif(lower(trim(f.lead_email)),'') IS NOT NULL AND lower(trim(f.lead_email))=l.email))) THEN 'MQL' WHEN lead_mql_observado THEN 'MQL' WHEN lead_mql_observado=false THEN 'LEAD' ELSE NULL END,
-   'classification_source',lead_classificacao_origem,'segmento','liso') AS dados_extras,
+   'classification_source',lead_classificacao_origem,'segmento','liso',
+   'utm_content',lead_utm_content,'utm_term',lead_utm_term,'capital',lead_capital_texto) AS dados_extras,
   NULL::text AS row_hash,data_evento_em AS criado_em,lead_contato_id AS contato_id,carregado_em
  FROM ouro.vw_leads_candidatos f
  WHERE marca='Lisô Laser' AND lead_event_identifier='lisolaser_multistep'
@@ -85,7 +87,7 @@ SELECT * FROM commercial WHERE dia>='2026-10-01' AND dia<'2026-11-01'
 UNION ALL
 SELECT * FROM captures WHERE dia>='2026-10-01' AND dia<'2026-11-01';
 
-CREATE VIEW ouro.vw_liso_beauty_dashboard_midia AS
+CREATE OR REPLACE VIEW ouro.vw_liso_beauty_dashboard_midia AS
 WITH source AS (
 -- Prévia somente leitura: campanhas homologadas, no único nível anúncio.
 -- Não filtrar elegivel_kpi: conservar o estado de homologação para revisão.

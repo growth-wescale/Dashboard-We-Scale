@@ -1,0 +1,71 @@
+.partner-close { box-sizing: border-box; padding: 20px 36px 48px; display: flex; flex-direction: column; gap: 12px; background: var(--ws-bg, #f8f9fb); color: var(--ws-text-primary, #172033); font-family: var(--font-body, sans-serif); line-height: 1.4; overflow: auto; }
+.partner-close * { box-sizing: border-box; }
+.partner-close-header { display: flex; align-items: center; gap: 20px; justify-content: space-between; }
+.partner-close-eyebrow { color: #7e0e70; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 6px; }
+.partner-close h1 { margin: 0; font-size: 32px; font-weight: 750; line-height: 1.15; color: #7e0e70; }
+.partner-close h1 span { font-size: 14px; color: #64748b; font-weight: 500; margin-left: 12px; }
+.partner-close-header p { font-size: 11px; color: #64748b; margin: 6px 0 0; }
+.partner-close nav { display: flex; gap: 8px; align-items: center; flex-shrink: 0; font-size: 11px; }
+.partner-close button { display: grid; place-items: center; padding: 7px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; color: #475569; }
+.partner-close button:focus-visible { outline: 2px solid #7e0e70; outline-offset: 3px; }
+.partner-close-body { display: flex; flex-direction: column; gap: 12px; }
+.partner-close-headline { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px; border-left: 4px solid #7e0e70; background: #f2eaf2; border-radius: 0 10px 10px 0; }
+.partner-close h2 { margin: 0; font-size: clamp(20px, 2vw, 30px); line-height: 1.2; letter-spacing: -.02em; }
+.partner-close h2 span { font-weight: 500; color: #6c4867; }
+.partner-close-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: flex-end; font-size: 12px; font-weight: 650; }
+.partner-close-legend i { display: inline-block; width: 8px; height: 8px; background: #64748b; border-radius: 50%; margin-right: 6px; }
+.partner-close-legend span:nth-child(2) i { background: #7e0e70; }
+.partner-close-legend small { width: 100%; text-align: right; color: #64748b; font-size: 10px; font-weight: 400; }
+.partner-close-costs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.partner-close-card { padding: 15px 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; min-width: 0; }
+.partner-close h3 { font-size: 13px; font-weight: 700; margin: 0 0 10px; }
+.partner-close-costs h3 { font-size: 11px; color: #64748b; margin-bottom: 6px; }
+.partner-close-costs p { margin: 5px 0 0; color: #64748b; font-size: 11px; }
+.partner-close-costs b { color: #334155; }
+.partner-close-better, .partner-close-worse { font-size: 30px; font-weight: 750; letter-spacing: -.02em; }
+.partner-close-better { color: #167354; }
+.partner-close-worse { color: #b45309; }
+.partner-close-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.partner-close-periods, .partner-close-row { display: grid; grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr)); gap: 8px; align-items: baseline; }
+.partner-close-periods { color: #64748b; font-size: 10px; padding: 2px 0 8px; text-align: right; }
+.partner-close-periods span:last-child, .partner-close-row strong:last-child { color: #7e0e70; }
+.partner-close-row { padding: 6px 0; font-size: 11px; border-top: 1px solid #f1f5f9; }
+.partner-close-row strong { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12px; }
+.partner-close-note { font-size: 10px; color: #64748b; line-height: 1.55; margin: 8px 0 0; }
+.partner-close .partner-close-subtitle { margin: 18px 0 6px; }
+.partner-close-activity { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 2px 0 8px 36%; }
+.partner-close-activity div { height: 5px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.partner-close-activity span { display: block; height: 100%; }
+.partner-close-bars { display: grid; gap: 3px; padding-bottom: 7px; }
+.partner-close-bars span { height: 4px; background: #64748b; border-radius: 3px; }
+.partner-close-bars span:last-child { background: #7e0e70; }
+.partner-close-caveats { border: 1px solid #eadfc9; background: #fffbf2; border-radius: 10px; padding: 12px 18px; }
+.partner-close-caveats h3 { font-size: 11px; color: #855c23; margin-bottom: 6px; }
+.partner-close-caveats div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.partner-close-caveats p { font-size: 10px; line-height: 1.55; margin: 0; color: #725e42; }
+.partner-close-footer { font-size: 9px; color: #64748b; }
+.partner-close-footer a { color: #7e0e70; text-decoration: underline; }
+.partner-close-export { padding: 28px 40px; overflow: hidden; gap: 16px; }
+.partner-close-export .partner-close-body { gap: 16px; }
+.partner-close-export .partner-close-card { padding: 18px; }
+.partner-close-export .partner-close-row { padding: 8px 0; font-size: 14px; }
+.partner-close-export .partner-close-row strong { font-size: 15px; }
+.partner-close-export .partner-close-note, .partner-close-export .partner-close-caveats p, .partner-close-export .partner-close-periods { font-size: 12px; }
+.partner-close-export .partner-close-costs p { font-size: 14px; }
+@media (max-width: 1100px) {
+  .partner-close:not(.partner-close-export) .partner-close-columns { grid-template-columns: 1fr; }
+  .partner-close:not(.partner-close-export) .partner-close-costs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .partner-close:not(.partner-close-export) .partner-close-caveats div { grid-template-columns: 1fr; gap: 8px; }
+}
+@media (max-width: 600px) {
+  .partner-close { padding: 16px 16px 64px; }
+  .partner-close-header, .partner-close-headline { align-items: flex-start; flex-direction: column; }
+  .partner-close h1 { font-size: 28px; }
+  .partner-close h1 span { display: block; margin: 5px 0 0; }
+  .partner-close-legend { justify-content: flex-start; }
+  .partner-close-legend small { text-align: left; }
+  .partner-close-card { padding: 12px; }
+  .partner-close-costs p { line-height: 1.6; }
+  .partner-close-row { font-size: 10px; }
+  .partner-close-row strong { font-size: 11px; }
+}

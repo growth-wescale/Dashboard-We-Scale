@@ -891,8 +891,11 @@ export function PerformanceVendas() {
               Só as etapas do SDR — clique numa etapa pra ver os deals.
             </div>
             <SCard style={{ padding: '18px clamp(14px, 4vw, 24px) 24px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' }}>
+              {/* No-show sai do fluxo logo depois do SQL. Mesmo número do card
+                  "SQL → No-show" (por evento), e o clique lista os mesmos deals. */}
               <TrapFunnel stages={funilSdr} invest={0} accent={SDR_ACCENT} dark={SDR_ACCENT_DARK}
-                onStageClick={key => setClickedSdrStage(key as StageKey)} />
+                onStageClick={key => setClickedSdrStage(key as StageKey)}
+                noShow={strip.noShow} />
             </SCard>
           </div>
         </>

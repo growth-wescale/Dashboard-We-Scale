@@ -13,9 +13,13 @@ Integração no PR275 em rascunho, sem merge/deploy. Flag `VITE_LISO_OURO_ENABLE
 - Meta & OKRs teve timeout transitório na primeira tentativa e carregou integralmente na repetição. Nenhum limite de tempo ou regra de consulta foi alterado. Não é teste de carga/SLA.
 - Build e858 testes frontend aprovados; seis testes de gateway já aprovados. Testes de isolamento cobrem rotas comerciais, outras marcas, histórico e flag independente. Sem nova homologação integral das telas de Vendas ou das plataformas de anúncios.
 
-## Limite técnico antes de publicar
+## Gateway definitivo — instalação autorizada em27/10
 
-A prévia usa servidor local autenticado com SELECTs fixos nas duas views ouro via Metabase, chave apenas no servidor. A role `dashboard_liso_ro`, TLS/READ ONLY e gateway definitivo em `app.py` ainda precisam de instalação e validação no ambiente de destino; não foram simulados como já instalados. Anônimo401 confirmado na prévia. A publicação exige autorização específica, implantação controlada do gateway, conferência de autenticação/permissões e ativação da flag pelo commit integrado. Não reabrir as auditorias comerciais encerradas.
+Gateway exclusivo `dashboard-liso-ouro`, sem escrita no container, instalado na VPS. A role `dashboard_liso_ro` tem SELECT apenas nas duas views próprias, sem privilégios administrativos; TLS verify-full e transação READ ONLY conferidos no cluster esperado. Sem alterações em fatos, RD, coletores ou serviços de outras marcas. Anônimo401.
+
+Cache compartilhado de leitura de até60s, preenchido antes de aceitar tráfego e renovado em segundo plano. Cada resposta exige sessão e permissões vivas; cache expirado falha fechado. SELECTs e conteúdo permanecem idênticos. Timeout45s apenas nas conexões deste novo gateway; não altera a configuração do banco ou o limite20s de OKRs. Isso evita que a página aguarde a consulta fria de contatos (~20s). Nove testes do gateway cobrem isolamento, expiração e revogação de acesso.
+
+Flag Lisô preparada no CI/deploy pelo PR275, aguardando merge e confirmação do deploy. O gate de publicação agora é autorizado pelo usuário; validar UI/PDF no destino após ativação.
 
 PR: https://github.com/growth-wescale/Dashboard-We-Scale/pull/275. PDF privado gerado pela própria prévia: `~/.config/wescale/liso-preview-artifacts/sop-marketing.pdf`; não versionar PDF/contatos/sessão. Reversão do consumidor: flag Lisô false.
 
@@ -80,6 +84,6 @@ As plataformas não foram relidas nesta rodada. A ouro mudou desde a conciliaç�
 
 Rotas /cadencias, /analise-termos e /esteira-oral-unic redirecionam para as páginas acima. Vendas, fontes Partner, metas e demais marcas permanecem nas implementações atuais. O bloqueio anterior da ferramenta de navegador foi contornado com Chrome isolado; a evidência atual é a prévia autenticada, não produção.
 
-## Publicação posterior
+## Operação e reversão
 
-As duas views de vínculo/mídia já existem e foram confirmadas no catálogo. Não executar novamente o arquivo completo: a role precisa de provisionamento próprio e credencial fora do Git. O gateway definitivo deve usar `dashboard_liso_ro`, TLS verify-full e transações READ ONLY, consultas fixas e permissões vivas. Preservar a cadência atual da ouro. Não ativar proxy/flag de produção sem autorização.
+As duas views e a role existem. Não executar novamente `views.sql` completo. Credencial fica apenas no arquivo protegido da VPS; nenhuma chave Metabase no gateway definitivo ou frontend. Fonte do app versionada no PR275. Preservar cadência horária da ouro. Reversão do consumidor pela flag Lisô false em PR; alternativa operacional `mode=legacy` no gateway próprio, sem tocar Partner/Beauty inscrições/Vendas. Backup do pacote anterior antes do merge e validação autenticada após deploy.

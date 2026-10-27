@@ -6,6 +6,7 @@ import decimal
 import json
 import os
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -50,6 +51,8 @@ class Service:
  def __init__(self, settings, connect=None, request_json=None):
   self.settings = settings
   self.slots = threading.BoundedSemaphore(3)
+  self.cache = {}
+  self.cache_lock = threading.Lock()
   if connect is None:
    import psycopg
    from psycopg.rows import dict_row
@@ -58,7 +61,7 @@ class Service:
     raise ValueError('unsafe_connection')
    self.connect = lambda: psycopg.connect(
     **pg, row_factory=dict_row, connect_timeout=5, application_name='dashboard_liso_ouro',
-    options='-c default_transaction_read_only=on -c statement_timeout=20000 -c lock_timeout=1000 -c search_path=pg_catalog -c timezone=UTC')
+    options='-c default_transaction_read_only=on -c statement_timeout=45000 -c lock_timeout=1000 -c search_path=pg_catalog -c timezone=UTC')
   else: self.connect = connect
   self.request_json = request_json or self.auth_request
 
@@ -81,25 +84,35 @@ class Service:
   authorize(token, self.request_json, body['route'])
   if self.settings.get('mode') == 'legacy': return {'mode': 'legacy'}
   if self.settings.get('mode') != 'ouro': raise GatewayError(503, 'invalid_mode')
+  dataset = body['dataset']
+  with self.cache_lock: cached = self.cache.get(dataset)
+  if cached:
+   if time.monotonic() - cached[0] > 60: raise GatewayError(503, 'source_refresh_pending')
+   return cached[1]
+  return self.refresh_dataset(dataset)
+
+ def refresh_dataset(self, dataset):
   if not self.slots.acquire(timeout=10): raise GatewayError(429, 'busy')
   try:
    with self.connect() as connection:
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
     role = connection.execute("SELECT current_user u,(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) unsafe").fetchone()
     if role['u'] != 'dashboard_liso_ro' or role['unsafe']: raise GatewayError(503, 'unsafe_role')
-    rows = connection.execute(QUERIES[body['dataset']]).fetchall()
+    rows = connection.execute(QUERIES[dataset]).fetchall()
     if len(rows) > 50000: raise GatewayError(503, 'result_too_large')
     if any(r.get('marca') not in ('Lisô Laser','Beauty Connection') or not isinstance(r.get('dia'),str)
      or not '2026-10-01' <= r['dia'] < '2026-11-01' for r in rows):
      raise GatewayError(503, 'scope_violation')
     if len({r.get('id') for r in rows}) != len(rows): raise GatewayError(503,'duplicate_id')
-    if body['dataset']=='leads' and any(r.get('dados_extras',{}).get('classification_source')=='deal_criado_crm'
+    if dataset=='leads' and any(r.get('dados_extras',{}).get('classification_source')=='deal_criado_crm'
      and (not r.get('contato_id') or not (r.get('email') or r.get('telefone'))) for r in rows):
      raise GatewayError(409,'commercial_identity_incomplete')
-    if body['dataset']=='media' and any(r.get('spend_brl') is None or r['spend_brl']<0 or r.get('moeda')!='BRL' for r in rows):
+    if dataset=='media' and any(r.get('spend_brl') is None or r['spend_brl']<0 or r.get('moeda')!='BRL' for r in rows):
      raise GatewayError(409,'invalid_media')
-    return {'mode':'ouro','contract':CONTRACT,'dataset':body['dataset'],'rows':rows,
+    result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':[]}
+    with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)
+    return result
 
   finally: self.slots.release()
 
@@ -133,9 +146,21 @@ class Handler(BaseHTTPRequestHandler):
   except Exception: self.respond(503, {'code': 'source_unavailable'})
 
 
+def maintain_cache(service):
+ while True:
+  started = time.monotonic()
+  for dataset in QUERIES:
+   try: service.refresh_dataset(dataset)
+   except Exception: pass  # Resposta expirada falha fechada; nunca expor diagnóstico/credencial.
+  time.sleep(max(1, 30 - (time.monotonic() - started)))
+
+
 def main():
  settings = json.loads(Path(os.environ.get('LISO_OURO_CONFIG', '/run/liso/config.json')).read_text())
  Handler.service = Service(settings)
+ if settings.get('mode') == 'ouro':
+  for dataset in QUERIES: Handler.service.refresh_dataset(dataset)
+  threading.Thread(target=maintain_cache,args=(Handler.service,),daemon=True).start()
  ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
 
 

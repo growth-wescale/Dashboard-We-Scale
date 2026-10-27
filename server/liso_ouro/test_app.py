@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 from app import Service, GatewayError
 
 def auth(path, token, body):
@@ -45,6 +46,32 @@ class Tests(unittest.TestCase):
   for row in [{'id':'a','dia':'2026-10-10','marca':'We Scale'}, {'id':'a','dia':'2026-09-10','marca':'Lisô Laser'}]:
    s,c=self.service([row])
    with self.assertRaises(GatewayError):s.read({'dataset':'leads','route':'/'},'token')
+ def test_cache_preserves_rows_and_rechecks_authorization(self):
+  s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Lisô Laser','dados_extras':{}}])
+  first=s.read({'dataset':'leads','route':'/'},'token')
+  queries=len(c.queries)
+  self.assertEqual(s.read({'dataset':'leads','route':'/marca'},'token'),first)
+  self.assertEqual(len(c.queries),queries)
+  s.request_json=lambda path,token,body: {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':False}
+  with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(e.exception.status,403)
+ def test_expired_cache_fails_closed_without_database_retry(self):
+  s,c=self.service([])
+  with patch('app.time.monotonic',return_value=100):s.refresh_dataset('leads')
+  queries=len(c.queries)
+  with patch('app.time.monotonic',return_value=161):
+   with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(e.exception.code,'source_refresh_pending')
+  self.assertEqual(len(c.queries),queries)
+ def test_permissions_cannot_read_other_brands_or_tabs(self):
+  s,c=self.service([])
+  for access in [
+   {'registrado':True,'ativo':True,'permissoes':['aba.visao-geral'],'marcas':['inpot']},
+   {'registrado':True,'ativo':True,'permissoes':['aba.okrs'],'marcas':['liso-laser']}]:
+   s.request_json=lambda path,token,body: {'id':'user'} if path.endswith('/user') else access
+   with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
+   self.assertEqual(e.exception.status,403)
+  self.assertEqual(c.queries,[])
  def test_no_token(self):
   s,c=self.service([])
   with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'')

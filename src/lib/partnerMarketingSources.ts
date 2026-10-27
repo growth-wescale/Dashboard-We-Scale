@@ -1,3 +1,5 @@
+import { createOralUnicOuroFetch } from './oralUnicOuroFetch'
+import { oralUnicOuroEnabled } from './oralUnicOuroScope'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { supabaseVendas } from './supabaseVendas'
@@ -14,7 +16,7 @@ const enabled = import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
 const lisoEnabled = import.meta.env.VITE_LISO_OURO_ENABLED === 'true'
 export function partnerMarketingCacheScope(optIn = true) {
   if (!optIn) return ''
-  return (enabled ? ':partner-ouro:marketing:v1' : '') + (lisoEnabled ? ':liso-ouro:marketing:v1' : '') + (legacyOuroEnabled ? ':legacy-ouro:marketing:v1' : '')
+  return (enabled ? ':partner-ouro:marketing:v1' : '') + (lisoEnabled ? ':liso-ouro:marketing:v1' : '') + (legacyOuroEnabled ? ':legacy-ouro:marketing:v1' : '') + (oralUnicOuroEnabled ? ':oral-unic-ouro:marketing:v1' : '')
 }
 function client(source: 'marketing' | 'vendas') {
   const vendas = source === 'vendas'
@@ -26,8 +28,10 @@ function client(source: 'marketing' | 'vendas') {
   const partnerFetch = createPartnerOuroFetch({ ...options, enabled })
   const lisoFetch = !vendas && lisoEnabled
     ? createLisoOuroFetch({ ...options, referenceFetch: partnerFetch }) : partnerFetch
-  const fetch = !vendas && legacyOuroEnabled
+  const legacyFetch = !vendas && legacyOuroEnabled
     ? createLegacyOuroFetch({ ...options, referenceFetch: lisoFetch }) : lisoFetch
+  const fetch = !vendas && oralUnicOuroEnabled
+    ? createOralUnicOuroFetch({ ...options, referenceFetch: legacyFetch }) : legacyFetch
   return createClient(
     vendas ? import.meta.env.VITE_SUPABASE_VENDAS_URL : import.meta.env.VITE_SUPABASE_URL,
     vendas ? import.meta.env.VITE_SUPABASE_VENDAS_ANON_KEY : import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -41,7 +45,7 @@ function client(source: 'marketing' | 'vendas') {
   )
 }
 export function marketingDataClient(optIn = true): SupabaseClient {
-  if ((!enabled && !lisoEnabled && !legacyOuroEnabled) || !optIn) return supabase
+  if ((!enabled && !lisoEnabled && !legacyOuroEnabled && !oralUnicOuroEnabled) || !optIn) return supabase
   return marketing ??= client('marketing')
 }
 export function marketingCrmClient(optIn = true): SupabaseClient {

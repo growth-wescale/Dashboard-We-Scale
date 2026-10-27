@@ -1,3 +1,4 @@
+import { createOralUnicOuroFetch } from './oralUnicOuroFetch'
 import { describe, expect, it, vi } from 'vitest'
 import { createPartnerOuroFetch } from './partnerOuroFetch'
 import { createLisoOuroFetch } from './lisoOuroFetch'
@@ -12,7 +13,8 @@ describe('isolamento da cadeia ouro nas consultas S&OP', () => {
     const options = { origin: 'https://marketing.test', token, route: () => '/sop-marketing', fetch: native }
     const partner = createPartnerOuroFetch({ ...options, source: 'marketing' })
     const liso = createLisoOuroFetch({ ...options, referenceFetch: partner })
-    const read = createLegacyOuroFetch({ ...options, referenceFetch: liso })
+    const legacy = createLegacyOuroFetch({ ...options, referenceFetch: liso })
+    const read = createOralUnicOuroFetch({ ...options, referenceFetch: legacy })
     const url = `${options.origin}/rest/v1/leads?marca=${encodeURIComponent(marca)}&dia=gte.2026-10-01`
     expect(await (await read(url)).json()).toEqual(rows)
     expect(native).toHaveBeenCalledTimes(1)

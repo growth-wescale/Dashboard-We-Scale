@@ -1,3 +1,5 @@
+import { BeautyMarketingPanel } from '@/components/marketing/BeautyMarketingPanel'
+import { useBeautyMarketing, lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 
@@ -780,6 +782,7 @@ interface SopSlideProps {
 
 function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
   const acc = slide.accent
+  const beautyMarketing = useBeautyMarketing(dates.mtdCurStart, dates.mtdCurEnd, slide.id === 'liso')
   const [filterFonte, setFilterFonte] = useState('__all__')
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
 
@@ -911,8 +914,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const { data: metas } = metasRes
   const { data: sqlEvents } = sqlEventsRes
 
-  const partnerReadError = isWeScale ? [mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
-  const partnerKpiPending = isWeScale && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
+  const ouroReadRequired = isWeScale || (slide.id === 'liso' && lisoOuroEnabled)
+  const partnerReadError = ouroReadRequired ? [mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
+  const partnerKpiPending = ouroReadRequired && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
 
   // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
   const allLoaded =
@@ -923,10 +927,10 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading
+    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(partnerReadError || beautyRes.error || undefined)
-  }, [allLoaded, onReady, partnerReadError, beautyRes.error])
+    if (allLoaded) onReady?.(partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
+  }, [allLoaded, onReady, partnerReadError, beautyRes.error, beautyMarketing.error])
 
   const applyF = useCallback((rows: VwMarketingFunil[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -1411,9 +1415,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
       for (const l of leads.filter(isLeadMql)) {
         const raw = l.dados_extras?.['capital'] ?? l.dados_extras?.['capital_disponivel']
         const vazio = typeof raw !== 'string' || raw.trim() === ''
-        if (vazio && !isOdontoLegacy) continue
+        if (vazio && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
         const b = parseCapital(typeof raw === 'string' ? raw : '')
-        if (b.kind === 'unknown' && !isOdontoLegacy) continue
+        if (b.kind === 'unknown' && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
         const k = vazio ? 'sem-capital' : b.kind === 'unknown' ? 'capital-nao-reconhecido' : bucketKey(b)
         const prev = acc.get(k)
         if (prev) prev.count += 1
@@ -1431,7 +1435,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     })
     rows.sort((a, b) => a.sort - b.sort)
     return rows.map(({ label, cur: c, prev: p }) => ({ label, cur: c, prev: p }))
-  }, [chartCurLeads, chartPrevLeads, isOdontoLegacy])
+  }, [chartCurLeads, chartPrevLeads, isOdontoLegacy, slide.id])
 
   // ── Funnel stages ─────────────────────────────────────────────────────────────
   // Fechado: usa override manual quando existir (RD Marketing não popula
@@ -1444,6 +1448,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     { label: 'SAL',         count: funnelMtd.sal },
     { label: 'Fechado',     count: fechOverride ?? funnelMtd.fech },
   ]
+
+  if (slide.id === 'liso' && lisoOuroEnabled && (!allLoaded || partnerReadError || beautyMarketing.error)) {
+    return <div role={partnerReadError || beautyMarketing.error ? 'alert' : 'status'} style={{ padding: 36 }}>
+      {partnerReadError || beautyMarketing.error ? 'Não foi possível carregar Lisô e Beauty. Atualize para tentar novamente.' : 'Carregando Lisô e Beauty…'}
+    </div>
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -1470,6 +1480,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             {dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM
           </div>
         </div>
+        <BeautyMarketingPanel result={beautyMarketing} compact />
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
         <select
           value={monthMode}
@@ -1515,7 +1526,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
         </button>
       </div>
 
-      {isWeScale && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error]} />}
+      {ouroReadRequired && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error]} />}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>
@@ -1759,7 +1770,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               ))}
             </select>
           </div>
-          <div style={{ height: 240, flexShrink: 0 }}>
+          <div style={{ height: slide.id === 'liso' && lisoOuroEnabled ? 190 : 240, flexShrink: 0 }}>
             <MtdBarChart items={mtdItems} accent={acc} />
           </div>
           {investMetaPct !== null && (
@@ -1819,7 +1830,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
                 {compareRange.label}: {fmtBR(compareRange.start)} a {fmtBR(compareRange.end)} · {dates.mtdLabel}: {fmtBR(mtdCurStart)} a {fmtBR(chartCurEnd)}
               </div>}
               <div style={{
-                display: 'grid', gridTemplateColumns: isOdontoLegacy ? 'minmax(0, 1fr) minmax(65px, auto) minmax(65px, auto)' : '1fr 40px 40px',
+                display: 'grid', gridTemplateColumns: isOdontoLegacy || (slide.id === 'liso' && lisoOuroEnabled) ? 'minmax(0, 1fr) minmax(65px, auto) minmax(65px, auto)' : '1fr 40px 40px',
                 gap: 8, padding: '0 8px', marginBottom: 4,
                 fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
                 color: 'var(--ws-text-secondary)', textTransform: 'uppercase',
@@ -1831,7 +1842,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {mqlByCapital.map(row => (
                   <div key={row.label} style={{
-                    display: 'grid', gridTemplateColumns: isOdontoLegacy ? 'minmax(0, 1fr) minmax(65px, auto) minmax(65px, auto)' : '1fr 40px 40px',
+                    display: 'grid', gridTemplateColumns: isOdontoLegacy || (slide.id === 'liso' && lisoOuroEnabled) ? 'minmax(0, 1fr) minmax(65px, auto) minmax(65px, auto)' : '1fr 40px 40px',
                     gap: 8, alignItems: 'baseline',
                     padding: '4px 8px', background: 'var(--ws-bg)',
                     borderRadius: 4, fontSize: 11,
@@ -2297,7 +2308,8 @@ export function SopMarketing() {
             if (readyResolverRef.current === finish) {
               readyResolverRef.current = null
               const partner = slides[i]?.marca === 'We Scale' || i === slides.length
-              if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
+              if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
+              else if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
               else resolve()
             }
           }, 30000)

@@ -788,6 +788,19 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-27 — Funil do SDR na Performance ganha a caixa de No-show
+
+Pedido do Junior: o funil MQL → SAL da aba Performance › SDR não mostrava No-show.
+Entrou a mesma caixa tracejada da Visão Macro, saindo logo depois do SQL. O número
+é `strip.noShow` (`countStageEvents(eventos, 'No Show', …)`), o mesmo do card
+"SQL → No-show", então funil e conversão batem. O clique abre o popup de deals pela
+mesma `dealsInStage(…, 'performance')` das outras etapas do funil. Diferença
+conhecida: a caixa da Visão Macro conta pela data de No Show na linha do deal
+(`countStage`), a da Performance conta por evento, como o resto da página.
+
+Verificado: `npm run build` + `npx vitest run` (858 testes) em worktree fora do
+OneDrive. App exige login, não visto renderizado.
+
 ### 2026-10-27 — Limpeza da cadência encerrava a execução recém-criada (snapshot atrasado)
 
 Achado na conferência de 27/10 depois do incidente de 26/10 (entrada abaixo). O Ingresso cria a

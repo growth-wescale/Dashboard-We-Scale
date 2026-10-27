@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Lead } from './types'
-import { FRENTES_MISSAO, MESES_MISSAO, proximoDia, type DadosMissao, type VendaMissaoRow, type MetaMissaoRow, type EtapaMissaoRow, type MidiaMissaoRow } from './missaoMetas'
+import { FRENTES_MISSAO, MARCAS_META_PERIODO_MISSAO, MESES_MISSAO, proximoDia, type DadosMissao, type VendaMissaoRow, type MetaMissaoRow, type EtapaMissaoRow, type MidiaMissaoRow } from './missaoMetas'
 
 // Proteções locais: nunca baixar toda a base nem repetir consulta em caso de erro.
 export const LIMITES_MISSAO = { vendas: 500, metas: 200, etapas: 500, paginaMidia: 500, paginasMidia: 8, paginasLeads: 8 } as const
@@ -12,7 +12,7 @@ function ler<T>(res: Resposta, nome: string, limite: number): T[] {
   return res.data as T[]
 }
 
-/** Uma requisição por vez. Sem eventos históricos, nomes, contatos, count ou SELECT *. */
+/** Uma requisição por vez. Nome do Closer somente nas metas, para paridade com Vendas; sem contatos ou SELECT *. */
 export async function consultarMissao(vendasDb: SupabaseClient, marketingDb: SupabaseClient, hoje: string, signal: AbortSignal): Promise<DadosMissao> {
   const marcas = FRENTES_MISSAO.map(m => m.marca)
   const mes = hoje.slice(0, 7) + '-01'
@@ -24,8 +24,8 @@ export async function consultarMissao(vendasDb: SupabaseClient, marketingDb: Sup
     .limit(LIMITES_MISSAO.vendas + 1).abortSignal(signal), 'vendas de 2026', LIMITES_MISSAO.vendas)
   signal.throwIfAborted()
   const metas = ler<MetaMissaoRow>(await vendasDb.from('DB_Metas_Performance')
-    .select('mes_referencia,marca,funcao,meta_financeira,meta_qtd_vendas,meta_sql,meta_volume_sal')
-    .in('mes_referencia', [...MESES_MISSAO]).in('marca', marcas).in('funcao', ['SDR', 'Closer'])
+    .select('mes_referencia,marca,funcao,nome_colaborador,meta_financeira,meta_qtd_vendas,meta_sql,meta_volume_sal')
+    .in('mes_referencia', [...MESES_MISSAO]).in('marca', [...MARCAS_META_PERIODO_MISSAO]).in('funcao', ['SDR', 'Closer'])
     .limit(LIMITES_MISSAO.metas + 1).abortSignal(signal), 'metas cadastradas', LIMITES_MISSAO.metas)
   // Fora da missão, não apresentar o realizado de outro mês contra metas de 2026.
   if (!MESES_MISSAO.some(m => m === mes)) {

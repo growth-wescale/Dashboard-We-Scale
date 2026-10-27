@@ -16,9 +16,13 @@ export const FRENTES_MISSAO = [
   { marca: 'Eletrovias', investimento: 76_000 },
   { marca: 'Lisô Laser', investimento: 72_000 },
 ] as const
+// Mesmo recorte de marcas do quadro de Vendas enviado para a Missão.
+export const MARCAS_META_PERIODO_MISSAO = [
+  'Oral Unic', 'Inpot', 'Eletrovias', 'Lisô Laser', 'B2Case', 'Viva', 'Instituto do Autismo',
+] as const
 
 export interface MetaMissaoRow {
-  mes_referencia: string; marca: string; funcao: string
+  mes_referencia: string; marca: string; funcao: string; nome_colaborador?: string | null
   meta_financeira: number | null; meta_qtd_vendas: number | null
   meta_sql: number | null; meta_volume_sal: string | null
 }
@@ -114,6 +118,25 @@ export function realizadoMissao(rows: VendaMissaoRow[], inicio: string, fim: str
     centavos += Math.round(valor * 100)
   }
   return { receita: centavos / 100, unidades, negocios, semValor }
+}
+
+/** Mesma agregação Closer do quadro de Vendas para o mês vigente. */
+export function metaPeriodoMissao(dados: DadosMissao) {
+  const mes = dados.hoje.slice(0, 7) + '-01'
+  const linhas = MARCAS_META_PERIODO_MISSAO.map(marca => {
+    const realizado = realizadoMissao(dados.vendas, mes, dados.hoje, marca)
+    const metas = dados.metas.filter(r => r.marca === marca && r.mes_referencia.slice(0, 10) === mes && r.funcao === 'Closer' && r.nome_colaborador)
+    const metaReceita = metas.reduce((s, r) => s + (r.meta_financeira ?? 0), 0)
+    const metaFechamentos = metas.reduce((s, r) => s + (r.meta_qtd_vendas ?? 0), 0)
+    return { marca, receita: realizado.receita, fechamentos: realizado.negocios, metaReceita, metaFechamentos }
+  })
+  const total = linhas.reduce((acc, linha) => ({
+    receita: acc.receita + linha.receita,
+    fechamentos: acc.fechamentos + linha.fechamentos,
+    metaReceita: acc.metaReceita + (linha.metaReceita ?? 0),
+    metaFechamentos: acc.metaFechamentos + (linha.metaFechamentos ?? 0),
+  }), { receita: 0, fechamentos: 0, metaReceita: 0, metaFechamentos: 0 })
+  return { mes, linhas, total }
 }
 
 /** Datas consolidadas por ciclo, como a campanha; não conta reentradas/passagens. */

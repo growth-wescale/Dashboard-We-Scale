@@ -15,23 +15,40 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
-### Projeção de MQLs de mídia paga — 27/10/2026
+### Meta do período — tabela do quadro de Vendas
 
-No card mensal de MQL, a linha “MQL gerados de mídia paga” segue o mesmo
-formato da linha MQL existente: volume sobre meta, barra, traço temporal,
-percentual e diferença. Ela mostra a estimativa de volume obtida por
-`orçamento mensal planejado ÷ CP-MQL meta`, arredondada ao
-inteiro mais próximo. Usa o mesmo orçamento da tabela e do pacing de
-investimento: Inpot/Lisô 40/40/20; Eletrovias 28/28/20 mil. O traço marca
-os dias transcorridos no mês, como na linha MQL atual. O percentual e a
-diferença usam a meta total de MQL do funil inverso; quando ela está pendente,
-a estimativa continua visível sem barra
-ou percentual fictício. Exemplo de outubro: Inpot 36.000/220 ≈ 164,
-Eletrovias 28.000/37 ≈ 757 e Lisô 28.800/300 = 96 MQLs.
+Antes do Plano de investimento, a Missão mostra a meta do mês vigente de
+outubro a dezembro para as sete marcas do print: Oral Unic, Inpot,
+Eletrovias, Lisô Laser, B2Case, Viva e Instituto do Autismo. Receita e
+fechamentos aparecem como realizado / meta cadastrada, atingimento e total,
+em tabela. O realizado usa Ganho pela data da venda em Brasília, negócio e
+ciclo únicos, sem multiplicar por unidades. As metas vêm das parcelas Closer
+de `DB_Metas_Performance` no mesmo mês, sem alterar o cadastro. A agregação
+segue o quadro de Vendas: soma somente linhas Closer com colaborador definido;
+valores vazios não acrescentam à soma. Meta zero ou ausente aparece como “—”.
+O realizado total inclui as sete marcas, mesmo as que ainda não têm meta. O
+trimestre e os placares fixos conservam suas regras próprias.
+Reutiliza a leitura de vendas existente e amplia somente o filtro de marcas
+da consulta de metas; os demais recortes de MQL, SQL, SAL e mídia permanecem
+nas três frentes prioritárias.
 
-A projeção representa apenas a capacidade estimada da verba de mídia paga,
-pressupondo CP-MQL igual à meta. Não substitui o MQL realizado, a meta total
-nem o CP-MQL observado. Nenhuma fonte, orçamento ou meta foi alterada.
+### Meta projetada de mídia paga — ajuste de 27/10/2026
+
+No card mensal de MQL, a segunda linha usa o mesmo formato visual da linha
+MQL: realizado / meta, barra, traço temporal, percentual e diferença. O
+denominador é a meta projetada com mídia paga:
+`orçamento mensal planejado ÷ CP-MQL meta`, arredondada ao inteiro mais
+próximo. Usa o mesmo orçamento da tabela e do pacing de investimento:
+Inpot/Lisô 40/40/20; Eletrovias 28/28/20 mil. Exemplo de outubro: Inpot
+36.000/220 ≈ 164, Eletrovias 28.000/37 ≈ 757 e Lisô 28.800/300 = 96 MQLs.
+
+O numerador é o MQL realizado já contado no card, **de todos os
+canais**, pois a consulta atual não traz origem e não há classificação paga
+validada. Assim, no print de Inpot, a comparação seria 108 / 164, sem afirmar
+que os 108 vieram de mídia paga. Contagem exclusiva de mídia exige acesso à
+fonte e regra de atribuição homologada. A meta total do funil inverso e o
+CP-MQL observado permanecem nas linhas originais. Nenhuma fonte, orçamento
+ou meta foi alterada por este ajuste local.
 
 ### Regra vigente aprovada em 20/10/2026 — funil inverso local
 
@@ -128,7 +145,7 @@ ou troca de conta. Clientes de conexão e permissões existentes não mudam.
 `consultarMissao` executa **sequencialmente**:
 
 1. Ganhos de 2026 até hoje (ou fim de 2026): até 500 linhas + sentinela.
-2. Metas de out–dez das três prioritárias/SDR/Closer: 200 + sentinela.
+2. Metas de out–dez das sete marcas do quadro/SDR/Closer: 200 + sentinela.
 3. SQL/SAL do mês vigente das três prioritárias: 500 + sentinela.
 4. Mídia das três marcas, mês até hoje, somente colunas necessárias;
    ordenação total `dia,id`, páginas de 500, máximo oito páginas.

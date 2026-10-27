@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { captacaoMissao, etapasMissao, funilInversoMissao, metaCadastrada, MESES_MISSAO, pacingMissao, projecaoMqlMidia, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
+import { captacaoMissao, etapasMissao, funilInversoMissao, metaCadastrada, metaPeriodoMissao, MESES_MISSAO, pacingMissao, projecaoMqlMidia, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
 import type { Lead } from './types'
 
 const meta: MetaMissaoRow = { mes_referencia: '2026-10-01', marca: 'Inpot', funcao: 'Closer', meta_financeira: 1000, meta_qtd_vendas: 2, meta_sql: null, meta_volume_sal: null }
@@ -96,6 +96,18 @@ describe('Missão: funil inverso aprovado em 20/10, exclusivo desta página', ()
 })
 
 describe('Missão: realizado', () => {
+  it('quadro de metas soma sete marcas no mês, preservando ausência de cadastro', () => {
+    const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '', etapas: [], midia: [],
+      vendas: [venda, { ...venda, id_lead: 'oral', marca: 'Oral Unic', valor_contrato: 50 },
+        { ...venda, id_lead: 'anterior', marca: 'Inpot', data_venda: '2026-09-30' }],
+      metas: [{ ...meta, nome_colaborador: 'Closer Inpot' }, { ...meta, nome_colaborador: 'Closer Oral', marca: 'Oral Unic', meta_financeira: 200, meta_qtd_vendas: 2 },
+        { ...meta, marca: 'Viva', meta_financeira: null, meta_qtd_vendas: null }] }
+    const r = metaPeriodoMissao(dados)
+    expect(r.linhas.map(l => l.marca)).toEqual(['Oral Unic', 'Inpot', 'Eletrovias', 'Lisô Laser', 'B2Case', 'Viva', 'Instituto do Autismo'])
+    expect(r.total).toEqual({ receita: 150.25, fechamentos: 2, metaReceita: 1200, metaFechamentos: 4 })
+    expect(r.linhas.find(l => l.marca === 'Viva')?.metaReceita).toBe(0)
+    expect(metaPeriodoMissao({ ...dados, metas: [] }).total.metaReceita).toBe(0)
+  })
   it('aplica trava Ganho, dedupe por ciclo, quantidade e receita sem multiplicar', () => {
     const r = realizadoMissao([venda, venda, { ...venda, ciclo: 2 }, { ...venda, id_lead: 'revertido', status_atual: 'Perdido' }], '2026-01-01', '2026-12-31')
     expect(r).toEqual({ receita: 200.5, unidades: 6, negocios: 2, semValor: 0 })

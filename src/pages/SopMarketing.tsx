@@ -1,3 +1,4 @@
+import { eletroviasOuroEnabled } from '@/lib/eletroviasOuroScope'
 import { isOralUnicSopFranchiseMedia, type OralUnicMediaRow } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
@@ -924,7 +925,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const { data: metas } = metasRes
   const { data: sqlEvents } = sqlEventsRes
 
-  const ouroReadRequired = (slide.filterFranquia && oralUnicOuroEnabled) || (isOdontoLegacy && legacyOuroEnabled) || isWeScale || (slide.id === 'liso' && lisoOuroEnabled)
+  const eletroviasReadRequired = slide.marca === 'Eletrovias' && eletroviasOuroEnabled
+  const ouroReadRequired = eletroviasReadRequired || (slide.filterFranquia && oralUnicOuroEnabled) || (isOdontoLegacy && legacyOuroEnabled) || isWeScale || (slide.id === 'liso' && lisoOuroEnabled)
   const partnerReadError = ouroReadRequired ? [...(isOdontoLegacy ? [mediaAllOdl.error, mediaPrevOdl.error] : []), mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
   const partnerKpiPending = ouroReadRequired && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
 
@@ -1451,6 +1453,12 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     { label: 'SAL',         count: funnelMtd.sal },
     { label: 'Fechado',     count: fechOverride ?? funnelMtd.fech },
   ]
+
+  if (eletroviasReadRequired && (!allLoaded || partnerReadError)) {
+    return <div role={partnerReadError ? 'alert' : 'status'} style={{ padding: 36 }}>
+      {partnerReadError ? 'Não foi possível carregar Eletrovias. Atualize para tentar novamente.' : 'Carregando Eletrovias…'}
+    </div>
+  }
 
   if (slide.filterFranquia && oralUnicOuroEnabled && (!allLoaded || partnerReadError)) {
     return <div role={partnerReadError ? 'alert' : 'status'} style={{ padding: 36 }}>
@@ -2323,7 +2331,8 @@ export function SopMarketing() {
             if (readyResolverRef.current === finish) {
               readyResolverRef.current = null
               const partner = slides[i]?.marca === 'We Scale' || i === slides.length
-              if (slides[i]?.filterFranquia && oralUnicOuroEnabled) reject(new Error('Aguarde o carregamento de Oral Unic antes de exportar.'))
+              if (slides[i]?.marca === 'Eletrovias' && eletroviasOuroEnabled) reject(new Error('Aguarde o carregamento de Eletrovias antes de exportar.'))
+              else if (slides[i]?.filterFranquia && oralUnicOuroEnabled) reject(new Error('Aguarde o carregamento de Oral Unic antes de exportar.'))
               else if (slides[i]?.marca === 'Odonto Scale' && legacyOuroEnabled) reject(new Error('Aguarde o carregamento de Legacy antes de exportar.'))
               else if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
               else if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))

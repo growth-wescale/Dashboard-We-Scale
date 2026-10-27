@@ -7,6 +7,17 @@ vi.mock('./supabaseVendas', () => ({ supabaseVendas: mocks.nativeSales }))
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); mocks.create.mockClear() })
 
 describe('clientes da ouro exclusivos de Marketing', () => {
+  it('Eletrovias isolada não muda Vendas nem consumidores sem opt-in', async () => {
+    for (const brand of ['PARTNER', 'LISO', 'LEGACY', 'ORAL_UNIC']) vi.stubEnv(`VITE_${brand}_OURO_ENABLED`, 'false')
+    vi.stubEnv('VITE_ELETROVIAS_OURO_ENABLED', 'true')
+    const s = await import('./partnerMarketingSources')
+    expect(s.marketingDataClient(false)).toBe(mocks.nativeMarketing)
+    expect(s.marketingCrmClient()).toBe(mocks.nativeSales)
+    expect(s.marketingDataClient()).not.toBe(mocks.nativeMarketing)
+    expect(s.partnerMarketingCacheScope(false)).toBe('')
+    expect(s.partnerMarketingCacheScope()).toBe(':eletrovias-ouro:marketing:v1')
+    expect(mocks.create).toHaveBeenCalledTimes(1)
+  })
   it('Legacy isolado mantém todos os clientes de Vendas nativos', async () => {
     vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'false')
     vi.stubEnv('VITE_LISO_OURO_ENABLED', 'false')

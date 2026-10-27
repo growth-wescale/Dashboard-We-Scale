@@ -737,16 +737,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Lisô Laser no RD Conversas (27/10):** o bot "(Lisô Laser) Bot - M1 regiao + CRM" é o **fluxo
-  padrão do canal "Lisô Laser 09"** (5547991923409): responde qualquer mensagem que chega fora de
-  atendimento, chama os webhooks do n8n `mover-crm-contato-efetivo`, `mover-crm-interesse-reuniao` e
-  `mover-crm-desqualificado` (mexe na etapa do deal no RD) e joga na fila do setor "Lisô Laser - Novos
-  MQLs". A **Bruna não tem usuário no RD Conversas** (21 usuários, nenhum é ela). Falta: (1) Junior/Brunno
-  criarem o usuário dela e porem no setor da Lisô; (2) tirar o fluxo do canal da Lisô (mudança de
-  configuração, com o OK do Junior); (3) cadastrar a carteira dela em `cadencia.sdr_carteiras` (só os
-  deals dela fora do funil Closer entram: em 27/10, 1 da Lisô). Em aberto: os 46 deals abertos da Lisô
-  com a Xayane (passar para a Bruna move o MQL desses deals para o nome dela no painel, porque deal
-  aberto em etapa de SDR mostra o dono atual)
+- [ ] **Lisô Laser sem bot e sem dono no RD Conversas (27/10):** o fluxo "(Lisô Laser) Bot - M1 regiao +
+  CRM" foi **despublicado** do número "Lisô Laser 09" (5547991923409), não excluído: segue salvo em
+  Automação de conversas (para religar: ⋮ → Publicar no canal → ligar esse WhatsApp → Salvar). Ele
+  respondia qualquer mensagem fora de atendimento, mexia na etapa do deal pelos webhooks do n8n
+  `mover-crm-*` e jogava na fila do setor "Lisô Laser - Novos MQLs". A Bruna **não vai ter usuário** no
+  RD Conversas (decisão do Junior), então mensagem que chega no número da Lisô cai na fila de espera
+  geral e alguém com acesso precisa atender ou repassar; `cadencia.sdr_carteiras` não se aplica a ela.
+  Em aberto: os 46 deals abertos da Lisô com a Xayane (passar para a Bruna move o MQL desses deals para
+  o nome dela no painel, porque deal aberto em etapa de SDR mostra o dono atual)
 - [ ] **Reconciliação da cadência travada não avisa ninguém.** Em 23 e 26/10 a rodada das 06h
   ficou `em_andamento` sem fim e só se descobriu pelos leads parados no RD (entrada de 26/10).
   Falta um alerta (ex.: `pg_cron` que avisa no Teams quando a rodada do dia útil não fecha em
@@ -865,7 +864,11 @@ Eletrovias, 50/50).
 ciclos ao aplicar; testado com rollback: lead distribuído para a Bruna e sem SDR passa a mostrar
 Bruna. SQL: `docs/sql/2026-10-27-liso-sem-sdr-v6-e-sdr-distribuicao.sql`.
 
-**RD Conversas:** ver pendência na seção 8 (bot é o fluxo padrão do canal da Lisô; Bruna sem usuário).
+**RD Conversas:** o bot "(Lisô Laser) Bot - M1 regiao + CRM" era o fluxo padrão do número da Lisô e
+respondia qualquer mensagem fora de atendimento, mexendo na etapa do deal via n8n. Despublicado do
+número "Lisô Laser 09" (Publicar no canal → desligar → Salvar), sem excluir: o fluxo segue salvo e os
+outros 6 números continuam com o bot deles (conferido pela API). A Bruna não terá usuário no RD
+Conversas; ver pendência na seção 8.
 
 ### 2026-10-27 — Lisô Laser sem bot e leads novos só para a Bruna; histórico da configuração das cadências
 

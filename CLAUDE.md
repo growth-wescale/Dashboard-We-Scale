@@ -164,7 +164,8 @@ sem filtro; formato legado `leads[]`, identificador em
   `distribuicao_time_da_marca(marca, em)`. Em 27/10 só marcas sem meta e a
   **Lisô Laser** (Bruna 100%, regra v5) têm time próprio; para voltar a Lisô à
   meta, publicar a regra com o time próprio vazio. O time próprio aceita
-  qualquer cargo (a Bruna é Closer).
+  qualquer cargo (a Bruna é Closer). A Lisô também não tem meta de SDR desde a
+  V6 de outubro (etapas de SDR "sem meta", sem pessoa SDR).
 - **Escolha**: `distribuicao_escolher` minimiza `n_i − p_i × (N+1)/100`
   (empate: maior peso, depois nome), contando só desde `reinicio_em` = o mais
   recente entre ativação da versão, virada do mês e última mudança de
@@ -328,6 +329,12 @@ eleito):
    instante da perda.
 2. `posse` com dono `SDR/Closer` igual ao Closer eleito — quem faz os dois
    papéis (Vanessa Daniel no Odonto Legacy) aparece nas duas colunas.
+3. `distribuicao` (desde 27/10) — ciclo 1 de deal criado pela distribuição de
+   leads: quem recebeu o lead (`distribuicao_atribuicao`, `atribuido`), de
+   qualquer cargo. Caso de origem: a Bruna (Closer) recebe os leads da Lisô e
+   também fecha; o nome dela era descartado em `posse` por ser igual ao Closer
+   eleito. Ela aparece como SDR **nos negócios dela** sem virar SDR no cadastro
+   (segue `Closer` em `nome_cargo_foto`, sem meta de SDR).
 Deal que nasceu e ficou só com Closer (indicação, franqueado, evento), com
 "SDR Responsável" vazio no RD, continua **sem SDR** — é o dado real.
 
@@ -730,12 +737,16 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Lisô Laser no RD Conversas (27/10):** conferir o gatilho da automação "(Lisô Laser) Bot - M1
-  regiao + CRM" (se responde qualquer mensagem do canal da Lisô, desligar; se só entra pela resposta ao
-  template, já parou) e se a Bruna tem usuário, acesso ao canal da Lisô e carteira. Com a carteira
-  confirmada, cadastrar a Bruna em `cadencia.sdr_carteiras` (só os deals dela fora do funil Closer
-  entram: em 27/10, 1 da Lisô). Decidir com o Junior: passar para a Bruna os 46 deals abertos da Lisô
-  que estão com a Xayane, e a meta de SDR da Lisô (hoje da Xayane) em novembro
+- [ ] **Lisô Laser no RD Conversas (27/10):** o bot "(Lisô Laser) Bot - M1 regiao + CRM" é o **fluxo
+  padrão do canal "Lisô Laser 09"** (5547991923409): responde qualquer mensagem que chega fora de
+  atendimento, chama os webhooks do n8n `mover-crm-contato-efetivo`, `mover-crm-interesse-reuniao` e
+  `mover-crm-desqualificado` (mexe na etapa do deal no RD) e joga na fila do setor "Lisô Laser - Novos
+  MQLs". A **Bruna não tem usuário no RD Conversas** (21 usuários, nenhum é ela). Falta: (1) Junior/Brunno
+  criarem o usuário dela e porem no setor da Lisô; (2) tirar o fluxo do canal da Lisô (mudança de
+  configuração, com o OK do Junior); (3) cadastrar a carteira dela em `cadencia.sdr_carteiras` (só os
+  deals dela fora do funil Closer entram: em 27/10, 1 da Lisô). Em aberto: os 46 deals abertos da Lisô
+  com a Xayane (passar para a Bruna move o MQL desses deals para o nome dela no painel, porque deal
+  aberto em etapa de SDR mostra o dono atual)
 - [ ] **Reconciliação da cadência travada não avisa ninguém.** Em 23 e 26/10 a rodada das 06h
   ficou `em_andamento` sem fim e só se descobriu pelos leads parados no RD (entrada de 26/10).
   Falta um alerta (ex.: `pg_cron` que avisa no Teams quando a rodada do dia útil não fecha em
@@ -836,6 +847,25 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-27 (2) — Lisô Laser sem meta de SDR (V6) e a Bruna como SDR nos negócios dela
+
+Decisão do chefe do Junior: a Xayane não tem mais meta de SDR da Lisô em outubro, mas o que ela fez
+na marca continua contando; a Bruna aparece como SDR nos negócios que ela trabalhar, sem virar SDR.
+
+**Metas:** V6 de outubro (`meta_versao` id 20, ativa), cópia da V5 com as etapas de SDR da Lisô "sem
+meta" e a Xayane fora do time da marca. Closer da Lisô (Bruna, 1 venda) e as outras 6 marcas
+idênticos (md5 conferido). `DB_Metas_Performance` de outubro: 15 → 14 linhas, as 14 iguais às de
+antes. Realizado da Xayane na Lisô em outubro igual antes e depois: 80 MQL, 4 SQL, 1 Diag, 1 SAL. A
+Configuração das Metas aceita marca sem SDR com as etapas "sem meta", então novembro já nasce assim.
+Ativar a V6 reiniciou o contador da distribuição das marcas que seguem a meta (só pesa na
+Eletrovias, 50/50).
+
+**Painel:** `vw_deal_ciclo` ganhou a fonte de SDR `distribuicao` (seção 4). 0 diferenças nos 11.204
+ciclos ao aplicar; testado com rollback: lead distribuído para a Bruna e sem SDR passa a mostrar
+Bruna. SQL: `docs/sql/2026-10-27-liso-sem-sdr-v6-e-sdr-distribuicao.sql`.
+
+**RD Conversas:** ver pendência na seção 8 (bot é o fluxo padrão do canal da Lisô; Bruna sem usuário).
 
 ### 2026-10-27 — Lisô Laser sem bot e leads novos só para a Bruna; histórico da configuração das cadências
 

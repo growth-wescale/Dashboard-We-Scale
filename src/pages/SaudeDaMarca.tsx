@@ -1,3 +1,4 @@
+import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
 import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
@@ -1892,7 +1893,7 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'evento')   return leadsData.filter(isLeadEventoInpot)
     if (isInpot && inpSubView === 'franquia') return leadsData.filter(l => !isLeadEventoInpot(l))
     if (!isOralUnic || ouSubView === 'geral') return leadsData
-    if (ouSubView === 'franquia')      return leadsData.filter(l => l.formulario === 'oralunic_multistep' && !isLeadV4(l.utm_campaign))
+    if (ouSubView === 'franquia')      return leadsData.filter(l => oralUnicOuroEnabled ? isOralUnicFranchiseLead(l) : l.formulario === 'oralunic_multistep' && !isLeadV4(l.utm_campaign))
     if (ouSubView === 'v4')            return leadsData.filter(l => isLeadV4(l.utm_campaign))
     if (ouSubView === 'legacy')        return leadsData.filter(l => l.formulario === 'comunidade_multistep')
     if (ouSubView === 'odonto_legacy') return osLeadsRaw
@@ -1917,7 +1918,7 @@ export function SaudeDaMarca() {
     if (isInpot && inpSubView === 'evento')   return leadsCompareRaw.filter(isLeadEventoInpot)
     if (isInpot && inpSubView === 'franquia') return leadsCompareRaw.filter(l => !isLeadEventoInpot(l))
     if (!isOralUnic || ouSubView === 'geral') return leadsCompareRaw
-    if (ouSubView === 'franquia')      return leadsCompareRaw.filter(l => l.formulario === 'oralunic_multistep' && !isLeadV4(l.utm_campaign))
+    if (ouSubView === 'franquia')      return leadsCompareRaw.filter(l => oralUnicOuroEnabled ? isOralUnicFranchiseLead(l) : l.formulario === 'oralunic_multistep' && !isLeadV4(l.utm_campaign))
     if (ouSubView === 'v4')            return leadsCompareRaw.filter(l => isLeadV4(l.utm_campaign))
     if (ouSubView === 'legacy')        return leadsCompareRaw.filter(l => l.formulario === 'comunidade_multistep')
     if (ouSubView === 'odonto_legacy') return osLeadsCompareRaw
@@ -1957,12 +1958,12 @@ export function SaudeDaMarca() {
   const campaigns = useMemo(
     () => {
       const built = buildCampaigns(activeMediaData, b.mql, b.sql, b.leads, marca ?? '', adCreativesByName)
-      if ((b.key === 'liso-laser' && lisoOuroEnabled) || (isOdontoLegacy && legacyOuroEnabled)) return attributeLisoCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)), activeMediaData)
+      if ((b.key === 'liso-laser' && lisoOuroEnabled) || (isOdontoLegacy && legacyOuroEnabled) || (isOralUnic && oralUnicOuroEnabled && dataInicio >= '2026-10-01' && dataFim < '2026-11-01' && ['geral','franquia'].includes(ouSubView))) return attributeLisoCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)), activeMediaData)
       return b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
         ? attributePartnerCampaigns(built, mqlLeads, crmData.filter(r => inPeriod(r.data_sql, dataInicio, dataFim, r.marca)))
         : built
     },
-    [activeMediaData, b.key, b.mql, b.sql, b.leads, marca, adCreativesByName, mqlLeads, crmData, dataInicio, dataFim, isOdontoLegacy],
+    [activeMediaData, b.key, b.mql, b.sql, b.leads, marca, adCreativesByName, mqlLeads, crmData, dataInicio, dataFim, isOdontoLegacy, isOralUnic, ouSubView],
   )
   const daily = buildDailySeries(activeMediaData)
   const channels = buildChannels(activeMediaData, mqlLeads, crmData)
@@ -1971,8 +1972,8 @@ export function SaudeDaMarca() {
   const partnerOuro = b.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
   const legacyDataPending = legacyOuroEnabled && isOdontoLegacy && (osLeadsLoading || osMediaLoading)
   const legacyDataFailed = legacyOuroEnabled && isOdontoLegacy && !!(osLeadsError || osMediaError)
-  const partnerDataPending = legacyDataPending || (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && (mediaLoading || crmLoading || leadsLoading)
-  const partnerDataFailed = legacyDataFailed || (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled)) && !!(mediaError || crmError || leadsError)
+  const partnerDataPending = legacyDataPending || (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled) || (isOralUnic && oralUnicOuroEnabled)) && (mediaLoading || crmLoading || leadsLoading)
+  const partnerDataFailed = legacyDataFailed || (partnerOuro || (activeBrand === 'liso-laser' && lisoOuroEnabled) || (isOralUnic && oralUnicOuroEnabled)) && !!(mediaError || crmError || leadsError)
 
   const periodLabel = useMemo(() => {
     if (range.start.slice(0, 7) === range.end.slice(0, 7)) return monthLabel(range.start)

@@ -27,6 +27,7 @@ jobs:
         env:
           VITE_LISO_OURO_ENABLED: 'true'
           VITE_LEGACY_OURO_ENABLED: 'true'
+          VITE_ORAL_UNIC_OURO_ENABLED: 'true'
           VITE_PARTNER_OURO_ENABLED: 'true'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -50,3 +51,6 @@ jobs:
 
       - name: Test Legacy readonly gateway
         run: python3 -m unittest discover -s server/legacy_ouro -p 'test_*.py'
+
+      - name: Test Oral Unic readonly gateway
+        run: python3 -m unittest discover -s server/oral_unic_ouro -p 'test_*.py'

@@ -1,0 +1,139 @@
+{
+  "elapsed": 0.713,
+  "current_rows": 34,
+  "current_contacts": 24,
+  "current_mql": 8,
+  "community_rows_preserved": 130,
+  "gold_rows": 29,
+  "gold_contacts": 29,
+  "gold_mql_emails": 19,
+  "matched": 21,
+  "missing_current": 3,
+  "extra_gold": 8,
+  "old_mql_missing": 1,
+  "missing_identity": [],
+  "missing_rows": [
+    {
+      "id": "330e95a0-8bdf-41ee-a4c5-53aa8927f917",
+      "dia": "2026-10-01",
+      "form": "oralunic_multistep",
+      "qualification": "Lead",
+      "deal": null
+    },
+    {
+      "id": "34116817-65e7-4318-ab70-52c28bda1c81",
+      "dia": "2026-10-13",
+      "form": "oralunic_multistep",
+      "qualification": "MQL",
+      "deal": null
+    },
+    {
+      "id": "0eaf16aa-7bb7-45fd-938d-108a34a3fc2e",
+      "dia": "2026-10-15",
+      "form": "oralunic_multistep",
+      "qualification": "Lead",
+      "deal": null
+    },
+    {
+      "id": "2669ade4-3a34-42e6-80f8-2aa8cb283a9a",
+      "dia": "2026-10-15",
+      "form": "oralunic_multistep",
+      "qualification": "Lead",
+      "deal": null
+    },
+    {
+      "id": "06a2af1d-d932-4e0c-b1d5-2a1bc83347e0",
+      "dia": "2026-10-15",
+      "form": "oralunic_multistep",
+      "qualification": "Lead",
+      "deal": null
+    }
+  ],
+  "gold_by_provenance": {
+    "deal_criado_crm_MQL": 19,
+    "source_LEAD": 10
+  },
+  "crm_pipeline_counts": {
+    "SDR": 11,
+    "Closer": 5,
+    "Repasse": 2,
+    "Funil de teste": 1
+  },
+  "qualification_rule": "Every created deal is MQL; no pipeline, capital or stage qualification filter",
+  "qualification_decomposition": {
+    "old_mql_retained": 7,
+    "old_mql_missing": 1,
+    "prior_lead_now_crm_mql": 4,
+    "additional_crm_contacts": 8
+  },
+  "period": [
+    "2026-10-01",
+    "2026-10-27"
+  ],
+  "date": "2026-10-27",
+  "status": "prepared_not_published",
+  "views_installed": false,
+  "gateway_installed": false,
+  "frontend_flag_default": false,
+  "media": [
+    {
+      "campaign_id": "23324303426",
+      "campaign": "[SEARCH] LEGACY Franchise marca",
+      "current": 3.35,
+      "gold": 3.35,
+      "delta": 0.0,
+      "closed_delta": 0.0,
+      "gold_loaded": "2026-10-27 05:39:32.317463-03:00"
+    },
+    {
+      "campaign_id": "120246002967810752",
+      "campaign": "[GS][CONV][LEAD] - Avaliadores - 05/06/2026",
+      "current": 1690.99,
+      "gold": 1775.88,
+      "delta": 84.89,
+      "closed_delta": 88.9,
+      "gold_loaded": "2026-10-27 09:39:12.030425-03:00"
+    },
+    {
+      "campaign_id": "120249498633040752",
+      "campaign": "[OUF] FUNDO_MQL_FRANQUIA_NOVA",
+      "current": 3896.29,
+      "gold": 4059.4,
+      "delta": 163.11,
+      "closed_delta": 169.72,
+      "gold_loaded": "2026-10-27 09:39:12.030425-03:00"
+    }
+  ],
+  "validation": {
+    "frontend_tests": 894,
+    "gateway_tests": 11,
+    "build": "passed",
+    "ui": "partial_authenticated_preview",
+    "source_completeness": "three_current_contacts_absent",
+    "verified": [
+      "overview",
+      "health_general",
+      "health_franchise",
+      "campaigns",
+      "adsets",
+      "ads"
+    ],
+    "overview_mql": 19,
+    "franchise_contacts": 29,
+    "general_contacts": 153,
+    "franchise_spend": 5950.2,
+    "pdf": "blocked_no_valid_export",
+    "remaining": [
+      "Meta and OKRs:20s timeout",
+      "SOP/PDF complete: existing Liso gateway503"
+    ],
+    "other_service_mutations": false
+  },
+  "source_writes": false,
+  "scope_notes": [
+    "Test pipeline included:every created deal remains MQL",
+    "Historical/native Sales and community preserved",
+    "Three fixed media IDs proposed; platform reconciliation not done",
+    "Current franchise grouping includes111.57 from two CMD campaigns, left native"
+  ]
+}

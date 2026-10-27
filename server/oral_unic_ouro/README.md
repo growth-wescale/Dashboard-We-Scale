@@ -25,7 +25,7 @@ Cinco linhas atuais correspondem aos três contatos ausentes, todas do formulár
 
 130 linhas atuais de comunidade são preservadas. Contagens gerais Oral Unic incluem a comunidade e dedupe existente; não comparar153 pessoas da tela geral com29 pessoas do recorte de franquia como se fossem a mesma população.
 
-## Investimento
+## Investimento — fotografia da preparação, superada pela conciliação abaixo
 
 | Campanha | Base atual | Ouro | Diferença |
 |---|---:|---:|---:|
@@ -44,4 +44,42 @@ A interface Franquia já inclui duas campanhas `CMD Aquisição...Engajamento Wh
 
 Prévia autenticada: Visão Geral e Saúde Oral Unic/Franquia (visão geral, campanhas, conjuntos e anúncios) mostraram19 MQLs, R$5.950,20 na frente Franquia e153 contatos gerais (inclui comunidade). A atribuição mantém5 MQLs na campanha OUF e14 sem correspondência exata, sem rateio proporcional. Meta & OKRs exibiu timeout de20s. Exportação PDF conjunto foi impedida por respostas503 do gateway Lisô já existente, sem novo PDF válido; S&OP Oral Unic/PDF completos permanecem não homologados. Não foi alterado/reiniciado esse serviço, nem reaberta auditoria de dados de Lisô. Nenhuma afirmação de gateway definitivo ou completude do RD. Falhas de leitura nas páginas e no PDF não devem virar zero/fallback silencioso. Termos/social/radar/email e fontes comerciais nativas não são migrados.
 
-Para publicar: decidir cobertura dos três contatos ausentes, conciliar as duas diferenças de mídia e confirmar escopo das campanhas; instalar/validar views e gateway restritos somente após aceite. Não reabrir qualificação MQL; negócio criado é MQL. Uma validação final após a decisão, sem rodada de ajustes nos fatos. Evidência: `docs/audits/2026-10-27-oral-unic-ouro.json`.
+Próximos gates atualizados pela investigação abaixo: cobertura/identidade da origem, aceite do recorte de mídia e validação final. Valores de mídia já conciliados nas plataformas; instalar/validar views e gateway restritos somente após aceite. Não reabrir qualificação MQL; negócio criado é MQL. Uma validação final após a decisão, sem rodada de ajustes nos fatos. Evidência: `docs/audits/2026-10-27-oral-unic-ouro.json`.
+
+
+## Investigação encerrada em27/10 — proposta antes de aplicar
+
+Somente leitura: base atual, bronze/prata/ouro, GET nas contas RD Marketing/CRM existentes e APIs Meta/Google. Nenhuma escrita RD/fatos, alteração de serviços/campanhas, implementação adicional ou publicação. A versão de consumo do PR continua sendo a preparação anterior; as mudanças de recorte abaixo **não foram aplicadas**. Não repetir auditoria comercial ou QA nesta etapa documental.
+
+### Três contatos: lacuna de cobertura e uma identidade ambígua
+
+- **01/10, Lead** — linha330e95a0-8bdf-41ee-a4c5-53aa8927f917: presente na captação atual, ausente no DW por ID/email/telefone; RD Marketing404 e CRM sem resultados por email/telefone.
+- **15/10, Lead** — três envios em23 segundos, mesmo email/contato (IDs completos na auditoria): presentes na base atual, ausentes no DW e nas consultas RD por email/telefone. Não são três pessoas, nem justificam apagar as submissões originais.
+- **13/10, MQL** — linha34116817-65e7-4318-ab70-52c28bda1c81: a própria LP gravou `lead_type=MQL` e `is_mql=true`; não foi recalculado no dashboard. Email ausente no DW e nas consultas RD. Telefone com país55 encontra três contatos CRM anteriores, todos com nomes/emails diferentes; vínculos conhecidos têm negócios de junho a setembro. Isso **não prova** identidade única nem uma negociação nova de outubro. Não unir nem mover esses negócios de data/marca.
+
+A cópia `prata.wescale_marketing_leads` contém16.070 linhas e termina em22/09 (última observação23/09), com nenhum dos cinco IDs. A leitura ouro não consegue recuperar registros que não chegaram a suas fontes. O404 limita-se à conta e identificadores consultados; não prova exclusão histórica nem causa da falha de entrega. Sem logs de envio vinculados aos IDs, não afirmar que a LP enviou ao RD ou por que não chegou.
+
+**Proposta de origem/TI:** disponibilizar na ouro as submissões reais da LP com IDs/datas/classificação original; para o MQL13/10, confirmar a identidade e o vínculo comercial ou documentar a qualificação da LP com a proveniência correta. Preserve os cinco registros originais, sem criar contatos/negócios RD, apagar importações, mesclar por telefone ou alterar marcas. Isso depende de correção de cobertura na origem, não de ajuste manual nos fatos. A migração integral continua sem aceite; não acrescentar automaticamente um20º MQL.
+
+### Valores conciliados: dias fechados idênticos
+
+BRL, America/Sao_Paulo, mesmos IDs e dias. Leitura das plataformas iniciada10:56 BRT; ouro Meta carregada10:38 BRT.
+
+| Campanha | Ouro01–26 | Plataforma01–26 | Diferença |
+|---|---:|---:|---:|
+| OUF120249498633040752 |R$4.013,91|R$4.013,91|R$0,00|
+| GS/Avaliadores120246002967810752 |R$1.751,45|R$1.751,45|R$0,00|
+| Google23324303426 |R$3,35|R$3,35|R$0,00|
+| Total |R$5.768,71|R$5.768,71|R$0,00|
+
+Paridade em cada dia, não apenas no total. Base atual01–26 somaR$5.510,07, R$258,64 abaixo; a divergência anterior é da referência atual versus plataforma, não erro no gasto ouro desses IDs. Incluindo27/10: base atualR$5.590,63; ouroR$5.859,18; plataformaR$5.882,38. Os R$23,20 residuais concentram-se exclusivamente no dia em andamento (OUF20,01/GS3,19); não propor ajuste manual por essa diferença de cortes. Estas são novas fotografias: osR$248 anteriores não eram um saldo fixo.
+
+### Proposta de recorte em Marketing, sem mudar as marcas/fatos
+
+- **Franquia:** OUF120249498633040752 → formulário nativo1476782897649731, `FRQ_OralUnic_Franquia_Condicional_v1_out26-copy`; Google23324303426 → anúncio786626548441 com osR$3,35 e destino [franquia Oral Unic](https://legacy.oralunic.com.br/franquia). A página viva confirma franquia; “LEGACY” no nome da campanha/domínio não justifica mover o gasto para consultoria.
+- **Avaliadores, separado da franquia:** GS120246002967810752 usa formulário1777211366826702, `Form - Avaliadores-copy`, com perguntas de profissão/especialidade e experiência como dentista avaliador. Propor retirar esse gasto do CP-MQL de franquia, mantendo-o identificado na própria Oral Unic.
+- **Comunidade:** CMD120249277805770752 e120249260819990752 somamR$111,57, idênticos na base atual/ouro/Meta. Anúncios de live/WhatsApp e objetivo engajamento confirmados. Entram em Franquia hoje porque a regra reconhece `[CMD]`, mas esses nomes usam `CMD` sem colchetes. Propor associação explícita pelos IDs no consumo Marketing; não renomear campanhas nem mudar fatos/marcas.
+
+Com o recorte proposto, franquia01–27 teriaR$4.077,42 na fotografia ouro (OUF+Google), versusR$4.097,43 na leitura posterior das plataformas. GS e CMD continuam existentes, separados da franquia; o total investido da marca não é apagado. Os19 MQLs CRM da preparação não são recalculados por esta proposta.
+
+**Mapa finito:** (1) aceite do recorte de mídia acima; (2) cobertura dos três contatos pela origem/TI e decisão da identidade ambígua; (3) após esses pontos, uma única validação Marketing/PDF, gateway e aceite de publicação. Valores de mídia e regra de MQL encerrados; sem repetir conferências já resolvidas. Evidência agregada na chave `investigation_2026_10_27` da auditoria JSON.

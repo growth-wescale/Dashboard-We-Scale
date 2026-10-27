@@ -4,7 +4,8 @@
 WITH atuais AS (
  SELECT DISTINCT ON (conta_id, negocio_id)
   conta_id, negocio_id, funil_id, nome_funil, marca,
-  data_criacao_original, data_novo_mql, status_atual, carregado_em
+  data_criacao_original, data_novo_mql, status_atual, carregado_em,
+  utm_source,utm_medium,utm_campaign
  FROM ouro.negocios_ciclos_dashboard
  WHERE conta_id = 'wescale_principal_crm'
  ORDER BY conta_id, negocio_id, eh_ciclo_atual DESC NULLS LAST,

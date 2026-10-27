@@ -7,6 +7,16 @@ vi.mock('./supabaseVendas', () => ({ supabaseVendas: mocks.nativeSales }))
 afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); mocks.create.mockClear() })
 
 describe('clientes da ouro exclusivos de Marketing', () => {
+  it('Lisô pode ser preparado sem ativar Partner ou qualquer cliente de Vendas', async () => {
+    vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'false')
+    vi.stubEnv('VITE_LISO_OURO_ENABLED', 'true')
+    const s = await import('./partnerMarketingSources')
+    expect(s.marketingDataClient(false)).toBe(mocks.nativeMarketing)
+    expect(s.marketingCrmClient()).toBe(mocks.nativeSales)
+    expect(s.marketingDataClient()).not.toBe(mocks.nativeMarketing)
+    expect(s.partnerMarketingCacheScope()).toBe(':liso-ouro:marketing:v1')
+    expect(mocks.create).toHaveBeenCalledTimes(1)
+  })
   it('flag desligada preserva os clientes e as chaves originais', async () => {
     vi.stubEnv('VITE_PARTNER_OURO_ENABLED', 'false')
     const s = await import('./partnerMarketingSources')

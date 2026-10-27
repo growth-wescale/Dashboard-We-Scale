@@ -12,7 +12,7 @@ SELECT m.registro_key, m.data_evento, e.segmento,
  m.grupo_id, m.grupo_nome, m.anuncio_id, m.anuncio_nome,
  m.moeda, m.fuso_horario, m.gasto, m.impressoes,
  m.cliques_total, m.cliques_link, m.lpv, m.leads_plataforma,
- m.lpv_presente, m.leads_presente, m.metricas_ausentes,
+ m.lpv_presente, m.leads_presente, m.metricas_ausentes, m.video_p50, m.video_thruplay,
  m.elegivel_kpi, m.motivo_nao_elegivel, m.carregado_em
 FROM ouro.vw_midia_anuncio m
 JOIN escopo e USING (conta_id, campanha_id, plataforma)

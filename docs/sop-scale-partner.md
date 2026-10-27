@@ -31,3 +31,28 @@ mapeamento, cancelamento, paginação e falhas; build/lint e
 conferência visual local a 1440/1024px e exportação PDF de nove folhas com
 dados fictícios (folha Scale Partner revisada). Não equivale a deploy ou QA
 autenticado com dados reais. Publicação depende de PR e merge.
+
+## Fechamento informado em 27/10/2026 — PR284 corrigido
+
+Somente dados da folha existente. Componentes, estilos, posições, formatação,
+navegação e nove folhas do PDF preservados; a folha extra anterior foi retirada.
+Na abertura de Partner, o seletor existente identifica o fechamento15/08–19/10.
+Seis cards: investimento21133.85, leads98, MQL51, CP-MQL414.39, vendas6,
+receita13718. Os valores monetários mantêm o formato compacto original.
+
+Fonte: texto do Comparativo Partner fornecido por Gabriel no chat em27/10,
+referência https://claude.ai/artifact/9fUjSYbkM5ryWqtzyW5y73. Holding sem IDA
+nem LISO Evento. Google recente ainda ausente, vendas em maturação no corte;
+13–14/08 fora. A referência anterior01/05–12/08 é acessível pelas datas exatas
+no seletor personalizado, sem modificar dados mensais ou atribuir totais a fontes.
+
+Por decisão explícita de Gabriel, MQL semanal e eventos mantêm consultas ao
+Dashboard para o mesmo período, não uma distribuição inventada dos98/51.
+O carregamento desses detalhes cobre15/08–19/10 inteiro. As barras continuam
+nas cinco semanas do gráfico existente. Esses detalhes consultados não são
+uma conciliação certificada com o snapshot informado. Beauty mantém seu card
+separado e conta somente inscrições dentro da janela selecionada.
+
+Métricas do material sem espaço no layout atual (CPL/CPV/CPP, pessoas, ROAS,
+ticket, dias ativos e ritmo30dias) não criam cards, gráficos ou folhas novos.
+Sem alteração de fatos, fontes de outras páginas, RD, merge ou deploy.

@@ -788,6 +788,24 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-27 — Limpeza da cadência encerrava a execução recém-criada (snapshot atrasado)
+
+Achado na conferência de 27/10 depois do incidente de 26/10 (entrada abaixo). O Ingresso cria a
+execução assim que o RD avisa a mudança de etapa, mas o `deal_snapshot` leva alguns minutos para
+mostrar a etapa nova; a Limpeza (n8n, a cada 15 min) lia `cadencia.v_execucoes_a_encerrar` com o
+snapshot antigo e encerrava a execução que acabou de nascer como `saiu_da_etapa`. Em 30 dias, **88
+execuções encerradas em menos de 1 h sem o deal ter mudado de etapa**: 81 da cadência 13 (Conexão,
+113 de 244 encerradas em até 30 min), 4 da 3 (Legacy) e 3 da 6 (SDR, que corta o WhatsApp). A
+reconciliação das 06h recolocava o lead no dia seguinte; perdia-se o dia de tarefas. Caso de
+27/10: deal Eletrovias entrou em Conexão às 09h09, execução criada 09h09, encerrada 09h15.
+
+**Correção (view, sem mexer no n8n):** `saiu_da_etapa` não vale enquanto a execução tem menos de 1 h
+**e** o snapshot é mais velho que ela (`data_atualizacao < criado_em − 2 min`). Snapshot já
+atualizado fica com `data_atualizacao` ≥ criação (o Ingresso cria tarefas no RD logo depois, o que
+mexe no `updated_at`), então quem saiu de verdade continua sendo encerrado; o atraso máximo é 1 h.
+`deal_fechado` segue sem trava. SQL em `docs/sql/2026-10-27-cadencia-limpeza-trava-snapshot.sql`;
+versão anterior em `_backup_viewdefs` (`cadencia.v_execucoes_a_encerrar_pre_trava_snapshot_20261027`).
+
 ### 2026-10-26 — Cadência: reconciliação diária morria desde a migração de funis; leads sem 1º WhatsApp
 
 Junior viu leads parados em SDR / Novo MQL sem a mensagem do bot (achou que fosse o Supabase

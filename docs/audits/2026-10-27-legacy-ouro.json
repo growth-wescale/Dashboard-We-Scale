@@ -212,6 +212,22 @@
     "no_rd_or_facts_mutations": true,
     "marketing_only": true,
     "qa_and_deploy": "pending",
-    "pending_deal_behavior": "Retain source deals; exclude only two explicitly accepted identityless deals from contact payload until linkage arrives. Unknown new identity failures still rejected."
+    "pending_deal_behavior": "Retain source deals; exclude only two explicitly accepted identityless deals from contact payload until linkage arrives. Unknown new identity failures still rejected.",
+    "query_validation": {
+      "rows": 166,
+      "different_rows_all_columns": 0,
+      "comparison_seconds": 36.883,
+      "candidate_seconds": 9.291,
+      "normalized_mql_emails": 136,
+      "mql_phone_only": 1,
+      "ui_mql": 137,
+      "pending_identity_deals": 2
+    },
+    "isolation_validation": {
+      "frontend_tests": 878,
+      "gateway_tests": 13,
+      "build": "passed",
+      "multi_brand_requests_bypass_unrelated_gateways": true
+    }
   }
 }

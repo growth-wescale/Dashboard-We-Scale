@@ -4,6 +4,8 @@ PR276: publicação autorizada em27/10 enquanto Maicon resolve quatro exceções
 
 ## Publicação autorizada — preparação
 
+Leitura revisada: qualificação histórica e detalhes do período separados;166/166 linhas idênticas em todas as colunas (EXCEPT ALL bilateral, zero diferenças), candidato9,291s. Mesma regra de pessoas:136 emails MQL+1 contato MQL por telefone=137 na carga atual.878 testes frontend/13 gateway/build aprovados. Consultas in.(...) das demais marcas agora ignoram gateways não relacionados, evitando que uma indisponibilidade contamine a S&OP; fontes e valores permanecem nativos.
+
 - Correção da leitura recupera a qualificação comercial anterior ao mês, mantendo datas e população.
 - Apenas os dois negócios sem contato já identificados são aceitos temporariamente: continuam no DW, classificados como negócios MQL, mas não viram contatos fictícios. O gateway devolve contagem técnica das exceções; outros casos inesperados ainda falham fechados. Quando a origem fornecer contato, a atualização normal passa a incluí-los sem novo de-para ou deploy.
 - Captação ausente e conflito Oral Unic seguem na origem, sem apagar importações ou trocar marcas. O total pode mudar quando a ouro receber os ajustes; não há promessa de igualdade por simples soma.

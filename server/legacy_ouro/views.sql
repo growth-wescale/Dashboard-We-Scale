@@ -9,7 +9,7 @@ WITH profiles AS MATERIALIZED (
  SELECT DISTINCT ON (lower(trim(lead_email))) lower(trim(lead_email)) email,lead_uf,lead_cidade_texto,lead_formulario_origem,lead_capital_texto
  FROM profiles WHERE lead_event_identifier <> 'RD Station CRM' AND nullif(trim(lead_email),'') IS NOT NULL
  ORDER BY lower(trim(lead_email)),data_evento_em DESC,registro_key
-), crm AS MATERIALIZED (
+), crm_all AS MATERIALIZED (
 -- Contrato Marketing: todo deal criado no CRM é MQL (decisão de27/10).
 -- SELECT somente ouro. Não exige passagem Novo MQL, capital ou status atual.
 -- Um deal por conta; reciclagem não cria outro deal.
@@ -36,16 +36,29 @@ FROM atuais
 -- O recorte de exibição permanece nos SELECTs finais, sem mudar as datas.
 WHERE marca IN ('Odonto Scale','Odonto Legacy') AND funil_id IN ('69380917e00ed10014daaa62','69380937219fc3001702b9b5')
 
+), crm AS MATERIALIZED (
+ -- Detalhes completos só dos negócios exibidos; qualificação histórica separada.
+ SELECT * FROM crm_all
+ WHERE coalesce(data_novo_mql,data_criacao_original) >= '2026-10-01 00:00:00-03'
+  AND coalesce(data_novo_mql,data_criacao_original) < '2026-11-01 00:00:00-03'
+), source_links AS MATERIALIZED (
+ SELECT n.*,first_value(n.api_version) OVER (
+  PARTITION BY n.account_id,n.negocio_id ORDER BY n.ultimo_observado_em DESC,n.api_version DESC) latest_api_version
+ FROM prata.crm_negocio_contatos n JOIN crm_all c ON c.conta_id=n.account_id AND c.negocio_id=n.negocio_id
+), qualification_links AS MATERIALIZED (
+ -- Mesmo primeiro email/vínculo da projeção, sem buscar telefone/perfil de todo o histórico.
+ SELECT DISTINCT ON (c.conta_id,c.negocio_id,n.contato_id)
+  c.negocio_id,c.segmento,lower(trim(e.email)) AS email
+ FROM crm_all c
+ LEFT JOIN source_links n ON n.account_id=c.conta_id AND n.negocio_id=c.negocio_id
+  AND n.api_version=n.latest_api_version
+ LEFT JOIN prata.crm_contato_emails e ON e.parent_key=n.contato_key AND e.account_id=c.conta_id AND e.api_version=n.api_version
+  AND nullif(trim(e.email),'') IS NOT NULL
+ ORDER BY c.conta_id,c.negocio_id,n.contato_id,e.ordinal,e.crm_key
 ), links AS MATERIALIZED (
  SELECT c.*,n.contato_id,ct.nome,email.email,phone.telefone
  FROM crm c
- LEFT JOIN LATERAL (
-  SELECT n0.* FROM prata.crm_negocio_contatos n0
-  WHERE n0.account_id=c.conta_id AND n0.negocio_id=c.negocio_id
-   AND n0.api_version=(SELECT n1.api_version FROM prata.crm_negocio_contatos n1
-    WHERE n1.account_id=c.conta_id AND n1.negocio_id=c.negocio_id
-    ORDER BY n1.ultimo_observado_em DESC,n1.api_version DESC LIMIT 1)
- ) n ON true
+ LEFT JOIN source_links n ON n.account_id=c.conta_id AND n.negocio_id=c.negocio_id AND n.api_version=n.latest_api_version
  LEFT JOIN prata.crm_contatos ct ON ct.crm_key=n.contato_key AND ct.account_id=c.conta_id AND ct.api_version=n.api_version
  LEFT JOIN LATERAL (SELECT lower(trim(e.email)) email FROM prata.crm_contato_emails e
   WHERE e.parent_key=n.contato_key AND e.account_id=c.conta_id AND e.api_version=n.api_version
@@ -71,7 +84,7 @@ WHERE marca IN ('Odonto Scale','Odonto Legacy') AND funil_id IN ('69380917e00ed1
   lead_nome AS nome,lead_email AS email,coalesce(lead_telefone_movel,lead_telefone_pessoal) AS telefone,
   lead_uf AS uf,lead_cidade_texto AS cidade,lead_utm_source AS utm_source,lead_utm_medium AS utm_medium,
   lead_utm_campaign AS utm_campaign,lead_formulario_origem AS formulario,
-  jsonb_build_object('lead_type',CASE WHEN EXISTS(SELECT 1 FROM links l WHERE l.segmento='legacy' AND (l.negocio_id=f.negocio_id OR (nullif(lower(trim(f.lead_email)),'') IS NOT NULL AND lower(trim(f.lead_email))=l.email))) THEN 'MQL' WHEN lead_mql_observado THEN 'MQL' WHEN lead_mql_observado=false THEN 'LEAD' ELSE NULL END,
+  jsonb_build_object('lead_type',CASE WHEN EXISTS(SELECT 1 FROM qualification_links l WHERE l.segmento='legacy' AND (l.negocio_id=f.negocio_id OR (nullif(lower(trim(f.lead_email)),'') IS NOT NULL AND lower(trim(f.lead_email))=l.email))) THEN 'MQL' WHEN lead_mql_observado THEN 'MQL' WHEN lead_mql_observado=false THEN 'LEAD' ELSE NULL END,
    'classification_source',lead_classificacao_origem,'segmento','legacy',
    'utm_content',lead_utm_content,'utm_term',lead_utm_term,'capital',lead_capital_texto) AS dados_extras,
   NULL::text AS row_hash,data_evento_em AS criado_em,lead_contato_id AS contato_id,carregado_em

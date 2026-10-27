@@ -1,6 +1,6 @@
 # Oral Unic — candidata Marketing, 27/10/2026
 
-**Preparada, não publicada.** Flag `VITE_ORAL_UNIC_OURO_ENABLED` desligada por padrão e ausente do deploy. Views/role/gateway definitivos não instalados. Prévia local autenticada executa SELECTs fixos read-only; produção segue inalterada. Base Git inicial83c5fc0, branch própria `codex/oral-unic-ouro-preparacao`; proposta de projeção de MQL de outro chat permanece separada.
+**Preparada, não publicada.** Flag `VITE_ORAL_UNIC_OURO_ENABLED` desligada por padrão e ausente do deploy. Views/role/gateway definitivos não instalados. Prévia local autenticada executa SELECTs fixos read-only; produção segue inalterada. Base Git inicial83c5fc0; branch própria `codex/oral-unic-ouro-preparacao` alinhada à main publicadafc4ea45 (PR278). Preparação no [PR279](https://github.com/growth-wescale/Dashboard-We-Scale/pull/279), em rascunho; demais propostas ainda não publicadas de outro chat permanecem separadas.
 
 ## Contrato de origem
 
@@ -40,7 +40,7 @@ A interface Franquia já inclui duas campanhas `CMD Aquisição...Engajamento Wh
 
 ## Validação e próxima decisão
 
-894 testes frontend,11 gateway e build com flag candidata aprovados. Testes cobrem Vendas não interceptada, histórico, comunidade/COF/V4, outras marcas, paginação, autenticação, rejeição de escopo/identidade incorreta e precisão dos valores. Nenhuma exceção de identidade Legacy copiada para Oral Unic.
+896 testes frontend,11 gateway e build com flag candidata aprovados. Testes cobrem Vendas não interceptada, histórico, comunidade/COF/V4, outras marcas, paginação, autenticação, rejeição de escopo/identidade incorreta e precisão dos valores. Nenhuma exceção de identidade Legacy copiada para Oral Unic.
 
 Prévia autenticada: Visão Geral e Saúde Oral Unic/Franquia (visão geral, campanhas, conjuntos e anúncios) mostraram19 MQLs, R$5.950,20 na frente Franquia e153 contatos gerais (inclui comunidade). A atribuição mantém5 MQLs na campanha OUF e14 sem correspondência exata, sem rateio proporcional. Meta & OKRs exibiu timeout de20s. Exportação PDF conjunto foi impedida por respostas503 do gateway Lisô já existente, sem novo PDF válido; S&OP Oral Unic/PDF completos permanecem não homologados. Não foi alterado/reiniciado esse serviço, nem reaberta auditoria de dados de Lisô. Nenhuma afirmação de gateway definitivo ou completude do RD. Falhas de leitura nas páginas e no PDF não devem virar zero/fallback silencioso. Termos/social/radar/email e fontes comerciais nativas não são migrados.
 

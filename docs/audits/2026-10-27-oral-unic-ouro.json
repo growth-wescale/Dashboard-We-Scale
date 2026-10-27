@@ -105,7 +105,7 @@
     }
   ],
   "validation": {
-    "frontend_tests": 894,
+    "frontend_tests": 896,
     "gateway_tests": 11,
     "build": "passed",
     "ui": "partial_authenticated_preview",
@@ -135,5 +135,7 @@
     "Historical/native Sales and community preserved",
     "Three fixed media IDs proposed; platform reconciliation not done",
     "Current franchise grouping includes111.57 from two CMD campaigns, left native"
-  ]
+  ],
+  "base_main": "fc4ea45",
+  "pull_request": 279
 }

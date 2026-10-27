@@ -1,6 +1,26 @@
 # Oral Unic — candidata Marketing, 27/10/2026
 
-**Preparada, não publicada.** Flag `VITE_ORAL_UNIC_OURO_ENABLED` desligada por padrão e ausente do deploy. Views/role/gateway definitivos não instalados. Prévia local autenticada executa SELECTs fixos read-only; produção segue inalterada. Base Git inicial83c5fc0; branch própria `codex/oral-unic-ouro-preparacao` alinhada à main publicadafc4ea45 (PR278). Preparação no [PR279](https://github.com/growth-wescale/Dashboard-We-Scale/pull/279), em rascunho; demais propostas ainda não publicadas de outro chat permanecem separadas.
+**Publicação autorizada em 27/10/2026, em validação.** Views e gateway definitivos instalados; ativação incluída no PR285, alinhado à main53ae9bc. RD/fatos/Vendas e fontes das demais marcas preservados. Os três casos continuam com Maicon e não bloqueiam esta publicação.
+
+## Gateway definitivo
+
+Serviço isolado `dashboard-oral-unic-ouro`, endpoint `/api/oral-unic-ouro/v1/read`, role `dashboard_oral_unic_ro`: SELECT apenas em `ouro.vw_oral_unic_dashboard_leads` e `ouro.vw_oral_unic_dashboard_midia`, zero privilégios DML. TLS `verify-full`, transações somente leitura, sessão/permissões Marketing validadas a cada pedido; sem sessão retorna401. Cache máximo5min sobre a carga horária existente; sem alterações no agendamento ou fontes. Container sem root, filesystem somente leitura e limites de CPU/memória.
+
+Rollback do consumo: desabilitar apenas `VITE_ORAL_UNIC_OURO_ENABLED` e reconstruir/publicar pelo fluxo normal, preservando os demais providers. Não remover fatos, importações ou credenciais de outras integrações. Evidência final de ativação e QA será registrada após o deploy.
+
+## Correções de consumo validadas — 27/10
+
+Branch `codex/oral-unic-esteira-sop-fix`, baseada na main68aee37. A Esteira troca somente as três campanhas aprovadas de Oral Unic pela ouro, por cliente exclusivo sobre a fonte nativa; consultoria, comunidade, V4, histórico e demais marcas permanecem nessa referência. Cache separado e erros explícitos impedem mistura ou zero silencioso. Não reutilizar a cadeia de todos os providers nesta página, pois migraria também a consultoria.
+
+S&OP/PDF exclui somente as campanhas Google24054007136 e24054143009 do filtro Franquia, em outubro/com flag ativa. IDs/conta têm precedência; fallback de nome exato só na referência sem ID. Elas permanecem na fonte e no slide Legacy. Regras históricas/V4 e outras marcas não mudam.
+
+Prévia autenticada: Esteira e Saúde/Franquia mostramR$4.131 no corte01–27. ConsultoriaR$14.622,48 e ComunidadeR$7.169,51 coincidem com sua fonte nativa no momento da leitura. S&OP/PDF19–25: investimentoR$2.175,51 (antesR$4.610,60), cinco MQLs eCP-MQLR$435,10 (antesR$922,12);19 MQLs no mês preservados. PDF novo de nove páginas renderizado/revisado; Legacy137 MQLs e192 membros mantidos.
+
+911 testes/82 arquivos,29 direcionados, build com flags de prévia e lint sem erros aprovados. Nenhuma escrita RD/fatos/views, mudança em Vendas, serviço, flag de produção, merge ou deploy. Os três casos ficam com Maicon e não bloqueiam este QA. Restam aceite e validação/instalação do gateway definitivo antes da ativação; não reabrir qualificação ou conciliação comercial. Evidência agregada: `consumer_fix_validation` em `docs/audits/2026-10-27-oral-unic-ouro.json`.
+
+## Histórico da preparação e da primeira validação
+
+As seções abaixo registram os cortes e gates anteriores; os dois problemas de consumo foram encerrados na validação acima. Observações existentes fora do ajuste (NaN/Infinity com denominador zero em Comunidade/V4, Termos/Social nativos e E-mail sem integração) foram preservadas.
 
 ## Recorte aprovado e implementado localmente —27/10
 

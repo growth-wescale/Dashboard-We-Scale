@@ -1,5 +1,6 @@
 import { inOralUnicWindow, oralUnicOuroEnabled, ORAL_UNIC_MEDIA } from './oralUnicOuroScope'
 import { isMediaFranquia, isMediaLegacy } from './oralUnicMapping'
+import { LEGACY_MEDIA } from './legacyOuroScope'
 
 export interface OralUnicMediaRow {
   marca?: unknown; dia?: unknown; canal?: unknown; campanha?: string | null
@@ -33,8 +34,14 @@ export function isOralUnicCommunityMedia(row: OralUnicMediaRow): boolean {
   return front === null ? isMediaLegacy(row.campanha ?? null) : front === 'comunidade'
 }
 
-// S&OP conserva seu filtro histórico quando não há uma campanha do novo recorte.
+// Exclui da Franquia somente as duas campanhas Google de consultoria já mapeadas.
+// Não altera sua fonte, atribuição ou presença no slide de Legacy.
+const CONSULTORIA_GOOGLE = LEGACY_MEDIA.filter(c => c.canal === 'google')
 export function isOralUnicSopFranchiseMedia(row: OralUnicMediaRow): boolean {
+  if (oralUnicOuroEnabled && row.marca === 'Oral Unic' && inOralUnicWindow(row)
+    && CONSULTORIA_GOOGLE.some(c => row.canal === c.canal
+      && (row.conta_id == null || String(row.conta_id) === c.account)
+      && (row.campanha_id != null ? String(row.campanha_id) === c.id : c.names.some(n => n === row.campanha)))) return false
   const front = oralUnicMediaFront(row)
   if (front !== null) return front === 'franquia'
   const c = (row.campanha ?? '').toUpperCase()

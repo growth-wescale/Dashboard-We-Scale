@@ -1,22 +1,217 @@
 {
   "date": "2026-10-27",
-  "period": ["2026-10-01", "2026-10-27"],
+  "period": [
+    "2026-10-01",
+    "2026-10-27"
+  ],
   "status": "prepared_not_approved_for_publication",
   "pr": 276,
-  "read_views_installed": ["ouro.vw_legacy_dashboard_leads", "ouro.vw_legacy_dashboard_midia"],
+  "read_views_installed": [
+    "ouro.vw_legacy_dashboard_leads",
+    "ouro.vw_legacy_dashboard_midia"
+  ],
   "public_grants": 0,
   "gateway_production_installed": false,
   "production_flag_enabled": false,
-  "reference": {"rows": 151, "unique_emails": 109},
-  "candidate": {"rows": 165, "unique_emails": 152, "mql_unique_emails": 132, "unclassified_capture_rows": 20, "media_rows": 239},
-  "comparison": {"reference_contacts_matched": 107, "reference_contacts_missing": 2, "candidate_extra_contacts": 45},
+  "reference": {
+    "rows": 151,
+    "unique_emails": 109
+  },
+  "candidate": {
+    "rows": 165,
+    "unique_emails": 152,
+    "mql_unique_emails": 132,
+    "unclassified_capture_rows": 20,
+    "media_rows": 239
+  },
+  "comparison": {
+    "reference_contacts_matched": 107,
+    "reference_contacts_missing": 2,
+    "candidate_extra_contacts": 45
+  },
   "blockers": [
-    {"type": "crm_contact_link_absent", "deal_ids": ["6adfbc05dd0f60002051921b", "6adfc1ea67274300203c2903"], "created_day_brt": "2026-10-26", "pipeline": "Closer", "upstream_normalized_link_also_absent": true},
-    {"type": "capture_not_found", "reference_day": "2026-10-13", "reference_form": "odontoscale_multistep"},
-    {"type": "brand_conflict", "deal_id": "6ace137efe506e002305cff2", "reference_brand": "Odonto Legacy", "gold_brand": "Oral Unic", "reference_mql_approval_date": "2026-10-15"},
-    {"type": "media_not_reconciled_with_platforms", "reference_brl": 14428.188559, "gold_brl": 15961.248559, "difference_brl": 1533.06, "common_day_campaign_differences": 34, "additional_day_campaign_gold_brl": 668.73}
+    {
+      "type": "crm_contact_link_absent",
+      "deal_ids": [
+        "6adfbc05dd0f60002051921b",
+        "6adfc1ea67274300203c2903"
+      ],
+      "created_day_brt": "2026-10-26",
+      "pipeline": "Closer",
+      "upstream_normalized_link_also_absent": true
+    },
+    {
+      "type": "capture_not_found",
+      "reference_day": "2026-10-13",
+      "reference_form": "odontoscale_multistep"
+    },
+    {
+      "type": "brand_conflict",
+      "deal_id": "6ace137efe506e002305cff2",
+      "reference_brand": "Odonto Legacy",
+      "gold_brand": "Oral Unic",
+      "reference_mql_approval_date": "2026-10-15"
+    },
+    {
+      "type": "media_not_reconciled_with_platforms",
+      "reference_brl": 14428.188559,
+      "gold_brl": 15961.248559,
+      "difference_brl": 1533.06,
+      "common_day_campaign_differences": 34,
+      "additional_day_campaign_gold_brl": 668.73
+    }
   ],
-  "validation": {"frontend_tests": 875, "gateway_tests": 11, "build": "passed", "lint": "no_errors_existing_warnings", "numerical_ui_acceptance": "blocked", "pdf_acceptance": "blocked", "routes_visited_authenticated": ["/", "/marca", "/okrs", "/sop-marketing"], "gateway_missing_identity_http": 409},
-  "unchanged": ["RD", "DW facts", "Sales sources and pages", "community constants and source", "manual consultancy snapshot", "revenue targets", "other brands", "production deployment"],
-  "notes": ["Counts are audit aggregates, not approved dashboard KPIs.", "No ad platform verification this round.", "The PDF from the preceding Liso production deployment is not evidence for this change."]
+  "validation": {
+    "frontend_tests": 875,
+    "gateway_tests": 11,
+    "build": "passed",
+    "lint": "no_errors_existing_warnings",
+    "numerical_ui_acceptance": "blocked",
+    "pdf_acceptance": "blocked",
+    "routes_visited_authenticated": [
+      "/",
+      "/marca",
+      "/okrs",
+      "/sop-marketing"
+    ],
+    "gateway_missing_identity_http": 409
+  },
+  "unchanged": [
+    "RD",
+    "DW facts",
+    "Sales sources and pages",
+    "community constants and source",
+    "manual consultancy snapshot",
+    "revenue targets",
+    "other brands",
+    "production deployment"
+  ],
+  "notes": [
+    "Counts are audit aggregates, not approved dashboard KPIs.",
+    "No ad platform verification this round.",
+    "The PDF from the preceding Liso production deployment is not evidence for this change."
+  ],
+  "read_only_followup": {
+    "period_confirmed_by_user": [
+      "2026-10-01",
+      "2026-10-27"
+    ],
+    "user_mql_reference": 135,
+    "qualification_proposal": {
+      "applied": false,
+      "current_mql_unique_emails": 132,
+      "simulated_mql_unique_emails": 135,
+      "rows": 165,
+      "changed_population_ids": 0,
+      "changed_dates": 0,
+      "changed_qualification_rows": 3,
+      "cause": "Monthly CRM filter was applied before contact qualification lookup; three October captures already had a Legacy deal in September. Keep the reporting date filter, but use all existing Legacy deals for qualification.",
+      "crm_deals": [
+        "6ab3efb39e03d7000156a0d3",
+        "6ab15d50a410330001594207",
+        "6ab3efb3becbf900018ebfd1"
+      ],
+      "not_total_deals_or_full_ui_acceptance": true
+    },
+    "four_cases": [
+      {
+        "deal_id": "6adfbc05dd0f60002051921b",
+        "live_rd_brand": "Odonto Legacy",
+        "live_rd_contact_endpoint_count": 0,
+        "action_proposed": "Resolve identity with source owner; never invent contact or count a deal as a person."
+      },
+      {
+        "deal_id": "6adfc1ea67274300203c2903",
+        "live_rd_brand": "Odonto Legacy",
+        "live_rd_contact_endpoint_count": 0,
+        "action_proposed": "Resolve identity with source owner; never invent contact or count a deal as a person."
+      },
+      {
+        "source_id": "1c593d5c-8d80-41c9-9b67-9d7f70fcc228",
+        "day": "2026-10-13",
+        "form": "odontoscale_multistep",
+        "present_current_base": true,
+        "present_bronze_reference_by_id": false,
+        "present_silver_reference_by_id": false,
+        "gold_email_match": false,
+        "gold_phone_match": false,
+        "reference_copy_last_day": "2026-09-22",
+        "reference_copy_last_run": "2026-09-23T06:12:23.069026Z",
+        "action_proposed": "Preserve current source record; request scoped source ingestion coverage from TI before full gold migration. No fact patch."
+      },
+      {
+        "deal_id": "6ace137efe506e002305cff2",
+        "live_rd_brand": "Oral Unic",
+        "live_rd_contact_endpoint_count": 1,
+        "action_proposed": "Keep CRM brand; do not reclassify Oral Unic into Legacy solely to match historical import."
+      }
+    ],
+    "platform_reconciliation": {
+      "read_at": "2026-10-27T10:14:50.217731+00:00",
+      "currency": "BRL",
+      "timezone": "America/Sao_Paulo",
+      "campaigns": [
+        {
+          "platform": "meta",
+          "account": "24763396173316651",
+          "campaign": "120248355011530752",
+          "current_base_brl": "9955.99",
+          "gold_brl": "10701.41",
+          "platform_brl": "10716.32",
+          "gold_last_load": "2026-10-27T09:42:21.697037Z",
+          "closed_1_26_gold_brl": "10654.79",
+          "closed_1_26_platform_brl": "10655.03",
+          "residual_26_brl": "0.24",
+          "residual_26_accepted_by_user": true,
+          "no_further_check_or_correction_for_residual": true,
+          "partial_27_gold_brl": "46.62",
+          "partial_27_platform_brl": "61.29"
+        },
+        {
+          "platform": "google",
+          "account": "9733883995",
+          "campaign": "24054007136",
+          "current_base_brl": "2282.36",
+          "gold_brl": "2643.82",
+          "platform_brl": "2643.82"
+        },
+        {
+          "platform": "google",
+          "account": "9733883995",
+          "campaign": "24054143009",
+          "current_base_brl": "2223.908559",
+          "gold_brl": "2660.488559",
+          "platform_brl": "2660.488559"
+        }
+      ],
+      "current_base_total_brl": "14462.258559",
+      "gold_total_brl": "16005.718559",
+      "platform_total_brl": "16020.628559",
+      "gold_vs_platform_delta_brl": "14.91",
+      "today_partial_delta_brl": "14.67",
+      "mutations": false,
+      "closed_by_user": true,
+      "intraday_difference_requires_no_intervention": true
+    },
+    "verification_limit": "RD lookup by email/phone for the missing capture was rejected by automatic approval review and was not executed. Investigation continued through existing DW/reference ID/hash reads only.",
+    "changes_this_followup": "Documentation only; no SQL installed, runtime code changed, source mutations, PR merge or deploy. Simulated 135 is not authenticated UI/PDF acceptance.",
+    "origin_handoff": {
+      "responsible_reported_by_user": "Maicon",
+      "channel": "Teams",
+      "sender": "user",
+      "sent_verified": false,
+      "response_pending": true,
+      "request": "Identify real contact links for two deals; explain and propose scoped gold coverage for the missing source ID; confirm brand and historical attribution of the Oral Unic deal. No RD or fact changes authorized.",
+      "next_validation": "One Marketing and PDF validation after resolution; no publication."
+    }
+  },
+  "publication_authorization": {
+    "date": "2026-10-27",
+    "pending_source_exceptions_accepted": true,
+    "investment_closed": true,
+    "no_rd_or_facts_mutations": true,
+    "marketing_only": true,
+    "qa_and_deploy": "pending",
+    "pending_deal_behavior": "Retain source deals; exclude only two explicitly accepted identityless deals from contact payload until linkage arrives. Unknown new identity failures still rejected."
+  }
 }

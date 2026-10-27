@@ -46,6 +46,22 @@ class Tests(unittest.TestCase):
   for row in [{'id':'a','dia':'2026-10-10','marca':'We Scale'}, {'id':'a','dia':'2026-09-10','marca':'Odonto Scale'}]:
    s,c=self.service([row])
    with self.assertRaises(GatewayError):s.read({'dataset':'leads','route':'/'},'token')
+ def test_accepted_pending_deals_do_not_create_people_or_block_other_contacts(self):
+  pending={'id':'legacy-crm:a','dia':'2026-10-26','marca':'Odonto Scale','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'6adfbc05dd0f60002051921b'}}
+  contact={'id':'legacy-crm:b','dia':'2026-10-26','marca':'Odonto Scale','email':'contact@example.test','contato_id':'real-contact','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'other'}}
+  s,c=self.service([pending,contact])
+  r=s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(r['rows'],[contact])
+  self.assertEqual(r['warnings'],[{'code':'accepted_missing_contact','count':1}])
+  self.assertEqual(len(c.rows),2)  # No mutation or removal of source records.
+ def test_corrected_source_contact_enters_on_next_refresh_without_code_change(self):
+  pending={'id':'legacy-crm:a','dia':'2026-10-26','marca':'Odonto Scale','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'6adfc1ea67274300203c2903'}}
+  s,c=self.service([pending])
+  self.assertEqual(s.refresh_dataset('leads')['rows'],[])
+  c.rows=[dict(pending,contato_id='real-contact',email='contact@example.test')]
+  r=s.refresh_dataset('leads')
+  self.assertEqual(r['rows'],c.rows)
+  self.assertEqual(r['warnings'],[])
  def test_cache_preserves_rows_and_rechecks_authorization(self):
   s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Odonto Scale','dados_extras':{}}])
   first=s.read({'dataset':'leads','route':'/'},'token')

@@ -30,8 +30,9 @@ SELECT *, true AS mql_comercial, 'deal_criado_crm'::text AS qualificacao_proveni
  CASE WHEN data_novo_mql IS NOT NULL THEN 'data_mql_crm'
       ELSE 'criacao_crm' END AS data_mql_proveniencia
 FROM atuais
-WHERE coalesce(data_novo_mql,data_criacao_original) >= '2026-10-01 00:00:00-03' AND coalesce(data_novo_mql,data_criacao_original) < '2026-11-01 00:00:00-03'
- AND marca IN ('Odonto Scale','Odonto Legacy') AND funil_id IN ('69380917e00ed10014daaa62','69380937219fc3001702b9b5')
+-- A qualificação pode vir de um negócio anterior ao mês da captação.
+-- O recorte de exibição permanece nos SELECTs finais, sem mudar as datas.
+WHERE marca IN ('Odonto Scale','Odonto Legacy') AND funil_id IN ('69380917e00ed10014daaa62','69380937219fc3001702b9b5')
 
 ), links AS MATERIALIZED (
  SELECT c.*,n.contato_id,ct.nome,email.email,phone.telefone

@@ -1,6 +1,14 @@
 # Legacy — integração ouro em revisão (27/10/2026)
 
-PR276 em rascunho. **Não publicar: a conferência encontrou pendências de origem e a homologação dos números/PDF está bloqueada.** Outubro é o recorte inicial; histórico anterior, comunidade, consultoria manual, RD, fatos do DW, Vendas e demais marcas permanecem preservados. Oral Unic será outra entrega.
+PR276: publicação autorizada em27/10 enquanto Maicon resolve quatro exceções de origem. **As seções de conferência anteriores são históricas; não bloqueiam a migração autorizada.** Outubro é o recorte inicial; histórico anterior, comunidade, consultoria manual, RD, fatos do DW, Vendas e demais marcas permanecem preservados. Oral Unic será outra entrega.
+
+## Publicação autorizada — preparação
+
+- Correção da leitura recupera a qualificação comercial anterior ao mês, mantendo datas e população.
+- Apenas os dois negócios sem contato já identificados são aceitos temporariamente: continuam no DW, classificados como negócios MQL, mas não viram contatos fictícios. O gateway devolve contagem técnica das exceções; outros casos inesperados ainda falham fechados. Quando a origem fornecer contato, a atualização normal passa a incluí-los sem novo de-para ou deploy.
+- Captação ausente e conflito Oral Unic seguem na origem, sem apagar importações ou trocar marcas. O total pode mudar quando a ouro receber os ajustes; não há promessa de igualdade por simples soma.
+- Investimento encerrado; não modificar coletores, campanhas, valores ou frequência.
+- Gateway definitivo, QA de Marketing/PDF e publicação ainda serão conferidos nesta entrega.
 
 ## Implementado
 
@@ -44,6 +52,31 @@ Diferença R$1.533,06. Ambas as fontes têm registros até27/10; não atribuir t
 
 Evidência agregada: `docs/audits/2026-10-27-legacy-ouro.json`; sem nomes, emails, telefones ou segredos.
 
-## Próximo passo único
+## Investigação complementar — 27/10, somente leitura
 
-Resolver o conjunto delimitado de origem: expor vínculo dos dois novos negócios, localizar a captação ausente, decidir o conflito de marca da importação e conciliar as três campanhas. Nenhuma correção de RD/fatos está autorizada ou foi feita nesta entrega. Depois, uma única repetição da matriz Marketing/PDF; apresentar para aceite antes de instalar gateway definitivo/ativar/deploy. Não reabrir auditorias de Partner/Lisô/Beauty.
+A referência do usuário é **135 MQLs de01–27/10**. Simulação SELECT corrigindo o filtro mensal antecipado do CRM produz **135 emails MQL**, contra132 da candidata instalada: três captações de outubro têm negócios Legacy qualificados em setembro. População165 linhas, IDs e datas permanecem idênticos; somente três qualificações recuperadas. A proposta remove o filtro mensal antes do vínculo e mantém os filtros finais do período. Não aplicada. Igualdade do agregado não homologa população completa nem UI/PDF.
+
+Quatro casos encerrados quanto ao diagnóstico:
+
+- Dois novos negócios Closer: GET do negócio e do endpoint de contatos confirma zero contatos vinculados no próprio RD. Ouro reproduz essa ausência. Não inventar contato, não eliminar negócio nem contar dois negócios como duas pessoas. Identidade precisa de decisão do responsável pela origem; qualquer escrita RD depende de autorização exata separada.
+- Captação de13/10: registro original existe, com email/telefone preenchidos, mas ID ausente da cópia bronze/prata e identidade ausente na captação ouro. A cópia histórica `wescale_marketing_leads_current` cobre somente01/03–22/09, última carga23/09. Preservar registro atual; solicitar ao TI exposição/ingestão delimitada dessa origem para permitir migração integral. Não remendar fatos nem usar registros de comunidade que compartilhem um telefone.
+- Importação Legacy de13/10: GET vivo confirma marca **Oral Unic** e um contato vinculado. Não alterar a marca para forçar paridade. Preservar fonte histórica e exigir decisão explícita de atribuição antes de substituir integralmente sua população.
+
+Investimento conciliado diretamente pelas APIs Meta/Google em27/10 às07:14 BRT, moedaBRL/fusoAmerica/Sao_Paulo. A tabela anterior é um snapshot mais cedo; a coleta continuou automaticamente:
+
+| Campanha | Base atual relida | Ouro | Plataforma |
+|---|---:|---:|---:|
+| Meta120248355011530752 |R$9.955,99|R$10.701,41|R$10.716,32|
+| Google24054007136 |R$2.282,36|R$2.643,82|R$2.643,82|
+| Google24054143009 |R$2.223,91|R$2.660,49|R$2.660,49|
+| Total |R$14.462,26|R$16.005,72|R$16.020,63|
+
+Google coincide na precisão original e por dia. Meta:01–26 ouroR$10.654,79/plataformaR$10.655,03; **residualR$0,24 aceito pelo usuário, sem nova conferência ou correção**. Em27/10, ouroR$46,62/plataformaR$61,29, observadas em horários distintos; diferença intradiáriaR$14,67. Não ajustar números para equalizar leituras de horários distintos. Proposta: consumir as três campanhas conciliadas na ouro, sem tocar campanhas nem os blocos manuais de consultoria/comunidade.
+
+A revisão automática bloqueou a busca externa por email/telefone do caso de captação; ela não foi executada. O diagnóstico restante usou IDs/hashes nas bases existentes. Não houve alteração operacional nesta rodada; somente documentação e simulação SELECT. Código/PR276 continuam em `a771ab5`; este complemento documental ainda é local.
+
+## Decisão anterior de aguardar a origem — superada pela autorização de migrar
+
+Decisão posterior de27/10: investimento integralmente encerrado pelo usuário, inclusive a diferença de horário; nenhuma intervenção ou nova conciliação. Maicon é o responsável pela origem/TI, segundo Gabriel; Gabriel encaminhará os quatro casos pelo Teams. Envio e resposta ainda não comprovados. Solicitar identificação dos contatos reais, cobertura da captação por ID e confirmação da atribuição atual/histórica; nenhuma autorização de escrita RD/fatos. Após resolução, uma única validação Marketing/PDF, sem publicar.
+
+Aprovar a correção delimitada da leitura e definir com a origem o tratamento dos dois negócios sem identidade e das duas exceções da base atual. Não publicar migração integral incompleta nem remover o bloqueio para ocultar ausência. Depois da cobertura aprovada, executar uma única matriz Marketing/PDF e apresentar antes de instalar gateway definitivo/ativar/deploy. Não reabrir qualificação comercial, conciliação de mídia ou auditorias encerradas de Partner/Lisô/Beauty. Oral Unic permanece entrega separada.

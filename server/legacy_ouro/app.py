@@ -48,6 +48,19 @@ def serialize(value):
 
 
 MEDIA_IDS = {('meta','24763396173316651','120248355011530752'),('google','9733883995','24054007136'),('google','9733883995','24054143009')}
+# Exceções aceitas em27/10 para publicação enquanto a origem regulariza os vínculos.
+# Permanecem no DW como negócios MQL; não são contatos fictícios de Marketing.
+PENDING_CONTACT_DEALS = frozenset({'6adfbc05dd0f60002051921b','6adfc1ea67274300203c2903'})
+
+def missing_commercial_identity(row):
+ return row.get('dados_extras',{}).get('classification_source')=='deal_criado_crm' and (
+  not row.get('contato_id') or not (row.get('email') or row.get('telefone')))
+
+def prepare_rows(dataset, rows):
+ validate_rows(dataset, rows)
+ pending = [r for r in rows if dataset=='leads' and missing_commercial_identity(r)]
+ return ([r for r in rows if not (dataset=='leads' and missing_commercial_identity(r))],
+  [{'code':'accepted_missing_contact','count':len(pending)}] if pending else [])
 
 def validate_rows(dataset, rows):
  if len(rows) > 50000: raise GatewayError(503, 'result_too_large')
@@ -55,8 +68,8 @@ def validate_rows(dataset, rows):
   or not '2026-10-01' <= r['dia'] < '2026-11-01' for r in rows):
   raise GatewayError(503, 'scope_violation')
  if len({r.get('id') for r in rows}) != len(rows): raise GatewayError(503,'duplicate_id')
- if dataset=='leads' and any(r.get('dados_extras',{}).get('classification_source')=='deal_criado_crm'
-  and (not r.get('contato_id') or not (r.get('email') or r.get('telefone'))) for r in rows):
+ if dataset=='leads' and any(missing_commercial_identity(r)
+  and r.get('dados_extras',{}).get('id_deal') not in PENDING_CONTACT_DEALS for r in rows):
   raise GatewayError(409,'commercial_identity_incomplete')
  if dataset=='media' and any((r.get('canal'),r.get('conta_id'),r.get('campanha_id')) not in MEDIA_IDS for r in rows):
   raise GatewayError(503,'campaign_scope_violation')
@@ -116,9 +129,9 @@ class Service:
     role = connection.execute("SELECT current_user u,(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) unsafe").fetchone()
     if role['u'] != 'dashboard_legacy_ro' or role['unsafe']: raise GatewayError(503, 'unsafe_role')
     rows = connection.execute(QUERIES[dataset]).fetchall()
-    validate_rows(dataset, rows)
-    result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':rows,
-     'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':[]}
+    contact_rows, warnings = prepare_rows(dataset, rows)
+    result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':contact_rows,
+     'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
     with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)
     return result
 

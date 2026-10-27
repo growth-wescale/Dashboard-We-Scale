@@ -31,9 +31,9 @@ import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
-import { PartnerFechamentoSlide } from '@/components/sop/PartnerFechamentoSlide'
 import { COMUNIDADE_LEGACY_ATUAL, COMUNIDADE_LEGACY_OUTUBRO, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getWeScaleSop } from '@/constants/weScaleSop'
+import { getPartnerFechamento, PARTNER_FECHAMENTO_ATUAL } from '@/constants/partnerFechamento'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
@@ -329,7 +329,6 @@ const SLIDES: SlideConfig[] = [
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
   { id: 'odonto-scale',  label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#7f0c72' },
   { id: 'we-scale',      label: 'Scale Partner', subLabel: 'Eventos',   marca: 'We Scale',     accent: '#7E0E70' },
-  { id: 'we-scale-fechamento', label: 'Scale Partner', subLabel: 'Fechamento', marca: 'We Scale', accent: '#7E0E70' },
 ]
 
 // ── SVG Charts ─────────────────────────────────────────────────────────────────
@@ -785,12 +784,12 @@ interface SopSlideProps {
   onReady?: (error?: string) => void   // chamado quando todos os hooks async terminaram (usado no export PDF)
 }
 
-function SopDeckSlide(props: SopSlideProps) {
-  if (props.slide.id === 'we-scale-fechamento') return <PartnerFechamentoSlide {...props} />
-  return <SopSlide {...props} />
-}
-
-function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
+function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
+  const isWeScale = slide.marca === 'We Scale'
+  // O fechamento atravessa meses. Só a folha Partner assume essa janela na abertura.
+  const dates = useMemo(() => isWeScale && monthMode === 'current'
+    ? computeCustomRanges(PARTNER_FECHAMENTO_ATUAL.start, PARTNER_FECHAMENTO_ATUAL.end)
+    : selectedDates, [isWeScale, monthMode, selectedDates])
   const acc = slide.accent
   const beautyMarketing = useBeautyMarketing(dates.mtdCurStart, dates.mtdCurEnd, slide.id === 'liso')
   const [filterFonte, setFilterFonte] = useState('__all__')
@@ -830,8 +829,8 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
-  const isWeScale = slide.marca === 'We Scale'
-  const beautyEnabled = isWeScale && beautyOuroEnabled && dates.monthStart.slice(0, 7) === '2026-10' && !getWeScaleSop('2026-10')
+  const partnerFechamento = isWeScale ? getPartnerFechamento(dates.mtdCurStart, dates.mtdCurEnd, filterFonte) : null
+  const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
   const beautyRes = useBeautyInscricoes(beautyEnabled)
   const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
   const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale })
@@ -855,13 +854,14 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
   const prevRangeStart = isOdontoLegacy ? mtdPrevStart : compareRange.start
   const prevRangeEnd   = isOdontoLegacy ? mtdPrevEnd   : compareRange.end
 
-  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const partnerReadStart = isWeScale && mtdCurStart < dates.fiveWeeksStart ? mtdCurStart : dates.fiveWeeksStart
+  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: partnerReadStart, dataFim: mtdCurEnd })
   const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
   const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const allMedia  = isOdontoLegacy ? mediaAllOdl.data  : mediaAllStd.data
   const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
-  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
+  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: partnerReadStart, dataFim: mtdCurEnd })
   const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
   const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
@@ -1371,12 +1371,12 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           },
         ] satisfies KpiCard[]
         : [
-            { label: 'INVEST.', value: partnerKpiPending ? '—' : fmtBRL(mtdInvest) },
-            { label: 'LEADS', value: partnerKpiPending ? '—' : String(mtdLeads.length) },
-            { label: 'MQL', value: partnerKpiPending ? '—' : String(mtdMql) },
-            { label: 'CP-MQL', value: !partnerKpiPending && mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
-            { label: 'VENDAS', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : String(partnerSales.length) },
-            { label: 'RECEITA', value: partnerSalesRes.loading || partnerSalesRes.error ? '—' : partnerRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+            { label: 'INVEST.', value: partnerFechamento ? fmtBRL(partnerFechamento.invest) : partnerKpiPending ? '—' : fmtBRL(mtdInvest) },
+            { label: 'LEADS', value: partnerFechamento ? String(partnerFechamento.leads) : partnerKpiPending ? '—' : String(mtdLeads.length) },
+            { label: 'MQL', value: partnerFechamento ? String(partnerFechamento.mql) : partnerKpiPending ? '—' : String(mtdMql) },
+            { label: 'CP-MQL', value: partnerFechamento ? fmtBRL(partnerFechamento.cpMql) : !partnerKpiPending && mtdMql > 0 ? fmtBRL(mtdInvest / mtdMql) : '—' },
+            { label: 'VENDAS', value: partnerFechamento ? String(partnerFechamento.vendas) : partnerSalesRes.loading || partnerSalesRes.error ? '—' : String(partnerSales.length) },
+            { label: 'RECEITA', value: (partnerFechamento?.receita ?? (partnerSalesRes.loading || partnerSalesRes.error ? null : partnerRevenue))?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) ?? '—' },
             ...(beautyEnabled ? [{ label: 'BC · INSCRIÇÕES', value: beautyRes.loading || beautyRes.error ? '—' : String(beautyInscricoes) }] : []),
           ] satisfies KpiCard[]
       : kpiCardsAll
@@ -1492,7 +1492,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-            {dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM
+            {partnerFechamento ? `Fechamento ${partnerFechamento.label} · Holding sem IDA/LISO Evento${partnerFechamento === PARTNER_FECHAMENTO_ATUAL ? ' · sem Google' : ' · com Google'}` : `${dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM`}
           </div>
         </div>
         <BeautyMarketingPanel result={beautyMarketing} compact />
@@ -1503,7 +1503,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
           style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
         >
           {SOP_MONTH_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>{isWeScale && opt.value === 'current' ? `Fechamento ${PARTNER_FECHAMENTO_ATUAL.label}` : opt.label}</option>
           ))}
         </select>
         {monthMode === 'custom' && (
@@ -1552,7 +1552,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: acc, textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            {dates.isClosed
+            {partnerFechamento ? `Fechamento · ${partnerFechamento.label}` : dates.isClosed
               ? `Mês fechado · ${dates.mtdLabel}`
               : isWeScale
               ? weScaleSnapshot ? `MTD · ${weScaleSnapshot.mtd.periodo}` : `Acumulado · ${dates.mtdLabel}`
@@ -1615,7 +1615,7 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: 'var(--status-positivo)', textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            Mês · {dates.mtdLabel}
+            {partnerFechamento ? 'Período' : 'Mês'} · {dates.mtdLabel}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -2399,7 +2399,7 @@ export function SopMarketing() {
             style={{ width: 1920, height: 1080, overflow: 'hidden', background: '#F8F9FB' }}
           >
             {exportingIdx < slides.length ? (
-              <SopDeckSlide
+              <SopSlide
                 key={slides[exportingIdx].id}
                 slide={slides[exportingIdx]} dates={dates}
                 slideIndex={exportingIdx} total={slides.length + 1}
@@ -2442,7 +2442,7 @@ export function SopMarketing() {
           dates={dates}
         />
       ) : (
-        <SopDeckSlide
+        <SopSlide
           key={slide.id} slide={slide} dates={dates}
           slideIndex={idxAtivo} total={slides.length + 1}
           onPrev={() => setActiveSlide(s => (s - 1 + slides.length + 1) % (slides.length + 1))}

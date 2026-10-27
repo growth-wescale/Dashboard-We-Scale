@@ -30,16 +30,19 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
-### S&OP — fechamento histórico Scale Partner (27/10/2026)
+### S&OP — dados de fechamento Scale Partner (27/10/2026)
 
-Folha própria depois de Scale Partner/Eventos, incluída na navegação e no PDF,
-com a mesma permissão da marca We Scale. Compara os períodos fixos 01/05–12/08
-e 15/08–19/10 do material fornecido por Gabriel em27/10; não acompanha o filtro
-mensal. Dados editoriais em `src/constants/partnerFechamento.ts`, sem consulta
-ou escrita de banco. Preserva custos, funil, retorno, pessoas, ritmo30dias e
-ressalvas (Google recente ausente, maturação, testes/carrosséis e13–14/08 fora).
-Faturamento arredondado e ticket informado não são recalculados entre si.
-Preparação local; publicação e QA autenticado do conjunto S&OP ficam separados.
+A folha Scale Partner existente usa os seis totais informados por Gabriel para
+15/08–19/10: investimento R$21.133,85,98 leads,51 MQL,CP-MQL R$414,39,
+6 vendas e R$13.718 de receita. Mesmos componentes, estilos, cards e nove
+folhas; nenhum slide adicional. O seletor existente identifica o fechamento;
+meses explícitos e personalizados preservam seus recortes. Snapshot somente
+para datas exatas e todas as fontes; referência01/05–12/08 disponível pelo
+personalizado. Gráfico semanal/eventos continuam consultando o período,
+conforme decisão de Gabriel; leitura cobre desde15/08, sem restringir aos
+últimos35dias. Inscrições Beauty continuam separadas. Formatação original
+preservada, incluindo valores monetários compactos. Fonte: texto fornecido no
+chat/constante partnerFechamento.ts; sem escrita RD/banco, merge ou deploy.
 
 ## 2. Os DOIS Supabase (a confusão mais cara deste projeto)
 
@@ -799,14 +802,14 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-10-27 — Fechamento histórico Partner na S&OP
+### 2026-10-27 — Dados Partner corrigidos sem alterar layout
 
-Nova folha de comparativo, exclusiva da S&OP e dos acessos We Scale, após
-Eventos e antes do Funil Atual. Snapshot informado pelo usuário, com fonte
-referenciada e períodos fixos. Build/905 testes e lint sem erros aprovados;
-QA visual local desktop/celular e captura1920×1080 sem cortes. Não altera
-fontes, fatos, RD, outras páginas ou indicadores da folha Partner existente.
-Sem merge/deploy; QA autenticado e exportação completa permanecem separados.
+PR284 corrigido por solicitação de Gabriel: remove a folha adicional e seu
+CSS; atualiza os seis indicadores da folha existente. Fonte informada27/10,
+janela15/08–19/10 explícita. Consultas semanal/eventos preservadas no mesmo
+período por decisão do usuário. Estrutura JSX e estilos idênticos à base;
+testes cobrem cards, leitura integral, outras marcas e limites do snapshot.
+Sem publicação. A prévia da folha adicional anterior foi superada.
 
 ### 2026-10-27 — Funil do SDR na Performance ganha a caixa de No-show
 

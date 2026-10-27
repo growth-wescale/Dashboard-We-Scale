@@ -4,7 +4,7 @@
 
 ## Investigação de origem e mídia —27/10, proposta não aplicada
 
-**Investimento encerrado; identidade/cobertura e qualificação da origem permanecem para decisão.** Somente SELECT e GET nas APIs. Nenhuma mudança no consumidor, SQL preparado, RD, fatos, outras marcas ou Vendas; nenhum gateway instalado, merge ou deploy. As consultas por email foram explicitamente autorizadas pelo usuário após bloqueio inicial da aprovação automática; só retornaram identificadores técnicos/status, sem atualização de registros.
+**Investimento encerrado; identidade/cobertura e qualificação da origem permanecem para decisão.** Handoff com IDs e critérios de retorno preparado para Gabriel encaminhar ao Maicon: [casos de Eletrovias](../../docs/handoffs/2026-10-27-eletrovias-maicon.md). Investimento confirmado como encerrado por Gabriel; envio ainda não realizado. Somente SELECT e GET nas APIs. Nenhuma mudança no consumidor, SQL preparado, RD, fatos, outras marcas ou Vendas; nenhum gateway instalado, merge ou deploy. As consultas por email foram explicitamente autorizadas pelo usuário após bloqueio inicial da aprovação automática; só retornaram identificadores técnicos/status, sem atualização de registros.
 
 ### Cinco campanhas conciliadas por dia
 

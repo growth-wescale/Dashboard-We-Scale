@@ -15,23 +15,23 @@ Os saldos são independentes; Q4 não foi redefinido como saldo anual.
 
 ## Contrato dos cards
 
-### Projeção de MQLs de mídia paga — 27/10/2026
+### Meta projetada de mídia paga — ajuste de 27/10/2026
 
-No card mensal de MQL, a linha “MQL gerados de mídia paga” segue o mesmo
-formato da linha MQL existente: volume sobre meta, barra, traço temporal,
-percentual e diferença. Ela mostra a estimativa de volume obtida por
-`orçamento mensal planejado ÷ CP-MQL meta`, arredondada ao
-inteiro mais próximo. Usa o mesmo orçamento da tabela e do pacing de
-investimento: Inpot/Lisô 40/40/20; Eletrovias 28/28/20 mil. O traço marca
-os dias transcorridos no mês, como na linha MQL atual. O percentual e a
-diferença usam a meta total de MQL do funil inverso; quando ela está pendente,
-a estimativa continua visível sem barra
-ou percentual fictício. Exemplo de outubro: Inpot 36.000/220 ≈ 164,
-Eletrovias 28.000/37 ≈ 757 e Lisô 28.800/300 = 96 MQLs.
+No card mensal de MQL, a segunda linha usa o mesmo formato visual da linha
+MQL: realizado / meta, barra, traço temporal, percentual e diferença. O
+denominador é a meta projetada com mídia paga:
+`orçamento mensal planejado ÷ CP-MQL meta`, arredondada ao inteiro mais
+próximo. Usa o mesmo orçamento da tabela e do pacing de investimento:
+Inpot/Lisô 40/40/20; Eletrovias 28/28/20 mil. Exemplo de outubro: Inpot
+36.000/220 ≈ 164, Eletrovias 28.000/37 ≈ 757 e Lisô 28.800/300 = 96 MQLs.
 
-A projeção representa apenas a capacidade estimada da verba de mídia paga,
-pressupondo CP-MQL igual à meta. Não substitui o MQL realizado, a meta total
-nem o CP-MQL observado. Nenhuma fonte, orçamento ou meta foi alterada.
+O numerador é o MQL realizado já contado no card, **de todos os
+canais**, pois a consulta atual não traz origem e não há classificação paga
+validada. Assim, no print de Inpot, a comparação seria 108 / 164, sem afirmar
+que os 108 vieram de mídia paga. Contagem exclusiva de mídia exige acesso à
+fonte e regra de atribuição homologada. A meta total do funil inverso e o
+CP-MQL observado permanecem nas linhas originais. Nenhuma fonte, orçamento
+ou meta foi alterada por este ajuste local.
 
 ### Regra vigente aprovada em 20/10/2026 — funil inverso local
 

@@ -717,5 +717,2863 @@
     "gold_closed": 23293.138097,
     "difference": 1539.819488,
     "difference_closed": 1531.664395
+  },
+  "investigation_2026_10_27": {
+    "status": "proposal_only_not_applied",
+    "read_at_utc": "2026-10-27T17:40:16Z",
+    "authorization": "User explicitly authorized read-only email lookups to RD Marketing/CRM via We Scale integration server after automatic approval initially rejected that transfer. No RD writes.",
+    "scope": "Only Eletrovias identity/classification cases and five media campaigns. No code/SQL contract changes, DML, RD mutations, gateway installation, publication or other-brand changes.",
+    "media": {
+      "platform_read_at_utc": {
+        "meta": "2026-10-27T17:29:57.805075+00:00",
+        "google": "2026-10-27T17:31:43.916483+00:00"
+      },
+      "currency": "BRL",
+      "timezones": {
+        "meta": "America/Sao_Paulo",
+        "google": "America/Manaus"
+      },
+      "same_account_calendar_days": true,
+      "closed_daily_mismatches": 0,
+      "closed_nonzero_campaign_days": 125,
+      "totals": {
+        "current": "22223.333702",
+        "gold": "23763.153190",
+        "platform": "23822.703190",
+        "closed_current": "21761.473702",
+        "closed_gold": "23293.138097",
+        "closed_platform": "23293.138097",
+        "platform_minus_gold": "59.550000"
+      },
+      "campaigns": [
+        {
+          "id": "23778217190",
+          "name": "01 - [Eletrovias] [Ongoing] [MQL] [Search] [Fundo Funil] [Genéricos]",
+          "current": "1262.283702",
+          "gold": "1602.003190",
+          "platform": "1611.473190",
+          "closed_current": "1262.283702",
+          "closed_gold": "1560.798097",
+          "closed_platform": "1560.798097",
+          "platform_minus_gold": "9.470000",
+          "closed_platform_minus_gold": "0.000000",
+          "loaded": "2026-10-27T13:51:31.791939-03:00",
+          "differences": [
+            {
+              "day": "2026-10-02",
+              "gold": "21.886138",
+              "platform": "21.886138",
+              "current": "19.801482",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "2.084656"
+            },
+            {
+              "day": "2026-10-03",
+              "gold": "17.664662",
+              "platform": "17.664662",
+              "current": "15.990402",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "1.674260"
+            },
+            {
+              "day": "2026-10-04",
+              "gold": "35.534023",
+              "platform": "35.534023",
+              "current": "34.191331",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "1.342692"
+            },
+            {
+              "day": "2026-10-05",
+              "gold": "120.210822",
+              "platform": "120.210822",
+              "current": "120.670822",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "-0.460000"
+            },
+            {
+              "day": "2026-10-13",
+              "gold": "53.939015",
+              "platform": "53.939015",
+              "current": "52.100938",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "1.838077"
+            },
+            {
+              "day": "2026-10-14",
+              "gold": "59.270579",
+              "platform": "59.270579",
+              "current": "57.481886",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "1.788693"
+            },
+            {
+              "day": "2026-10-17",
+              "gold": "23.349595",
+              "platform": "23.349595",
+              "current": "22.509595",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "0.840000"
+            },
+            {
+              "day": "2026-10-18",
+              "gold": "36.891385",
+              "platform": "36.891385",
+              "current": "36.531385",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "0.360000"
+            },
+            {
+              "day": "2026-10-21",
+              "gold": "57.68008",
+              "platform": "57.68008",
+              "current": "49.172469",
+              "platform_minus_gold": "0.00000",
+              "gold_minus_current": "8.507611"
+            },
+            {
+              "day": "2026-10-22",
+              "gold": "58.920789",
+              "platform": "58.920789",
+              "current": "0",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "58.920789"
+            },
+            {
+              "day": "2026-10-23",
+              "gold": "54.152565",
+              "platform": "54.152565",
+              "current": "0",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "54.152565"
+            },
+            {
+              "day": "2026-10-24",
+              "gold": "32.909023",
+              "platform": "32.909023",
+              "current": "0",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "32.909023"
+            },
+            {
+              "day": "2026-10-25",
+              "gold": "43.173535",
+              "platform": "43.173535",
+              "current": "0",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "43.173535"
+            },
+            {
+              "day": "2026-10-26",
+              "gold": "91.382494",
+              "platform": "91.382494",
+              "current": "0",
+              "platform_minus_gold": "0.000000",
+              "gold_minus_current": "91.382494"
+            },
+            {
+              "day": "2026-10-27",
+              "gold": "41.205093",
+              "platform": "50.675093",
+              "current": "0",
+              "platform_minus_gold": "9.470000",
+              "gold_minus_current": "41.205093"
+            }
+          ]
+        },
+        {
+          "id": "52585384013024",
+          "name": "01 - WSL | PERPETUO | ELETRO | ALL | NA | T4-FRIO | IG | MQL | BR | 2026-04-20 | Aquisição fria",
+          "current": "679.87",
+          "gold": "719.83",
+          "platform": "719.83",
+          "closed_current": "679.87",
+          "closed_gold": "719.83",
+          "closed_platform": "719.83",
+          "platform_minus_gold": "0.00",
+          "closed_platform_minus_gold": "0.00",
+          "loaded": "2026-10-23T09:39:19.591918-03:00",
+          "differences": [
+            {
+              "day": "2026-10-01",
+              "gold": "40.33",
+              "platform": "40.33",
+              "current": "37.87",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.46"
+            },
+            {
+              "day": "2026-10-02",
+              "gold": "30.31",
+              "platform": "30.31",
+              "current": "29.03",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.28"
+            },
+            {
+              "day": "2026-10-03",
+              "gold": "26.62",
+              "platform": "26.62",
+              "current": "25.79",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "0.83"
+            },
+            {
+              "day": "2026-10-04",
+              "gold": "38.81",
+              "platform": "38.81",
+              "current": "37.61",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.20"
+            },
+            {
+              "day": "2026-10-05",
+              "gold": "30.87",
+              "platform": "30.87",
+              "current": "28.62",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.25"
+            },
+            {
+              "day": "2026-10-06",
+              "gold": "31.94",
+              "platform": "31.94",
+              "current": "29.3",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.64"
+            },
+            {
+              "day": "2026-10-07",
+              "gold": "31.87",
+              "platform": "31.87",
+              "current": "27.89",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "3.98"
+            },
+            {
+              "day": "2026-10-08",
+              "gold": "37.11",
+              "platform": "37.11",
+              "current": "35.3",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.81"
+            },
+            {
+              "day": "2026-10-09",
+              "gold": "31.42",
+              "platform": "31.42",
+              "current": "29.45",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.97"
+            },
+            {
+              "day": "2026-10-10",
+              "gold": "27.86",
+              "platform": "27.86",
+              "current": "26.65",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.21"
+            },
+            {
+              "day": "2026-10-11",
+              "gold": "44.51",
+              "platform": "44.51",
+              "current": "42.98",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.53"
+            },
+            {
+              "day": "2026-10-12",
+              "gold": "34.19",
+              "platform": "34.19",
+              "current": "33.07",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.12"
+            },
+            {
+              "day": "2026-10-13",
+              "gold": "31.22",
+              "platform": "31.22",
+              "current": "28.55",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.67"
+            },
+            {
+              "day": "2026-10-14",
+              "gold": "36.61",
+              "platform": "36.61",
+              "current": "35.09",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.52"
+            },
+            {
+              "day": "2026-10-15",
+              "gold": "31.45",
+              "platform": "31.45",
+              "current": "28.78",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.67"
+            },
+            {
+              "day": "2026-10-16",
+              "gold": "27.08",
+              "platform": "27.08",
+              "current": "26.48",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "0.60"
+            },
+            {
+              "day": "2026-10-17",
+              "gold": "24.98",
+              "platform": "24.98",
+              "current": "23.74",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.24"
+            },
+            {
+              "day": "2026-10-18",
+              "gold": "44.21",
+              "platform": "44.21",
+              "current": "42.61",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.60"
+            },
+            {
+              "day": "2026-10-19",
+              "gold": "31.26",
+              "platform": "31.26",
+              "current": "29.37",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.89"
+            },
+            {
+              "day": "2026-10-20",
+              "gold": "36.46",
+              "platform": "36.46",
+              "current": "32.37",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "4.09"
+            },
+            {
+              "day": "2026-10-21",
+              "gold": "32.13",
+              "platform": "32.13",
+              "current": "30.73",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.40"
+            }
+          ]
+        },
+        {
+          "id": "52671387111024",
+          "name": "ELETROVIAS_FUNDO_LEADS_AON - MQL",
+          "current": "16739.63",
+          "gold": "17679.83",
+          "platform": "17716.71",
+          "closed_current": "16384.85",
+          "closed_gold": "17349.86",
+          "closed_platform": "17349.86",
+          "platform_minus_gold": "36.88",
+          "closed_platform_minus_gold": "0.00",
+          "loaded": "2026-10-27T13:51:31.791939-03:00",
+          "differences": [
+            {
+              "day": "2026-10-01",
+              "gold": "534.94",
+              "platform": "534.94",
+              "current": "504.22",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "30.72"
+            },
+            {
+              "day": "2026-10-02",
+              "gold": "474.82",
+              "platform": "474.82",
+              "current": "437.50",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "37.32"
+            },
+            {
+              "day": "2026-10-03",
+              "gold": "552.52",
+              "platform": "552.52",
+              "current": "523.99",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "28.53"
+            },
+            {
+              "day": "2026-10-04",
+              "gold": "588.96",
+              "platform": "588.96",
+              "current": "566.00",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "22.96"
+            },
+            {
+              "day": "2026-10-05",
+              "gold": "409.16",
+              "platform": "409.16",
+              "current": "382.72",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "26.44"
+            },
+            {
+              "day": "2026-10-06",
+              "gold": "652.62",
+              "platform": "652.62",
+              "current": "612.71",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "39.91"
+            },
+            {
+              "day": "2026-10-07",
+              "gold": "631.03",
+              "platform": "631.03",
+              "current": "587.35",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "43.68"
+            },
+            {
+              "day": "2026-10-08",
+              "gold": "765.01",
+              "platform": "765.01",
+              "current": "734.74",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "30.27"
+            },
+            {
+              "day": "2026-10-09",
+              "gold": "770.8",
+              "platform": "770.8",
+              "current": "731.85",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "38.95"
+            },
+            {
+              "day": "2026-10-10",
+              "gold": "697.93",
+              "platform": "697.93",
+              "current": "657.61",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "40.32"
+            },
+            {
+              "day": "2026-10-11",
+              "gold": "885.12",
+              "platform": "885.12",
+              "current": "833.82",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "51.30"
+            },
+            {
+              "day": "2026-10-12",
+              "gold": "833.07",
+              "platform": "833.07",
+              "current": "807.84",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "25.23"
+            },
+            {
+              "day": "2026-10-13",
+              "gold": "537.85",
+              "platform": "537.85",
+              "current": "505.37",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "32.48"
+            },
+            {
+              "day": "2026-10-14",
+              "gold": "728.56",
+              "platform": "728.56",
+              "current": "679.04",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "49.52"
+            },
+            {
+              "day": "2026-10-15",
+              "gold": "782.15",
+              "platform": "782.15",
+              "current": "743.40",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "38.75"
+            },
+            {
+              "day": "2026-10-16",
+              "gold": "670.83",
+              "platform": "670.83",
+              "current": "632.49",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "38.34"
+            },
+            {
+              "day": "2026-10-17",
+              "gold": "758.94",
+              "platform": "758.94",
+              "current": "713.90",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "45.04"
+            },
+            {
+              "day": "2026-10-18",
+              "gold": "905.37",
+              "platform": "905.37",
+              "current": "857.18",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "48.19"
+            },
+            {
+              "day": "2026-10-19",
+              "gold": "525.09",
+              "platform": "525.09",
+              "current": "472.78",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "52.31"
+            },
+            {
+              "day": "2026-10-20",
+              "gold": "690.96",
+              "platform": "690.96",
+              "current": "657.92",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "33.04"
+            },
+            {
+              "day": "2026-10-21",
+              "gold": "761.95",
+              "platform": "761.95",
+              "current": "717.45",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "44.50"
+            },
+            {
+              "day": "2026-10-22",
+              "gold": "678.15",
+              "platform": "678.15",
+              "current": "649.88",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "28.27"
+            },
+            {
+              "day": "2026-10-23",
+              "gold": "639.42",
+              "platform": "639.42",
+              "current": "593.67",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "45.75"
+            },
+            {
+              "day": "2026-10-24",
+              "gold": "568.67",
+              "platform": "568.67",
+              "current": "536.50",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "32.17"
+            },
+            {
+              "day": "2026-10-25",
+              "gold": "788.49",
+              "platform": "788.49",
+              "current": "760.21",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "28.28"
+            },
+            {
+              "day": "2026-10-26",
+              "gold": "517.45",
+              "platform": "517.45",
+              "current": "484.71",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "32.74"
+            },
+            {
+              "day": "2026-10-27",
+              "gold": "329.97",
+              "platform": "366.85",
+              "current": "354.78",
+              "platform_minus_gold": "36.88",
+              "gold_minus_current": "-24.81"
+            }
+          ]
+        },
+        {
+          "id": "52682815187224",
+          "name": "ELETROVIAS_REMARKETING - MQL",
+          "current": "1018.01",
+          "gold": "1057.53",
+          "platform": "1061.40",
+          "closed_current": "996.54",
+          "closed_gold": "1039.22",
+          "closed_platform": "1039.22",
+          "platform_minus_gold": "3.87",
+          "closed_platform_minus_gold": "0.00",
+          "loaded": "2026-10-27T13:51:31.791939-03:00",
+          "differences": [
+            {
+              "day": "2026-10-01",
+              "gold": "35.96",
+              "platform": "35.96",
+              "current": "34.16",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.80"
+            },
+            {
+              "day": "2026-10-02",
+              "gold": "34.34",
+              "platform": "34.34",
+              "current": "32.64",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.70"
+            },
+            {
+              "day": "2026-10-03",
+              "gold": "36.73",
+              "platform": "36.73",
+              "current": "35.83",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "0.90"
+            },
+            {
+              "day": "2026-10-04",
+              "gold": "45.58",
+              "platform": "45.58",
+              "current": "43.14",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.44"
+            },
+            {
+              "day": "2026-10-05",
+              "gold": "33.78",
+              "platform": "33.78",
+              "current": "32.07",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.71"
+            },
+            {
+              "day": "2026-10-06",
+              "gold": "49.53",
+              "platform": "49.53",
+              "current": "48.02",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.51"
+            },
+            {
+              "day": "2026-10-07",
+              "gold": "36.03",
+              "platform": "36.03",
+              "current": "32.67",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "3.36"
+            },
+            {
+              "day": "2026-10-08",
+              "gold": "40.64",
+              "platform": "40.64",
+              "current": "39.49",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.15"
+            },
+            {
+              "day": "2026-10-09",
+              "gold": "37.1",
+              "platform": "37.1",
+              "current": "35.44",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "1.66"
+            },
+            {
+              "day": "2026-10-10",
+              "gold": "35.94",
+              "platform": "35.94",
+              "current": "34.8",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.14"
+            },
+            {
+              "day": "2026-10-11",
+              "gold": "51.96",
+              "platform": "51.96",
+              "current": "50.34",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.62"
+            },
+            {
+              "day": "2026-10-12",
+              "gold": "46.12",
+              "platform": "46.12",
+              "current": "44.48",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.64"
+            },
+            {
+              "day": "2026-10-13",
+              "gold": "36.63",
+              "platform": "36.63",
+              "current": "34.46",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.17"
+            },
+            {
+              "day": "2026-10-14",
+              "gold": "37.32",
+              "platform": "37.32",
+              "current": "35.77",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.55"
+            },
+            {
+              "day": "2026-10-15",
+              "gold": "42.57",
+              "platform": "42.57",
+              "current": "40.42",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.15"
+            },
+            {
+              "day": "2026-10-16",
+              "gold": "32.02",
+              "platform": "32.02",
+              "current": "31.18",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "0.84"
+            },
+            {
+              "day": "2026-10-17",
+              "gold": "32.29",
+              "platform": "32.29",
+              "current": "30.22",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.07"
+            },
+            {
+              "day": "2026-10-18",
+              "gold": "48.26",
+              "platform": "48.26",
+              "current": "45.95",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.31"
+            },
+            {
+              "day": "2026-10-19",
+              "gold": "44.22",
+              "platform": "44.22",
+              "current": "42.26",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.96"
+            },
+            {
+              "day": "2026-10-20",
+              "gold": "33.97",
+              "platform": "33.97",
+              "current": "32.17",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.80"
+            },
+            {
+              "day": "2026-10-21",
+              "gold": "46.51",
+              "platform": "46.51",
+              "current": "45.81",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "0.70"
+            },
+            {
+              "day": "2026-10-22",
+              "gold": "26.65",
+              "platform": "26.65",
+              "current": "25.88",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "0.77"
+            },
+            {
+              "day": "2026-10-23",
+              "gold": "46.43",
+              "platform": "46.43",
+              "current": "43.88",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.55"
+            },
+            {
+              "day": "2026-10-24",
+              "gold": "32.5",
+              "platform": "32.5",
+              "current": "31.91",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "0.59"
+            },
+            {
+              "day": "2026-10-25",
+              "gold": "52.23",
+              "platform": "52.23",
+              "current": "50.97",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.26"
+            },
+            {
+              "day": "2026-10-26",
+              "gold": "43.91",
+              "platform": "43.91",
+              "current": "42.58",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.33"
+            },
+            {
+              "day": "2026-10-27",
+              "gold": "18.31",
+              "platform": "22.18",
+              "current": "21.47",
+              "platform_minus_gold": "3.87",
+              "gold_minus_current": "-3.16"
+            }
+          ]
+        },
+        {
+          "id": "52683550378024",
+          "name": "ELETROVIAS_FORMS_AON - MQL",
+          "current": "2523.54",
+          "gold": "2703.96",
+          "platform": "2713.29",
+          "closed_current": "2437.93",
+          "closed_gold": "2623.43",
+          "closed_platform": "2623.43",
+          "platform_minus_gold": "9.33",
+          "closed_platform_minus_gold": "0.00",
+          "loaded": "2026-10-27T13:51:31.791939-03:00",
+          "differences": [
+            {
+              "day": "2026-10-02",
+              "gold": "31.08",
+              "platform": "31.08",
+              "current": "26.67",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "4.41"
+            },
+            {
+              "day": "2026-10-03",
+              "gold": "66.47",
+              "platform": "66.47",
+              "current": "64.21",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.26"
+            },
+            {
+              "day": "2026-10-04",
+              "gold": "92.1",
+              "platform": "92.1",
+              "current": "88.70",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "3.40"
+            },
+            {
+              "day": "2026-10-05",
+              "gold": "68.11",
+              "platform": "68.11",
+              "current": "66.35",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.76"
+            },
+            {
+              "day": "2026-10-06",
+              "gold": "60.1",
+              "platform": "60.1",
+              "current": "56.87",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "3.23"
+            },
+            {
+              "day": "2026-10-07",
+              "gold": "94.62",
+              "platform": "94.62",
+              "current": "83.40",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "11.22"
+            },
+            {
+              "day": "2026-10-08",
+              "gold": "79.41",
+              "platform": "79.41",
+              "current": "76.34",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "3.07"
+            },
+            {
+              "day": "2026-10-09",
+              "gold": "69.32",
+              "platform": "69.32",
+              "current": "67.35",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "1.97"
+            },
+            {
+              "day": "2026-10-10",
+              "gold": "59.73",
+              "platform": "59.73",
+              "current": "56.54",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "3.19"
+            },
+            {
+              "day": "2026-10-11",
+              "gold": "97.13",
+              "platform": "97.13",
+              "current": "92.29",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "4.84"
+            },
+            {
+              "day": "2026-10-12",
+              "gold": "86.29",
+              "platform": "86.29",
+              "current": "82.76",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "3.53"
+            },
+            {
+              "day": "2026-10-13",
+              "gold": "72.41",
+              "platform": "72.41",
+              "current": "69.5",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.91"
+            },
+            {
+              "day": "2026-10-14",
+              "gold": "74.02",
+              "platform": "74.02",
+              "current": "68.15",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "5.87"
+            },
+            {
+              "day": "2026-10-15",
+              "gold": "69.75",
+              "platform": "69.75",
+              "current": "63.68",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "6.07"
+            },
+            {
+              "day": "2026-10-16",
+              "gold": "63.94",
+              "platform": "63.94",
+              "current": "61.77",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.17"
+            },
+            {
+              "day": "2026-10-17",
+              "gold": "61.4",
+              "platform": "61.4",
+              "current": "46.51",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "14.89"
+            },
+            {
+              "day": "2026-10-18",
+              "gold": "112.02",
+              "platform": "112.02",
+              "current": "109.17",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "2.85"
+            },
+            {
+              "day": "2026-10-19",
+              "gold": "150.8",
+              "platform": "150.8",
+              "current": "139.74",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "11.06"
+            },
+            {
+              "day": "2026-10-20",
+              "gold": "175.66",
+              "platform": "175.66",
+              "current": "159.22",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "16.44"
+            },
+            {
+              "day": "2026-10-21",
+              "gold": "139.37",
+              "platform": "139.37",
+              "current": "127.42",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "11.95"
+            },
+            {
+              "day": "2026-10-22",
+              "gold": "160.44",
+              "platform": "160.44",
+              "current": "134.91",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "25.53"
+            },
+            {
+              "day": "2026-10-23",
+              "gold": "212.8",
+              "platform": "212.8",
+              "current": "202.14",
+              "platform_minus_gold": "0.0",
+              "gold_minus_current": "10.66"
+            },
+            {
+              "day": "2026-10-24",
+              "gold": "163.69",
+              "platform": "163.69",
+              "current": "153.79",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "9.90"
+            },
+            {
+              "day": "2026-10-25",
+              "gold": "204.81",
+              "platform": "204.81",
+              "current": "194.64",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "10.17"
+            },
+            {
+              "day": "2026-10-26",
+              "gold": "157.96",
+              "platform": "157.96",
+              "current": "145.81",
+              "platform_minus_gold": "0.00",
+              "gold_minus_current": "12.15"
+            },
+            {
+              "day": "2026-10-27",
+              "gold": "80.53",
+              "platform": "89.86",
+              "current": "85.61",
+              "platform_minus_gold": "9.33",
+              "gold_minus_current": "-5.08"
+            }
+          ]
+        }
+      ],
+      "conclusion": "All five campaigns match Ouro on every closed account day 1-26. Residual59.55 entirely27Oct. Do not adjust facts or reopen media."
+    },
+    "identity": {
+      "scope_people": 20,
+      "source_rows": 22,
+      "not_found_by_email": {
+        "people": 17,
+        "source_rows": 19,
+        "current_mql": 6,
+        "rd_marketing_status": 404,
+        "crm_contacts": 0
+      },
+      "present_in_rd_pending_ouro": {
+        "people": 2,
+        "current_mql": 0
+      },
+      "deal_without_contact": {
+        "people_in_reference": 1,
+        "deal_id": "6ad18c51de18d10020db5411",
+        "source_id": "fd8a1d23-3f9d-4575-991d-3a485eeffa66",
+        "read": {
+          "deal_id": "6ad18c51de18d10020db5411",
+          "http": 200,
+          "rows": 0,
+          "complete": true,
+          "contacts": []
+        }
+      },
+      "email_lookup_cases": [
+        {
+          "source_ids": [
+            "14cc0754-4971-4255-b104-115f2c37e378"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "16906b1d-4ece-4283-8c70-19a16ebd5404"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "2d46cc7a-d097-44d8-a17d-ca9b48dfc550"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "3aecebe7-c3fd-42bc-9ce8-9af3c8dc9ee9",
+            "805ff60c-5063-4cf1-9d92-90d15df0bf5b",
+            "867fb984-e362-40a7-a097-34fcd74b90dc"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "553a31b4-f353-4877-b646-c2651be10a0c"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "58e92563-9521-4622-8f50-8a19358fa7a7"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "697e1e67-cca7-4d74-8d99-ad46aa6d5de5"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "7445e6a5-9a00-4643-b6ec-2e31efc74137"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "744677c6-ff60-4497-9de4-2dd431322e84"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "8248b9bc-5013-49f3-989e-0a44f4626b91"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "bb1bfca4-9d41-496b-9bfe-88332be4a3a2"
+          ],
+          "marketing": {
+            "status": 200,
+            "uuid": "c3e112f6-80d0-43ad-88f3-8774233a9387",
+            "created_at": null,
+            "last_conversion_at": null,
+            "events_status": 200,
+            "events": [
+              {
+                "created_at": null,
+                "event_identifier": "eletrovias_multistep"
+              }
+            ]
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "c2b04134-462d-4b51-9887-c3cc86a28926"
+          ],
+          "marketing": {
+            "status": 200,
+            "uuid": "4a0e98e1-718a-4299-b36d-5288071b96c7",
+            "created_at": null,
+            "last_conversion_at": null,
+            "events_status": 200,
+            "events": [
+              {
+                "created_at": null,
+                "event_identifier": "eletrovias_multistep"
+              }
+            ]
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "c41493c6-4f68-4601-a6cb-a5f6c70f29de"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "c5d4c88c-9623-4774-8ad8-91523ab2b9a2"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "d68a3086-5133-4222-a936-31c27b0d99de"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "de9c18b0-7736-40c3-b270-5f55248aec66"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "e890c675-ea80-4874-a022-e8ede94a14b3"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "f7f7155f-9472-449a-9014-8590362b84b0"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        },
+        {
+          "source_ids": [
+            "fc1afbd9-d903-4676-a1a0-bf710786f124"
+          ],
+          "marketing": {
+            "status": 404
+          },
+          "crm": {
+            "count": 0,
+            "contacts": []
+          }
+        }
+      ],
+      "source_copy_coverage": {
+        "max": "2026-09-22",
+        "min": "2026-03-01",
+        "rows": 16070,
+        "last_observed": "2026-09-23T03:12:23.069026-03:00"
+      },
+      "limit": "404/no email match only for consulted account/identifier; not proof of deletion or failed delivery. No phone lookup or replay performed."
+    },
+    "classification": {
+      "unclassified_gold_people": 89,
+      "source_event_classification_fields_present": 0,
+      "source_event_capital_fields_not_used_to_qualify": true,
+      "current_reference": {
+        "Lead": 84,
+        "MQL": 3,
+        "absent": 2,
+        "same_email_and_day": 86,
+        "same_email_different_day": 1
+      },
+      "cases": [
+        {
+          "gold_id": "lead:d6dcb18d6a38d3820e18cb0e19c4ac72",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "f5907c7f-9261-4dab-add1-193b71876fcd",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:3d1c39b45f3779891b7d97b616f7861e",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "19cc551e-d67a-4b14-88a5-cfb9b00e456e",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:e21c2881b5f96543fbf5b5ec56f5989c",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "23c2d3c2-1d52-4102-a945-b0eab4a18194",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:e621184b753aab66a17e1c520e1171b0",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "7c66be2f-b704-44d8-9090-7c249fc53d8b",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:345db3254b7b09c7b8ac2c85acf24776",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "21453c41-e48f-4a8f-a038-bcfa9dee5aa8",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:c492c74a874000a1da1b7febe912967d",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "84577b3f-a704-4cbe-8509-a67d895a194a",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:005fe383380192f8194669a74a2cb4a9",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "35fa7238-e92d-4ad6-9fb8-8ecbc9afa4bc",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:1a3bbb06e9298b6a34166d0edd9d2d1e",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "182afe92-215a-4875-bb8b-5a7d2f9e530e",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:71b568e48550aa26ac5d927186cf5f5b",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "fe4bf9dc-8343-4244-81c7-5f6a86842557",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:392e93b4d3d2459a0a7f7952ad5703f2",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "20512620-1ad4-4d79-b76c-62590dee5618",
+              "dia": "2026-10-13",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            },
+            {
+              "id": "dae97653-8863-4f35-adda-ca61a9f26f96",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            },
+            {
+              "id": "781a6cdf-234a-4490-b74d-d8f240350dae",
+              "dia": "2026-10-06",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:5f47e16f9ea3af2a2ff0054ed7704efe",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "67b2bc88-fd0a-4d89-96b9-53ee8fea510d",
+              "dia": "2026-10-10",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            },
+            {
+              "id": "5dbfafb8-78b9-4c02-9c3b-b36c10bd22d1",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:47ed921c10ebf08461cf084159ed746b",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "9d8b7844-53ea-4a9e-b6f8-99fb870e75e2",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:263ac9d108d589ab299a7cb296e83770",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "6ebb762c-2666-4ca7-957b-55be3bc02ef4",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            },
+            {
+              "id": "68ec1f26-eb52-4e28-aed5-cdd6c4e356c0",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:49b674a579d91c8e2148e6580dd2e418",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "c2c72681-6b90-46f7-a579-7139aa6d3900",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:59152e9d2a98428139eeeba55f8166c1",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "ebf9eb00-ea91-47cb-9b29-311a88712f01",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:5703fed85fa12dc8b38854275f05246d",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "65f301d4-a71d-4130-916c-b8e48aa2c653",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:89520cb287ac9206ea956d8f2efba741",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "b292119f-2c62-4d26-8607-e55ac1b353a6",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:6f58dd2a87d325d7f461ecffb0c11763",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "e177e58d-beef-4143-93a6-99020b0108c3",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:03a17e50bafe8ac0a4c17f9f406988c8",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "b3130d06-0ad5-4002-adbc-94359483b0b6",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:8e4ec957db2ef326bb6a41c3838ad639",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "6b9da848-ab60-4c41-816b-acacecf96c72",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "MQL",
+              "is_mql": true,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:efe27bd2d778dd656db34a2928f3ee0d",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "59d557e9-15b7-4802-9ef5-fadbd35e7aa0",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:cb491a085eb59f29e6ef6733536a680c",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "66136323-27a9-4b23-935a-47dca64a4c48",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:7f61fa86bcf0841bc5e917cac0c0a5b9",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "62f50fb6-8149-4028-a5d1-6b10bc9028bc",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:8f90a5908366dab4276bfb331eadbbab",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "38b4795e-a4da-4a0d-907e-85689a9996b2",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:6eb0d23eb920b043c0cc247b9d2eb2a4",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "1570c21f-4697-4123-b70a-1c56b6bb4939",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:60f60f75a58b1212cc84e44e44113354",
+          "gold_day": "2026-10-27",
+          "reference": [
+            {
+              "id": "f5f65b63-9ec2-4321-af61-1a7bbe82ac57",
+              "dia": "2026-10-27",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:797458929067d801c02c439f3b7932d7",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "df10ec4f-c8d8-47fc-bc16-b9ca7cae58c4",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:b5707cba71fe62f0741eff0ff38c497c",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "08066b72-1bd4-4776-845a-32e8f7b8059f",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:573beeae25917e33bdab1e7d111ab700",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "78138be8-2c74-43b6-be2b-ffcae5069446",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "MQL",
+              "is_mql": true,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:b2d418f01bbb6c0d635f8bb06b05e156",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "a7987562-dec8-4e29-acba-5bb887846fe0",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:277d7bf5921d11474793e563c91d42ba",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "fd391f88-f52f-4c6d-b2a9-c0784f4bf4bd",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:ca00074ef453a3e9c2d58f7397ef5fac",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "06617d3d-ab39-4c44-9a96-d6ceb228bf2e",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:001db6f76f3ad4d74417dd5ab08739f9",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "9cd0e6ae-5936-4298-85a9-0bff5bd725c5",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:80393f8a86742221d220c66c0608dd43",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "671e7a2e-0a7a-4290-9be8-e477a2581416",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:abe460fb70dfbe59459743e411314794",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "e7a1e484-d9d1-483e-9395-1b9e87297ebe",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:bc9222e3f24f4a78e64b8a5ad7ee1366",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "1472a337-ef65-4210-b2f9-cef33c5907bb",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:99c18d106ec0b802e10f4c9676444372",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "f9ca2ecd-f3b5-45ad-8ec7-76f2c4aca989",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:f887a5ebbcdb55b874d43522c6ba2c24",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "7b8f3b95-e71a-4df9-a6a4-8ca6b175dcf7",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:136e2ba41b36c8a778f6b69e5ce8c47a",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "626979a4-fc70-4685-accb-9cfe2f7b8d8d",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:81b2a9a315ca474b14a7a49446723703",
+          "gold_day": "2026-10-24",
+          "reference": [
+            {
+              "id": "66022af5-3d9e-486d-9f0e-1d9b59313d8f",
+              "dia": "2026-10-24",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:2deca67b7f2428772f070285d14891f4",
+          "gold_day": "2026-10-06",
+          "reference": [
+            {
+              "id": "823dd4b7-de09-4261-820a-6876c73fe841",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "MQL",
+              "is_mql": true,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:f4b75c2ccfacc6fcaf13d588eae06f4e",
+          "gold_day": "2026-10-24",
+          "reference": []
+        },
+        {
+          "gold_id": "lead:006a31913cf609771a8be9dfaa4319cf",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "7f3831c6-7046-40ba-b084-9d644fd9b65d",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:a18402ce01c179fd7c7021d0512ece9b",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "5fd197a8-c772-4811-b19c-ff59f389a4a0",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:9188393d241482de8776876029bc8ccb",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "695226f6-a44d-430f-954f-db6f8608b890",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:7bcca20a6b1d3f41a9487903c6bcea05",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "98e999d0-c231-45f3-9c3f-2aa35ede175b",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:33de4cb06f4b77c5e68077a1f07ae309",
+          "gold_day": "2026-10-25",
+          "reference": []
+        },
+        {
+          "gold_id": "lead:3f89a13cfabc305497e553c5678c6ae7",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "e5330e93-2cd1-4c6e-8336-4f20d7e59158",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:06a655c49e0dca6275b3ea9f1251e64b",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "37e4b4ee-dab6-47ba-bd34-9bef24534f13",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:79f079d4fe03b86bb5ed6bbf184b1a1f",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "2ebc69b6-9914-4d07-9731-f522a4dd2ef0",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:22396696e30b0ae4dc1f36901f2eab2a",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "7eb8f8e6-7940-467a-93af-7ea0326388d1",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:1252f04b848be44bd24588b8ab351c94",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "9ba59769-c90a-472f-b3c2-68713a6618ab",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:ec8f125d09dddaf1647b809637d61719",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "844d83e1-5dc4-4695-b0a1-70dcc09523d4",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:77f657b071e909fa0ae786f8c59be13c",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "0585db9d-598e-47db-a3ec-dc7e06e74b4f",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:19a0f8719569123b9c9dfcdd44db7772",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "72d0dfb3-4458-45e4-b914-5a631b9629be",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:d333655d46505b1ea391fe4968d663ed",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "6166e3f6-8012-42b7-8b43-5d52c9fee4ce",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:8690c286ee37a0dc532bc72ddebec735",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "ae5125f1-1633-4cf6-81fb-845eadf28084",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:00bb6348af6a3ab2d88a4eec1490ccb4",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "d6c0d344-4db2-4ba4-b210-1ddc302fc5de",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:513b0c72449aa5587ae9e8195f2f6def",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "44300ea5-dc17-489b-b018-7930d124a7e8",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:7bd6e1dd6c35e968cba444e156c5058d",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "a9e76db6-9d18-4b93-ba38-74fe6ee81b35",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:341271f85d9469202b35360d528b8eaf",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "eb5d0aea-03fb-4cb3-87b7-f1a8be81c205",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:b3beabd833f4cb8a47438f569368446f",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "bd461989-8d11-42af-a609-b247cb735e18",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:e463c7acd9164724659ce1495a4dd2a6",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "b2a637a4-7232-4472-be21-e28a71972a57",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:e1eb79e961b8b4508ea07d3b778b7ce1",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "5f0ec9ca-5591-425c-b5fa-46ffe7872b37",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:13cef5c6b2f0f373b3d57bbd59138f6d",
+          "gold_day": "2026-10-25",
+          "reference": [
+            {
+              "id": "bae55540-7b8e-4dd3-acbf-59feba9ad34f",
+              "dia": "2026-10-25",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:36429ceb929fdeb08a5b012667d4d619",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "fb15e645-4f7e-4afa-94b1-f4d814459b9a",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:efa0a28d4b585270e0502b7e27ece59c",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "79eca0fe-183e-4dfe-bb77-d23b7658b477",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:2fc7b3cddbc70ad5284ed7b3ce089c55",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "01392d19-026f-4683-944e-55e71ef190bc",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:e19ba2aa15cc1e5fa775f56872f74838",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "9c3dbe75-3496-438f-9494-ba38ae35a0e6",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:ab3c29f8a0984c3144faf07b09e473f9",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "8387cbcc-e422-4a16-8055-1f34c4022ca6",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:2cdb2bd40d4f9c973b934719bbba27e7",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "c2481d62-08c8-45ee-a2fa-633aa8de4d08",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:081529619e19956474359e9bfe75ce22",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "13097ae7-4983-47f5-81c7-2b8cc72f7ac0",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:2e6f9fc543121e589178e2105d9052fb",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "8d18dea0-3770-4b10-92a9-4dff6d28700b",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:085df2fdbb68fba2e5c62c78c76617c9",
+          "gold_day": "2026-10-23",
+          "reference": [
+            {
+              "id": "1a253803-1f2b-424c-87c2-ba857dee56cf",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:3f2d710f82f73e22cf38a3e9d3de28be",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "58c0b67d-c630-432e-bf4f-e64a3edc260d",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:c3ba93948d741961021d8457ac09ee3c",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "9cf2e6f1-5b89-41e9-bd14-47daa5cbb321",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:5a08a0ff6fb612278fdabae17a717dad",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "404942ba-d06a-44aa-b020-876ac035a942",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:a80da39427c42b037510362885aa8c5d",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "6b5aae21-bfb3-48eb-954b-8566ced6d3e8",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:3c3d07a0fb08fb2f4fcd7415c5d5b678",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "5a594f0e-473c-46ee-b419-4a9d60e027ee",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:a14817f90a0e09a0f54111d4c56c2eaf",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "f0062741-327b-4276-9ac1-20dfd26819f6",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:84d60c387f13486fedf7077115a0e989",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "06c63a70-cff9-44ea-88b5-a939b617683b",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:8d1de33eade5a36c0b732c7766437a5c",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "5a54089f-f9a3-43df-94f2-a5b4e65eaca2",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:982f2df5b959a99d7c6c78c49dc36415",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "d4e11347-73b1-4117-8057-824dd07ec231",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:04349f848a2630f044bfcff0e368874b",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "f0cd0a76-8621-418d-aa09-3e3b4b900cdb",
+              "dia": "2026-10-23",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            },
+            {
+              "id": "26e5991f-bbea-456c-a4ca-098ade3d6130",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:31a40d6220ab3c688a725b13ba07a318",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "bf89e17f-d5a5-44ce-abdd-73f949a434f7",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:cad5b9211cd04e06475876b3f17f9756",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "8cb1f634-5fd8-4b8a-a0ed-cbc429a6127c",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:0b7943eda501af548b0216f7ffeba7ce",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "6305463b-7695-4036-9ce6-c02b9d98531d",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:b0ed7eab75e73007f78fbfee90fa637e",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "ea8234d7-e993-4d5e-97c4-40188cb4e723",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        },
+        {
+          "gold_id": "lead:dde317aed89443e9b4606c311ad73962",
+          "gold_day": "2026-10-26",
+          "reference": [
+            {
+              "id": "c8e12a1b-9693-49d9-a635-11ae4b2f3121",
+              "dia": "2026-10-26",
+              "form": "eletrovias_multistep",
+              "type": "Lead",
+              "is_mql": false,
+              "classification_source": null
+            }
+          ]
+        }
+      ],
+      "other_brand_deal_matches": [
+        {
+          "id": "lead:573beeae25917e33bdab1e7d111ab700",
+          "marca": "B2Case",
+          "negocio_id": "6adca9d9b19ce6002818a65a",
+          "nome_funil": "SDR",
+          "data_criacao_original": "2026-10-24T09:51:37.518-03:00"
+        },
+        {
+          "id": "lead:2deca67b7f2428772f070285d14891f4",
+          "marca": "Inpot",
+          "negocio_id": "6aa3935aae06890001bb127f",
+          "nome_funil": "Scale Partner",
+          "data_criacao_original": "2026-09-11T02:36:27.151-03:00"
+        },
+        {
+          "id": "lead:2deca67b7f2428772f070285d14891f4",
+          "marca": "Inpot",
+          "negocio_id": "6a4d78af0dafb50001d40172",
+          "nome_funil": "Closer",
+          "data_criacao_original": "2026-07-07T19:07:44.093-03:00"
+        },
+        {
+          "id": "lead:573beeae25917e33bdab1e7d111ab700",
+          "marca": "B2Case",
+          "negocio_id": "6adbe687c3de7d002414e087",
+          "nome_funil": "SDR",
+          "data_criacao_original": "2026-10-23T19:58:15.711-03:00"
+        },
+        {
+          "id": "lead:2deca67b7f2428772f070285d14891f4",
+          "marca": "Inpot",
+          "negocio_id": "6a60c9a3631b920001efeb7f",
+          "nome_funil": "Avaliadores",
+          "data_criacao_original": "2026-07-22T10:46:11.983-03:00"
+        },
+        {
+          "id": "lead:2deca67b7f2428772f070285d14891f4",
+          "marca": "B2Case",
+          "negocio_id": "6a7f0b105b5f1d0001ad659a",
+          "nome_funil": "SDR",
+          "data_criacao_original": "2026-08-14T09:33:21.125-03:00"
+        }
+      ],
+      "contact_level_mql_not_reused_across_brands": true,
+      "rd_deal_reads": [
+        {
+          "id": "6ad18c51de18d10020db5411",
+          "http": 200,
+          "created_at": "2026-10-15T23:30:41.665-03:00",
+          "updated_at": "2026-10-26T13:56:13.301-03:00",
+          "contact_ids": null,
+          "contacts": [],
+          "custom_fields": [
+            {
+              "id": "69600aafd006b100155e4066",
+              "label": "Marca",
+              "value": "Eletrovias"
+            }
+          ]
+        },
+        {
+          "id": "6adbe687c3de7d002414e087",
+          "http": 200,
+          "created_at": "2026-10-23T19:58:15.711-03:00",
+          "updated_at": "2026-10-27T13:56:38.163-03:00",
+          "contact_ids": null,
+          "contacts": [],
+          "custom_fields": [
+            {
+              "id": "69600aafd006b100155e4066",
+              "label": "Marca",
+              "value": "Eletrovias"
+            }
+          ]
+        },
+        {
+          "id": "6adca9d9b19ce6002818a65a",
+          "http": 200,
+          "created_at": "2026-10-24T09:51:37.518-03:00",
+          "updated_at": "2026-10-27T13:57:03.901-03:00",
+          "contact_ids": null,
+          "contacts": [],
+          "custom_fields": [
+            {
+              "id": "69600aafd006b100155e4066",
+              "label": "Marca",
+              "value": "B2Case"
+            }
+          ]
+        },
+        {
+          "id": "6ae0c8d63e139500234f2c0b",
+          "http": 200,
+          "created_at": "2026-10-27T12:52:54.102-03:00",
+          "updated_at": "2026-10-27T13:06:28.452-03:00",
+          "contact_ids": null,
+          "contacts": [],
+          "custom_fields": [
+            {
+              "id": "69600aafd006b100155e4066",
+              "label": "Marca",
+              "value": "Eletrovias"
+            }
+          ]
+        }
+      ],
+      "dw_deal_state": {
+        "silver_deals": [
+          {
+            "etapa_id": "69380937219fc3001702b9bb",
+            "funil_id": "69380937219fc3001702b9b5",
+            "criado_em": "2026-10-15T23:30:41.665-03:00",
+            "id_origem": "6ad18c51de18d10020db5411",
+            "api_version": "v1",
+            "atualizado_em": "2026-10-26T13:56:13.301-03:00",
+            "ultimo_observado_em": "2026-10-27T09:06:46.460606-03:00",
+            "apenas_identificador": false
+          },
+          {
+            "etapa_id": "69380937219fc3001702b9bb",
+            "funil_id": "69380937219fc3001702b9b5",
+            "criado_em": "2026-10-15T23:30:41.665-03:00",
+            "id_origem": "6ad18c51de18d10020db5411",
+            "api_version": "v2",
+            "atualizado_em": "2026-10-26T13:56:13.301-03:00",
+            "ultimo_observado_em": "2026-10-27T13:06:02.501529-03:00",
+            "apenas_identificador": false
+          },
+          {
+            "etapa_id": "6a29ca1adb44a7001fd4893c",
+            "funil_id": "69380917e00ed10014daaa62",
+            "criado_em": "2026-10-23T19:58:15.711-03:00",
+            "id_origem": "6adbe687c3de7d002414e087",
+            "api_version": "v1",
+            "atualizado_em": "2026-10-27T09:13:23.581-03:00",
+            "ultimo_observado_em": "2026-10-27T10:08:38.958001-03:00",
+            "apenas_identificador": false
+          },
+          {
+            "etapa_id": "6a29ca1adb44a7001fd4893c",
+            "funil_id": "69380917e00ed10014daaa62",
+            "criado_em": "2026-10-23T19:58:15.711-03:00",
+            "id_origem": "6adbe687c3de7d002414e087",
+            "api_version": "v2",
+            "atualizado_em": "2026-10-27T09:13:23.581-03:00",
+            "ultimo_observado_em": "2026-10-27T13:07:26.85297-03:00",
+            "apenas_identificador": false
+          }
+        ],
+        "gold_deals": [
+          {
+            "marca": "Eletrovias",
+            "negocio_id": "6ad18c51de18d10020db5411",
+            "carregado_em": "2026-10-27T13:51:31.791939-03:00",
+            "data_criacao_original": "2026-10-15T23:30:41.665-03:00"
+          },
+          {
+            "marca": "B2Case",
+            "negocio_id": "6adbe687c3de7d002414e087",
+            "carregado_em": "2026-10-27T13:51:31.791939-03:00",
+            "data_criacao_original": "2026-10-23T19:58:15.711-03:00"
+          }
+        ],
+        "silver_links": [
+          {
+            "contato_id": "6adbe687c3de7d002414e088",
+            "negocio_id": "6adbe687c3de7d002414e087",
+            "api_version": "v1",
+            "ultimo_observado_em": "2026-10-26T23:10:43.003878-03:00"
+          },
+          {
+            "contato_id": "6adbe687c3de7d002414e088",
+            "negocio_id": "6adbe687c3de7d002414e087",
+            "api_version": "v2",
+            "ultimo_observado_em": "2026-10-27T13:07:26.85297-03:00"
+          }
+        ],
+        "fresh_marketing": null
+      },
+      "rd_event_dates": [
+        {
+          "contact_id": "198f4b51-5c41-467d-ba9f-b63a50f902fa",
+          "status": 200,
+          "events": [
+            {
+              "identifier": "cof_eletrovias",
+              "event_timestamp": "2026-10-27T12:52:56.232-03:00",
+              "classification": {}
+            },
+            {
+              "identifier": "eletrovias_multistep",
+              "event_timestamp": "2026-10-27T12:52:09.245-03:00",
+              "classification": {}
+            }
+          ]
+        },
+        {
+          "contact_id": "3056ddbe-de81-453e-ad0a-2dbe1c53d9d5",
+          "status": 200,
+          "events": [
+            {
+              "identifier": "cof_eletrovias",
+              "event_timestamp": "2026-10-23T19:58:18.810-03:00",
+              "classification": {}
+            },
+            {
+              "identifier": "eletrovias_multistep",
+              "event_timestamp": "2026-10-23T19:58:06.954-03:00",
+              "classification": {}
+            }
+          ]
+        },
+        {
+          "contact_id": "3a17feed-0c8b-46be-a299-21b4b94d3f67",
+          "status": 200,
+          "events": [
+            {
+              "identifier": "eletrovias_multistep",
+              "event_timestamp": "2026-10-06T12:45:14.664-03:00",
+              "classification": {}
+            }
+          ]
+        },
+        {
+          "contact_id": "3377be8a-8381-423d-ac20-90940dc24522",
+          "status": 200,
+          "events": [
+            {
+              "identifier": "eletrovias_multistep",
+              "event_timestamp": "2026-10-13T00:38:07.385-03:00",
+              "classification": {}
+            },
+            {
+              "identifier": "eletrovias_multistep",
+              "event_timestamp": "2026-10-07T21:29:58.728-03:00",
+              "classification": {}
+            },
+            {
+              "identifier": "Eletrovias - FORMULARIO ELETROVIAS (CONDICIONAL)",
+              "event_timestamp": "2026-10-07T21:29:52.093-03:00",
+              "classification": {}
+            }
+          ]
+        }
+      ],
+      "conclusion": "Do not calculate qualification. Recover LP classification per real submission and current CRM deals via normal source pipeline. Two of three current MQLs have Eletrovias CRM deals; remaining LP23Oct submission is not the RD06Oct event."
+    },
+    "proposal": [
+      "Keep five campaign scope/spend; media gate complete.",
+      "Origin/TI identify genuine contact for unlinked deal, preserve existing records; any future RD change needs specific approval.",
+      "Origin/TI trace17 absent identities by submission IDs and expose real LP records/classification in Ouro; no resending/import/deletion now.",
+      "Ingestion bring two fresh Marketing contacts, missing Eletrovias deal and current source brand for23Oct deal; do not patch DW facts.",
+      "Preserve CRM MQL07Oct vs later LP recapture13Oct; recover actual LP23Oct submission separately from06Oct event.",
+      "After source/exception decision, one authenticated Marketing/PDF validation; publication remains unapproved."
+    ]
   }
 }

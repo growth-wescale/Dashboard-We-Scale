@@ -137,5 +137,512 @@
     "Current franchise grouping includes111.57 from two CMD campaigns, left native"
   ],
   "base_main": "fc4ea45",
-  "pull_request": 279
+  "pull_request": 279,
+  "investigation_2026_10_27": {
+    "status": "proposal_only_not_applied",
+    "read_at": "2026-10-27T13:56:41.010037+00:00",
+    "source_copy_coverage": {
+      "max": "2026-09-22",
+      "min": "2026-03-01",
+      "rows": 16070,
+      "last_observed": "2026-09-23T03:12:23.069026-03:00"
+    },
+    "contacts": [
+      {
+        "source_ids": [
+          "330e95a0-8bdf-41ee-a4c5-53aa8927f917"
+        ],
+        "day": "2026-10-01",
+        "source_qualification": "Lead",
+        "findings": "Present in current LP source; absent by id/email/phone in bronze/silver/gold. RD Marketing404 and CRM0 by email/phone."
+      },
+      {
+        "source_ids": [
+          "0eaf16aa-7bb7-45fd-938d-108a34a3fc2e",
+          "2669ade4-3a34-42e6-80f8-2aa8cb283a9a",
+          "06a2af1d-d932-4e0c-b1d5-2a1bc83347e0"
+        ],
+        "day": "2026-10-15",
+        "source_qualification": "Lead",
+        "findings": "Three submissions within23 seconds, one email/contact. Present only in current LP source; RD Marketing404 and CRM0 by email/phone."
+      },
+      {
+        "source_ids": [
+          "34116817-65e7-4318-ab70-52c28bda1c81"
+        ],
+        "day": "2026-10-13",
+        "source_qualification": "MQL",
+        "source_is_mql": true,
+        "findings": "LP qualification preserved. RD Marketing404 and CRM0 by email. Phone with country prefix matches3 older contacts, all with different names/emails; no unique identity or October deal established. Do not merge or create a new deal by inference.",
+        "ambiguous_crm_contact_ids": [
+          "6a46635084cc30000118df86",
+          "6aa1a241a93ce8000170e54b",
+          "6a3ee6d11b17d60001cc23ae"
+        ]
+      }
+    ],
+    "rd_access": "GET only; no writes or token refresh; absence limited to queried account/identifiers",
+    "media": [
+      {
+        "id": "120246002967810752",
+        "name": "[GS][CONV][LEAD] - Avaliadores - 05/06/2026",
+        "current": "1690.99",
+        "gold": "1781.76",
+        "platform": "1784.95",
+        "closed_current": "1662.53",
+        "closed_gold": "1751.45",
+        "closed_platform": "1751.45",
+        "platform_minus_gold": "3.19",
+        "closed_platform_minus_gold": "0.00",
+        "loaded": "2026-10-27T10:38:19.635909-03:00",
+        "differences": [
+          {
+            "day": "2026-10-01",
+            "gold": "65.18",
+            "platform": "65.18",
+            "current": "62.82",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "2.36"
+          },
+          {
+            "day": "2026-10-02",
+            "gold": "122.96",
+            "platform": "122.96",
+            "current": "116.80",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "6.16"
+          },
+          {
+            "day": "2026-10-03",
+            "gold": "74.72",
+            "platform": "74.72",
+            "current": "72.99",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "1.73"
+          },
+          {
+            "day": "2026-10-04",
+            "gold": "116.91",
+            "platform": "116.91",
+            "current": "109.97",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "6.94"
+          },
+          {
+            "day": "2026-10-05",
+            "gold": "101.42",
+            "platform": "101.42",
+            "current": "96.04",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "5.38"
+          },
+          {
+            "day": "2026-10-06",
+            "gold": "97.69",
+            "platform": "97.69",
+            "current": "90.52",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "7.17"
+          },
+          {
+            "day": "2026-10-07",
+            "gold": "102.46",
+            "platform": "102.46",
+            "current": "96.91",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "5.55"
+          },
+          {
+            "day": "2026-10-08",
+            "gold": "97.85",
+            "platform": "97.85",
+            "current": "91.05",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "6.80"
+          },
+          {
+            "day": "2026-10-09",
+            "gold": "32.54",
+            "platform": "32.54",
+            "current": "32.47",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "0.07"
+          },
+          {
+            "day": "2026-10-20",
+            "gold": "124.28",
+            "platform": "124.28",
+            "current": "109.33",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "14.95"
+          },
+          {
+            "day": "2026-10-21",
+            "gold": "170.58",
+            "platform": "170.58",
+            "current": "165.25",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "5.33"
+          },
+          {
+            "day": "2026-10-22",
+            "gold": "127.61",
+            "platform": "127.61",
+            "current": "122.48",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "5.13"
+          },
+          {
+            "day": "2026-10-23",
+            "gold": "116.29",
+            "platform": "116.29",
+            "current": "107.88",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "8.41"
+          },
+          {
+            "day": "2026-10-24",
+            "gold": "161.24",
+            "platform": "161.24",
+            "current": "159.01",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "2.23"
+          },
+          {
+            "day": "2026-10-25",
+            "gold": "128.71",
+            "platform": "128.71",
+            "current": "124.28",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "4.43"
+          },
+          {
+            "day": "2026-10-26",
+            "gold": "111.01",
+            "platform": "111.01",
+            "current": "104.73",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "6.28"
+          },
+          {
+            "day": "2026-10-27",
+            "gold": "30.31",
+            "platform": "33.5",
+            "current": "28.46",
+            "platform_minus_gold": "3.19",
+            "gold_minus_current": "1.85"
+          }
+        ]
+      },
+      {
+        "id": "120249260819990752",
+        "name": "CMD Aquisição (comunidade) I Engajamento Whats",
+        "current": "49.12",
+        "gold": "49.12",
+        "platform": "49.12",
+        "closed_current": "49.12",
+        "closed_gold": "49.12",
+        "closed_platform": "49.12",
+        "platform_minus_gold": "0.00",
+        "closed_platform_minus_gold": "0.00",
+        "loaded": "2026-10-23T03:40:11.799682-03:00",
+        "differences": []
+      },
+      {
+        "id": "120249277805770752",
+        "name": "CMD Aquisição (comunidade) I Engajamento Whats — Cópia",
+        "current": "62.45",
+        "gold": "62.45",
+        "platform": "62.45",
+        "closed_current": "62.45",
+        "closed_gold": "62.45",
+        "closed_platform": "62.45",
+        "platform_minus_gold": "0.00",
+        "closed_platform_minus_gold": "0.00",
+        "loaded": "2026-10-23T03:40:11.799682-03:00",
+        "differences": []
+      },
+      {
+        "id": "120249498633040752",
+        "name": "[OUF] FUNDO_MQL_FRANQUIA_NOVA",
+        "current": "3896.29",
+        "gold": "4074.07",
+        "platform": "4094.08",
+        "closed_current": "3844.19",
+        "closed_gold": "4013.91",
+        "closed_platform": "4013.91",
+        "platform_minus_gold": "20.01",
+        "closed_platform_minus_gold": "0.00",
+        "loaded": "2026-10-27T10:38:19.635909-03:00",
+        "differences": [
+          {
+            "day": "2026-10-13",
+            "gold": "69.06",
+            "platform": "69.06",
+            "current": "61.42",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "7.64"
+          },
+          {
+            "day": "2026-10-14",
+            "gold": "231.04",
+            "platform": "231.04",
+            "current": "274.08",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "-43.04"
+          },
+          {
+            "day": "2026-10-15",
+            "gold": "272.79",
+            "platform": "272.79",
+            "current": "237.61",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "35.18"
+          },
+          {
+            "day": "2026-10-16",
+            "gold": "422.5",
+            "platform": "422.5",
+            "current": "410.43",
+            "platform_minus_gold": "0.0",
+            "gold_minus_current": "12.07"
+          },
+          {
+            "day": "2026-10-17",
+            "gold": "269.57",
+            "platform": "269.57",
+            "current": "255.17",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "14.40"
+          },
+          {
+            "day": "2026-10-18",
+            "gold": "324.56",
+            "platform": "324.56",
+            "current": "305.41",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "19.15"
+          },
+          {
+            "day": "2026-10-19",
+            "gold": "334.7",
+            "platform": "334.7",
+            "current": "317.19",
+            "platform_minus_gold": "0.0",
+            "gold_minus_current": "17.51"
+          },
+          {
+            "day": "2026-10-20",
+            "gold": "319.26",
+            "platform": "319.26",
+            "current": "303.99",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "15.27"
+          },
+          {
+            "day": "2026-10-21",
+            "gold": "323.19",
+            "platform": "323.19",
+            "current": "306.24",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "16.95"
+          },
+          {
+            "day": "2026-10-22",
+            "gold": "235.15",
+            "platform": "235.15",
+            "current": "222.54",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "12.61"
+          },
+          {
+            "day": "2026-10-23",
+            "gold": "333.01",
+            "platform": "333.01",
+            "current": "319.24",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "13.77"
+          },
+          {
+            "day": "2026-10-24",
+            "gold": "227.95",
+            "platform": "227.95",
+            "current": "212.18",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "15.77"
+          },
+          {
+            "day": "2026-10-25",
+            "gold": "402.25",
+            "platform": "402.25",
+            "current": "385.76",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "16.49"
+          },
+          {
+            "day": "2026-10-26",
+            "gold": "248.88",
+            "platform": "248.88",
+            "current": "232.93",
+            "platform_minus_gold": "0.00",
+            "gold_minus_current": "15.95"
+          },
+          {
+            "day": "2026-10-27",
+            "gold": "60.16",
+            "platform": "80.17",
+            "current": "52.10",
+            "platform_minus_gold": "20.01",
+            "gold_minus_current": "8.06"
+          }
+        ]
+      },
+      {
+        "id": "23324303426",
+        "name": "[SEARCH] LEGACY Franchise marca",
+        "current": "3.35",
+        "gold": "3.35",
+        "platform": "3.35",
+        "closed_current": "3.35",
+        "closed_gold": "3.35",
+        "closed_platform": "3.35",
+        "platform_minus_gold": "0.00",
+        "closed_platform_minus_gold": "0.00",
+        "loaded": "2026-10-27T05:39:32.317463-03:00",
+        "differences": []
+      }
+    ],
+    "media_reconciliation": {
+      "currency": "BRL",
+      "timezone": "America/Sao_Paulo",
+      "three_campaign_ids": [
+        "120249498633040752",
+        "120246002967810752",
+        "23324303426"
+      ],
+      "closed_period": [
+        "2026-10-01",
+        "2026-10-26"
+      ],
+      "closed_current": "5510.07",
+      "closed_gold": "5768.71",
+      "closed_platform": "5768.71",
+      "closed_gold_minus_current": "258.64",
+      "closed_daily_differences_gold_platform": 0,
+      "through_27_current": "5590.63",
+      "through_27_gold": "5859.18",
+      "through_27_platform": "5882.38",
+      "intraday_platform_minus_gold": "23.20",
+      "meta_gold_loaded": "2026-10-27T10:38:19.635909-03:00"
+    },
+    "scope_evidence": {
+      "meta_forms": [
+        {
+          "id": "1476782897649731",
+          "name": "FRQ_OralUnic_Franquia_Condicional_v1_out26-copy",
+          "status": "ACTIVE"
+        },
+        {
+          "id": "1777211366826702",
+          "name": "Form - Avaliadores-copy",
+          "status": "ACTIVE"
+        }
+      ],
+      "google_ads": [
+        {
+          "ad": "786626548441",
+          "urls": [
+            "https://legacy.oralunic.com.br/franquia"
+          ],
+          "cost_micros": "3350000"
+        },
+        {
+          "ad": "812637691143",
+          "urls": [
+            "https://franquia.oralunic.com.br/"
+          ],
+          "cost_micros": "0"
+        },
+        {
+          "ad": "817775907496",
+          "urls": [
+            "https://legacy.oralunic.com.br/"
+          ],
+          "cost_micros": "0"
+        }
+      ],
+      "google_spending_destination": "https://legacy.oralunic.com.br/franquia",
+      "destination_public_content": "Oral Unic franchise page verified27/10",
+      "community_campaign_ids": [
+        "120249277805770752",
+        "120249260819990752"
+      ],
+      "community_spend": "111.57"
+    },
+    "proposal": {
+      "source": "Origin/TI expose real LP submissions in ouro with source IDs, dates and existing qualification; resolve MQL identity. No invented contact, deleted import, forced brand or RD write. No ingestion change applied.",
+      "franchise_campaigns": [
+        "120249498633040752",
+        "23324303426"
+      ],
+      "separate_avaliadores": [
+        "120246002967810752"
+      ],
+      "separate_community": [
+        "120249277805770752",
+        "120249260819990752"
+      ],
+      "scope": "Analytical Marketing mapping only, after explicit approval; preserve total source spend and all brand/source data.",
+      "franchise_gold_through_27": "4077.42",
+      "franchise_platform_through_27": "4097.43",
+      "mql_rule": "CRM created deal is MQL; no local qualification; source LP flag preserved."
+    },
+    "runtime_changes": false,
+    "dw_fact_writes": false,
+    "published": false,
+    "qa_repeated": false
+  },
+  "marketing_scope_adjustment": {
+    "date": "2026-10-27",
+    "status": "implemented_locally_not_published",
+    "branch": "codex/oral-unic-marketing-recorte",
+    "base_main": "e48a4f2",
+    "source_switches": false,
+    "mql_rule_changes": false,
+    "dw_fact_writes": false,
+    "rd_calls_this_step": false,
+    "sales_diff": false,
+    "scope": {
+      "brand": "Oral Unic",
+      "start": "2026-10-01",
+      "end_exclusive": "2026-11-01",
+      "flag": "VITE_ORAL_UNIC_OURO_ENABLED",
+      "production_flag": false
+    },
+    "surfaces": [
+      "overview",
+      "daily_cp_mql",
+      "health_franchise_and_comparison",
+      "sop_and_pdf_filter",
+      "community",
+      "esteira_assessors"
+    ],
+    "validation": {
+      "frontend_tests": 905,
+      "build": "passed",
+      "lint": "no_errors_existing_warnings",
+      "authenticated_ui": "deferred_by_user",
+      "pdf": "deferred_by_user"
+    },
+    "fixture_cents": {
+      "franchise": 407742,
+      "assessors": 178176,
+      "community": 11157,
+      "five_campaign_total": 597075
+    },
+    "maicon_handoff": "docs/handoffs/2026-10-27-oral-unic-maicon.md",
+    "maicon_sent": false,
+    "pull_request": 283,
+    "code_commit": "5fa5929"
+  }
 }

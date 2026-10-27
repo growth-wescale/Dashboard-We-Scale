@@ -1,3 +1,4 @@
+import { isOralUnicSopFranchiseMedia, type OralUnicMediaRow } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { BeautyMarketingPanel } from '@/components/marketing/BeautyMarketingPanel'
@@ -947,16 +948,9 @@ function SopSlide({ slide, dates, slideIndex, total, onPrev, onNext, isFullscree
     return leads
   }, [slide.filterFranquia])
 
-  const filterMedia = useCallback(<T extends { campanha?: string | null }>(media: T[]) => {
-    if (slide.filterFranquia) {
-      // Franquia OU = campanhas SEM prefixo [LEGACY] (Comunidade) / [CMD] (Comunidade) / [ODL] (Odonto Legacy)
-      return media.filter(r => {
-        const c = (r.campanha ?? '').toUpperCase()
-        return !c.includes('[LEGACY]') && !c.includes('LEGACY]') && !c.includes('[CMD]') && !c.includes('[ODL]')
-      })
-    }
-    return media
-  }, [slide.filterFranquia])
+  const filterMedia = useCallback(<T extends OralUnicMediaRow>(media: T[]) =>
+    slide.filterFranquia ? media.filter(isOralUnicSopFranchiseMedia) : media,
+    [slide.filterFranquia])
 
   const activeMedia     = useMemo(() => filterMedia(allMedia),  [allMedia,  filterMedia])
   const activePrevMedia = useMemo(() => filterMedia(prevMedia), [prevMedia, filterMedia])

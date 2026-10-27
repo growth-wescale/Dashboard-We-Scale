@@ -1,3 +1,4 @@
+import { oralUnicMediaFront } from '@/lib/oralUnicMarketingMedia'
 import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useMediaData } from '@/hooks/useMediaData'
@@ -13,20 +14,26 @@ const pct = (n: number) => pctBase(n, 2)
 
 // ── classificação de frente por prefixo no nome da campanha ───────────────────
 // Reusa a fonte única em src/lib/oralUnicMapping.ts em vez de reimplementar inline
-type Frente = 'ODL' | 'OUF' | 'LEGACY'
+type Frente = 'ODL' | 'OUF' | 'LEGACY' | 'AVALIADORES'
 
-function frenteOf(campanha: string | null): Frente {
+function frenteOf(row: MediaDailyRaw): Frente {
+  const front = oralUnicMediaFront(row)
+  if (front === 'avaliadores') return 'AVALIADORES'
+  if (front === 'comunidade') return 'LEGACY'
+  if (front === 'franquia') return 'OUF'
+  const campanha = row.campanha
   if (isMediaLegacy(campanha)) return 'LEGACY'
   if (isMediaOdontoLegacy(campanha)) return 'ODL'
   return 'OUF'
 }
 
 const FRENTE_META: Record<Frente, { label: string; description: string; color: string }> = {
+  AVALIADORES: { label: 'Avaliadores', description: 'Captação de dentistas avaliadores', color: '#D99A28' },
   ODL:    { label: 'ODL — Odonto Legacy',      description: 'Venda de consultoria / produto Legacy', color: '#4A9EFF' },
   OUF:    { label: 'OUF — Oral Unic Franquia', description: 'Aquisição de franqueados',             color: '#7C5CFF' },
   LEGACY: { label: 'Comunidade',               description: 'Captação de cadastro e diagnóstico',   color: '#22C6A1' },
 }
-const FRENTE_ORDER: Frente[] = ['OUF', 'ODL', 'LEGACY']
+const FRENTE_ORDER: Frente[] = ['OUF', 'ODL', 'LEGACY', 'AVALIADORES']
 
 // ── métricas agregadas ────────────────────────────────────────────────────────
 interface Metrics {
@@ -74,12 +81,12 @@ function isCampanhaAtiva(rows: MediaDailyRaw[], rangeEnd: string): boolean {
 function buildTree(rows: MediaDailyRaw[], rangeEnd: string): { total: Metrics; frentes: FrenteNode[] } {
   const byFrente = new Map<Frente, MediaDailyRaw[]>()
   for (const r of rows) {
-    const f = frenteOf(r.campanha)
+    const f = frenteOf(r)
     if (!byFrente.has(f)) byFrente.set(f, [])
     byFrente.get(f)!.push(r)
   }
 
-  const frentes: FrenteNode[] = FRENTE_ORDER.map(frente => {
+  const frentes: FrenteNode[] = FRENTE_ORDER.filter(f => f !== 'AVALIADORES' || byFrente.has(f)).map(frente => {
     const rowsF = byFrente.get(frente) ?? []
     // group by campanha
     const byCamp = new Map<string, MediaDailyRaw[]>()

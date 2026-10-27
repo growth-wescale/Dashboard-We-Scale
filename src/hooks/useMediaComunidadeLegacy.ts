@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useMediaData } from '@/hooks/useMediaData'
-import { isMediaLegacy } from '@/lib/oralUnicMapping'
+import { isOralUnicCommunityMedia } from '@/lib/oralUnicMarketingMedia'
 import type { MediaDailyRaw } from '@/lib/types'
 
 /**
@@ -29,7 +29,7 @@ export function useMediaComunidadeLegacy(filters: Filters = {}): Result {
   const oralUnicAll = useMediaData({ marca: 'Oral Unic', dataInicio: filters.dataInicio, dataFim: filters.dataFim })
 
   const data = useMemo(
-    () => oralUnicAll.data.filter(r => isMediaLegacy(r.campanha)),
+    () => oralUnicAll.data.filter(isOralUnicCommunityMedia),
     [oralUnicAll.data],
   )
 

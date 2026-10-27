@@ -1,16 +1,23 @@
+import { oralUnicMediaFront, isOralUnicCommunityMedia } from './oralUnicMarketingMedia'
 import type { MediaDailyRaw } from './types'
-import { isMediaOdontoLegacy, isMediaLegacy } from './oralUnicMapping'
+import { isMediaOdontoLegacy } from './oralUnicMapping'
 
 // Regras existentes da Visão Geral: Franquia, Consultoria e Comunidade
 // não podem compartilhar o mesmo investimento no cálculo de CP-MQL.
 export function isComunidadeRow(r: MediaDailyRaw): boolean {
-  return r.marca === 'Oral Unic' && isMediaLegacy(r.campanha)
+  return r.marca === 'Oral Unic' && isOralUnicCommunityMedia(r)
+}
+
+/** Comunidade e Avaliadores ficam fora do investimento de aquisição/CP-MQL. */
+export function isOutsideMqlMedia(r: MediaDailyRaw): boolean {
+  return isComunidadeRow(r) || oralUnicMediaFront(r) === 'avaliadores'
 }
 
 export function rowBucket(r: MediaDailyRaw): string | null {
   if (r.marca === 'Oral Unic') {
+    if (oralUnicMediaFront(r) === 'avaliadores') return null
     if (isMediaOdontoLegacy(r.campanha)) return 'Odonto Scale'
-    if (isMediaLegacy(r.campanha)) return null
+    if (isOralUnicCommunityMedia(r)) return null
     return 'Oral Unic'
   }
   return r.marca

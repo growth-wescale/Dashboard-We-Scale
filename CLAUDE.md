@@ -802,6 +802,28 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-27 — Detalhe da versão: metas de cada pessoa abertas por marca
+
+Pedido do Junior, em cima da entrada de 26/10: em "Metas por pessoa" ele via só
+o peso em cada marca e o total. Agora as tabelas de SDR e Closer têm uma linha
+por pessoa × marca (marca, peso e as metas daquela marca) e, quando a pessoa
+atua em mais de uma marca, uma linha **Total**. As duas tabelas ficaram uma
+embaixo da outra; lado a lado, a do Closer saía cortada à direita.
+
+`DetalhePessoa.marcas` passou a carregar `valores` e `faturamento` de cada marca,
+lidos da linha de `linhas_espelho` daquela marca. Nas versões do Hub tudo é
+inteiro e as linhas somam o total. Na V1 de setembro (importada da planilha) as
+metas são quebradas: a linha da marca mostra o valor com 1 casa (Sarah SQL
+30,8 + 27,5 + 15,4) e só o total arredonda pra cima (74), como a Performance.
+Pessoa com uma marca só não ganha linha Total, e a linha dela já usa o número
+arredondado.
+
+Conferido renderizado com dado real (cópia local sem login, removida): V5 de
+outubro, Sarah na Eletrovias 252 / 50 / 30 / 18 e Xayane 253 / 51 / 29 / 19,
+somando os 505 / 101 / 59 / 37 do funil da marca; V1 de setembro fechando nos
+totais da Performance; 375 px sem rolagem horizontal da página. Build + 916
+testes + oxlint.
+
 ### 2026-10-27 — Dados Partner corrigidos sem alterar layout
 
 PR286 corrige o PR284 já mesclado, por solicitação de Gabriel: remove a folha adicional e seu

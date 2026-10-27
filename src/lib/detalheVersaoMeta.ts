@@ -29,12 +29,21 @@ export interface DetalheMarca {
   etapas: Record<EtapaMetaConfig, DetalheEtapa>
 }
 
+export interface MetaPessoaMarca {
+  marca: string
+  /** Peso da pessoa no time da marca. Nulo em versão importada da planilha (a divisão veio pronta). */
+  peso: number | null
+  /** Como gravado. Só versão importada da planilha tem meta quebrada; o total da pessoa é que arredonda. */
+  valores: Partial<Record<EtapaMetaConfig, number>>
+  faturamento: number | null
+}
+
 export interface DetalhePessoa {
   nome: string
   funcao: 'SDR' | 'Closer'
-  /** Peso da pessoa em cada marca. Nulo em versão importada da planilha (a divisão veio pronta). */
-  marcas: { marca: string; peso: number | null }[]
-  /** Somado entre as marcas e arredondado pra cima, como a Performance mostra. */
+  /** Uma entrada por marca da pessoa, na ordem das marcas do dashboard. */
+  marcas: MetaPessoaMarca[]
+  /** Somado entre as marcas e só então arredondado pra cima, como a Performance mostra. */
   valores: Partial<Record<EtapaMetaConfig, number>>
   faturamento: number | null
 }
@@ -93,24 +102,29 @@ function valoresDaLinha(l: LinhaEspelho): { valores: Partial<Record<EtapaMetaCon
   return { valores, faturamento: l.funcao === 'Closer' ? n(l.meta_financeira) ?? null : null }
 }
 
+function arredondarValores(valores: Partial<Record<EtapaMetaConfig, number>>): Partial<Record<EtapaMetaConfig, number>> {
+  return Object.fromEntries(Object.entries(valores).map(([e, v]) => [e, arredondarMeta(v)]))
+}
+
 function pessoasDoEspelho(versao: Pick<VersaoMeta, 'origem' | 'linhasEspelho'>, estado: EstadoMes): DetalhePessoa[] {
   const porChave = new Map<string, DetalhePessoa>()
   for (const l of versao.linhasEspelho) {
     const chave = `${l.funcao}|${l.nome_colaborador}`
     const atual = porChave.get(chave) ?? { nome: l.nome_colaborador, funcao: l.funcao, marcas: [], valores: {}, faturamento: null }
     const pessoa = estado.marcas.find(m => m.marca === l.marca)?.pessoas.find(p => p.nome === l.nome_colaborador && p.funcao === l.funcao)
-    atual.marcas.push({ marca: l.marca, peso: versao.origem === 'importado' ? null : pessoa?.peso ?? null })
     const { valores, faturamento } = valoresDaLinha(l)
+    atual.marcas.push({
+      marca: l.marca,
+      peso: versao.origem === 'importado' ? null : pessoa?.peso ?? null,
+      valores,
+      faturamento,
+    })
     for (const [e, v] of Object.entries(valores) as [EtapaMetaConfig, number][]) atual.valores[e] = (atual.valores[e] ?? 0) + v
     if (faturamento != null) atual.faturamento = (atual.faturamento ?? 0) + faturamento
     porChave.set(chave, atual)
   }
   return [...porChave.values()]
-    .map(p => ({
-      ...p,
-      marcas: ordenarMarcas(p.marcas),
-      valores: Object.fromEntries(Object.entries(p.valores).map(([e, v]) => [e, arredondarMeta(v)])) as DetalhePessoa['valores'],
-    }))
+    .map(p => ({ ...p, marcas: ordenarMarcas(p.marcas), valores: arredondarValores(p.valores) }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 }
 

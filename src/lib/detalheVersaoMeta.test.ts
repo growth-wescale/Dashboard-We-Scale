@@ -122,13 +122,21 @@ describe('detalharVersao — pessoas', () => {
     const d = detalharVersao('2026-10-01', V5, OUTUBRO)
     expect(d.closers).toEqual([{
       nome: 'Douglas', funcao: 'Closer',
-      marcas: [{ marca: 'Inpot', peso: 100 }, { marca: 'Viva', peso: 100 }],
+      marcas: [
+        { marca: 'Inpot', peso: 100, valores: { 'Oportunidade COF': 12, Fechamento: 6 }, faturamento: 449400 },
+        { marca: 'Viva', peso: 100, valores: { 'Oportunidade COF': 2, Fechamento: 1 }, faturamento: 69900 },
+      ],
       valores: { 'Oportunidade COF': 14, Fechamento: 7 },
       faturamento: 519300,
     }])
     expect(d.sdrs.map(p => p.nome)).toEqual(['Sarah Padilha', 'Xayane'])
-    expect(d.sdrs[0]).toMatchObject({
-      marcas: [{ marca: 'Inpot', peso: 50 }, { marca: 'Viva', peso: 100 }],
+    expect(d.sdrs[0]).toEqual({
+      nome: 'Sarah Padilha', funcao: 'SDR',
+      marcas: [
+        { marca: 'Inpot', peso: 50, valores: { MQL: 200, 'Reunião Agendada SQL': 40, 'Reunião Realizada': 25, SAL: 15 }, faturamento: null },
+        // Na Viva ela está no time, mas sem meta de SDR: a marca aparece vazia.
+        { marca: 'Viva', peso: 100, valores: {}, faturamento: null },
+      ],
       valores: { MQL: 200, 'Reunião Agendada SQL': 40, 'Reunião Realizada': 25, SAL: 15 },
       faturamento: null,
     })
@@ -143,7 +151,8 @@ describe('detalharVersao — pessoas', () => {
       ],
     }
     const [xay] = detalharVersao('2026-10-01', importada, OUTUBRO).sdrs
-    expect(xay.marcas).toEqual([{ marca: 'Inpot', peso: null }, { marca: 'Viva', peso: null }])
+    // Cada marca fica como veio da planilha; só o total arredonda (73,7 → 74), senão as linhas somariam 37 + 37.
+    expect(xay.marcas.map(m => [m.marca, m.peso, m.valores['Reunião Agendada SQL']])).toEqual([['Inpot', null, 36.85], ['Viva', null, 36.85]])
     expect(xay.valores['Reunião Agendada SQL']).toBe(74)
   })
 })

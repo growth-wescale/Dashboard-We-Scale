@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { captacaoMissao, etapasMissao, funilInversoMissao, metaCadastrada, MESES_MISSAO, pacingMissao, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
+import { captacaoMissao, etapasMissao, funilInversoMissao, metaCadastrada, MESES_MISSAO, pacingMissao, projecaoMqlMidia, proximoDia, realizadoMissao, type DadosMissao, type MetaMissaoRow, type VendaMissaoRow } from './missaoMetas'
 import type { Lead } from './types'
 
 const meta: MetaMissaoRow = { mes_referencia: '2026-10-01', marca: 'Inpot', funcao: 'Closer', meta_financeira: 1000, meta_qtd_vendas: 2, meta_sql: null, meta_volume_sal: null }
 const venda: VendaMissaoRow = { id_lead: 'teste', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100.25, quantidade_unidades: 3, data_venda: '2026-10-02T12:00:00Z' }
 
 describe('Missão: metas publicadas sem alterações comerciais', () => {
+  it('projeta MQLs pagos pela verba mensal e CP-MQL meta, sem usar gasto ou MQL realizado', () => {
+    expect(projecaoMqlMidia('Inpot', '2026-10-01')).toEqual({ orcamento: 36_000, mql: 164 })
+    expect(projecaoMqlMidia('Eletrovias', '2026-10-01')).toEqual({ orcamento: 28_000, mql: 757 })
+    expect(projecaoMqlMidia('Eletrovias', '2026-12-01')).toEqual({ orcamento: 20_000, mql: 541 })
+    expect(projecaoMqlMidia('Lisô Laser', '2026-12-01')).toEqual({ orcamento: 14_400, mql: 48 })
+    expect(projecaoMqlMidia('Inpot', '2027-01-01')).toBeNull()
+  })
   it('MQL preserva dedupe, classificação, marca e período; CP-MQL é razão dos totais', () => {
     const lead = { id: 'a', dia: '2026-10-02', marca: 'Inpot', email: 'exemplo', telefone: null, dados_extras: { lead_type: 'MQL' } } as unknown as Lead
     const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '', vendas: [], metas: [meta], etapas: [],

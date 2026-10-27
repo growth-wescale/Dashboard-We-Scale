@@ -133,6 +133,16 @@ export function orcamentoMensalMissao(marca: string, investimento: number, indic
   return marca === 'Eletrovias' ? [28_000, 28_000, 20_000][indice] : investimento * [0.4, 0.4, 0.2][indice]
 }
 
+/** Estimativa de MQLs pagos no mês com a verba planejada e o CP-MQL meta. */
+export function projecaoMqlMidia(marca: string, mes: string): { orcamento: number; mql: number } | null {
+  const indice = MESES_MISSAO.indexOf(mes as typeof MESES_MISSAO[number])
+  const investimento = FRENTES_MISSAO.find(f => f.marca === marca)?.investimento
+  const custoMeta = CP_MQL_MISSAO[marca]
+  if (investimento === undefined || !Number.isFinite(custoMeta) || custoMeta <= 0) return null
+  const orcamento = orcamentoMensalMissao(marca, investimento, indice)
+  return orcamento === null ? null : { orcamento, mql: Math.round(orcamento / custoMeta) }
+}
+
 export function pacingMissao(rows: MidiaMissaoRow[], marca: string, investimento: number, hoje: string) {
   const inicio = hoje.slice(0, 7) + '-01'
   const indice = MESES_MISSAO.indexOf(inicio as typeof MESES_MISSAO[number])

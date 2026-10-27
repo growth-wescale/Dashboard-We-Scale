@@ -158,11 +158,30 @@ export function desvios(sdrs: PessoaPeso[], contadores: Record<string, number>):
     .sort((a, b) => a.desvio - b.desvio || b.peso - a.peso || a.nome.localeCompare(b.nome))
 }
 
+/**
+ * Quem pode entrar no time próprio da regra: pessoas ativas com usuário no RD, de qualquer cargo
+ * (a Lisô Laser distribui para uma Closer), SDRs primeiro. Quem já está no time e saiu do cadastro
+ * continua na lista, para o select não trocar o nome sozinho.
+ */
+export function opcoesTimeProprio(
+  pessoas: { nome: string; cargo: string; ativo: boolean; user_id: string | null }[],
+  time: PessoaPeso[] | null,
+): { nome: string; rotulo: string }[] {
+  const ehSdr = (cargo: string) => cargo === 'SDR' || cargo === 'SDR/Closer'
+  const ativas = pessoas
+    .filter(p => p.user_id && p.ativo)
+    .sort((a, b) => Number(ehSdr(b.cargo)) - Number(ehSdr(a.cargo)) || a.nome.localeCompare(b.nome, 'pt-BR'))
+    .map(p => ({ nome: p.nome, rotulo: p.cargo && p.cargo !== 'SDR' ? `${p.nome} (${p.cargo})` : p.nome }))
+  const nomes = new Set(ativas.map(o => o.nome))
+  const fora = (time ?? []).filter(p => p.nome && !nomes.has(p.nome)).map(p => ({ nome: p.nome, rotulo: `${p.nome} (fora do cadastro ativo)` }))
+  return [...ativas, ...fora]
+}
+
 export function rotuloFonteTime(fonte: FonteTime | string | null | undefined): string {
   switch (fonte) {
     case 'versao_ativa': return 'meta do mês'
     case 'versao_anterior': return 'última meta publicada (sem meta neste mês)'
-    case 'time_proprio': return 'time próprio (marca sem meta)'
+    case 'time_proprio': return 'time próprio da regra'
     default: return 'sem SDR elegível'
   }
 }

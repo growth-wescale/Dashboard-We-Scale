@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { X } from 'lucide-react'
 import { bannerStyle, cardStyle, disabledButtonStyle, inputStyle, primaryButtonStyle, secondaryButtonStyle } from '@/components/metas/metasUi'
-import type { ModoRegra, PessoaPeso, RegraRow } from '@/lib/distribuicao/regras'
+import { opcoesTimeProprio, type ModoRegra, type PessoaPeso, type RegraRow } from '@/lib/distribuicao/regras'
 import type { CampoVisto, PessoaRd } from '@/hooks/useDistribuicao'
 import type { RegraInput } from '@/hooks/useGravarDistribuicao'
 
@@ -46,8 +46,8 @@ export function EditorRegra({ regra, camposVistos, pessoas, fonteTime, onSalvar,
   const chavesDaMarca = useMemo(() => camposVistos.filter(c => c.marca === f.marca), [camposVistos, f.marca])
   const valoresSugeridos = useMemo(() => chavesDaMarca.find(c => c.chave === f.barreira_campo)?.valores ?? [], [chavesDaMarca, f.barreira_campo])
   const responsaveis = pessoas.filter(p => p.user_id && p.ativo)
-  const sdrs = pessoas.filter(p => p.user_id && p.ativo && (p.cargo === 'SDR' || p.cargo === 'SDR/Closer'))
-  const timeProprioVale = fonteTime !== 'versao_ativa' && fonteTime !== 'versao_anterior'
+  const opcoesTime = opcoesTimeProprio(pessoas, f.time_proprio)
+  const seguiaMeta = fonteTime === 'versao_ativa' || fonteTime === 'versao_anterior'
   const somaTime = (f.time_proprio ?? []).reduce((s, p) => s + (Number(p.peso) || 0), 0)
   const precisaMotivo = regra != null
   const set = <K extends keyof RegraInput>(k: K, v: RegraInput[K]) => setF(prev => ({ ...prev, [k]: v }))
@@ -155,20 +155,22 @@ export function EditorRegra({ regra, camposVistos, pessoas, fonteTime, onSalvar,
           </div>
         </fieldset>
 
-        <fieldset style={{ border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', padding: 12, opacity: timeProprioVale ? 1 : 0.7 }}>
-          <legend style={rotulo}>Time próprio (só vale para marca sem meta publicada)</legend>
-          {!timeProprioVale && <div style={{ ...bannerStyle('atencao'), marginBottom: 8 }}>Esta marca tem meta publicada: a distribuição segue os pesos da Configuração das Metas. O time próprio só entra se a marca sair da meta.</div>}
+        <fieldset style={{ border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+          <legend style={rotulo}>Time próprio (vale no lugar dos pesos da meta)</legend>
+          {f.time_proprio
+            ? <div style={{ ...bannerStyle('atencao'), marginBottom: 8 }}>Com o time próprio preenchido, a marca recebe só por este time, mesmo com meta publicada. Para voltar aos pesos da Configuração das Metas, remova todas as pessoas.</div>
+            : <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>{seguiaMeta ? 'Vazio: a distribuição segue os pesos da Configuração das Metas.' : 'Vazio: sem meta publicada, o lead vai para o responsável padrão.'} Preencha só para fixar quem recebe os leads desta marca.</div>}
           {(f.time_proprio ?? []).map((p, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
               <select style={{ ...campo, maxWidth: 260 }} value={p.nome} onChange={e => { const t = [...(f.time_proprio ?? [])]; t[i] = { ...t[i], nome: e.target.value }; setTime(t) }}>
-                {sdrs.map(s => <option key={s.nome} value={s.nome}>{s.nome}</option>)}
+                {opcoesTime.map(o => <option key={o.nome} value={o.nome}>{o.rotulo}</option>)}
               </select>
               <input type="number" min={0} max={100} step={1} style={{ ...campo, maxWidth: 90 }} value={p.peso} onChange={e => { const t = [...(f.time_proprio ?? [])]; t[i] = { ...t[i], peso: Number(e.target.value) }; setTime(t) }} />%
               <button type="button" aria-label="remover" onClick={() => setTime((f.time_proprio ?? []).filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}><X size={12} /></button>
             </div>
           ))}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button type="button" style={{ ...secondaryButtonStyle, padding: '6px 10px' }} onClick={() => setTime([...(f.time_proprio ?? []), { nome: sdrs[0]?.nome ?? '', peso: 0 }])} disabled={sdrs.length === 0}>+ SDR</button>
+            <button type="button" style={{ ...secondaryButtonStyle, padding: '6px 10px' }} onClick={() => setTime([...(f.time_proprio ?? []), { nome: opcoesTime[0]?.nome ?? '', peso: 0 }])} disabled={opcoesTime.length === 0}>+ Pessoa</button>
             {f.time_proprio && <span style={{ fontSize: 12, color: Math.abs(somaTime - 100) > 0.01 ? 'var(--status-risco)' : 'var(--ws-text-secondary)' }}>soma {somaTime}%</span>}
           </div>
         </fieldset>

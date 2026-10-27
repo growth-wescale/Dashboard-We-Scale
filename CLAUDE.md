@@ -30,6 +30,17 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
+### S&OP — fechamento histórico Scale Partner (27/10/2026)
+
+Folha própria depois de Scale Partner/Eventos, incluída na navegação e no PDF,
+com a mesma permissão da marca We Scale. Compara os períodos fixos 01/05–12/08
+e 15/08–19/10 do material fornecido por Gabriel em27/10; não acompanha o filtro
+mensal. Dados editoriais em `src/constants/partnerFechamento.ts`, sem consulta
+ou escrita de banco. Preserva custos, funil, retorno, pessoas, ritmo30dias e
+ressalvas (Google recente ausente, maturação, testes/carrosséis e13–14/08 fora).
+Faturamento arredondado e ticket informado não são recalculados entre si.
+Preparação local; publicação e QA autenticado do conjunto S&OP ficam separados.
+
 ## 2. Os DOIS Supabase (a confusão mais cara deste projeto)
 
 | Projeto | Ref | Serve para |
@@ -787,6 +798,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-27 — Fechamento histórico Partner na S&OP
+
+Nova folha de comparativo, exclusiva da S&OP e dos acessos We Scale, após
+Eventos e antes do Funil Atual. Snapshot informado pelo usuário, com fonte
+referenciada e períodos fixos. Build/905 testes e lint sem erros aprovados;
+QA visual local desktop/celular e captura1920×1080 sem cortes. Não altera
+fontes, fatos, RD, outras páginas ou indicadores da folha Partner existente.
+Sem merge/deploy; QA autenticado e exportação completa permanecem separados.
 
 ### 2026-10-27 — Funil do SDR na Performance ganha a caixa de No-show
 

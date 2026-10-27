@@ -35,6 +35,7 @@ describe('Missão: apresentação e isolamento', () => {
     const pendente = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, metas: [] } }))
     expect(pendente).toContain('meta pendente')
     expect(pendente).toContain('falta completar a meta de vendas dos Closers deste mês')
+    expect(pendente).toContain('Meta de MQL pendente: comparação não calculável.')
     expect(pendente).not.toContain('/ 164'); expect(pendente).not.toContain('/ 757'); expect(pendente).not.toContain('/ 96')
   })
   it('preserva os dois placares e mostra nove cards mensais sem vendas por marca', () => {
@@ -46,9 +47,24 @@ describe('Missão: apresentação e isolamento', () => {
     expect(html).toContain('MQL e CP-MQL · Inpot')
     expect(html).toContain('SQL · reuniões agendadas'); expect(html).toContain('>SAL<')
     expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('/ 170'); expect(html).toContain('/ 310'); expect(html).toContain('/ 180')
+    expect((html.match(/<span>MQL gerados de mídia paga<\/span>/g) ?? []).length).toBe(3)
+    expect(html.indexOf('<span>MQL</span>')).toBeLessThan(html.indexOf('<span>MQL gerados de mídia paga</span>'))
+    expect(html.indexOf('<span>MQL gerados de mídia paga</span>')).toBeLessThan(html.indexOf('<span>CP-MQL</span>'))
+    expect(html).toContain('≈ 164'); expect(html).toContain('≈ 757'); expect(html).toContain('≈ 96')
+    expect(html).toContain('96,47% da meta total de MQL')
+    expect(html).toContain('aria-label="MQL gerados de mídia paga"')
+    expect(html).toContain('36.000,00 de investimento projetado ÷')
+    expect(html).toContain('220,00 de CP-MQL projetado')
     expect(html).toContain('Taxas do print: MQL → SQL 23% · SQL → SAL 39% · SAL → Venda 20%')
     expect(html).toContain('São referências de planejamento, não conversões observadas no CRM')
     expect(html).toContain('base: 3 vendas cadastradas no mês')
+  })
+  it('no recorte do print, Inpot projeta 164 MQLs pagos frente à meta total de 227', () => {
+    const metas = dados.metas.map(m => m.marca === 'Inpot' ? { ...m, meta_qtd_vendas: 4 } : m)
+    const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, metas } }))
+    expect(html).toContain('≈ 164</strong><span>/ 227</span>')
+    expect(html).toContain('72,25% da meta total de MQL')
+    expect(html).toContain('Faltariam: 63')
   })
   it('metas não diminuem com vendas realizadas; zero não divide por zero', () => {
     const venda = { id_lead: 'ganho', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100, quantidade_unidades: 1, data_venda: '2026-10-02' }

@@ -59,6 +59,13 @@ describe('Missão: apresentação e isolamento', () => {
     expect(html).toContain('São referências de planejamento, não conversões observadas no CRM')
     expect(html).toContain('base: 3 vendas cadastradas no mês')
   })
+  it('no recorte do print, Inpot projeta 164 MQLs pagos frente à meta total de 227', () => {
+    const metas = dados.metas.map(m => m.marca === 'Inpot' ? { ...m, meta_qtd_vendas: 4 } : m)
+    const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, metas } }))
+    expect(html).toContain('≈ 164</strong><span>/ 227</span>')
+    expect(html).toContain('72,25% da meta total de MQL')
+    expect(html).toContain('Faltariam: 63')
+  })
   it('metas não diminuem com vendas realizadas; zero não divide por zero', () => {
     const venda = { id_lead: 'ganho', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100, quantidade_unidades: 1, data_venda: '2026-10-02' }
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, vendas: [venda] } }))

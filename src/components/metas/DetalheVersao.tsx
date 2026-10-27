@@ -4,7 +4,7 @@ import { buscarEstadoVersao, type EstadoMes, type VersaoMeta } from '@/hooks/use
 import { ROTULO_ETAPA, type EtapaMetaConfig } from '@/lib/configMetas'
 import { detalharVersao, etapaAbaixo, type DetalheEtapa, type DetalhePessoa } from '@/lib/detalheVersaoMeta'
 import type { DiaSemana, Semana } from '@/lib/metasEngine'
-import { bannerStyle, fmtBRL, fmtInt, fmtPct } from './metasUi'
+import { bannerStyle, fmtBRL, fmtDec, fmtInt, fmtPct } from './metasUi'
 
 // Versão publicada não muda (o banco bloqueia UPDATE/DELETE): busca uma vez por sessão.
 const cacheEstado = new Map<number, EstadoMes>()
@@ -123,10 +123,10 @@ export function DetalheVersao({ mes, versao }: { mes: string; versao: VersaoMeta
       <Secao
         titulo="Metas por pessoa"
         nota={versao.origem === 'importado'
-          ? 'O que a versão grava pro dashboard medir cada pessoa, somado entre as marcas dela. Versão importada da planilha: a divisão entre as pessoas veio pronta, sem peso.'
-          : 'O que a versão grava pro dashboard medir cada pessoa, somado entre as marcas dela. Ao lado de cada marca, o peso da pessoa no time da marca.'}
+          ? 'O que a versão grava pro dashboard medir cada pessoa: uma linha por marca e, quando ela atua em mais de uma, o total. Versão importada da planilha: a divisão entre as pessoas veio pronta, sem peso, e as metas quebradas só arredondam pra cima no total, como a Performance mostra.'
+          : 'O que a versão grava pro dashboard medir cada pessoa: uma linha por marca, com o peso dela no time da marca, e o total quando ela atua em mais de uma.'}
       >
-        <div className="rs-split" style={{ ['--rs-gap' as string]: '16px', ['--rs-split' as string]: 'minmax(0, 1.15fr) minmax(0, 1fr)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <TabelaPessoas titulo="SDR" pessoas={d.sdrs} etapas={ETAPAS_SDR} />
           <TabelaPessoas titulo="Closer" pessoas={d.closers} etapas={ETAPAS_CLOSER} faturamento />
         </div>
@@ -155,13 +155,21 @@ function TabelaPessoas({ titulo, pessoas, etapas, faturamento }: {
   etapas: EtapaMetaConfig[]
   faturamento?: boolean
 }) {
+  // Total da pessoa vem arredondado pra cima; a linha da marca mostra como foi gravada (meta quebrada só na planilha importada).
+  const celulas = (valores: DetalhePessoa['valores'], fat: number | null, fmt: (n: number) => string) => (
+    <>
+      {etapas.map(e => <td key={e} style={td}>{valores[e] != null ? fmt(valores[e]!) : '—'}</td>)}
+      {faturamento && <td style={td}>{fat != null ? fmtBRL(fat) : '—'}</td>}
+    </>
+  )
   return (
     <div className="rs-scroll-x">
-      <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', minWidth: faturamento ? 440 : 500 }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 13, width: '100%', minWidth: 330 + etapas.length * 80 + (faturamento ? 110 : 0) }}>
         <thead>
           <tr>
             <th style={{ ...th, textAlign: 'left' }}>{titulo}</th>
-            <th style={{ ...th, textAlign: 'left' }}>Marcas</th>
+            <th style={{ ...th, textAlign: 'left' }}>Marca</th>
+            <th style={th}>Peso</th>
             {etapas.map(e => <th key={e} style={th}>{ROTULO_ETAPA[e]}</th>)}
             {faturamento && <th style={th}>Faturamento</th>}
           </tr>
@@ -169,23 +177,33 @@ function TabelaPessoas({ titulo, pessoas, etapas, faturamento }: {
         <tbody>
           {pessoas.length === 0 && (
             <tr style={{ borderTop: '1px solid var(--ws-border)' }}>
-              <td colSpan={etapas.length + (faturamento ? 3 : 2)} style={{ ...td, textAlign: 'left', color: 'var(--ws-text-secondary)' }}>Ninguém nesta função.</td>
+              <td colSpan={etapas.length + (faturamento ? 4 : 3)} style={{ ...td, textAlign: 'left', color: 'var(--ws-text-secondary)' }}>Ninguém nesta função.</td>
             </tr>
           )}
-          {pessoas.map(p => (
-            <tr key={p.nome} style={{ borderTop: '1px solid var(--ws-border)' }}>
-              <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{p.nome}</td>
-              <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', fontSize: 12, color: 'var(--ws-text-secondary)', minWidth: 150 }}>
-                {p.marcas.map(m => (
-                  <span key={m.marca} style={{ whiteSpace: 'nowrap' }}>
-                    {marcaLabel(m.marca)}{m.peso != null && <b style={{ color: 'var(--ws-text-primary)', fontWeight: 600 }}> {fmtPeso(m.peso)}</b>}
-                  </span>
-                )).reduce<ReactNode[]>((acc, el, i) => (i ? [...acc, ' · ', el] : [el]), [])}
-              </td>
-              {etapas.map(e => <td key={e} style={td}>{p.valores[e] != null ? fmtInt(p.valores[e]!) : '—'}</td>)}
-              {faturamento && <td style={td}>{p.faturamento != null ? fmtBRL(p.faturamento) : '—'}</td>}
-            </tr>
-          ))}
+          {pessoas.flatMap(p => {
+            // Com uma marca só, a linha da marca já é o total da pessoa.
+            const comTotal = p.marcas.length > 1
+            const linhas = p.marcas.map((m, i) => (
+              <tr key={`${p.nome}|${m.marca}`} style={{ borderTop: `1px solid var(${i === 0 ? '--ws-border-strong' : '--ws-border'})` }}>
+                {i === 0 && (
+                  <td rowSpan={p.marcas.length + (comTotal ? 1 : 0)} style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{p.nome}</td>
+                )}
+                <td style={{ ...td, textAlign: 'left' }}>{marcaLabel(m.marca)}</td>
+                <td style={{ ...td, color: 'var(--ws-text-secondary)' }}>{m.peso != null ? fmtPeso(m.peso) : '—'}</td>
+                {comTotal ? celulas(m.valores, m.faturamento, fmtDec) : celulas(p.valores, p.faturamento, fmtInt)}
+              </tr>
+            ))
+            if (comTotal) {
+              linhas.push(
+                <tr key={`${p.nome}|total`} style={{ borderTop: '1px solid var(--ws-border)', background: 'var(--ws-bg)', fontWeight: 600 }}>
+                  <td style={{ ...td, textAlign: 'left' }}>Total</td>
+                  <td style={td} />
+                  {celulas(p.valores, p.faturamento, fmtInt)}
+                </tr>,
+              )
+            }
+            return linhas
+          })}
         </tbody>
       </table>
     </div>

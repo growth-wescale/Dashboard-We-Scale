@@ -804,7 +804,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ### 2026-10-27 — Dados Partner corrigidos sem alterar layout
 
-PR284 corrigido por solicitação de Gabriel: remove a folha adicional e seu
+PR286 corrige o PR284 já mesclado, por solicitação de Gabriel: remove a folha adicional e seu
 CSS; atualiza os seis indicadores da folha existente. Fonte informada27/10,
 janela15/08–19/10 explícita. Consultas semanal/eventos preservadas no mesmo
 período por decisão do usuário. Estrutura JSX e estilos idênticos à base;

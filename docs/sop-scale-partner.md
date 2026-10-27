@@ -32,7 +32,7 @@ conferência visual local a 1440/1024px e exportação PDF de nove folhas com
 dados fictícios (folha Scale Partner revisada). Não equivale a deploy ou QA
 autenticado com dados reais. Publicação depende de PR e merge.
 
-## Fechamento informado em 27/10/2026 — PR284 corrigido
+## Fechamento informado em 27/10/2026 — PR286 corretivo
 
 Somente dados da folha existente. Componentes, estilos, posições, formatação,
 navegação e nove folhas do PDF preservados; a folha extra anterior foi retirada.
@@ -56,3 +56,6 @@ separado e conta somente inscrições dentro da janela selecionada.
 Métricas do material sem espaço no layout atual (CPL/CPV/CPP, pessoas, ROAS,
 ticket, dias ativos e ritmo30dias) não criam cards, gráficos ou folhas novos.
 Sem alteração de fatos, fontes de outras páginas, RD, merge ou deploy.
+
+O PR284 original foi mesclado externamente em53ae9bc às13:24 BRT; workflow
+Deploy40540539342 concluído. A correção está no PR286, sem merge/deploy próprio.

@@ -184,8 +184,17 @@ sem filtro; formato legado `leads[]`, identificador em
   `distribuicao_disponibilidade` (fora_agora / ausência agendada),
   `distribuicao_config`. Escrita só pela Edge Function `gravar-distribuicao`
   (sessão do Marketing + `tem_permissao('acao.distribuicao-editar')`).
-- **Conversão nova = deal novo**, sempre. Só o reenvio em < 10 min vira
-  `duplicado`.
+- **Conversão nova = deal novo**, sempre. Só o reenvio em < 10 min (mesmo e-mail, marca e
+  formulário) vira `duplicado`.
+- **Lead com deal aberto** (desde 28/10), achado por e-mail ou telefone (`distribuicao_tel_chave`:
+  DDD + últimos 8 dígitos) em qualquer marca e funil (`distribuicao_deals_abertos`): o deal novo
+  vai para o SDR que já atendeu o lead (SDR do deal aberto mais recente, se ativo, com user_id,
+  cargo SDR/SDR-Closer e disponível; senão, rodízio) e ganha a anotação "este MQL já tem deal
+  aberto" (link, funil, etapa, marca, responsável e se foi por E-mail, Telefone ou os dois).
+- **Contato do RD reaproveitado** (desde 28/10): `POST /deals` com `contacts[]` sempre cria
+  contato novo, então o deal nasce sem contato e é ligado por `PUT /contacts/:id` (`deal_ids`
+  com a lista inteira) ao contato do e-mail (`contato.ts`). Só e-mail que o RD não conhece ganha
+  contato novo.
 - **Não envia "SDR Responsável"** (campo de opção com "Xay"/"Thiago"/"Sarah
   Padilha", a automação do RD também não preenchia). Dono = `user_id`.
 - Segredos no Vault: `distribuicao_webhook_chave` (`?chave=` da URL do
@@ -846,6 +855,53 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-10-28 — Deals duplicados no RD: mesmo contato, mesmo SDR e anotação
+
+Queixa dos SDRs ao Junior. **Causa** (desde a virada da distribuição em 19/10): (1) a
+`distribuir-lead` mandava `contacts[]` em todo `POST /deals`, e o RD cria contato novo mesmo
+com e-mail já cadastrado: o lead aparecia duas vezes na busca, um contato por deal (a automação
+antiga do RD Marketing reaproveitava o contato; conferido na API). (2) Reconversão depois de
+10 min sempre virava deal novo e o SDR era sorteado de novo: o Humberto (Eletrovias) estava no
+Closer com a Jéssica e ganhou deal no SDR com a Xayane 43 min depois.
+
+**Números** (19/10 a 28/10, 450 deals da distribuição): 38 de lead que já tinha deal (29 por
+e-mail, isto é, contato duplicado; 9 só por telefone), 24 na mesma marca (20 com deal aberto) e
+14 em outra marca. Mesma marca antes da virada: 4,3% dos deals (62 de 1.454, 14/09–19/10);
+depois: 5,7% (27 de 472). Odonto Legacy foi a mais afetada (9 de 48). O bloqueio de 10 min
+funcionou (95 barrados).
+
+**Decisões do Junior:** deal novo sempre, mas no mesmo contato; vai para o SDR que já atendeu
+(nunca o Closer); anotação com o deal aberto e o que identificou (E-mail, Telefone ou E-mail e
+Telefone); vale com deal aberto em qualquer funil; o dashboard continua contando cada deal
+separado (já era assim: o grão é o deal, nunca o contato); todas as regras descritas na aba.
+
+**Banco** (`docs/sql/2026-10-28-distribuicao-reconversao.sql`): `distribuicao_tel_chave`,
+`distribuicao_deals_abertos` (espelho + deals que a própria distribuição criou e o espelho ainda
+não trouxe; 11 ms), índices em `deal_contatos`, colunas `reconversao`/`contato_rd`/
+`contato_reaproveitado` em `distribuicao_atribuicao`, `distribuicao_processar` com a regra (depois
+da barreira; SDR do deal aberto mais recente que seja elegível) e `vw_distribuicao_config`.
+Backup das definições em `_backup_viewdefs` (`*_pre_reconversao_20261028`).
+
+**Edge Function** `distribuir-lead` v12: `contato.ts` (busca por e-mail, liga ao contato, plano B
+cria contato) e a anotação da reconversão. Testado no Funil de teste: deal ligado ao contato
+antigo, contato com os 2 deals, anotação criada. Achado no caminho: a **listagem** de anotações
+da API (`GET /activities`) mostra acento quebrado em toda anotação criada por API, mas o texto
+está gravado certo (`last_note_content` do deal confere). `jsonAscii` escapa o corpo por garantia.
+
+**Retroativo** (função de uso único `corrigir-duplicados`, tabelas `_retro_contatos_20261028` e
+`_retro_notas_20261028`, RLS ligado): 27 leads ficaram com um contato só (deals movidos para o
+contato ligado ao RD Marketing; os duplicados ficaram vazios e **não foram apagados**: ids em
+`contatos_esvaziados`, pra apagar na tela do RD se quiser) e 24 deals abertos de lead com outro
+deal aberto ganharam a anotação, com rodapé dizendo que o responsável não foi trocado. 0 erros.
+
+**Aba Distribuição de Leads:** seção "Como a distribuição funciona" com todas as regras na ordem
+do processo (números lidos de `vw_distribuicao_config`) e, no registro de leads, "Já tinha deal
+aberto" e "Ligado ao contato que já existia no RD". Verificado: build + vitest + oxlint e visto
+renderizado com dado real numa rota de prévia sem login (removida antes do commit).
+
+Ficaram no Funil de teste do RD 3 deals criados hoje e 1 contato vazio de teste (Teste Caixa A/B, "TESTE
+contato reaproveitado (apagar)").
 
 ### 2026-10-27 (2) — Lisô Laser sem meta de SDR (V6) e a Bruna como SDR nos negócios dela
 

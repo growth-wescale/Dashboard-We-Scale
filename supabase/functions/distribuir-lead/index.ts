@@ -5,8 +5,11 @@
 // Fluxo por conversão:
 //   1. autentica (?chave= = Vault distribuicao_webhook_chave) e normaliza o payload
 //   2. rpc distribuicao_processar(payload): roteia, dedup, barreira, escolhe, grava o registro
-//   3. se 'atribuido'/'fallback': POST /deals no RD CRM (rd.ts) → rpc distribuicao_fechar
-//   3a. deal criado: nota e tarefa da regra (o que a automação do RD fazia dentro do deal)
+//   3. se 'atribuido'/'fallback': POST /deals no RD CRM (rd.ts) → rpc distribuicao_fechar. Se o
+//      e-mail já tem contato no RD, o deal nasce sem contato e é ligado a ele (contato.ts); senão,
+//      nasce com contato novo como antes
+//   3a. deal criado: nota e tarefa da regra (o que a automação do RD fazia dentro do deal) e, se o
+//       lead já tinha deal aberto, a anotação da reconversão (deal_pronto.reconversao)
 //   3b. deal criado e a regra tem conversao_cof: registra a conversão no RD Marketing (rdmkt.ts),
 //       que dispara a automação da COF → rpc distribuicao_marcar_cof
 //   4. erro ou fallback → alerta no Teams; 1 linha em sync_execucao (job distribuir_lead,
@@ -24,6 +27,7 @@
 // atualizada no RD Station CRM") como conversão — sem regra vigente, são ignorados sem log.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { criarDealNoRd, criarNotaNoRd, criarTarefaNoRd, type DealPronto } from './rd.ts'
+import { buscarContatosPorEmail, criarContatoNoDeal, escolherContato, ligarDealAoContato, montarNotaReconversao, type ContatoRd } from './contato.ts'
 import { enviarConversaoCof } from './rdmkt.ts'
 
 const DASHBOARD_URL = 'https://dashboard.srv1816822.hstgr.cloud/distribuicao-leads'
@@ -98,7 +102,15 @@ async function configInt(sb: Sb, chave: string, padrao: number): Promise<number>
 async function criarEFechar(sb: Sb, atribuicaoId: number, marca: string, deal: DealPronto, resultado: string, tentativasAnteriores = 0) {
   const token = await segredo(sb, 'rd_token')
   const tentativas = await configInt(sb, 'retries_rd', 3)
-  const r = await criarDealNoRd(token, deal, { tentativas })
+  // Contato que já existe no RD com esse e-mail: o deal nasce sem contato e é ligado a ele.
+  let contato: ContatoRd | null = null
+  const errosContato: string[] = []
+  try {
+    contato = escolherContato(await buscarContatosPorEmail(token, deal.contato.email))
+  } catch (e) {
+    errosContato.push(`busca do contato: ${(e as Error)?.message ?? String(e)}`.slice(0, 300))
+  }
+  const r = await criarDealNoRd(token, deal, { tentativas, semContato: !!contato })
   const totalTentativas = tentativasAnteriores + r.tentativas
   const { error: erroFechar } = await sb.rpc('distribuicao_fechar', { p_id: atribuicaoId, p_id_deal: r.id ?? null, p_erro: r.erro ?? null, p_tentativas: totalTentativas })
   if (erroFechar) {
@@ -115,15 +127,36 @@ async function criarEFechar(sb: Sb, atribuicaoId: number, marca: string, deal: D
     await alertarTeams(sb, 'Distribuição de leads · responsável padrão',
       `${marca} · ${deal.contato.email} · nenhum SDR elegível, deal ${r.id} foi para o responsável padrão · registro #${atribuicaoId}`)
   }
-  if (r.id && (deal.nota || deal.tarefa)) await criarExtras(sb, token, atribuicaoId, marca, deal, r.id)
+  if (r.id) {
+    let idContato: string | null = null
+    let reaproveitado = false
+    if (contato) {
+      const e = await ligarDealAoContato(token, contato, r.id)
+      if (!e) { idContato = contato.id; reaproveitado = true }
+      else {
+        errosContato.push(e)
+        const novo = await criarContatoNoDeal(token, deal.contato, r.id)
+        if (novo.erro) errosContato.push(`contato novo: ${novo.erro}`)
+        idContato = novo.id ?? null
+      }
+    }
+    await sb.from('distribuicao_atribuicao').update({ contato_rd: idContato, contato_reaproveitado: contato ? reaproveitado : false }).eq('id', atribuicaoId)
+    if (errosContato.length) {
+      await alertarTeams(sb, 'Distribuição de leads · contato do deal',
+        `${marca} · deal ${r.id} criado, mas: ${errosContato.join(' | ').slice(0, 300)} · registro #${atribuicaoId}`)
+    }
+  }
+  if (r.id && (deal.nota || deal.tarefa || deal.reconversao)) await criarExtras(sb, token, atribuicaoId, marca, deal, r.id)
   let cof: string | null = null
   if (r.id && deal.conversao_cof) cof = await dispararCof(sb, atribuicaoId, marca, deal, r.id)
   return { id_deal: r.id ?? null, erro: r.erro ?? null, tentativas: totalTentativas, ...(deal.conversao_cof ? { cof } : {}) }
 }
 
-/** Passo 3a: nota e tarefa no deal. Falha não desfaz o deal: grava extras_erro e avisa. */
+/** Passo 3a: anotação da reconversão, nota e tarefa no deal. Falha não desfaz o deal: grava extras_erro e avisa. */
 async function criarExtras(sb: Sb, token: string, atribuicaoId: number, marca: string, deal: DealPronto, idDeal: string) {
   const erros: string[] = []
+  const notaReconv = montarNotaReconversao(deal.reconversao, deal.nome_sdr)
+  if (notaReconv) { const e = await criarNotaNoRd(token, idDeal, deal.user_id, notaReconv); if (e) erros.push(e) }
   if (deal.nota) { const e = await criarNotaNoRd(token, idDeal, deal.user_id, deal.nota); if (e) erros.push(e) }
   if (deal.tarefa) { const e = await criarTarefaNoRd(token, idDeal, deal.user_id, deal.tarefa); if (e) erros.push(e) }
   const erro = erros.length ? erros.join(' | ').slice(0, 500) : null

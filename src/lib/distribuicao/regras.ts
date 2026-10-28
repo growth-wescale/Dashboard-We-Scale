@@ -68,6 +68,12 @@ export interface AtribuicaoRow {
   cof_enviada_em?: string | null
   cof_erro?: string | null
   extras_erro?: string | null
+  /** Lead já tinha deal aberto (regra de 28/10/2026). */
+  reconversao?: boolean
+  /** SDR do deal aberto que recebeu este lead; null = foi pelo rodízio. */
+  reconversao_sdr?: string | null
+  /** O deal foi ligado ao contato que já existia no RD. */
+  contato_reaproveitado?: boolean | null
 }
 
 /** Linha de vw_distribuicao_disponibilidade. */

@@ -11,6 +11,7 @@ import type { RegraRow } from '@/lib/distribuicao/regras'
 import { CardMarca } from '@/components/distribuicao/CardMarca'
 import { EditorRegra } from '@/components/distribuicao/EditorRegra'
 import { LogAtribuicoes } from '@/components/distribuicao/LogAtribuicoes'
+import { RegrasProcesso } from '@/components/distribuicao/RegrasProcesso'
 import { PainelDisponibilidade } from '@/components/distribuicao/PainelDisponibilidade'
 import { MODO_VISUAL, fmtRelativo, pill, td, th } from '@/components/distribuicao/ui'
 
@@ -103,6 +104,8 @@ export function DistribuicaoLeads() {
               {' '}<strong>Em teste</strong> (modo sombra): o sistema registra pra quem iria cada lead, mas quem cria a negociação ainda é a automação antiga do RD. <strong>Ativo</strong>: o sistema cria a negociação e dispara a COF.
             </p>
           </section>
+
+          <RegrasProcesso config={d.config} />
 
           <section>
             <h2 style={{ ...sectionTitleStyle, fontSize: 16 }}>Marcas</h2>

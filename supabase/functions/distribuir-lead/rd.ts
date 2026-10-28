@@ -10,6 +10,7 @@
 // Toda mensagem de erro passa por `semToken()`: o token vai na query string e o Deno inclui a URL
 // inteira em erros de rede ("error sending request for url (...?token=XXX)"); sem isso o token
 // iria parar em erro_rd (view lida pela chave anon), em sync_execucao e no Teams.
+import type { Reconversao } from './contato.ts'
 
 export type DealPronto = {
   name: string
@@ -29,6 +30,8 @@ export type DealPronto = {
   nota?: string | null
   /** Tarefa a criar pro dono do deal. */
   tarefa?: TarefaRegra | null
+  /** Lead que já tem deal aberto (contato.ts monta a anotação). null = lead sem deal aberto. */
+  reconversao?: Reconversao | null
   /** { "<custom_field_id do CRM>": valor } — resolvido pela regra da marca (campos_extra). */
   campos_extra: Record<string, unknown>
 }
@@ -50,7 +53,7 @@ type CustomField = { custom_field_id: string; value: string | string[] }
 
 export type RdDealBody = {
   deal: { name: string; deal_stage_id: string; user_id: string; deal_custom_fields: CustomField[] }
-  contacts: Array<{ name: string; emails: Array<{ email: string }>; phones?: Array<{ phone: string; type: string }> }>
+  contacts?: Array<{ name: string; emails: Array<{ email: string }>; phones?: Array<{ phone: string; type: string }> }>
   campaign?: { _id: string }
 }
 
@@ -61,7 +64,8 @@ function texto(v: unknown): string | null {
   return s ? s : null
 }
 
-export function montarCorpoDeal(deal: DealPronto): RdDealBody {
+/** semContato: o deal nasce sem contato e é ligado depois ao contato que já existe (contato.ts). */
+export function montarCorpoDeal(deal: DealPronto, semContato = false): RdDealBody {
   const cf: CustomField[] = [
     { custom_field_id: CF.marca, value: deal.marca_rd },
     { custom_field_id: CF.fonteMacro, value: 'Inbound' },
@@ -79,11 +83,13 @@ export function montarCorpoDeal(deal: DealPronto): RdDealBody {
   }
   const body: RdDealBody = {
     deal: { name: deal.name, deal_stage_id: deal.deal_stage_id, user_id: deal.user_id, deal_custom_fields: cf },
-    contacts: [{
+  }
+  if (!semContato) {
+    body.contacts = [{
       name: deal.contato.nome,
       emails: [{ email: deal.contato.email }],
       ...(deal.contato.telefone ? { phones: [{ phone: deal.contato.telefone, type: 'cellphone' }] } : {}),
-    }],
+    }]
   }
   if (deal.campaign_id) body.campaign = { _id: deal.campaign_id }
   return body
@@ -111,12 +117,12 @@ function ehTimeout(e: unknown): boolean {
 }
 
 export async function criarDealNoRd(
-  token: string, deal: DealPronto, opts: { tentativas?: number; timeoutMs?: number; fetchImpl?: typeof fetch } = {},
+  token: string, deal: DealPronto, opts: { tentativas?: number; timeoutMs?: number; fetchImpl?: typeof fetch; semContato?: boolean } = {},
 ): Promise<ResultadoRd> {
   const max = Math.max(1, opts.tentativas ?? 3)
   const timeoutMs = opts.timeoutMs ?? 15_000
   const f = opts.fetchImpl ?? fetch
-  const body = JSON.stringify(montarCorpoDeal(deal))
+  const body = JSON.stringify(montarCorpoDeal(deal, opts.semContato ?? false))
   let ultimoErro = 'sem tentativa'
   for (let i = 1; i <= max; i++) {
     let resp: Response | null = null
@@ -148,6 +154,16 @@ export async function criarDealNoRd(
   return { erro: ultimoErro, tentativas: max }
 }
 
+/**
+ * JSON só com ASCII (acentos viram \uXXXX), pra não depender do charset que o RD assume.
+ * Atenção: a LISTAGEM de anotações da API (GET /activities) devolve acento quebrado ("aÃ§Ã£o") em
+ * toda anotação criada por API, mesmo gravada certa: o `last_note_content` do deal mostra o texto
+ * certo (conferido em 28/10/2026). Não é sinal de erro aqui.
+ */
+export function jsonAscii(v: unknown): string {
+  return JSON.stringify(v).replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
+}
+
 // ---- Passos que as automações do RD faziam dentro do deal (nota e tarefa) ----
 // Melhor esforço: o deal já existe; falha vira extras_erro + alerta, nunca desfaz o deal.
 // Repete só 429/5xx (até 2 vezes); timeout não repete (evita nota/tarefa em dobro).
@@ -159,7 +175,7 @@ async function postRd(token: string, caminho: string, body: unknown, f: typeof f
     let resp: Response
     try {
       resp = await f(`https://crm.rdstation.com/api/v1/${caminho}?token=${encodeURIComponent(token)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: jsonAscii(body), signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (e) {
       return `${caminho}: ${semToken((e as Error)?.message ?? String(e), token)}`.slice(0, 300)

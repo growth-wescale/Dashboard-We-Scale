@@ -92,6 +92,8 @@ export function LogAtribuicoes({ marcas, sdrs, podeEditar, reprocessando, onRepr
                   <td style={td}><span style={pill(rv.bg, rv.fg)} title={RESULTADO_AJUDA[l.resultado]}>{rv.label}</span></td>
                   <td style={{ ...td, whiteSpace: 'normal', minWidth: 220, fontSize: 12 }} title={l.erro_rd ?? undefined}>
                     {l.motivo ?? '—'}
+                    {l.reconversao && <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>Já tinha deal aberto{l.reconversao_sdr ? `: foi para ${l.reconversao_sdr}` : ': foi pelo rodízio'}. Anotação no deal.</div>}
+                    {l.contato_reaproveitado && <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>Ligado ao contato que já existia no RD.</div>}
                     {l.erro_rd && <div style={{ color: 'var(--status-risco)', fontSize: 11 }}>{l.erro_rd.slice(0, 140)}</div>}
                     {l.cof_erro && <div style={{ color: 'var(--status-risco)', fontSize: 11 }}>COF não disparou: {l.cof_erro.slice(0, 120)}</div>}
                   </td>

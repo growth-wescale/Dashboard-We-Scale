@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { criarDealNoRd, criarNotaNoRd, criarTarefaNoRd, montarCorpoDeal, prazoBrt, type DealPronto } from './rd.ts'
+import { criarDealNoRd, criarNotaNoRd, criarTarefaNoRd, jsonAscii, montarCorpoDeal, prazoBrt, type DealPronto } from './rd.ts'
 
 const deal: DealPronto = {
   name: 'Lead X', deal_stage_id: 'etapa', user_id: 'u1', campaign_id: 'camp', marca_rd: 'Eletrovias', nome_sdr: 'Sarah Padilha',
@@ -96,5 +96,14 @@ describe('nota e tarefa no deal', () => {
     const e = await criarNotaNoRd(TOKEN, 'd1', 'u1', 'oi', f)
     expect(e).toContain('HTTP 422')
     expect(e).not.toContain(TOKEN)
+  })
+})
+
+describe('jsonAscii', () => {
+  it('escapa acento e continua sendo o mesmo JSON', () => {
+    const v = { activity: { text: 'ATENÇÃO: reconversão · responsável Jéssica' } }
+    const s = jsonAscii(v)
+    expect(/^[\x00-\x7e]*$/.test(s)).toBe(true)
+    expect(JSON.parse(s)).toEqual(v)
   })
 })

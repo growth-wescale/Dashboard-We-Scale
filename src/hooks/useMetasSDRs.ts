@@ -7,13 +7,13 @@ import { useRosterVendas } from '@/hooks/useRosterVendas'
  * Métricas mensais dos SDRs da campanha F1 GP We Scale. Grão SDR (quem gera
  * lead qualificado / marca reunião), separado dos closers (quem fecha venda).
  *
- * Lê `DB_Metas_Performance` filtrado por `funcao='SDR'` e agrega `meta_sql` +
- * `meta_reuniao_realizada` por pessoa. (`meta_agendamento` é sempre igual a
+ * Lê `DB_Metas_Performance` filtrado por `funcao='SDR'` e agrega `meta_sql`,
+ * `meta_reuniao_realizada` e `meta_volume_sal` (texto no banco) por pessoa. (`meta_agendamento` é sempre igual a
  * `meta_sql` no banco e "Agendamento" virou a mesma etapa que "SQL" na
  * padronização de nomenclatura — não expomos mais.)
  *
  * O **realizado** do Grid dos SDRs vem de `useCorridaPerformance`, que conta
- * SQL/RR do mês em `vw_funil_vendas` — a mesma fonte da aba Performance.
+ * SQL/RR/SAL do mês em `vw_funil_vendas` — a mesma fonte da aba Performance.
  *
  * Consumido pela seção "Grid dos SDRs" na página Campanha de Metas.
  */
@@ -26,6 +26,7 @@ export interface SdrMeta {
   escuderia?: string
   metaSql: number
   metaReuniao: number
+  metaSal: number
 }
 
 interface RawMetaRow {
@@ -33,6 +34,7 @@ interface RawMetaRow {
   funcao: string | null
   meta_sql: number | null
   meta_reuniao_realizada: number | null
+  meta_volume_sal: string | null
 }
 
 function normalizeNome(s: string): string {
@@ -42,7 +44,7 @@ function normalizeNome(s: string): string {
 async function fetchMetasSdr(mesRef: string): Promise<{ rows: RawMetaRow[]; error: string | null }> {
   const { data, error } = await supabaseVendas
     .from('DB_Metas_Performance')
-    .select('nome_colaborador, funcao, meta_sql, meta_reuniao_realizada')
+    .select('nome_colaborador, funcao, meta_sql, meta_reuniao_realizada, meta_volume_sal')
     .eq('mes_referencia', mesRef)
     .eq('funcao', 'SDR')
   if (error) return { rows: [], error: error.message }
@@ -51,18 +53,19 @@ async function fetchMetasSdr(mesRef: string): Promise<{ rows: RawMetaRow[]; erro
 
 /** Pilotos do mês = quem tem meta de SDR no mês (soma todas as marcas). */
 function aggregate(rows: RawMetaRow[], fotos: ReadonlyMap<string, string | null>): SdrMeta[] {
-  const metasMap = new Map<string, { sql: number; reun: number }>()
+  const metasMap = new Map<string, { sql: number; reun: number; sal: number }>()
   for (const r of rows) {
     if (!r.nome_colaborador || r.funcao !== 'SDR') continue
     const key = normalizeNome(r.nome_colaborador)
-    const cur = metasMap.get(key) ?? { sql: 0, reun: 0 }
+    const cur = metasMap.get(key) ?? { sql: 0, reun: 0, sal: 0 }
     cur.sql += Number(r.meta_sql) || 0
     cur.reun += Number(r.meta_reuniao_realizada) || 0
+    cur.sal += Number(r.meta_volume_sal) || 0
     metasMap.set(key, cur)
   }
   return nomesComMeta(rows, 'SDR').map(nome => {
-    const meta = metasMap.get(normalizeNome(nome)) ?? { sql: 0, reun: 0 }
-    return { ...perfilPiloto(nome, fotos.get(nome)), metaSql: meta.sql, metaReuniao: meta.reun }
+    const meta = metasMap.get(normalizeNome(nome)) ?? { sql: 0, reun: 0, sal: 0 }
+    return { ...perfilPiloto(nome, fotos.get(nome)), metaSql: meta.sql, metaReuniao: meta.reun, metaSal: meta.sal }
   })
 }
 
@@ -105,7 +108,7 @@ export function useMetasSDRs(mesRef: string): UseMetasSDRsResult {
   }, [fetchAll])
 
   const metasCadastradas = useMemo(
-    () => sdrs.some(s => s.metaSql > 0 || s.metaReuniao > 0),
+    () => sdrs.some(s => s.metaSql > 0 || s.metaReuniao > 0 || s.metaSal > 0),
     [sdrs],
   )
   return { sdrs, loading, error, reload: () => fetchAll(true), metasCadastradas }

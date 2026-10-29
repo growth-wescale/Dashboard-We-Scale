@@ -20,9 +20,10 @@ import {
  * dela (1 pt Inbound/Indicação/Parceiro/Repasse, 2 pt o restante) e pela
  * `marca` dela (multiplicador de ticket — ver `TICKET_FAIXAS` em
  * `corridaPerformance.ts`), então precisa de todas as fontes e marcas juntas.
- * Três recortes do mês:
+ * Quatro recortes do mês:
  *   - RR realizada  (`data_reuniao_realizada`)         → trilha SDR + realizado RR
  *   - SQL agendado  (`data_agendamento_reuniao_sql`)   → realizado SQL do SDR
+ *   - SAL           (`data_sal`)                       → realizado SAL do SDR
  *   - venda ganha   (`data_venda` + `status = 'Ganho'`) → trilha Closer, por
  *     unidade vendida (`quantidade_unidades` via `saleUnits`, não 1 por deal)
  *
@@ -69,6 +70,10 @@ interface RawSql {
   nome_sdr: string | null
   data_agendamento_reuniao_sql: string | null
 }
+interface RawSal {
+  nome_sdr: string | null
+  data_sal: string | null
+}
 interface RawVenda {
   nome_closer: string | null
   fonte_macro: string | null
@@ -98,6 +103,16 @@ async function fetchSqls(inicio: string, fimTs: string): Promise<RawSql[]> {
   return (data ?? []) as RawSql[]
 }
 
+async function fetchSals(inicio: string, fimTs: string): Promise<RawSal[]> {
+  const { data, error } = await supabaseVendas
+    .from('vw_funil_vendas')
+    .select('nome_sdr, data_sal')
+    .gte('data_sal', inicio)
+    .lte('data_sal', fimTs)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as RawSal[]
+}
+
 async function fetchVendas(inicio: string, fimTs: string): Promise<RawVenda[]> {
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
@@ -112,12 +127,13 @@ async function fetchVendas(inicio: string, fimTs: string): Promise<RawVenda[]> {
 export interface SdrRealizado {
   sql: number
   rr: number
+  sal: number
 }
 
 export interface UseCorridaPerformanceResult {
   sdrTrilha: LinhaTrilha[]
   closerTrilha: LinhaTrilha[]
-  /** Realizado de SQL e RR no mês, por SDR canônico — alimenta o Grid dos SDRs. */
+  /** Realizado de SQL, RR e SAL no mês, por SDR canônico — alimenta o Grid dos SDRs. */
   sdrRealizado: Map<string, SdrRealizado>
   loading: boolean
   error: string | null
@@ -126,11 +142,12 @@ export interface UseCorridaPerformanceResult {
 function agregarRealizadoSdr(
   rrs: RawRr[],
   sqls: RawSql[],
+  sals: RawSal[],
   nomesSdr: readonly string[],
   janelas?: readonly Janela[],
 ): Map<string, SdrRealizado> {
   const SDR_LOOKUP = lookup(nomesSdr)
-  const map = new Map<string, SdrRealizado>(nomesSdr.map(n => [n, { sql: 0, rr: 0 }]))
+  const map = new Map<string, SdrRealizado>(nomesSdr.map(n => [n, { sql: 0, rr: 0, sal: 0 }]))
   for (const r of sqls) {
     if (!emJanelas(r.data_agendamento_reuniao_sql, janelas)) continue
     const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
@@ -141,12 +158,18 @@ function agregarRealizadoSdr(
     const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
     if (nome) map.get(nome)!.rr++
   }
+  for (const r of sals) {
+    if (!emJanelas(r.data_sal, janelas)) continue
+    const nome = SDR_LOOKUP.get(normalizeNome(r.nome_sdr ?? ''))
+    if (nome) map.get(nome)!.sal++
+  }
   return map
 }
 
 export function useCorridaPerformance(mesRef: string, pilotos: PilotosCorrida, janelas?: readonly Janela[]): UseCorridaPerformanceResult {
   const [rrs, setRrs] = useState<RawRr[]>([])
   const [sqls, setSqls] = useState<RawSql[]>([])
+  const [sals, setSals] = useState<RawSal[]>([])
   const [vendas, setVendas] = useState<RawVenda[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -157,13 +180,15 @@ export function useCorridaPerformance(mesRef: string, pilotos: PilotosCorrida, j
     const inicio = mesRef
     const fimTs = ultimoDiaMes(mesRef) + 'T23:59:59'
     try {
-      const [r, s, v] = await Promise.all([
+      const [r, s, sl, v] = await Promise.all([
         fetchRrs(inicio, fimTs),
         fetchSqls(inicio, fimTs),
+        fetchSals(inicio, fimTs),
         fetchVendas(inicio, fimTs),
       ])
       setRrs(r)
       setSqls(s)
+      setSals(sl)
       setVendas(v)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -231,9 +256,9 @@ export function useCorridaPerformance(mesRef: string, pilotos: PilotosCorrida, j
   }, [vendas, jKey, closerKey])
 
   const sdrRealizado = useMemo(
-    () => agregarRealizadoSdr(rrs, sqls, pilotos.sdr, janelas),
+    () => agregarRealizadoSdr(rrs, sqls, sals, pilotos.sdr, janelas),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rrs, sqls, jKey, sdrKey],
+    [rrs, sqls, sals, jKey, sdrKey],
   )
 
   return { sdrTrilha, closerTrilha, sdrRealizado, loading, error }

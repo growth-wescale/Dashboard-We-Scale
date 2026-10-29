@@ -151,7 +151,7 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
   // desempate por SQL e depois por RR.
   const poleSdr = useMemo<PoleSdr | null>(() => {
     const linhas = metasSdr.sdrs.map(s => {
-      const real = sdrRealizado.get(s.nome) ?? { sql: 0, rr: 0 }
+      const real = sdrRealizado.get(s.nome) ?? { sql: 0, rr: 0, sal: 0 }
       const meta = s.metaSql * metaFatorSdr
       return { sdr: s, sql: real.sql, rr: real.rr, pct: meta > 0 ? (real.sql / meta) * 100 : 0 }
     })
@@ -1157,7 +1157,7 @@ function PctBadge({ pct: valor, temMeta }: { pct: number; temMeta: boolean }) {
 /* ── Grid dos SDRs ──────────────────────────────────────────────────────── */
 // Métricas alinhadas com "corrida-de-performance-logica.md": volume = RR
 // realizada, e a dimensão de velocidade = tempo MQL → agendamento. Realizado
-// (SQL e RR) vem de `useCorridaPerformance` — mesma fonte da aba Performance.
+// (SQL, RR e SAL) vem de `useCorridaPerformance` — mesma fonte da aba Performance.
 
 function SdrsSection({
   metas, realizado, trilha, loadingCorrida, metaFator, rotuloJanela, nomeMes,
@@ -1185,7 +1185,7 @@ function SdrsSection({
             Quem abre o caminho no octógono
           </h2>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 4 }}>
-            SQL e reunião realizada vs. meta + velocidade de resposta por SDR — {roundLabel(rotuloJanela)}
+            SQL, reunião realizada e SAL vs. meta + velocidade de resposta por SDR — {roundLabel(rotuloJanela)}
             {metaFator !== 1 ? ' · meta rateada pelos dias do(s) round(s)' : ''}
           </div>
         </div>
@@ -1248,6 +1248,12 @@ function SdrCard({
             label="Reunião realizada"
             realizado={realizado?.rr ?? 0}
             meta={sdr.metaReuniao * metaFator}
+            loading={loadingMetas || loadingCorrida}
+          />
+          <MetricaLinha
+            label="SAL"
+            realizado={realizado?.sal ?? 0}
+            meta={sdr.metaSal * metaFator}
             loading={loadingMetas || loadingCorrida}
           />
           <VelocidadeLinha

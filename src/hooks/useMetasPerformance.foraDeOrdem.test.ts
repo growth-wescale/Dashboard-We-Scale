@@ -70,6 +70,14 @@ vi.mock('react', () => ({
 vi.mock('@/lib/supabaseVendas', () => ({
   supabaseVendas: {
     from(tabela: string) {
+      // Meta de MQL da marca (meta_versao/meta_marca/...): responde vazio na hora,
+      // fora da fila — o teste controla só a ordem das respostas das metas.
+      if (tabela !== 'DB_Metas_Performance') {
+        const vazio = Promise.resolve({ data: null, error: null })
+        const c: Record<string, unknown> = { then: vazio.then.bind(vazio) }
+        for (const metodo of ['select', 'eq', 'in', 'maybeSingle']) c[metodo] = () => c
+        return c
+      }
       const pedido: (typeof h.pedidos)[number] = { tabela, chamadas: [], responder: () => {} }
       const promessa = new Promise(resolve => { pedido.responder = resolve })
       const consulta: Record<string, unknown> = { then: promessa.then.bind(promessa) }

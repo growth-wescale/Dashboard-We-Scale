@@ -56,7 +56,9 @@ export const ETAPA_ABAIXO: Record<EtapaConfiguravel, EtapaFunil> = {
 }
 
 /** Quem leva a meta de cada etapa — mesma partição de `gerarLinhasEspelho`. */
-export const ETAPAS_SDR: readonly EtapaMetaConfig[] = ['MQL', 'Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
+// MQL não está aqui de propósito: é meta da marca (marketing). O SDR trabalha
+// depois que o MQL chega, então a meta de MQL não é repartida entre os SDRs.
+export const ETAPAS_SDR: readonly EtapaMetaConfig[] = ['Ligações', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
 export const ETAPAS_CLOSER: readonly EtapaMetaConfig[] = ['Oportunidade COF', 'Fechamento']
 
 export function funcaoDaEtapaSemanal(etapa: EtapaMeta): 'SDR' | 'Closer' {
@@ -645,8 +647,8 @@ export interface Publicacao {
 
 /**
  * Linhas de `DB_Metas_Performance` (o que o dashboard lê) com as metas
- * inteiras por pessoa. Mesma partição de `gerarLinhasEspelho`: SDR leva MQL,
- * SQL (= agendamento), Diagnóstico e SAL; Closer leva Oportunidade, vendas e
+ * inteiras por pessoa. SDR leva SQL (= agendamento), Diagnóstico e SAL (MQL
+ * fica só na marca, `meta_mql` vai sempre vazio); Closer leva Oportunidade, vendas e
  * faturamento.
  */
 export function linhasEspelho(r: RascunhoConfig): LinhaEspelho[] {
@@ -668,7 +670,7 @@ export function linhasEspelho(r: RascunhoConfig): LinhaEspelho[] {
           meta_cof: funcao === 'Closer' ? v['Oportunidade COF'] ?? null : null,
           meta_financeira: funcao === 'Closer' ? p.faturamento : null,
           meta_qtd_vendas: funcao === 'Closer' ? v.Fechamento ?? null : null,
-          meta_mql: funcao === 'SDR' ? v.MQL ?? null : null,
+          meta_mql: null,
         })
       }
     }

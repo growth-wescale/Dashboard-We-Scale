@@ -11,7 +11,9 @@ const cacheEstado = new Map<number, EstadoMes>()
 
 /** Funil de cima pra baixo; a conversão embaixo de cada número aponta pra coluna da direita. */
 const FUNIL: EtapaMetaConfig[] = ['MQL', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL', 'Oportunidade COF']
-const ETAPAS_SDR: EtapaMetaConfig[] = ['MQL', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
+// Sem MQL: é meta da marca, não do SDR. Versões antigas gravaram `meta_mql` por
+// SDR no espelho; a coluna fica escondida também nelas.
+const ETAPAS_SDR: EtapaMetaConfig[] = ['Reunião Agendada SQL', 'Reunião Realizada', 'SAL']
 const ETAPAS_CLOSER: EtapaMetaConfig[] = ['Oportunidade COF', 'Fechamento']
 
 const DIA_LABEL: Record<DiaSemana, string> = {

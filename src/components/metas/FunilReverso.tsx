@@ -98,7 +98,7 @@ function LinhaEtapa({ etapa, calc, modo, escala, onMudarModo, mostrarProblema }:
   const selo = SELO[calc.origem]
   const detalhe = ancora ? ' · vem da Base do mês'
     : ligacoes ? ' · atividade, fora da cadeia de conversão'
-    : etapa === 'MQL' ? ' · topo do funil, vira a meta de MQL → SQL da Performance'
+    : etapa === 'MQL' ? ' · meta da marca, não é dividida entre os SDRs; vira a meta de MQL → SQL da Performance'
     : ''
   const largura = escala && calc.meta != null ? Math.max(3, (calc.meta / escala) * 100) : 0
 

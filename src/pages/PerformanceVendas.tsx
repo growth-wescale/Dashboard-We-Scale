@@ -499,7 +499,7 @@ export function PerformanceVendas() {
   const fimJanela = ranges[0]?.end ?? range.end
 
   // Metas por pessoa (para a coluna % das tabelas e para os cards).
-  const { data: metasPessoa, rows: metasRows, error: metasError } = useMetasPerformance({
+  const { data: metasPessoa, rows: metasRows, mqlMarca, error: metasError } = useMetasPerformance({
     mesKey: mesUnico ?? range.start.slice(0, 7),
   })
 
@@ -523,8 +523,8 @@ export function PerformanceVendas() {
       marcas: marcasSelecionadas.flatMap(b => (b.marca ? [b.marca as string] : [])),
       sdrs,
       closers,
-    })
-  }, [mesUnico, metasRows, marcasSelecionadas, sdrs, closers])
+    }, mqlMarca)
+  }, [mesUnico, metasRows, mqlMarca, marcasSelecionadas, sdrs, closers])
   // Fora de um único mês (Trimestre/Ano/multi-mês) a meta mensal não faz sentido
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
   // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".

@@ -74,17 +74,28 @@ describe('etapa MQL na Configuração das Metas', () => {
     expect(definirModoEtapa(manual, 'Reunião Agendada SQL', { tipo: 'sem_meta' }).etapas.MQL.tipo).toBe('manual')
   })
 
-  it('publica MQL derivado do SQL e a meta de MQL de cada SDR pelo peso', () => {
+  it('publica MQL derivado do SQL só na marca: SDR não leva meta de MQL (30/10/2026)', () => {
     const m = comMql({ ...marcaDoMesAnterior(INPOT, 'setembro'), vendas: 5 }, 0.23)
     expect(paraConfigEtapas(m).find(c => c.etapa === 'MQL')).toMatchObject({
       modo: 'derivado', etapaOrigem: 'Reunião Agendada SQL', taxa: 0.23, taxaOrigem: 'manual',
     })
+    expect(calcularFunil(m).etapas.MQL.meta).toBeGreaterThan(0)
     const pessoas = metasPorPessoa(m)
-    expect(pessoas.filter(p => p.funcao === 'SDR').map(p => p.valores.MQL)).toEqual([150, 150])
+    expect(pessoas.filter(p => p.funcao === 'SDR').every(p => p.valores.MQL == null)).toBe(true)
+    expect(pessoas.filter(p => p.funcao === 'SDR').every(p => p.valores['Reunião Agendada SQL'] != null)).toBe(true)
     const r = { mesReferencia: '2026-10-01', marcas: [m] } as unknown as RascunhoConfig
-    const linhas = linhasEspelho(r)
-    expect(linhas.find(l => l.nome_colaborador === 'Thiago')!.meta_mql).toBe(150)
-    expect(linhas.find(l => l.nome_colaborador === 'Douglas')!.meta_mql).toBeNull()
+    expect(linhasEspelho(r).every(l => l.meta_mql == null)).toBe(true)
+  })
+
+  it('meta de MQL sozinha não pede SDR no time', () => {
+    let m: MarcaConfig = { ...marcaDoMesAnterior(INPOT, 'setembro'), vendas: 5 }
+    m = definirModoEtapa(m, 'MQL', { tipo: 'manual', valor: 300 })
+    m = definirModoEtapa(m, 'SAL', { tipo: 'sem_meta' })
+    const f = calcularFunil(m)
+    expect(f.etapas.MQL.meta).toBe(300)
+    expect(f.etapas['Reunião Agendada SQL'].meta).toBeNull()
+    const semSdr = { ...m, pessoas: m.pessoas.filter(p => p.funcao !== 'SDR') }
+    expect(pendenciasMarca(semSdr).some(p => p.texto.includes('SDR'))).toBe(false)
   })
 
   it('revisão de uma versão com MQL derivado volta como referência com a mesma taxa', () => {
@@ -125,5 +136,33 @@ describe('meta de conversão MQL → SQL na Performance', () => {
 
   it('segue o filtro de SDR', () => {
     expect(metasConversao(rows, { marcas: ['Inpot', 'Oral Unic'], sdrs: ['Sarah Padilha'] }).mql_sql).toBeCloseTo(20, 6)
+  })
+})
+
+describe('meta de conversão MQL → SQL pela meta de MQL da marca (30/10/2026)', () => {
+  // Linhas novas não trazem meta_mql: o MQL vem da etapa MQL da versão ativa.
+  const rows = [
+    sdr('Xayane', 'Inpot', 54, null),
+    sdr('Xayane', 'Eletrovias', 51, null), sdr('Sarah Padilha', 'Eletrovias', 50, null),
+    sdr('Sarah Padilha', 'Oral Unic', 31, null),
+  ]
+
+  it('usa a taxa da marca quando o MQL deriva do SQL', () => {
+    const mql = { Inpot: { taxa: 0.23 }, Eletrovias: { taxa: 0.2 } }
+    expect(metasConversao(rows, { marcas: ['Inpot'] }, mql).mql_sql).toBeCloseTo(23, 6)
+    // 155 SQL ÷ (54/0,23 + 101/0,2) MQL
+    expect(metasConversao(rows, { marcas: ['Inpot', 'Eletrovias'] }, mql).mql_sql)
+      .toBeCloseTo((155 / (54 / 0.23 + 101 / 0.2)) * 100, 6)
+  })
+
+  it('MQL fixo da marca reparte pela fatia de SQL do SDR filtrado', () => {
+    const mql = { Eletrovias: { mql: 404 } }
+    expect(metasConversao(rows, { marcas: ['Eletrovias'] }, mql).mql_sql).toBeCloseTo((101 / 404) * 100, 6)
+    expect(metasConversao(rows, { marcas: ['Eletrovias'], sdrs: ['Sarah Padilha'] }, mql).mql_sql)
+      .toBeCloseTo((50 / (404 * 50 / 101)) * 100, 6)
+  })
+
+  it('marca sem meta de MQL fica fora', () => {
+    expect(metasConversao(rows, { marcas: ['Oral Unic'] }, { Inpot: { taxa: 0.23 } }).mql_sql).toBeNull()
   })
 })

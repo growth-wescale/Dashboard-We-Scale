@@ -25,6 +25,14 @@ export type ConvKey =
   | 'sal_fech'   // SAL → Fechamento
   | 'no_show'    // SQL → No-show (teto fixo, não derivado)
 
+/**
+ * Meta de MQL da MARCA na versão ativa do mês (etapa MQL da Configuração das
+ * Metas). Desde 30/10/2026 a meta de MQL não é repartida entre os SDRs (SDR
+ * trabalha depois que o MQL chega), então a conversão MQL → SQL sai daqui:
+ * `taxa` quando o MQL deriva do SQL por conversão, `mql` quando é número fixo.
+ */
+export type MetaMqlMarca = { taxa: number } | { mql: number }
+
 /** `null` = sem meta pra esse recorte (etapa sem número cadastrado). */
 export type MetasConversao = Record<ConvKey, number | null>
 
@@ -89,7 +97,11 @@ function razao(
  * Douglas (só Inpot) faz até o `Diagnóstico → SAL` do card virar o da Inpot, em
  * vez de continuar mostrando o consolidado ao lado de números que já são só dele.
  */
-export function metasConversao(rows: RawMetaRow[], escopo: EscopoMetaConversao): MetasConversao {
+export function metasConversao(
+  rows: RawMetaRow[],
+  escopo: EscopoMetaConversao,
+  mqlMarca: Record<string, MetaMqlMarca> = {},
+): MetasConversao {
   const marcasSel = new Set(escopo.marcas)
   if (marcasSel.size === 0) return { ...VAZIO }
 
@@ -101,12 +113,17 @@ export function metasConversao(rows: RawMetaRow[], escopo: EscopoMetaConversao):
   const marcasComSdrFiltrado = new Set<string>()
   const marcasComCloserFiltrado = new Set<string>()
 
+  // SQL de todos os SDRs da marca, sem o filtro de pessoa: base pra repartir uma
+  // meta de MQL fixa da marca pela fatia de SQL do SDR filtrado.
+  const sqlMarcaTotal = new Map<string, number>()
+
   for (const r of rows) {
     const marca = r.marca
     if (!marca || MARCAS_EXCLUIR.has(marca) || !marcasSel.has(marca)) continue
     if (!r.nome_colaborador) continue
 
     if (r.funcao === 'SDR') {
+      sqlMarcaTotal.set(marca, (sqlMarcaTotal.get(marca) ?? 0) + num(r.meta_sql))
       if (sdrsSel.size > 0 && !sdrsSel.has(r.nome_colaborador)) continue
       marcasComSdrFiltrado.add(marca)
       const cur = sdrPorMarca.get(marca) ?? { mql: 0, sql: 0, rr: 0, sal: 0 }
@@ -135,9 +152,19 @@ export function metasConversao(rows: RawMetaRow[], escopo: EscopoMetaConversao):
   const sdr = (m: string) => sdrPorMarca.get(m)
   const clo = (m: string) => closerPorMarca.get(m)
 
+  // Origem do MQL → SQL: a meta de MQL da marca (versão ativa). Sem ela, cai no
+  // `meta_mql` por SDR que versões publicadas entre 15 e 30/10/2026 gravaram.
+  const mqlDoRecorte = (m: string, s: EtapasSdr): number => {
+    const mm = mqlMarca[m]
+    if (!mm) return s.mql
+    if ('taxa' in mm) return mm.taxa > 0 ? s.sql / mm.taxa : 0
+    const total = sqlMarcaTotal.get(m) ?? 0
+    return total > 0 ? mm.mql * (s.sql / total) : 0
+  }
+
   return {
     // Marca sem meta de MQL no mês fica fora (razao exige as duas pontas > 0).
-    mql_sql:  razao(marcas, m => { const s = sdr(m); return s && { destino: s.sql, origem: s.mql } }),
+    mql_sql:  razao(marcas, m => { const s = sdr(m); return s && { destino: s.sql, origem: mqlDoRecorte(m, s) } }),
     sql_diag: razao(marcas, m => { const s = sdr(m); return s && { destino: s.rr, origem: s.sql } }),
     diag_sal: razao(marcas, m => { const s = sdr(m); return s && { destino: s.sal, origem: s.rr } }),
     sql_sal:  razao(marcas, m => { const s = sdr(m); return s && { destino: s.sal, origem: s.sql } }),

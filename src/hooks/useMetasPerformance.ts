@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import type { MetaMqlMarca } from '@/lib/metaConversao'
 
 export type FuncaoMeta = 'SDR' | 'Closer'
 
@@ -17,7 +18,8 @@ export interface RawMetaRow {
   meta_qtd_vendas: number | null
   /** Coluna `text` no banco (ex.: "25") — precisa de Number() antes de somar. */
   meta_volume_sal: string | null
-  /** Meta de MQL do SDR (etapa MQL da Configuração das Metas). Vazia em meses publicados antes de 15/10/2026. */
+  /** Meta de MQL por SDR: só versões publicadas entre 15 e 30/10/2026 gravaram. Desde então
+   *  o MQL é meta da marca (ver `fetchMetaMqlMarcas`) e esta coluna vai vazia. */
   meta_mql?: number | null
 }
 
@@ -44,6 +46,8 @@ interface UseMetasResult {
   /** Linhas cruas (sem colapsar a marca) — usadas pela meta de conversão, que
    *  precisa cruzar pessoa × marca. Ver `metasConversao` em `metaConversao.ts`. */
   rows: RawMetaRow[]
+  /** Meta de MQL de cada marca na versão ativa do mês — origem da meta de conversão MQL → SQL. */
+  mqlMarca: Record<string, MetaMqlMarca>
   loading: boolean
   error: string | null
 }
@@ -63,6 +67,33 @@ async function fetchMetas(mesKey: string, marca?: string): Promise<{ rows: RawMe
   const { data, error } = await q
   if (error) return { rows: [], error: error.message }
   return { rows: (data ?? []) as RawMetaRow[], error: null }
+}
+
+/**
+ * Meta de MQL de cada marca na versão ativa do mês: a etapa MQL de
+ * `meta_marca_etapa`. Derivada do SQL → `taxa`; número fixo → `mql`; sem meta →
+ * marca fora do resultado. Falha aqui não derruba as metas: devolve vazio.
+ */
+async function fetchMetaMqlMarcas(mesKey: string): Promise<Record<string, MetaMqlMarca>> {
+  const { data: versao } = await supabaseVendas
+    .from('meta_versao').select('id').eq('mes_referencia', `${mesKey}-01`).eq('ativa', true).maybeSingle()
+  if (!versao) return {}
+  const { data: marcas } = await supabaseVendas.from('meta_marca').select('id, marca').eq('meta_versao_id', versao.id)
+  if (!marcas?.length) return {}
+  const { data: etapas } = await supabaseVendas
+    .from('meta_marca_etapa').select('meta_marca_id, modo, valor_fixo, taxa')
+    .eq('etapa', 'MQL').in('meta_marca_id', marcas.map(m => m.id))
+  const marcaPorId = new Map(marcas.map(m => [m.id, m.marca as string]))
+  const out: Record<string, MetaMqlMarca> = {}
+  for (const e of etapas ?? []) {
+    const marca = marcaPorId.get(e.meta_marca_id)
+    if (!marca) continue
+    const taxa = Number(e.taxa)
+    const fixo = Number(e.valor_fixo)
+    if (e.modo === 'derivado' && taxa > 0) out[marca] = { taxa }
+    else if (e.modo === 'fixo' && fixo > 0) out[marca] = { mql: fixo }
+  }
+  return out
 }
 
 export function aggregate(rows: RawMetaRow[]): MetaAgregada[] {
@@ -92,6 +123,7 @@ export function aggregate(rows: RawMetaRow[]): MetaAgregada[] {
 
 export function useMetasPerformance({ mesKey, marca }: Filters): UseMetasResult {
   const [rawRows, setRawRows] = useState<RawMetaRow[]>([])
+  const [mqlMarca, setMqlMarca] = useState<Record<string, MetaMqlMarca>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   // Chave ativa: resposta de um mês que já saiu da tela é descartada (ver useMetaResumo).
@@ -101,10 +133,14 @@ export function useMetasPerformance({ mesKey, marca }: Filters): UseMetasResult 
   const fetchAll = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
     setError(null)
-    const { rows, error: err } = await fetchMetas(mesKey, marca)
+    const [{ rows, error: err }, mql] = await Promise.all([
+      fetchMetas(mesKey, marca),
+      fetchMetaMqlMarcas(mesKey).catch(() => ({})),
+    ])
     if (chaveAtiva.current !== chave) return
     if (err) { setError(err); setLoading(false); return }
     setRawRows(rows)
+    setMqlMarca(mql)
     setLoading(false)
   }, [chave, mesKey, marca])
 
@@ -126,7 +162,7 @@ export function useMetasPerformance({ mesKey, marca }: Filters): UseMetasResult 
   }, [chave, fetchAll])
 
   const data = useMemo(() => aggregate(rawRows), [rawRows])
-  return { data, rows: rawRows, loading, error }
+  return { data, rows: rawRows, mqlMarca, loading, error }
 }
 
 // Helper: pega meta de uma pessoa/função específica (útil pra ranking)

@@ -856,6 +856,27 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-30 — Meta de MQL deixa de ser dos SDRs
+
+Pedido do Junior: a meta de MQL existe, mas é da marca (marketing). O SDR trabalha
+depois que o MQL chega, então não leva meta de MQL.
+
+- **Configuração das Metas:** a etapa MQL continua no funil da marca, mas sai de
+  `ETAPAS_SDR` (`configMetas.ts`). Não é mais repartida pelo peso: some dos cartões
+  do time, da tabela "Metas por pessoa" (inclusive em versões antigas, que gravaram
+  `meta_mql` no espelho), da tabela de semanas por pessoa e das linhas gravadas em
+  `DB_Metas_Performance` (`meta_mql` vai sempre vazio). Meta de MQL sozinha não pede
+  SDR no time.
+- **Performance:** a meta de conversão MQL → SQL agora sai da etapa MQL da marca na
+  versão ativa (`fetchMetaMqlMarcas` em `useMetasPerformance.ts`: taxa, ou número fixo
+  repartido pela fatia de SQL do SDR filtrado). Sem a etapa, cai no `meta_mql` antigo.
+  Em outubro dá o mesmo valor de antes (~20,6% no consolidado).
+- **Dado de outubro:** `meta_mql` das 6 linhas de SDR em `DB_Metas_Performance` foi
+  limpo depois do deploy. Valores antigos: Xayane Inpot 234, Eletrovias 253, B2Case
+  207; Sarah Eletrovias 252, Oral Unic 154, Viva 0. As versões publicadas (imutáveis)
+  ainda guardam o número no `linhas_espelho`: reativar uma delas regrava a coluna,
+  mas nada no dashboard lê mais esse campo por SDR.
+
 ### 2026-10-28 — Deals duplicados no RD: mesmo contato, mesmo SDR e anotação
 
 Queixa dos SDRs ao Junior. **Causa** (desde a virada da distribuição em 19/10): (1) a
@@ -1689,7 +1710,7 @@ fixo no código.
 **Configuração das Metas ganhou a etapa MQL**, pendurada no SQL igual às
 Ligações (fora da cadeia: não alimenta nenhuma etapa de baixo). O gestor define
 a conversão MQL → SQL (meta de MQL = SQL ÷ taxa) ou um número fixo; os SDRs
-recebem a meta de MQL pelo peso, em inteiros. Marca nova e mês novo a partir de
+recebiam a meta de MQL pelo peso, em inteiros (desfeito em 30/10: MQL é só da marca). Marca nova e mês novo a partir de
 mês sem MQL começam com MQL "sem meta" (opcional, sem pendência). SQL sem meta
 leva o MQL junto, salvo se o MQL for manual. Rascunho salvo no navegador antes
 da mudança (sem a chave `MQL`) abre como "sem meta" (`modoDaEtapa`).

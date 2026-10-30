@@ -12,7 +12,7 @@ import { fmtBRL, fmtInt, ghostButtonStyle, pillStyle } from './metasUi'
 type Funcao = 'SDR' | 'Closer'
 
 const FUNCOES: { funcao: Funcao; titulo: string; leva: string }[] = [
-  { funcao: 'SDR', titulo: 'SDRs', leva: 'levam MQL, Ligações, SQL, Diagnóstico e SAL' },
+  { funcao: 'SDR', titulo: 'SDRs', leva: 'levam Ligações, SQL, Diagnóstico e SAL' },
   { funcao: 'Closer', titulo: 'Closers', leva: 'levam Oportunidade, Vendas e faturamento' },
 ]
 
@@ -20,7 +20,7 @@ const FUNCOES: { funcao: Funcao; titulo: string; leva: string }[] = [
 const CORES = ['#6366F1', '#0EA5E9', '#F59E0B', '#10B981', '#EC4899', '#8B5CF6', '#14B8A6', '#F97316']
 
 const ETAPAS_PESSOA: Record<Funcao, EtapaMetaConfig[]> = {
-  SDR: ['MQL', 'Reunião Agendada SQL', 'Reunião Realizada', 'SAL', 'Ligações'],
+  SDR: ['Reunião Agendada SQL', 'Reunião Realizada', 'SAL', 'Ligações'],
   Closer: ['Fechamento', 'Oportunidade COF'],
 }
 

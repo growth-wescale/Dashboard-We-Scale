@@ -856,6 +856,25 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-30 — Visão Geral fora do ar: negócio sem contato derrubava a ouro de Legacy
+
+Junior viu "Erro ao carregar período selecionado · Não foi possível consultar a ouro
+de Legacy" na Visão Geral (e o gráfico de MQL vazio). O gateway `legacy-ouro` (VPS,
+`/opt/wescale-legacy-ouro-20261027`) recusava a leitura de leads com 409
+`commercial_identity_incomplete`: dois negócios Odonto Legacy criados à mão pela
+Thaina no Closer em 30/10 (`6ae4d3d452cb43002352e7c3`, `6ae4c2220e98500028bf9889`,
+sem contato no RD, Fonte Macro Prospecção Ativa) não estavam na lista fixa de
+exceções (`PENDING_CONTACT_DEALS`, só os 2 de 26/10). O refresh de 4 em 4 min
+falhava, o cache passava de 5 min e toda leitura virava 503.
+
+Fix nos gateways Legacy e Eletrovias (mesma trava): negócio criado no CRM sem
+contato nunca vira pessoa, sai das linhas e entra na contagem
+`accepted_missing_contact`, sem lista de IDs. App instalado à mão na VPS (backup em
+`app.py.bak-20261030` em cada pasta) e containers reiniciados: Legacy 183 leads
+(4 sem contato), Eletrovias 1.798 (1). Oral Unic, Lisô e Scale Partner têm regra
+própria e não foram mexidos. Os gateways não são publicados pelo deploy: mudar
+`server/*_ouro/app.py` exige copiar pra VPS e `docker restart dashboard-<marca>-ouro`.
+
 ### 2026-10-30 (2) — V7 de outubro: meta da Xayane 30% menor
 
 Decisão do chefe do Junior, depois da revisão das metas de SDR de outubro. Versão 7

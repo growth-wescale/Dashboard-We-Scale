@@ -38,10 +38,13 @@ class Tests(unittest.TestCase):
   s,c=self.service([],mode='legacy')
   self.assertEqual(s.read({'dataset':'leads','route':'/'},'token'),{'mode':'legacy'})
   self.assertEqual(c.queries,[])
- def test_missing_commercial_identity_is_not_silently_counted(self):
-  s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Eletrovias','dados_extras':{'classification_source':'deal_criado_crm'}}])
-  with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
-  self.assertEqual(e.exception.code,'commercial_identity_incomplete')
+ def test_new_deal_without_contact_is_counted_not_blocking(self):
+  # Negócio criado no CRM sem contato (ex.: Closer cria à mão) não vira pessoa,
+  # mas também não pode derrubar a leitura inteira da marca.
+  s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Eletrovias','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'novo-sem-contato'}}])
+  r=s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(r['rows'],[])
+  self.assertEqual(r['warnings'],[{'code':'accepted_missing_contact','count':1}])
  def test_accepted_pending_contact_does_not_create_a_person_or_drop_other_rows(self):
   pending={'id':'pending','dia':'2026-10-15','marca':'Eletrovias','dados_extras':{'classification_source':'deal_criado_crm','lead_type':'MQL','id_deal':'6ad18c51de18d10020db5411'}}
   identified={'id':'real','dia':'2026-10-16','marca':'Eletrovias','contato_id':'contact','email':'real@example.test','dados_extras':{'classification_source':'deal_criado_crm','lead_type':'MQL'}}

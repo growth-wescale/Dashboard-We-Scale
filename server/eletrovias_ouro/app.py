@@ -48,9 +48,10 @@ def serialize(value):
 
 
 MEDIA_IDS = {('google','2319926905','23778217190'), *{('meta','2424035941347251',c) for c in ['52585384013024','52671387111024','52682815187224','52683550378024']}}
-# Caso aceito em27/10 para seguir com a migração enquanto Maicon resolve a origem.
-# O negócio continua MQL no DW, mas não representa uma pessoa identificada ainda.
-PENDING_CONTACT_DEALS = frozenset({'6ad18c51de18d10020db5411'})
+# Negócio criado no CRM sem contato (Closer cria à mão, contato ainda não ligado no RD)
+# não vira pessoa fictícia: sai das linhas e entra na contagem técnica `accepted_missing_contact`.
+# Antes era uma lista fixa de IDs, e cada negócio novo assim derrubava a leitura da marca inteira
+# (30/10/2026: dois negócios Odonto Legacy da Thaina tiraram a Visão Geral do ar).
 
 def missing_commercial_identity(row):
  return row.get('dados_extras',{}).get('classification_source')=='deal_criado_crm' and (
@@ -69,9 +70,6 @@ def validate_rows(dataset, rows):
   or not '2026-10-01' <= r['dia'] < '2026-11-01' for r in rows):
   raise GatewayError(503, 'scope_violation')
  if len({r.get('id') for r in rows}) != len(rows): raise GatewayError(503,'duplicate_id')
- if dataset=='leads' and any(missing_commercial_identity(r)
-  and r.get('dados_extras',{}).get('id_deal') not in PENDING_CONTACT_DEALS for r in rows):
-  raise GatewayError(409,'commercial_identity_incomplete')
  if dataset=='media' and any((r.get('canal'),r.get('conta_id'),r.get('campanha_id')) not in MEDIA_IDS for r in rows):
   raise GatewayError(503,'campaign_scope_violation')
  if dataset=='media' and any(r.get('spend_brl') is None or r['spend_brl']<0 or r.get('moeda')!='BRL' for r in rows):

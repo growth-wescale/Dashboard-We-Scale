@@ -856,6 +856,30 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-10-30 (2) — V7 de outubro: meta da Xayane 30% menor
+
+Decisão do chefe do Junior, depois da revisão das metas de SDR de outubro. Versão 7
+(`meta_versao` id 21, "v7 outubro · Xayane −30%") publicada e ativa, montada a partir
+da V6 (id 20) direto no banco com `publicar_meta_versao`. Meta da Xayane × 0,7,
+arredondada pro inteiro mais próximo marca a marca:
+
+| Marca | SQL | Diagnóstico | SAL | Ligações |
+|---|---|---|---|---|
+| Inpot | 54 → 38 | 35 → 25 | 23 → 16 | 1.247 → 873 |
+| Eletrovias | 51 → 36 | 29 → 20 | 19 → 13 | 2.795 → 1.957 |
+| B2Case | 42 → 29 | 24 → 17 | 15 → 11 | 1.862 → 1.303 |
+| Total | 147 → 103 | 88 → 62 | 57 → 40 | 5.904 → 4.133 |
+
+Sarah, Closers (COF, vendas, receita) e semanas iguais à V6. Nas 3 marcas, SQL,
+Diagnóstico, SAL e Ligações viraram `fixo` (soma das SDRs) e o MQL da marca ficou
+`fixo` no valor da V6 (Inpot 234, Eletrovias 505, B2Case 207): a meta de marketing não
+cai junto. Efeito: a meta de conversão MQL → SQL da Performance nessas marcas cai
+(Inpot 23% → ~16%). Eletrovias passou de 50/50 para Xayane 42 / Sarah 58 (só pra tela
+da Configuração das Metas; `linhas_espelho` tem os números exatos). Distribuição semanal
+da Xayane reescalada mantendo o total. Conferido em `DB_Metas_Performance`. Até 30/10 a
+Xayane fica em 43% de SQL (44/103), 45% de Diagnóstico e 58% de SAL. V6 continua
+guardada.
+
 ### 2026-10-30 — Meta de MQL deixa de ser dos SDRs
 
 Pedido do Junior: a meta de MQL existe, mas é da marca (marketing). O SDR trabalha

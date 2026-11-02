@@ -11,12 +11,50 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 CONTRACT = 'eletrovias_marketing_v1'
 QUERIES = {
  'leads': 'SELECT * FROM ouro.vw_eletrovias_dashboard_leads ORDER BY dia DESC,id LIMIT 50001',
  'media': 'SELECT * FROM ouro.vw_eletrovias_dashboard_midia ORDER BY dia DESC,id LIMIT 50001',
 }
+# Explicit test records investigated on 02/11; never use elegivel_kpi as MQL qualification.
+KNOWN_TEST_DEALS = {'6adbb24ffe6c3900293048dc', '6adbbe360085d5002083f991', '6ae35e54aefc9100238e22e7'}
+DEALS_QUERY = 'SELECT * FROM ouro.vw_eletrovias_dashboard_negocios ORDER BY data_criacao_original DESC,negocio_id LIMIT 50001'
+
+
+def prepare_deals(rows):
+ if len(rows) > 50000: raise GatewayError(503, 'result_too_large')
+ zone = ZoneInfo('America/Sao_Paulo')
+ seen, result = set(), []
+ for row in rows:
+  account, deal = row.get('conta_id'), row.get('negocio_id')
+  if account != 'wescale_principal_crm' or row.get('marca') != 'Eletrovias' or not isinstance(deal,str) or not deal:
+   raise GatewayError(503,'deal_scope_violation')
+  key = (account,deal)
+  if key in seen: raise GatewayError(503,'duplicate_deal')
+  seen.add(key)
+  created = row.get('data_criacao_original')
+  if isinstance(created,str):
+   try:
+    try: created = dt.datetime.fromisoformat(created.replace('Z','+00:00'))
+    except ValueError: created = dt.datetime.strptime(created,'%Y-%m-%dT%H:%M:%S.%f%z')
+   except ValueError: raise GatewayError(503,'invalid_creation_date') from None
+  if not isinstance(created,dt.datetime) or created.tzinfo is None: raise GatewayError(503,'invalid_creation_date')
+  day = created.astimezone(zone).date().isoformat()
+  if not '2026-10-01' <= day < '2026-11-01': continue
+  if deal in KNOWN_TEST_DEALS: continue
+  result.append({
+   'id':f'eletrovias-deal:{account}:{deal}', 'dia':day,'marca':'Eletrovias',
+   **{field:None for field in ('nome','email','telefone','uf','cidade','formulario','row_hash')},
+   **{field:row.get(field) for field in ('utm_source','utm_medium','utm_campaign')},
+   'criado_em':created.isoformat(),'carregado_em':row.get('carregado_em'),
+   'dados_extras':{'metric_grain':'crm_deal','conta_id':account,'id_deal':deal,
+    'crm_funil_id':row.get('funil_id'),'crm_funil':row.get('nome_funil'),
+    'crm_status':row.get('status_atual'),'data_criacao_crm':created.isoformat(),
+    'utm_content':row.get('utm_content'),'utm_term':row.get('utm_term')},
+  })
+ return result, []
 ROUTES = {'/':'aba.visao-geral','/marca':'aba.saude-marca','/sop-marketing':'aba.sop-marketing','/okrs':'aba.okrs','/copa-b2b':'aba.okrs'}
 
 
@@ -79,6 +117,9 @@ def validate_rows(dataset, rows):
 class Service:
  def __init__(self, settings, connect=None, request_json=None):
   self.settings = settings
+  self.queries = dict(QUERIES)
+  if settings.get('negocios_enabled') is True:
+   self.queries['negocios'] = DEALS_QUERY
   self.slots = threading.BoundedSemaphore(1)
   self.cache = {}
   self.cache_lock = threading.Lock()
@@ -108,7 +149,7 @@ class Service:
   except (OSError, ValueError): raise GatewayError(503, 'auth_unavailable') from None
 
  def read(self, body, token):
-  if not isinstance(body, dict) or set(body) != {'dataset','route'} or body.get('dataset') not in QUERIES or body.get('route') not in ROUTES:
+  if not isinstance(body, dict) or set(body) != {'dataset','route'} or body.get('dataset') not in self.queries or body.get('route') not in ROUTES:
    raise GatewayError(400, 'invalid_request')
   authorize(token, self.request_json, body['route'])
   if self.settings.get('mode') == 'legacy': return {'mode': 'legacy'}
@@ -127,9 +168,9 @@ class Service:
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
     role = connection.execute("SELECT current_user u,(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) unsafe").fetchone()
     if role['u'] != 'dashboard_eletrovias_ro' or role['unsafe']: raise GatewayError(503, 'unsafe_role')
-    rows = connection.execute(QUERIES[dataset]).fetchall()
-    contact_rows, warnings = prepare_rows(dataset, rows)
-    result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':contact_rows,
+    rows = connection.execute(self.queries[dataset]).fetchall()
+    contact_rows, warnings = prepare_deals(rows) if dataset=='negocios' else prepare_rows(dataset, rows)
+    result = {'mode':'ouro','contract':'eletrovias_negocios_v1' if dataset=='negocios' else CONTRACT,'dataset':dataset,'rows':contact_rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
     with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)
     return result
@@ -169,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
 def maintain_cache(service):
  while True:
   time.sleep(240)
-  for dataset in QUERIES:
+  for dataset in service.queries:
    try: service.refresh_dataset(dataset)
    except Exception: pass  # Resposta expirada falha fechada; nunca expor diagnóstico/credencial.
 
@@ -178,7 +219,7 @@ def main():
  settings = json.loads(Path(os.environ.get('ELETROVIAS_OURO_CONFIG', '/run/eletrovias/config.json')).read_text())
  Handler.service = Service(settings)
  if settings.get('mode') == 'ouro':
-  for dataset in QUERIES: Handler.service.refresh_dataset(dataset)
+  for dataset in Handler.service.queries: Handler.service.refresh_dataset(dataset)
   threading.Thread(target=maintain_cache,args=(Handler.service,),daemon=True).start()
  ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
 

@@ -1,4 +1,31 @@
-# Eletrovias — prévia Marketing validada, 27/10/2026
+# Eletrovias — correção do MQL por negociação, 02/11/2026
+
+**Preparação local, sem ativação ou publicação.** Base `origin/main` 5bae521. A implantação anterior (PR288) permanece como estava; os totais históricos de pessoas não comprovam paridade com negócios do CRM.
+
+## Contrato aprovado em 02/11
+
+- Uma negociação criada = um MQL, por `(conta_id, negocio_id)`. Último estado de cada negócio antes do recorte; ciclos, pessoas e emails não multiplicam nem suprimem negócios.
+- Marca Eletrovias, conta `wescale_principal_crm`, criação original em outubro/2026, horário `America/Sao_Paulo`. Todos os funis, responsáveis e status. Ausência de contato não exclui negócio; Closer não é origem.
+- Excluir **apenas** os três testes confirmados: `6adbb24ffe6c3900293048dc`, `6adbbe360085d5002083f991`, `6ae35e54aefc9100238e22e7`. Aprovação explícita do usuário em 02/11. Não usar `elegivel_kpi`, capital, flag de formulário ou etapa para qualificar MQL.
+- A consulta candidata executada no Metabase/Oral Unic DW em 02/11 retornou **674 negócios: 623 SDR e 51 Closer**. O total informado de 673 é reproduzido em UTC, mas não certifica a mesma população do relatório CRM; não recebemos exportação de IDs desse total.
+- `negocios-source.sql` lê somente `ouro.negocios_ciclos_dashboard`. A view adicional é proposta em `negocios-view.sql`; **nenhum DDL executado**. O gateway preserva as duas consultas existentes de contatos/mídia e oferece um dataset independente de negócios.
+- A prévia acrescenta registros de métrica com marcador explícito; `deduplicateLeads` os ignora, preservando os cards de contatos. `marketingMqlRows` conta negócios por ID e não soma novamente LPs. Perfis opcionais são associados por ID real do negócio, somente para detalhamento.
+- Consumidores: Visão Geral e volume diário, Saúde/campanhas/conjuntos/anúncios, Meta & OKRs/Missão/Copa, pacing, S&OP semanal/mensal/capital e PDF. As regras existentes das demais marcas e os consumidores de Vendas permanecem.
+- Histórico anterior e novembro continuam nas fontes anteriores, conforme a janela já migrada. Esta correção não estende a cobertura temporal.
+
+## Ativação posterior — ainda não executada
+
+1. Revisar o PR e concluir QA autenticado/PDF; mostrar o resultado e obter autorização de publicação.
+2. Instalar somente a nova view de leitura e o grant SELECT da role existente; validar uma linha por ID, 674 no corte observado e nenhuma permissão DML. Não modificar fatos ou RD.
+3. Atualizar o gateway com `negocios_enabled: true`, testar contrato `eletrovias_negocios_v1`, sessão/permissões/expiração; só então compilar com `VITE_ELETROVIAS_NEGOCIOS_ENABLED=true` e publicar pela main/PR alinhados.
+4. Rollback: desligar a nova flag de frontend e republicar o pacote anterior. O gateway com a opção ausente mantém somente os datasets anteriores; não depende da instalação da nova view.
+
+Validação local: 972 testes frontend, 17 gateway, compilação e lint sem erros. Testes cobrem dois negócios da mesma pessoa, negócio sem contato, LP sem duplicação, data original/virada do mês, ausência de filtro de qualificação, preservação de outras marcas e isolamento de Vendas. QA visual e PDF em andamento; não equivalem a aprovação da publicação.
+
+---
+
+## Histórico da implantação anterior — 27/10/2026
+
 
 **Publicação autorizada em27/10; gateway definitivo instalado e validado, ativação em andamento.** PR288 na branch `codex/eletrovias-ouro-preparacao`, atualizada com a main publicada `55a5125`. Gabriel autorizou instalar/validar o gateway definitivo e publicar enquanto Maicon trata as exceções. Nova conferência da carga16:41 confirmou C1/C2 Eletrovias, outra negociação B2Case preservada e caso Oral Unic coerente com o relato; três negócios sem contato são um Eletrovias e dois Legacy. Detalhes da origem LP no handoff. A flag `VITE_ELETROVIAS_OURO_ENABLED` está ativa somente na prévia e continua ausente/desligada no deploy. As duas views próprias, a role `dashboard_eletrovias_ro` e o gateway `dashboard-eletrovias-ouro` foram instalados após autorização. SELECT apenas nessas views, zero permissões DML; TLS verify-full, filesystem read-only, cache até300s e sessão/permissões Marketing a cada pedido. Anônimo401, autenticado200. RD, fatos, importações, coletores e Vendas não foram alterados.
 

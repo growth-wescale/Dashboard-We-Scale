@@ -36,7 +36,7 @@ import { CreativePreview } from '@/components/ui/CreativePreview'
 import { BubbleMatrix } from '@/components/ui/BubbleMatrix'
 import { MetricSeriesChart } from '@/components/ui/MetricSeriesChart'
 import { CompareControl } from '@/components/ui/CompareControl'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
+import { marketingMqlRows, deduplicateLeads } from '@/lib/leadUtils'
 import { previousMonthSameRange, computeDeltaPct, formatCompareLabel, type DateRange } from '@/lib/periodCompare'
 import { isMediaOdontoLegacy, isMediaV4, isPausedStrategy } from '@/lib/oralUnicMapping'
 import { isMediaEventoInpot, isMediaFranquiaInpot, isLeadEventoInpot, isCrmEventoInpot } from '@/lib/inpotMapping'
@@ -98,7 +98,7 @@ function computeBrand(
   const invest = def.key === 'we-scale' && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true' ? Math.round(rawInvest * 100) / 100 : rawInvest
   const uniqueLeads = deduplicateLeads(leadRows)
   const leads   = uniqueLeads.length
-  const mql     = uniqueLeads.filter(isLeadMql).length
+  const mql     = marketingMqlRows(leadRows).length
   const active  = crm.filter(r => r.status_atual !== 'Excluído')
   const sql        = active.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
   const diagnostico = active.filter(r => inPeriod(r.data_diagnostico, di, df, r.marca)).length
@@ -1951,7 +1951,7 @@ export function SaudeDaMarca() {
     ? formatCompareLabel(effectiveCompareRange)
     : `${formatCompareLabel(effectiveCompareRange)} (mês anterior)`
 
-  const mqlLeads = useMemo(() => deduplicateLeads(activeLeadsData).filter(isLeadMql), [activeLeadsData])
+  const mqlLeads = useMemo(() => marketingMqlRows(activeLeadsData), [activeLeadsData])
   const activeAdNames = useMemo(
     () => [...new Set(activeMediaData.map(row => row.anuncio).filter((name): name is string => Boolean(name)))],
     [activeMediaData],

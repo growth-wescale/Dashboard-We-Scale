@@ -15,10 +15,11 @@ import { createLisoOuroFetch } from './lisoOuroFetch'
 let marketing: SupabaseClient | undefined
 let crm: SupabaseClient | undefined
 const enabled = import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true'
+const eletroviasDealsEnabled = import.meta.env.VITE_ELETROVIAS_NEGOCIOS_ENABLED === 'true'
 const lisoEnabled = import.meta.env.VITE_LISO_OURO_ENABLED === 'true'
 export function partnerMarketingCacheScope(optIn = true) {
   if (!optIn) return ''
-  return (enabled ? ':partner-ouro:marketing:v1' : '') + (lisoEnabled ? ':liso-ouro:marketing:v1' : '') + (legacyOuroEnabled ? ':legacy-ouro:marketing:v1' : '') + (oralUnicOuroEnabled ? ':oral-unic-ouro:marketing:v1' : '') + (eletroviasOuroEnabled ? ':eletrovias-ouro:marketing:v1' : '')
+  return (enabled ? ':partner-ouro:marketing:v1' : '') + (lisoEnabled ? ':liso-ouro:marketing:v1' : '') + (legacyOuroEnabled ? ':legacy-ouro:marketing:v1' : '') + (oralUnicOuroEnabled ? ':oral-unic-ouro:marketing:v1' : '') + (eletroviasOuroEnabled ? (eletroviasDealsEnabled ? ':eletrovias-ouro:negocios:v1' : ':eletrovias-ouro:marketing:v1') : '')
 }
 function client(source: 'marketing' | 'vendas') {
   const vendas = source === 'vendas'
@@ -35,7 +36,7 @@ function client(source: 'marketing' | 'vendas') {
   const oralFetch = !vendas && oralUnicOuroEnabled
     ? createOralUnicOuroFetch({ ...options, referenceFetch: legacyFetch }) : legacyFetch
   const fetch = !vendas && eletroviasOuroEnabled
-    ? createEletroviasOuroFetch({ ...options, referenceFetch: oralFetch }) : oralFetch
+    ? createEletroviasOuroFetch({ ...options, referenceFetch: oralFetch, dealsEnabled: eletroviasDealsEnabled }) : oralFetch
   return createClient(
     vendas ? import.meta.env.VITE_SUPABASE_VENDAS_URL : import.meta.env.VITE_SUPABASE_URL,
     vendas ? import.meta.env.VITE_SUPABASE_VENDAS_ANON_KEY : import.meta.env.VITE_SUPABASE_ANON_KEY,

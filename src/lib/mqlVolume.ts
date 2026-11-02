@@ -1,5 +1,5 @@
 import { BRAND_LIST } from '@/constants/brands'
-import { deduplicateLeads, isLeadMql } from './leadUtils'
+import { marketingMqlRows } from './leadUtils'
 import { filterMediaByMarcas } from './visaoGeralMedia'
 import type { Lead, MediaDailyRaw } from './types'
 
@@ -49,7 +49,7 @@ export function buildMqlVolume(
     if (day) day.investment += row.spend_brl
   }
   const scoped = leads.filter(row => marcas.includes(row.marca) && byDay.has(row.dia))
-  for (const row of deduplicateLeads(scoped).filter(isLeadMql)) byDay.get(row.dia)!.mql++
+  for (const row of marketingMqlRows(scoped)) byDay.get(row.dia)!.mql++
   let mql = 0, investment = 0
   for (const day of days) {
     day.cpmql = day.mql > 0 ? day.investment / day.mql : null

@@ -18,7 +18,7 @@ import type { MediaDailyRaw, Lead, Meta, Marca } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
+import { marketingMqlRows, deduplicateLeads } from '@/lib/leadUtils'
 import { isOutsideMqlMedia, filterMediaByMarcas, filterMediaByMarca } from '@/lib/visaoGeralMedia'
 import { getMetaVendas } from '@/constants/metasVendas'
 import { MqlVolumeChart } from '@/components/ui/MqlVolumeChart'
@@ -87,7 +87,7 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
   const leads  = uniqueLeads.length
   const vis    = mRows.reduce((s, r) => s + r.impressoes, 0)
   const lpv    = mRows.reduce((s, r) => s + r.lpv, 0)
-  const mql    = uniqueLeads.filter(isLeadMql).length
+  const mql    = marketingMqlRows(lRows).length
   const sql    = active.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
   const sal    = active.filter(r => inPeriod(r.data_sal, di, df, r.marca)).length
   const fech   = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).length
@@ -124,7 +124,7 @@ function computeBrands(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketin
     const uniqueLeads = deduplicateLeads(lRows)
     const invest = mRows.reduce((s, r) => s + r.spend_brl, 0)
     const leads  = uniqueLeads.length
-    const mql    = uniqueLeads.filter(isLeadMql).length
+    const mql    = marketingMqlRows(lRows).length
     const sql    = cRows.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
     const cpmql  = mql > 0 ? Math.round(invest / mql) : 0
     const cpsql  = sql > 0 ? Math.round(invest / sql) : 0
@@ -185,7 +185,11 @@ function buildSeries(
     const d = parseInt(r.dia.slice(-2), 10) - 1
     if (d < 0 || d >= totalDays) continue
     daily[d].leads++
-    if (isLeadMql(r)) daily[d].mql++
+  }
+  for (const r of marketingMqlRows(lRows)) {
+    if (!r.dia || r.dia.slice(0, 7) !== ym) continue
+    const d = parseInt(r.dia.slice(-2), 10) - 1
+    if (d >= 0 && d < totalDays) daily[d].mql++
   }
 
   for (const r of cRows) {
@@ -893,7 +897,7 @@ export function VisaoGeral() {
     const lRows = leadsCur
       .filter(r => isConsolidado || (!!r.marca && set.has(r.marca)))
       .filter(r => VALID_MARCAS.has(r.marca))
-    return deduplicateLeads(lRows).filter(isLeadMql)
+    return marketingMqlRows(lRows)
   }, [leadsCur, marcasSelecionadas, isConsolidado])
 
   const curLabel   = monthLabel(range.start)

@@ -7,7 +7,7 @@ import { StatusPill } from '@/components/ui/StatusPill'
 import { MARCAS } from '@/lib/types'
 import type { Marca } from '@/lib/types'
 import { BRAND_ACCENT as MARCA_COR } from '@/constants/brands'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
+import { marketingMqlRows } from '@/lib/leadUtils'
 import {
   COPA_MESES,
   COPA_MESES_ORDENADOS,
@@ -196,8 +196,8 @@ export function MetaCopaB2B() {
     MARCAS.map(marca => {
       // CUSTO
       const spendTotal  = mediaMes.data.filter(r => r.marca === marca).reduce((s, r) => s + r.spend_brl, 0)
-      const leadsM      = deduplicateLeads(leadsMes.data.filter(r => r.marca === marca))
-      const mqlCount    = leadsM.filter(isLeadMql).length
+      const leadsM      = marketingMqlRows(leadsMes.data.filter(r => r.marca === marca))
+      const mqlCount    = leadsM.length
       const cpmql       = mqlCount > 0 ? spendTotal / mqlCount : null
       const { meta: custMeta, baseline: custBase } = mes.custo[marca]
       const cSt         = custoStatus(cpmql, custMeta, custBase)
@@ -241,7 +241,7 @@ export function MetaCopaB2B() {
 
   const volumeStats = useMemo(() =>
     mes.volumeMarcas.map(marca => {
-      const mqlCount = deduplicateLeads(leadsMes.data.filter(r => r.marca === marca)).filter(isLeadMql).length
+      const mqlCount = marketingMqlRows(leadsMes.data.filter(r => r.marca === marca)).length
       const meta     = mes.volumeMeta[marca]!
       const proj     = diaAtual > 0 ? Math.round((mqlCount / diaAtual) * mes.diasMes) : 0
       const vSt      = volStatus(proj, meta)

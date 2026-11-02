@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { MediaDailyRaw, Lead } from '@/lib/types'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
+import { marketingMqlRows, deduplicateLeads } from '@/lib/leadUtils'
 
 type MetricKey = 'mql' | 'lead' | 'cpmql' | 'cpl' | 'ctr' | 'cpm' | 'connect'
 type ChartType = 'bar' | 'line' | 'area'
@@ -116,6 +116,8 @@ export function MetricSeriesChart({ media, leads }: Props) {
 
   const uniqueLeads = useMemo(() => deduplicateLeads(leads), [leads])
 
+  const mqlRows = useMemo(() => marketingMqlRows(leads), [leads])
+
   const buckets = useMemo(() => {
     type Agg = {
       key: string
@@ -145,7 +147,9 @@ export function MetricSeriesChart({ media, leads }: Props) {
       const k = bucketKey(l.dia, gran)
       const a = get(k)
       a.leadsCount += 1
-      if (isLeadMql(l)) a.mqlCount += 1
+    }
+    for (const l of mqlRows) {
+      get(bucketKey(l.dia, gran)).mqlCount += 1
     }
 
     const arr = [...map.values()].sort((a, b) => a.key.localeCompare(b.key))
@@ -161,7 +165,7 @@ export function MetricSeriesChart({ media, leads }: Props) {
         connect: a.cliques     > 0 ? (a.lpv / a.cliques) * 100         : 0,
       } as Record<MetricKey, number>,
     }))
-  }, [media, uniqueLeads, gran])
+  }, [media, uniqueLeads, mqlRows, gran])
 
   const activeMetrics = METRICS.filter(m => cfg[m.key].enabled)
 

@@ -20,7 +20,7 @@
 3. Atualizar o gateway com `negocios_enabled: true`, testar contrato `eletrovias_negocios_v1`, sessão/permissões/expiração; só então compilar com `VITE_ELETROVIAS_NEGOCIOS_ENABLED=true` e publicar pela main/PR alinhados.
 4. Rollback: desligar a nova flag de frontend e republicar o pacote anterior. O gateway com a opção ausente mantém somente os datasets anteriores; não depende da instalação da nova view.
 
-Validação local: 972 testes frontend, 17 gateway, compilação e lint sem erros. Testes cobrem dois negócios da mesma pessoa, negócio sem contato, LP sem duplicação, data original/virada do mês, ausência de filtro de qualificação, preservação de outras marcas e isolamento de Vendas. QA visual e PDF em andamento; não equivalem a aprovação da publicação.
+Validação local: 972 testes frontend, 17 gateway, compilação e lint sem erros. Testes cobrem dois negócios da mesma pessoa, negócio sem contato, LP sem duplicação, data original/virada do mês, ausência de filtro de qualificação, preservação de outras marcas e isolamento de Vendas. QA autenticado local em Saúde (geral, campanhas, conjuntos, anúncios) e S&OP: 674 MQLs; 1.622 contatos preservados. Semanas fechadas 61+165+146+129+173=674. O PDF completo foi tentado e bloqueado na leitura Lisô/Beauty; Visão Geral consolidada apresentou erro de leitura Oral Unic. Não houve reinício/alteração desses serviços. QA consolidado, Meta & OKRs e PDF completo continuam pendentes; não equivalem a aprovação da publicação. PR297 em rascunho, implementação 228ae39. Evidência visual privada em `outputs/audits/eletrovias-negocios-20261102.local/`; novo dataset da prévia vem de SELECT real via Metabase, não da view ainda não instalada.
 
 ---
 

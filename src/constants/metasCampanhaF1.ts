@@ -168,6 +168,57 @@ export function fatorMetaCloser(
   return fatorMetaSdr(c, voltas)
 }
 
+/** Uma venda distribuída na Configuração das Metas: Closer × semana × marca. */
+export interface VendaSemanal {
+  nome: string
+  /** 1 = primeira semana do mês. */
+  semana: number
+  vendas: number
+  /** Taxa de franquia média da marca na versão (`meta_marca.ticket_medio`). */
+  ticket: number | null
+}
+
+/**
+ * Peso de cada semana na meta do Closer, a partir da distribuição semanal das
+ * vendas. `unidades` = fração das vendas; `faturamento` = fração do R$, com cada
+ * venda valendo o ticket da marca dela — uma venda de Oral Unic (R$ 74,9 mil)
+ * pesa mais que uma de Odonto Legacy (R$ 8,6 mil) na mesma semana. Closer com
+ * alguma venda sem ticket cai na fração das unidades no R$ também.
+ */
+export function fracoesSemanaisCloser(
+  linhas: readonly VendaSemanal[],
+  nSemanas: number,
+): { unidades: Map<string, number[]>; faturamento: Map<string, number[]> } {
+  const un = new Map<string, number[]>()
+  const fat = new Map<string, number[]>()
+  const semTicket = new Set<string>()
+  for (const l of linhas) {
+    const nome = l.nome.trim()
+    const i = l.semana - 1
+    if (i < 0 || i >= nSemanas || !(l.vendas > 0)) continue
+    const a = un.get(nome) ?? Array(nSemanas).fill(0)
+    const b = fat.get(nome) ?? Array(nSemanas).fill(0)
+    a[i] += l.vendas
+    if (l.ticket != null && l.ticket > 0) b[i] += l.vendas * l.ticket
+    else semTicket.add(nome)
+    un.set(nome, a)
+    fat.set(nome, b)
+  }
+  const normalizar = (arr: number[]) => {
+    const total = arr.reduce((x, y) => x + y, 0)
+    return total > 0 ? arr.map(v => v / total) : null
+  }
+  const unidades = new Map<string, number[]>()
+  const faturamento = new Map<string, number[]>()
+  for (const [nome, arr] of un) {
+    const fu = normalizar(arr)
+    if (!fu) continue
+    unidades.set(nome, fu)
+    faturamento.set(nome, (!semTicket.has(nome) && normalizar(fat.get(nome)!)) || fu)
+  }
+  return { unidades, faturamento }
+}
+
 /** Fator da meta mensal (rateio pelos dias) para o conjunto de voltas. */
 export function fatorMetaSdr(c: CampanhaMes, voltas: readonly number[]): number {
   return voltas.reduce((s, v) => s + (c.voltas[v - 1]?.fracaoDias ?? 0), 0)

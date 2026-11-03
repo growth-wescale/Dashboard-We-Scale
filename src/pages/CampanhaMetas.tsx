@@ -67,7 +67,7 @@ export function CampanhaMetas() {
 
 function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void }) {
   // Voltas = semanas da versão ativa do mês (setembro mantém as 4 voltas da campanha).
-  const { semanas, fracoesCloser } = useSemanasCampanha(mes)
+  const { semanas, fracoesCloser, fracoesFatCloser } = useSemanasCampanha(mes)
   const campanha = useMemo(() => montarCampanha(mes, semanas), [mes, semanas])
   const dia = diaDaCampanha(campanha)
   const [ciclo, setCiclo] = useState<Ciclo>('semanal')
@@ -111,9 +111,11 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
   const closers = useMemo(
     () =>
       closersRaw.map(c => {
-        const fator = ciclo === 'mensal' ? 1 : fatorMetaCloser(campanha, c.nome, voltasSel, fracoesCloser)
-        const metaFinanceira = c.metaFinanceira * fator
-        const metaQtdVendas = c.metaQtdVendas * fator
+        // Unidades pela fração das vendas; R$ pela fração do faturamento (ticket de cada venda).
+        const fatorUn = ciclo === 'mensal' ? 1 : fatorMetaCloser(campanha, c.nome, voltasSel, fracoesCloser)
+        const fatorFat = ciclo === 'mensal' ? 1 : fatorMetaCloser(campanha, c.nome, voltasSel, fracoesFatCloser)
+        const metaFinanceira = c.metaFinanceira * fatorFat
+        const metaQtdVendas = c.metaQtdVendas * fatorUn
         return {
           ...c,
           metaFinanceira,
@@ -121,7 +123,7 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
           pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
         }
       }),
-    [closersRaw, ciclo, voltasSel, campanha, fracoesCloser],
+    [closersRaw, ciclo, voltasSel, campanha, fracoesCloser, fracoesFatCloser],
   )
 
   // Ranking ordenado por % atingimento desc, empate por realizado desc

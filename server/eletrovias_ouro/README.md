@@ -1,6 +1,6 @@
 # Eletrovias — correção do MQL por negociação, 02/11/2026
 
-**Preparação local, sem ativação ou publicação.** Base `origin/main` 5bae521. A implantação anterior (PR288) permanece como estava; os totais históricos de pessoas não comprovam paridade com negócios do CRM.
+**QA da prévia concluído em 02/11; nova contagem ainda não ativada.** PR297 integrado pelo usuário em `2ae79ba` (22:49 BRT), deploy automático `41562191894` concluído. Worktree alinhada à main; `VITE_ELETROVIAS_NEGOCIOS_ENABLED` ausente no deploy, `negocios_enabled=false` no gateway vivo e nova view não instalada. A implantação anterior (PR288) permanece como estava; os totais históricos de pessoas não comprovam paridade com negócios do CRM.
 
 ## Contrato aprovado em 02/11
 
@@ -20,7 +20,15 @@
 3. Atualizar o gateway com `negocios_enabled: true`, testar contrato `eletrovias_negocios_v1`, sessão/permissões/expiração; só então compilar com `VITE_ELETROVIAS_NEGOCIOS_ENABLED=true` e publicar pela main/PR alinhados.
 4. Rollback: desligar a nova flag de frontend e republicar o pacote anterior. O gateway com a opção ausente mantém somente os datasets anteriores; não depende da instalação da nova view.
 
-Validação local: 972 testes frontend, 17 gateway, compilação e lint sem erros. Testes cobrem dois negócios da mesma pessoa, negócio sem contato, LP sem duplicação, data original/virada do mês, ausência de filtro de qualificação, preservação de outras marcas e isolamento de Vendas. QA autenticado local em Saúde (geral, campanhas, conjuntos, anúncios) e S&OP: 674 MQLs; 1.622 contatos preservados. Semanas fechadas 61+165+146+129+173=674. O PDF completo foi tentado e bloqueado na leitura Lisô/Beauty; Visão Geral consolidada apresentou erro de leitura Oral Unic. Não houve reinício/alteração desses serviços. QA consolidado, Meta & OKRs e PDF completo continuam pendentes; não equivalem a aprovação da publicação. PR297 em rascunho, implementação 228ae39. Evidência visual privada em `outputs/audits/eletrovias-negocios-20261102.local/`; novo dataset da prévia vem de SELECT real via Metabase, não da view ainda não instalada.
+Validação: 972 testes frontend, 17 gateway, compilação e lint sem erros sobre a implementação integrada. Testes cobrem dois negócios da mesma pessoa, negócio sem contato, LP sem duplicação, data original/virada do mês, ausência de filtro de qualificação, preservação de outras marcas e isolamento de Vendas.
+
+QA autenticado da prévia em 02/11, sobre a main integrada: Visão Geral/cards/funil/comparativo/volume diário, Saúde (geral, campanhas, conjuntos, anúncios), Meta & OKRs e S&OP/PDF mostram **674 MQLs**. Contatos **1.622**, investimento **R$ 28.868,97**, CP-MQL **R$ 42,83**; semanas **61+165+146+129+173=674**. Meta & OKRs foi conferida com relógio apenas do navegador fixado em 31/10, pois não possui seletor histórico. As fontes nativas de Termos/Social/E-mail/Radar não foram migradas. SQL 75 em Saúde/Visão Geral/OKRs versus 79 em S&OP mantém regras anteriores; não foi uniformizado nesta entrega.
+
+PDF real exportado às 23:01 BRT, nove páginas, renderizado e revisado; Eletrovias na primeira folha com 674 e todas as semanas/capital preservados. Evidência privada em `outputs/audits/eletrovias-negocios-20261102.local/`; dados pessoais e PDF não entram no Git. O dataset novo da prévia vem de SELECT real via Metabase, não da view ainda não instalada.
+
+**Falha de leitura identificada:** Oral Unic rejeita toda a resposta por um negócio de 30/10 sem vínculo de contato (`commercial_identity_incomplete`); o cache expira e a tela recebe `source_refresh_pending`. Usuário autorizou preparar/testar somente na prévia: 43 linhas da ouro, 42 identificadas retornadas integralmente iguais, uma pendência explícita. Essa correção do gateway Oral está proposta nesta branch, sem instalar/reiniciar produção e sem mudar sua regra de MQL. A falha anterior Lisô não foi reproduzida: consulta isolada e APIs autenticadas passaram; causa histórica não comprovada.
+
+Próximo gate: apresentar o resultado e obter autorização para instalar/ativar Eletrovias e, separadamente, publicar a correção de leitura Oral Unic necessária ao consolidado. Nenhuma escrita RD/fatos, serviço de produção, Vendas ou critérios das outras marcas nesta rodada.
 
 ---
 

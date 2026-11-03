@@ -55,7 +55,11 @@ def missing_commercial_identity(row):
 
 def prepare_rows(dataset, rows):
  validate_rows(dataset, rows)
- return rows, []
+ # Preserve the contact dataset: an unlinked deal is a pending identity,
+ # not a synthetic contact and not a reason to discard all valid rows.
+ pending = [r for r in rows if dataset=='leads' and missing_commercial_identity(r)]
+ return ([r for r in rows if not (dataset=='leads' and missing_commercial_identity(r))],
+  [{'code':'accepted_missing_contact','count':len(pending)}] if pending else [])
 
 
 def validate_rows(dataset, rows):
@@ -64,8 +68,6 @@ def validate_rows(dataset, rows):
   or not '2026-10-01' <= r['dia'] < '2026-11-01' for r in rows):
   raise GatewayError(503, 'scope_violation')
  if len({r.get('id') for r in rows}) != len(rows): raise GatewayError(503,'duplicate_id')
- if dataset=='leads' and any(missing_commercial_identity(r) for r in rows):
-  raise GatewayError(409,'commercial_identity_incomplete')
  if dataset=='media' and any((r.get('canal'),r.get('conta_id'),r.get('campanha_id')) not in MEDIA_IDS for r in rows):
   raise GatewayError(503,'campaign_scope_violation')
  if dataset=='media' and any(r.get('spend_brl') is None or r['spend_brl']<0 or r.get('moeda')!='BRL' for r in rows):

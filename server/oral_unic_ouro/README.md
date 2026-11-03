@@ -2,6 +2,14 @@
 
 **Publicação autorizada em 27/10/2026, em validação.** Views e gateway definitivos instalados; ativação incluída no PR285, alinhado à main53ae9bc. RD/fatos/Vendas e fontes das demais marcas preservados. Os três casos continuam com Maicon e não bloqueiam esta publicação.
 
+## Correção de leitura proposta — 02/11/2026, somente prévia
+
+Durante o QA Eletrovias, a consulta real retornou 43 linhas, uma com identidade comercial ausente: negociação `6ae4fad9b68bf60028b82b13`, de 30/10. A validação atual lança `commercial_identity_incomplete`; a atualização do cache falha e, após 300s, o cliente recebe `source_refresh_pending`. Confirmado por execução isolada somente leitura, sem tocar cache/serviço de produção.
+
+Por autorização explícita, `prepare_rows` passa a retornar as 42 linhas identificadas **sem modificar nenhum campo**, além de `accepted_missing_contact: 1`. O negócio permanece na ouro e como pendência de vínculo; não vira contato sintético. Não é mudança para contagem por negócio em Oral Unic, nem promessa de cobertura completa desse KPI. Escopo/mês/IDs duplicados/campanhas/autorização continuam falhando de forma fechada. Treze testes cobrem preservação, renovação de cache, pendências e rejeições.
+
+Testado somente na prévia: leitura real via Metabase, resposta validada localmente e autenticação pela rota de mídia do mesmo gateway. Visão Geral e PDF completo de nove páginas passaram. **Não instalado/publicado; produção continua com a falha até autorização específica.** RD, fatos, critérios comerciais, consultoria e demais marcas permanecem intocados.
+
 ## Gateway definitivo
 
 Serviço isolado `dashboard-oral-unic-ouro`, endpoint `/api/oral-unic-ouro/v1/read`, role `dashboard_oral_unic_ro`: SELECT apenas em `ouro.vw_oral_unic_dashboard_leads` e `ouro.vw_oral_unic_dashboard_midia`, zero privilégios DML. TLS `verify-full`, transações somente leitura, sessão/permissões Marketing validadas a cada pedido; sem sessão retorna401. Cache máximo5min sobre a carga horária existente; sem alterações no agendamento ou fontes. Container sem root, filesystem somente leitura e limites de CPU/memória.

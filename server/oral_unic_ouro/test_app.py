@@ -40,8 +40,26 @@ class Tests(unittest.TestCase):
   self.assertEqual(c.queries,[])
  def test_missing_commercial_identity_is_not_silently_counted(self):
   s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm'}}])
-  with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
-  self.assertEqual(e.exception.code,'commercial_identity_incomplete')
+  result=s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(result['rows'],[])
+  self.assertEqual(result['warnings'],[{'code':'accepted_missing_contact','count':1}])
+ def test_pending_identity_does_not_modify_valid_rows_or_refresh(self):
+  valid={'id':'a','dia':'2026-10-10','marca':'Oral Unic','contato_id':'c','email':'example@example.test','dados_extras':{'classification_source':'deal_criado_crm','original':'preserved'}}
+  pending={'id':'b','dia':'2026-10-30','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm'}}
+  s,c=self.service([valid,pending])
+  with patch('app.time.monotonic',return_value=100):s.refresh_dataset('leads')
+  with patch('app.time.monotonic',return_value=340):s.refresh_dataset('leads')
+  with patch('app.time.monotonic',return_value=401):result=s.read({'dataset':'leads','route':'/'},'token')
+  self.assertEqual(result['rows'],[valid])
+  self.assertIs(result['rows'][0],valid)
+  self.assertEqual(c.rows,[valid,pending])
+  self.assertEqual(result['warnings'],[{'code':'accepted_missing_contact','count':1}])
+ def test_pending_identity_cannot_hide_scope_or_duplicate_errors(self):
+  pending={'id':'a','dia':'2026-10-30','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm'}}
+  for rows,code in [([pending,pending],'duplicate_id'),([dict(pending,marca='Outra')],'scope_violation'),([dict(pending,dia='2026-11-01')],'scope_violation')]:
+   s,c=self.service(rows)
+   with self.assertRaises(GatewayError) as error:s.read({'dataset':'leads','route':'/'},'token')
+   self.assertEqual(error.exception.code,code)
  def test_other_brands_and_months_are_rejected(self):
   for row in [{'id':'a','dia':'2026-10-10','marca':'We Scale'}, {'id':'a','dia':'2026-09-10','marca':'Oral Unic'}]:
    s,c=self.service([row])

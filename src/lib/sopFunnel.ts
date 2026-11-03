@@ -10,7 +10,7 @@ import { inPeriod } from '@/lib/vendasUtils'
  * presente nas duas fontes.
  */
 export function countSopSqlDeals(
-  rows: VwMarketingFunil[],
+  rows: Pick<VwMarketingFunil, 'id_lead' | 'data_sql' | 'marca'>[],
   events: FunnelEventRow[],
   start: string,
   end: string,

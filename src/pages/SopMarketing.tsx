@@ -25,7 +25,7 @@ import { stageLabel, toWindow, type FunnelEventRow } from '@/lib/metrics'
 import { dealNaJanela } from '@/lib/funilFilterOptions'
 import { nf } from '@/lib/format'
 import { fmtBR } from '@/lib/dateUtils'
-import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
+import type { LinhaFunilSop } from '@/hooks/useSopVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql, marketingMqlRows, isMarketingDeal } from '@/lib/leadUtils'
@@ -257,12 +257,12 @@ interface Funnel {
   perdido: { mql: number; sql: number; diagnostico: number; sal: number }
 }
 
-function unidadesVendidas(r: VwMarketingFunil): number {
+function unidadesVendidas(r: LinhaFunilSop): number {
   const q = Number(r.quantidade_unidades)
   return Number.isFinite(q) && q > 0 ? q : 1
 }
 
-function buildFunnel(rows: VwMarketingFunil[], sqlEvents: FunnelEventRow[], di: string, df: string): Funnel {
+function buildFunnel(rows: LinhaFunilSop[], sqlEvents: FunnelEventRow[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
     mql:              d.filter(r => inPeriod(r.data_mql, di, df, r.marca)).length,
@@ -952,7 +952,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || presencas.error || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
   }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, presencas.error, partnerReadError, beautyRes.error, beautyMarketing.error])
 
-  const applyF = useCallback((rows: VwMarketingFunil[]) =>
+  const applyF = useCallback((rows: LinhaFunilSop[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
     [filterFonte])
   const crmCur   = useMemo(() => applyF(rawCrmCur),   [rawCrmCur,   applyF])
@@ -1218,7 +1218,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   // dos outros cards do slide). MTD do mês inteiro (do dia 1 até hoje) é
   // usado no extra pra comparar com a meta mensal, que vive num plano diferente
   // da janela de 7d — meta é mensal por natureza.
-  const somaGanhos = useCallback((rows: VwMarketingFunil[], di: string, df: string, fonte = filterFonte) => {
+  const somaGanhos = useCallback((rows: LinhaFunilSop[], di: string, df: string, fonte = filterFonte) => {
     const historico = rows.filter(r => (!usarReceita || (r.data_venda ?? '').slice(0, 10) < '2026-01-01') && r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca))
       .reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
     return historico + (usarReceita ? resumirReceitaLegacy(receitaOuro.data, di, df, fonte).total : 0)

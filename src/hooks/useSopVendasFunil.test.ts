@@ -8,15 +8,15 @@ vi.mock('@/lib/supabaseVendas', () => ({ supabaseVendas: { from: mocks.from } })
 vi.mock('./useVendasFunil', () => ({ useVendasFunil: mocks.standard }))
 vi.mock('./useConsultaFiltrada', () => ({ useConsultaFiltrada: mocks.scoped }))
 
-import { fetchSopLegacyRows, lerFunilSop, useSopVendasFunil } from './useSopVendasFunil'
+import { fetchSopRows, lerFunilSop, useSopVendasFunil } from './useSopVendasFunil'
 
 function query(data: unknown[] | null = [], error: { message: string } | null = null) {
   const q = {
-    select: vi.fn(), in: vi.fn(), order: vi.fn(), range: vi.fn(),
+    select: vi.fn(), eq: vi.fn(), in: vi.fn(), order: vi.fn(), range: vi.fn(),
     abortSignal: vi.fn(), or: vi.fn(), lte: vi.fn(),
     then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data, error }).then(resolve),
   }
-  for (const k of ['select', 'in', 'order', 'range', 'abortSignal', 'or', 'lte'] as const) q[k].mockReturnValue(q)
+  for (const k of ['select', 'eq', 'in', 'order', 'range', 'abortSignal', 'or', 'lte'] as const) q[k].mockReturnValue(q)
   return q
 }
 
@@ -31,7 +31,7 @@ describe('fonte Legacy exclusiva da S&OP', () => {
     const q = query([{ id_lead: 'historic' }, { id_lead: 'current' }])
     mocks.from.mockReturnValue(q)
     const signal = new AbortController().signal
-    expect(await fetchSopLegacyRows({ dataInicio: '2026-10-01', dataFim: '2026-10-19' }, signal)).toHaveLength(2)
+    expect(await fetchSopRows({ dataInicio: '2026-10-01', dataFim: '2026-10-19' }, signal)).toHaveLength(2)
     expect(mocks.from).toHaveBeenCalledWith('vw_marketing_funil')
     expect(q.in).toHaveBeenCalledWith('funil', ['Odonto Scale', 'Odonto Legacy'])
     expect(q.or).toHaveBeenCalledWith('data_criacao_negociacao.gte.2026-10-01,data_sql.gte.2026-10-01,data_diagnostico.gte.2026-10-01,data_sal.gte.2026-10-01,data_venda.gte.2026-10-01')
@@ -39,11 +39,19 @@ describe('fonte Legacy exclusiva da S&OP', () => {
     expect(q.abortSignal).toHaveBeenCalledWith(signal)
   })
 
+  it('lê a folha de Eletrovias com os campos utilizados, a mesma marca e os mesmos funis', async () => {
+    const q = query([{ id_lead: 'exemplo', ciclo: 1 }]); mocks.from.mockReturnValue(q)
+    expect(await fetchSopRows({ marca: 'Eletrovias' }, new AbortController().signal)).toHaveLength(1)
+    expect(q.eq).toHaveBeenCalledWith('marca', 'Eletrovias')
+    expect(q.in).toHaveBeenCalledWith('funil', ['SDR', 'Closer', 'Prospecção Ativa', 'Odonto Scale'])
+    expect(q.select.mock.calls[0][0].split(',')).toContain('data_sql')
+    expect(q.order.mock.calls.map(call => call[0])).toEqual(['data_criacao_negociacao','id_lead','ciclo'])
+  })
   it('preserva consulta histórica sem período e pagina a base completa', async () => {
     const first = query(Array.from({ length: 1000 }, (_, i) => ({ id_lead: String(i) })))
     const second = query([{ id_lead: 'last' }])
     mocks.from.mockReturnValueOnce(first).mockReturnValueOnce(second)
-    expect(await fetchSopLegacyRows({}, new AbortController().signal)).toHaveLength(1001)
+    expect(await fetchSopRows({}, new AbortController().signal)).toHaveLength(1001)
     expect(first.range).toHaveBeenCalledWith(0, 999)
     expect(second.range).toHaveBeenCalledWith(1000, 1999)
     expect(first.or).not.toHaveBeenCalled()
@@ -52,10 +60,10 @@ describe('fonte Legacy exclusiva da S&OP', () => {
 
   it('não oculta falhas nem consulta quando já cancelada', async () => {
     mocks.from.mockReturnValue(query(null, { message: 'indisponível' }))
-    await expect(fetchSopLegacyRows({}, new AbortController().signal)).rejects.toThrow('indisponível')
+    await expect(fetchSopRows({}, new AbortController().signal)).rejects.toThrow('indisponível')
     mocks.from.mockClear()
     const c = new AbortController(); c.abort()
-    await expect(fetchSopLegacyRows({}, c.signal)).rejects.toThrow('cancelada')
+    await expect(fetchSopRows({}, c.signal)).rejects.toThrow('cancelada')
     expect(mocks.from).not.toHaveBeenCalled()
   })
 
@@ -65,7 +73,13 @@ describe('fonte Legacy exclusiva da S&OP', () => {
     expect(mocks.scoped).toHaveBeenCalledWith('["expansao:sop_legacy_funil","2026-10-01",null]', expect.any(Function), true)
   })
 
-  it.each(['Eletrovias', 'Inpot', 'B2Case', 'Lisô Laser', 'Viva', 'Oral Unic', 'We Scale', undefined])('não muda a fonte da folha %s', marca => {
+  it('isola a projeção de Eletrovias no cache da S&OP', () => {
+    useSopVendasFunil({ marca: 'Eletrovias', dataInicio: '2026-10-01', dataFim: '2026-10-03' })
+    expect(mocks.standard.mock.calls[0][0].enabled).toBe(false)
+    expect(mocks.scoped.mock.calls[0]).toEqual(['["expansao:sop_eletrovias_funil","2026-10-01","2026-10-03"]', expect.any(Function), true])
+  })
+
+  it.each(['Inpot', 'B2Case', 'Lisô Laser', 'Viva', 'Oral Unic', 'We Scale', undefined])('não muda a fonte da folha %s', marca => {
     expect(useSopVendasFunil({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19' }).data).toEqual(['standard'])
     expect(mocks.standard).toHaveBeenCalledWith({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19', enabled: true }, marca === 'We Scale' ? undefined : expect.any(Function))
     expect(mocks.scoped.mock.calls[0][2]).toBe(false)

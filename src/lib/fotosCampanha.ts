@@ -8,8 +8,8 @@ const FOTOS: Record<string, string> = {
   'Sarah Padilha': '/assets/campanha-ufc/sarah.png',
   'Thiago': '/assets/campanha-ufc/thiago.png',
   'Xayane': '/assets/campanha-ufc/xayane.png',
-  'Cassiana': '/assets/campanha-ufc/cassiana.png',
-  'Thaina': '/assets/campanha-ufc/thaina.png',
+  'Cassiana Lavall': '/assets/campanha-ufc/cassiana.png',
+  'Thaina Freitas': '/assets/campanha-ufc/thaina.png',
 }
 
 export function fotoCampanha(nome: string, fotoAtual?: string): string | undefined {

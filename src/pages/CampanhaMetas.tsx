@@ -25,10 +25,11 @@ import {
   type VoltaDef,
 } from '@/constants/metasCampanhaF1'
 
-// Ordem canônica das marcas na seção "Metas por Marca" (mesmo recorte que a
-// seção sempre teve — sem Odonto Scale, que não é franquia).
-const MARCAS_FRANQUIA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 'Eletrovias'] as const
+// Ordem canônica das marcas na seção "Metas por Marca". Valor canônico do banco
+// (`BRAND_LIST[].marca`): Odonto Legacy é 'Odonto Scale' — o rótulo vem de marcaLabel.
+const MARCAS_CAMPANHA = ['Oral Unic', 'Lisô Laser', 'Inpot', 'B2Case', 'Viva', 'Eletrovias', 'Odonto Scale'] as const
 import { money, pct, nf, nfCeil } from '@/lib/format'
+import { marcaLabel } from '@/constants/brands'
 import { OctagonFightCard } from '@/components/octogono/OctagonArena'
 import { rankingOctogono } from '@/lib/octogono'
 import { fotoCampanha } from '@/lib/fotosCampanha'
@@ -44,6 +45,7 @@ const MARCA_COR: Record<string, string> = {
   'Lisô Laser': '#FF6643',
   'B2Case':     '#0169F2',
   'Viva':       '#FF0069',
+  'Odonto Scale': '#0EA5E9',
 }
 
 function moneyCompact(n: number): string {
@@ -1315,7 +1317,7 @@ function MetasMarcaSection({ mes }: { mes: string }) {
   const loading = loadingMetas || loadingReal
 
   const linhas = useMemo(() => {
-    return MARCAS_FRANQUIA.map(marca => {
+    return MARCAS_CAMPANHA.map(marca => {
       const meta = metasMap.get(marca)
       const real = realizadoMap.get(marca)
       const metaQtd = meta?.metaQtd ?? 0
@@ -1364,7 +1366,7 @@ function MetasMarcaSection({ mes }: { mes: string }) {
             <tbody>
               {linhas.map(l => (
                 <tr key={l.marca} style={{ borderTop: '1px solid var(--ws-border)' }}>
-                  <td style={{ ...tdMarca, borderLeft: `3px solid ${l.cor}`, paddingLeft: 20, fontWeight: 500 }}>{l.marca}</td>
+                  <td style={{ ...tdMarca, borderLeft: `3px solid ${l.cor}`, paddingLeft: 20, fontWeight: 500 }}>{marcaLabel(l.marca)}</td>
                   <td style={{ ...tdMarca, textAlign: 'right' }}>{l.metaQtd}</td>
                   <td style={{ ...tdMarca, textAlign: 'right' }}>{loading ? '—' : l.realQtd}</td>
                   <td style={{ ...tdMarca, textAlign: 'right' }}>{money(l.metaFat)}</td>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { normalizeMarcaRaw } from '@/constants/brands'
 import { saleUnits } from '@/lib/metrics'
 
 /**
@@ -49,11 +50,14 @@ async function fetchRealizado(mesReferencia: string): Promise<{ rows: RawWin[]; 
 function aggregate(rows: RawWin[]): Map<string, RealizadoMarca> {
   const map = new Map<string, RealizadoMarca>()
   for (const r of rows) {
-    if (!r.marca) continue
-    const cur = map.get(r.marca) ?? { marca: r.marca, qtd: 0, faturamento: 0 }
+    // Normaliza alias ('Odonto Legacy' → 'Odonto Scale'): as vendas vêm com o
+    // nome novo do RD e as metas com o canônico — sem isso não se encontram.
+    const marca = normalizeMarcaRaw(r.marca)
+    if (!marca) continue
+    const cur = map.get(marca) ?? { marca, qtd: 0, faturamento: 0 }
     cur.qtd += saleUnits(r) // null/0 = venda sem produto no RD, conta 1 unidade
     cur.faturamento += Number(r.valor_contrato) || 0
-    map.set(r.marca, cur)
+    map.set(marca, cur)
   }
   return map
 }

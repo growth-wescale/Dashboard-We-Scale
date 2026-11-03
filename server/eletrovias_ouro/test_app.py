@@ -109,3 +109,38 @@ class Tests(unittest.TestCase):
   self.assertEqual(c.queries,[])
 
 if __name__=='__main__':unittest.main()
+
+class DealTests(unittest.TestCase):
+ def rows(self):
+  return [dict(conta_id='wescale_principal_crm',negocio_id=i,marca='Eletrovias',
+   data_criacao_original=date,elegivel_kpi=eligible,nome_funil=funnel,status_atual=status)
+   for i,date,eligible,funnel,status in [
+    ('start','2026-10-01T01:00:00+00:00',True,'SDR','Aberto'),
+    ('sdr','2026-10-10T12:00:00+00:00',True,'SDR','Perdido'),
+    ('closer','2026-10-10T12:00:00+00:00',True,'Closer','Ganho'),
+    ('6adbb24ffe6c3900293048dc','2026-10-10T12:00:00+00:00',False,'SDR','Perdido'),
+    ('end','2026-11-01T01:00:00+00:00',True,'Closer','Aberto')]]
+ def test_default_never_reads_new_view(self):
+  s=Service({'mode':'ouro'},connect=lambda:None,request_json=auth)
+  self.assertNotIn('negocios',s.queries)
+  with self.assertRaises(GatewayError):s.read({'dataset':'negocios','route':'/'},'token')
+ def test_approved_brasilia_boundaries_and_only_three_explicit_tests(self):
+  from app import prepare_deals
+  source=self.rows()+[dict(self.rows()[1],negocio_id='other-ineligible',elegivel_kpi=False)]
+  rows,_=prepare_deals(source)
+  self.assertEqual([r['dados_extras']['id_deal'] for r in rows],['sdr','closer','end','other-ineligible'])
+  self.assertTrue(all(r['email'] is None and r['nome'] is None for r in rows))
+  self.assertTrue(all(r['utm_source'] is None for r in rows))
+  self.assertEqual(rows[2]['dia'],'2026-10-31')
+ def test_negocios_readonly_and_missing_contact_is_retained(self):
+  c=Connection(self.rows())
+  s=Service({'mode':'ouro','negocios_enabled':True},connect=lambda:c,request_json=auth)
+  reply=s.read({'dataset':'negocios','route':'/sop-marketing'},'token')
+  self.assertEqual(reply['contract'],'eletrovias_negocios_v1')
+  self.assertEqual(len(reply['rows']),3)
+  self.assertIn('READ ONLY',c.queries[0])
+  self.assertIn('ouro.vw_eletrovias_dashboard_negocios',c.queries[-1])
+ def test_duplicate_and_other_brand_cannot_enter(self):
+  from app import prepare_deals
+  for rows in [[self.rows()[0]]*2,[dict(self.rows()[0],marca='Oral Unic')],[dict(self.rows()[0],data_criacao_original='2026-10-10')]]:
+   with self.assertRaises(GatewayError):prepare_deals(rows)

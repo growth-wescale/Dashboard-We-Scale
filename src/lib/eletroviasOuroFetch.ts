@@ -12,6 +12,7 @@ interface Options {
   fetch?: typeof fetch
   referenceFetch?: typeof fetch
   enabled?: boolean
+  dealsEnabled?: boolean
 }
 // Não guarda sessão nem dados pessoais em armazenamento persistente.
 export function createEletroviasOuroFetch(options: Options): typeof fetch {
@@ -21,6 +22,25 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
   const legacyCache = new Map<string, { at: number; value: Promise<RecordRow[]> }>()
   let currentToken: string | null = null
   if (typeof window !== 'undefined') window.addEventListener('dashboard:refresh', () => { goldCache.clear(); legacyCache.clear() })
+  async function getGold(dataset: string, route: string, token: string): Promise<GoldReply> {
+    const goldKey = `${route}:${dataset}`
+    let goldEntry = goldCache.get(goldKey)
+    if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
+      const value = (async () => {
+        const response = await nativeFetch('/api/eletrovias-ouro/v1/read', {
+          method: 'POST', signal: AbortSignal.timeout(60_000),
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: dataset, route }),
+        })
+        if (!response.ok) throw new Error('Não foi possível consultar a ouro de Eletrovias. Atualize os dados para tentar novamente.')
+        return await response.json() as GoldReply
+      })()
+      goldEntry = { at: Infinity, value }; goldCache.set(goldKey, goldEntry)
+      value.then(() => { const e = goldCache.get(goldKey); if (e?.value === value) e.at = Date.now() }, () => {})
+      value.catch(() => { if (goldCache.get(goldKey)?.value === value) goldCache.delete(goldKey) })
+    }
+    return await goldEntry.value
+  }
   return async (input, init) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
@@ -43,23 +63,7 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     const token = await options.token()
     if (!token) throw new Error('Entre novamente para consultar Eletrovias.')
     if (token !== currentToken) { goldCache.clear(); legacyCache.clear(); currentToken = token }
-    const goldKey = `${route}:${config.dataset}`
-    let goldEntry = goldCache.get(goldKey)
-    if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
-      const value = (async () => {
-        const response = await nativeFetch('/api/eletrovias-ouro/v1/read', {
-          method: 'POST', signal: AbortSignal.timeout(60_000),
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dataset: config.dataset, route }),
-        })
-        if (!response.ok) throw new Error('Não foi possível consultar a ouro de Eletrovias. Atualize os dados para tentar novamente.')
-        return await response.json() as GoldReply
-      })()
-      goldEntry = { at: Infinity, value }; goldCache.set(goldKey, goldEntry)
-      value.then(() => { const e = goldCache.get(goldKey); if (e?.value === value) e.at = Date.now() }, () => {})
-      value.catch(() => { if (goldCache.get(goldKey)?.value === value) goldCache.delete(goldKey) })
-    }
-    const reply = await goldEntry.value
+    const reply = await getGold(config.dataset, route, token)
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     if (reply.mode === 'legacy') return referenceFetch(input, init)
     if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || reply.contract !== 'eletrovias_marketing_v1') throw new Error('Contrato de Eletrovias inválido.')
@@ -101,7 +105,36 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     const scoped = (r: RecordRow) => inEletroviasWindow(r) && (table === 'leads' ? isEletroviasMigrationLead(r) : isEletroviasMigrationMedia(r))
     if (reply.rows.some(r => !scoped(r))) throw new Error('Escopo Eletrovias inválido.')
-    const merged = sortRows([...rows.filter(r => !scoped(r)), ...filterRows(reply.rows, requested)], requested.get('order'))
+    let goldRows = reply.rows
+    if (table === 'leads' && options.dealsEnabled) {
+      const deals = await getGold('negocios', route, token)
+      if (deals.mode !== 'ouro' || deals.contract !== 'eletrovias_negocios_v1' || !Array.isArray(deals.rows)) throw new Error('Contrato de negociações de Eletrovias inválido.')
+      const ids = new Set<string>()
+      for (const row of deals.rows) {
+        const data = row.dados_extras as Record<string, unknown> | null
+        const key = JSON.stringify([data?.conta_id, data?.id_deal])
+        if (!scoped(row) || data?.metric_grain !== 'crm_deal' || data?.conta_id !== 'wescale_principal_crm'
+          || typeof data?.id_deal !== 'string' || !data.id_deal || ids.has(key)) throw new Error('Escopo de negociações de Eletrovias inválido.')
+        ids.add(key)
+      }
+      const profiles = new Map<unknown, RecordRow>()
+      for (const row of reply.rows) {
+        const id = (row.dados_extras as Record<string, unknown> | null)?.id_deal
+        if (id && !profiles.has(id)) profiles.set(id, row)
+      }
+      const metricRows = deals.rows.map(row => {
+        const data = row.dados_extras as Record<string, unknown>
+        const profile = profiles.get(data.id_deal)
+        if (!profile) return row
+        return { ...row,
+          ...Object.fromEntries(['nome', 'email', 'telefone', 'uf', 'cidade', 'formulario'].map(field => [field, profile[field] ?? null])),
+          dados_extras: { ...data, capital: (profile.dados_extras as Record<string, unknown> | null)?.capital ?? null },
+        }
+      })
+      // Contact rows remain available to contact metrics; LP submissions never add MQLs.
+      goldRows = [...reply.rows.map(row => ({ ...row, dados_extras: { ...(row.dados_extras as object ?? {}), metric_grain: 'contact_only' } })), ...metricRows]
+    }
+    const merged = sortRows([...rows.filter(r => !scoped(r)), ...filterRows(goldRows, requested)], requested.get('order'))
     const offset = Number(requested.get('offset') ?? 0), limit = Number(requested.get('limit') ?? merged.length)
     if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(limit) || offset < 0 || limit < 0) throw new Error('Página de dados inválida.')
     const page = projectRows(merged.slice(offset, offset + limit), select)

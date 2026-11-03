@@ -1,6 +1,6 @@
 import { daysInMonth, toLocalDate } from './dateUtils'
 import { saleUnits } from './metrics'
-import { deduplicateLeads, isLeadMql } from './leadUtils'
+import { marketingMqlRows } from './leadUtils'
 import type { Lead } from './types'
 
 export const MISSAO = { anual: 4_932_000, trimestre: 2_068_360, inicio: '2026-10-01', fim: '2026-12-31' } as const
@@ -54,7 +54,7 @@ export const TAXAS_FUNIL_MISSAO: Readonly<Record<string, { mqlSql: number; sqlSa
 export function captacaoMissao(dados: DadosMissao, marca: string) {
   const inicio = dados.hoje.slice(0, 7) + '-01'
   const leads = (dados.leads ?? []).filter(r => r.marca === marca && r.dia >= inicio && r.dia <= dados.hoje)
-  const mql = deduplicateLeads(leads).filter(isLeadMql).length
+  const mql = marketingMqlRows(leads).length
   const metaMql = funilInversoMissao(dados.metas, marca, inicio).mql
   const investimento = FRENTES_MISSAO.find(f => f.marca === marca)?.investimento ?? 0
   const gasto = pacingMissao(dados.midia, marca, investimento, dados.hoje).gasto

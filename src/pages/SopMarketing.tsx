@@ -26,7 +26,7 @@ import { fmtBR } from '@/lib/dateUtils'
 import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
-import { deduplicateLeads, isLeadMql } from '@/lib/leadUtils'
+import { deduplicateLeads, isLeadMql, marketingMqlRows, isMarketingDeal } from '@/lib/leadUtils'
 import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
 import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
@@ -994,7 +994,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     const wLeads = filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= w.start && l.dia <= w.end)))
     const invest = wMedia.reduce((s, r) => s + r.spend_brl, 0)
     const leads  = wLeads.length
-    const mql    = wLeads.filter(isLeadMql).length
+    const mql    = filterLeads(marketingMqlRows(allLeads.filter(l => l.dia >= w.start && l.dia <= w.end))).length
     return { invest, leads, mql, cpmql: mql > 0 ? invest / mql : 0 }
   }), [activeMedia, allLeads, effectiveWeeks, filterLeads])
 
@@ -1152,8 +1152,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const mtdPrevInvest = useMemo(() => activePrevMedia.reduce((s, r) => s + r.spend_brl, 0), [activePrevMedia])
 
   const mtdLeadsCnt = mtdLeads.length
-  const mtdMql      = mtdLeads.filter(isLeadMql).length
-  const mtdPrevMql  = mtdPrevLeads.filter(isLeadMql).length
+  const mtdMql      = filterLeads(marketingMqlRows(allLeads.filter(l => l.dia >= mtdCurStart))).length
+  const mtdPrevMql  = filterLeads(marketingMqlRows(prevLeads)).length
   const mtdPrevLeadsCnt = mtdPrevLeads.length
 
   const funnelMtd  = useMemo(() => buildFunnel(crmCur, sqlEvents, mtdCurStart, mtdCurEnd), [crmCur, sqlEvents, mtdCurStart, mtdCurEnd])
@@ -1165,17 +1165,17 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     return sopComparisonEnd(dates.monthStart.slice(0, 7), dates.isClosed, dates.mtdCurEnd)
   }, [dates.isClosed, dates.monthStart, dates.mtdCurEnd])
 
-  const chartCurLeads = useMemo(
-    () => filterLeads(deduplicateLeads(allLeads.filter(l => l.dia >= mtdCurStart && l.dia <= chartCurEnd))),
+  const chartCurMqlRows = useMemo(
+    () => filterLeads(marketingMqlRows(allLeads.filter(l => l.dia >= mtdCurStart && l.dia <= chartCurEnd))),
     [allLeads, mtdCurStart, chartCurEnd, filterLeads],
   )
-  const chartPrevLeads = useMemo(
-    () => filterLeads(deduplicateLeads(prevLeads.filter(l => l.dia >= compareRange.start && l.dia <= compareRange.end))),
+  const chartPrevMqlRows = useMemo(
+    () => filterLeads(marketingMqlRows(prevLeads.filter(l => l.dia >= compareRange.start && l.dia <= compareRange.end))),
     [prevLeads, compareRange.start, compareRange.end, filterLeads],
   )
 
-  const chartCurMql  = chartCurLeads.filter(isLeadMql).length
-  const chartPrevMql = chartPrevLeads.filter(isLeadMql).length
+  const chartCurMql  = chartCurMqlRows.length
+  const chartPrevMql = chartPrevMqlRows.length
 
   const chartFunnelCur  = useMemo(
     () => buildFunnel(crmCur, sqlEvents, mtdCurStart, chartCurEnd),
@@ -1420,9 +1420,9 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
       for (const l of leads.filter(isLeadMql)) {
         const raw = l.dados_extras?.['capital'] ?? l.dados_extras?.['capital_disponivel']
         const vazio = typeof raw !== 'string' || raw.trim() === ''
-        if (vazio && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
+        if (vazio && !isMarketingDeal(l) && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
         const b = parseCapital(typeof raw === 'string' ? raw : '')
-        if (b.kind === 'unknown' && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
+        if (b.kind === 'unknown' && !isMarketingDeal(l) && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
         const k = vazio ? 'sem-capital' : b.kind === 'unknown' ? 'capital-nao-reconhecido' : bucketKey(b)
         const prev = acc.get(k)
         if (prev) prev.count += 1
@@ -1430,8 +1430,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
       }
       return acc
     }
-    const cur  = collect(chartCurLeads)
-    const prev = collect(chartPrevLeads)
+    const cur  = collect(chartCurMqlRows)
+    const prev = collect(chartPrevMqlRows)
     const keys = new Set<string>([...cur.keys(), ...prev.keys()])
     const rows: { label: string; sort: number; cur: number; prev: number }[] = []
     keys.forEach(k => {
@@ -1440,7 +1440,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     })
     rows.sort((a, b) => a.sort - b.sort)
     return rows.map(({ label, cur: c, prev: p }) => ({ label, cur: c, prev: p }))
-  }, [chartCurLeads, chartPrevLeads, isOdontoLegacy, slide.id])
+  }, [chartCurMqlRows, chartPrevMqlRows, isOdontoLegacy, slide.id])
 
   // ── Funnel stages ─────────────────────────────────────────────────────────────
   // Fechado: usa override manual quando existir (RD Marketing não popula

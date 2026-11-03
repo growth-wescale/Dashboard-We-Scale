@@ -46,3 +46,29 @@ describe('Eletrovias isolada em Marketing', () => {
   await expect(s.read(`${origin}/rest/v1/leads`)).rejects.toThrow('Contrato')
  })
 })
+
+describe('dataset de negociações opt-in', () => {
+ it.each([...ELETROVIAS_MARKETING_ROUTES])('mesma composição em %s, sem alterar contatos, mídia ou outras marcas',async route=>{
+  const contact={...lead('gold'),email:'real@example.test',dados_extras:{lead_type:'MQL',id_deal:'crm'}}
+  const deal={...lead('deal'),email:null,dados_extras:{metric_grain:'crm_deal',conta_id:'wescale_principal_crm',id_deal:'crm'}}
+  const s=setup(route)
+  s.fetch.mockImplementation(async(_input?:unknown,init?:RequestInit)=>{
+   const dataset=JSON.parse(String(init?.body)).dataset
+   return new Response(JSON.stringify({mode:'ouro',contract:dataset==='negocios'?'eletrovias_negocios_v1':'eletrovias_marketing_v1',rows:dataset==='negocios'?[deal]:[contact]}))
+  })
+  const read=createEletroviasOuroFetch({origin,route:()=>route,token:s.token,fetch:s.fetch,referenceFetch:s.referenceFetch,dealsEnabled:true})
+  const data=await(await read(`${origin}/rest/v1/leads?order=id.asc`)).json()
+  expect(data.filter((r:{marca:string;dia:string})=>r.marca!=='Eletrovias'||r.dia<'2026-10-01')).toEqual(reference.filter(r=>!['capture','import'].includes(r.id)).sort((a,b)=>a.id.localeCompare(b.id)))
+  expect(data.find((r:{id:string})=>r.id==='gold')).toEqual({...contact,dados_extras:{...contact.dados_extras,metric_grain:'contact_only'}})
+  expect(data.find((r:{id:string})=>r.id==='deal').email).toBe('real@example.test')
+  expect(contact.dados_extras).not.toHaveProperty('metric_grain')
+  const page=await(await read(`${origin}/rest/v1/leads?marca=eq.Eletrovias&order=id.asc&limit=1&offset=1`)).json()
+  expect(page.map((r:{id:string})=>r.id)).toEqual(['gold'])
+ })
+ it('não usa contagem antiga quando o dataset de negócios falha',async()=>{
+  const s=setup();let calls=0
+  s.fetch.mockImplementation(async()=>new Response(JSON.stringify(++calls===1?{mode:'ouro',contract:'eletrovias_marketing_v1',rows:[lead('gold')]}:{mode:'legacy'})))
+  const read=createEletroviasOuroFetch({origin,route:()=> '/',token:s.token,fetch:s.fetch,referenceFetch:s.referenceFetch,dealsEnabled:true})
+  await expect(read(`${origin}/rest/v1/leads`)).rejects.toThrow('Contrato de negociações')
+ })
+})

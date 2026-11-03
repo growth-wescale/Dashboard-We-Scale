@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Lead, BaselineFunil } from '@/lib/types'
-import { isLeadMql, deduplicateLeads } from '@/lib/leadUtils'
+import { marketingMqlRows } from '@/lib/leadUtils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,7 +80,7 @@ function computePacing(
 
   // MTD leads para esta marca
   const brandLeads = allLeads.filter(l => l.marca === marca)
-  const mqls = deduplicateLeads(brandLeads.filter(isLeadMql))
+  const mqls = marketingMqlRows(brandLeads, true)
   const mtdMqls = mqls.length
 
   // breakdown diário (deduplicado — igual aos KPI tiles)

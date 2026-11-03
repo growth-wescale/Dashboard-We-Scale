@@ -13,7 +13,6 @@ import { useMarketingMediaData as useMediaData } from '@/hooks/useMediaData'
 import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useSopVendasFunil as useVendasFunil } from '@/hooks/useSopVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
-import { useParticipantesPartner, type ParticipantePartner } from '@/hooks/useParticipantesPartner'
 import { useSopScalePartnerSales } from '@/hooks/useSopScalePartnerSales'
 import { beautyOuroEnabled, useBeautyInscricoes } from '@/hooks/useBeautyInscricoes'
 import { beautyInscricoesNoPeriodo } from '@/lib/beautyInscricoes'
@@ -33,6 +32,7 @@ import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
 import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
+import { PartnerComparativo } from '@/components/sop/PartnerComparativo'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
 import { COMUNIDADE_LEGACY_ATUAL, COMUNIDADE_LEGACY_OUTUBRO, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getWeScaleSop } from '@/constants/weScaleSop'
@@ -835,11 +835,12 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const usarReceita = isOdontoLegacy && legacyOuroEnabled && dates.mtdCurEnd >= '2026-01-01'
   const receitaOuro = useReceitaLegacy(usarReceita)
   const partnerFechamento = isWeScale ? getPartnerFechamento(dates.mtdCurStart, dates.mtdCurEnd, filterFonte) : null
+  const weScaleSnapshot = isWeScale ? getWeScaleSop(dates.monthStart.slice(0, 7)) : null
+  const lerIndicadores = !partnerFechamento && !weScaleSnapshot
   const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
   const beautyRes = useBeautyInscricoes(beautyEnabled)
   const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
-  const presencas = useParticipantesPartner(isWeScale)
-  const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale })
+  const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale && lerIndicadores })
   const partnerSales = useMemo(() => partnerSalesInPeriod(partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte), [partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte])
   const partnerRevenue = partnerSales.reduce((total, sale) => total + (sale.valor_contrato ?? 0), 0)
 
@@ -861,16 +862,16 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const prevRangeEnd   = isOdontoLegacy ? mtdPrevEnd   : compareRange.end
 
   const partnerReadStart = isWeScale && mtdCurStart < dates.fiveWeeksStart ? mtdCurStart : dates.fiveWeeksStart
-  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: partnerReadStart, dataFim: mtdCurEnd })
-  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const mediaAllStd    = useMediaData({ marca: slide.marca, dataInicio: partnerReadStart, dataFim: mtdCurEnd, enabled: lerIndicadores })
+  const mediaPrevStd   = useMediaData({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd, enabled: !isWeScale })
   const mediaAllOdl    = useMediaOdontoLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
   const mediaPrevOdl   = useMediaOdontoLegacy({ dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
   const allMedia  = isOdontoLegacy ? mediaAllOdl.data  : mediaAllStd.data
   const prevMedia = isOdontoLegacy ? mediaPrevOdl.data : mediaPrevStd.data
-  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: partnerReadStart, dataFim: mtdCurEnd })
-  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
-  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd })
-  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd })
+  const leadsAll   = useLeads({ marca: slide.marca, dataInicio: partnerReadStart, dataFim: mtdCurEnd, enabled: lerIndicadores })
+  const leadsPrev  = useLeads({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd, enabled: !isWeScale })
+  const crmCurRes  = useVendasFunil({ marca: slide.marca, dataInicio: mtdCurStart,    dataFim: mtdCurEnd, enabled: !isWeScale })
+  const crmPrevRes = useVendasFunil({ marca: slide.marca, dataInicio: prevRangeStart,   dataFim: prevRangeEnd, enabled: !isWeScale })
 
   // Odonto Legacy: "semana atual" = MTD completo (Set 01 → hoje), "semana ant" = Ago fechado.
   const latestWeek = dates.weeks.at(-1)!
@@ -880,10 +881,10 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const weekPriorStart = isOdontoLegacy ? mtdPrevStart  : priorWeek.start
   const weekPriorEnd   = isOdontoLegacy ? mtdPrevEnd    : priorWeek.end
 
-  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: weekCurStart,   dataFim: weekCurEnd })
-  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
+  const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: weekCurStart,   dataFim: weekCurEnd, enabled: !isWeScale })
+  const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd, enabled: !isWeScale })
   // The all-history dataset only supplies Legacy revenue before gold coverage.
-  const precisaHistorico = isWeScale || (isOdontoLegacy && (!usarReceita || dates.monthStart < '2026-01-01'))
+  const precisaHistorico = isOdontoLegacy && (!usarReceita || dates.monthStart < '2026-01-01')
   const crmAllRes = useVendasFunil({ marca: slide.marca, enabled: precisaHistorico })
   const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
   const sqlEventsStart = [dates.fiveWeeksStart, prevRangeStart].sort()[0]
@@ -947,10 +948,10 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !receitaOuro.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !presencas.loading && !beautyRes.loading && !beautyMarketing.loading
+    !receitaOuro.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || presencas.error || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
-  }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, presencas.error, partnerReadError, beautyRes.error, beautyMarketing.error])
+    if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
+  }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, partnerReadError, beautyRes.error, beautyMarketing.error])
 
   const applyF = useCallback((rows: LinhaFunilSop[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -1230,7 +1231,6 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const receitaMtd   = useMemo(() => somaGanhos(rawCrmAll, dates.monthStart, mtdCurEnd, '__all__'),   [somaGanhos, rawCrmAll, dates.monthStart, mtdCurEnd])
 
   const monthKeyCur    = dates.monthStart.slice(0, 7)
-  const weScaleSnapshot = getWeScaleSop(monthKeyCur)
   const metaReceita    = getMetaReceitaLegacy(monthKeyCur).meta_receita
   const pctReceita     = metaReceita > 0 ? Math.round((receitaMtd / metaReceita) * 100) : null
   const [mesLblY, mesLblM] = monthKeyCur.split('-').map(Number)
@@ -1637,7 +1637,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
             fontSize: 9, fontWeight: 700, letterSpacing: '0.11em',
             color: 'var(--status-positivo)', textTransform: 'uppercase', whiteSpace: 'nowrap',
           }}>
-            {partnerFechamento ? 'Período' : 'Mês'} · {dates.mtdLabel}
+            {isWeScale ? 'Comparativo histórico de Partner · 2026' : `Mês · ${dates.mtdLabel}`}
           </div>
           <div style={{ flex: 1, height: 1, background: 'var(--ws-border)' }} />
         </div>
@@ -1645,15 +1645,16 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         {/* Grid: 3 cols (MTD) | 2 cols equal (fechado) | 2 cols (We Scale — sem MTD comparativo) */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isWeScale ? '1fr 1.4fr' : '1fr 1fr 1.4fr',
+          gridTemplateColumns: isWeScale ? 'repeat(2, minmax(0, 1fr))' : '1fr 1fr 1.4fr',
           gap: 14, flex: 1, minHeight: 0,
         }}>
 
+        {isWeScale ? <PartnerComparativo /> : <>
         {/* Col 1: MQL semanal + CP-MQL
              Odonto Legacy: chart cumulativo MTD com seletor MQL/Membros/Custo/membro +
              tabela do funil abaixo. Card fica scrollável se os dois não couberem
              de uma vez, e o chart tem piso de altura pra não achatar. */}
-        <div style={(isOdontoLegacy || isWeScale) ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
+        <div style={isOdontoLegacy ? { ...cardStyle, overflowY: 'auto' } : cardStyle}>
           <div style={{ marginBottom: 6 }}>
             <div style={colTitle(acc)}>
               {isOdontoLegacy ? 'Comparativo MTD · cumulativo' : 'MQL Semanal'}
@@ -1691,13 +1692,13 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
               )
             })() : (
               <WeeklyBarChart
-                values={isWeScale && weScaleSnapshot ? weScaleSnapshot.semanas.map(s => s.mql) : weeklyData.map(w => w.mql)}
-                labels={isWeScale && weScaleSnapshot ? weScaleSnapshot.semanas.map(s => s.label) : effectiveWeeks.map(w => w.label)}
+                values={weeklyData.map(w => w.mql)}
+                labels={effectiveWeeks.map(w => w.label)}
                 accent={acc}
               />
             )}
           </div>
-          {!isOdontoLegacy && !isWeScale && (
+          {!isOdontoLegacy && (
             <div style={{ marginTop: 14 }}>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 4 }}>
                 CP-MQL
@@ -1705,45 +1706,6 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
               <div style={{ height: 110 }}>
                 <SparkLine values={weeklyData.map(w => w.cpmql)} accent={acc} />
               </div>
-            </div>
-          )}
-          {isWeScale && weScaleSnapshot && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span>Funil Scale Partner — {weScaleSnapshot.mtd.periodo}</span>
-                <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
-                  snapshot {weScaleSnapshot.ate}
-                </span>
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <thead>
-                  <tr style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase' }}>
-                    <th style={{ textAlign: 'left', padding: '0 0 4px', borderBottom: '1px solid var(--ws-border)' }}>Etapa</th>
-                    <th style={{ textAlign: 'right', padding: '0 0 4px', borderBottom: '1px solid var(--ws-border)' }}>Ativos</th>
-                    <th style={{ textAlign: 'right', padding: '0 0 4px 8px', borderBottom: '1px solid var(--ws-border)' }}>Perdidos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {([
-                    { label: 'Novo MQL',             ativos: 0,  perdidos: 12 },
-                    { label: 'Tentando Contato',     ativos: 22, perdidos: 9  },
-                    { label: 'Contato Efetivo',      ativos: 3,  perdidos: 1  },
-                    { label: 'Interesse Reunião',    ativos: 2,  perdidos: 0  },
-                    { label: 'Reunião Agendada SQL', ativos: 3,  perdidos: 0  },
-                  ] as const).map(row => (
-                    <tr key={row.label} style={{ borderTop: '1px solid var(--ws-border)' }}>
-                      <td style={{ padding: '5px 0', color: 'var(--ws-text-primary)' }}>{row.label}</td>
-                      <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: acc }}>{row.ativos > 0 ? row.ativos : '—'}</td>
-                      <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--ws-text-secondary)' }}>{row.perdidos > 0 ? `-${row.perdidos}` : '—'}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ borderTop: '2px solid var(--ws-border)' }}>
-                    <td style={{ padding: '5px 0', fontWeight: 700, color: 'var(--ws-text-primary)' }}>Total</td>
-                    <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: acc }}>30</td>
-                    <td style={{ padding: '5px 0 5px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--ws-text-secondary)' }}>-22</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           )}
           {isOdontoLegacy && (
@@ -1786,8 +1748,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
           )}
         </div>
 
-        {/* Col 2: MTD comparativo — oculto para We Scale (usa layout 2 colunas) */}
-        {!isWeScale && (
+        {/* Col 2: MTD comparativo */}
         <div style={{ ...cardStyle, overflowY: 'auto' }}>
           <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={colTitle(acc)}>{compareRange.label} MTD vs {dates.mtdLabel} MTD</div>
@@ -1897,14 +1858,10 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
             </div>
           )}
         </div>
-        )}
 
-        {/* Col 3: Taxas de conversão — para Odonto Legacy widget da comunidade; para We Scale participantes do evento */}
+        {/* Col 3: Taxas de conversão ou comunidade Legacy */}
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={monthKeyCur === '2026-10' ? COMUNIDADE_LEGACY_OUTUBRO : COMUNIDADE_LEGACY_ATUAL} accent={acc} />
-        ) : isWeScale ? (
-          <PartnerParticipantes participantes={presencas.data.filter(p => p.dia >= dates.mtdCurStart && p.dia <= dates.mtdCurEnd)}
-            accent={acc} loading={presencas.loading} error={presencas.error} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
@@ -1916,6 +1873,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
             />
           </div>
         )}
+        </>}
       </div>
 
         {/* ── Horizontal Waterfall Funnel — oculto para Odonto Legacy (receita) e We Scale (Eventos sem deals ainda) ── */}
@@ -1957,26 +1915,6 @@ function colTitle(accent: string): React.CSSProperties {
   return { fontSize: 14, fontWeight: 700, color: accent, marginBottom: 2, letterSpacing: '-0.01em' }
 }
 
-
-function PartnerParticipantes({ participantes, accent, loading, error }: {
-  participantes: ParticipantePartner[]; accent: string; loading: boolean; error: string | null
-}) {
-  return (
-    <div style={cardStyle}>
-      <div style={colTitle(accent)}>Participantes do evento Scale Partner</div>
-      {loading ? <p>Carregando participantes…</p> : error ? <p role="alert">{error}</p> :
-        <table style={{ width: '100%', textAlign: 'left', fontSize: 12, borderCollapse: 'collapse' }}>
-          <caption style={{ textAlign: 'left', padding: '8px 0' }}>{participantes.length} participantes · pagamentos no período · todos os canais</caption>
-          <thead><tr><th>Participante</th><th>Pagamento</th><th>Valor</th></tr></thead>
-          <tbody>{participantes.map(p => <tr key={p.dia + p.participante} style={{ borderTop: '1px solid #e2e8f0' }}>
-            <td style={{ padding: '6px 4px 6px 0', overflowWrap: 'anywhere' }}>{p.participante}</td>
-            <td>{fmtBR(p.dia)}</td>
-            <td>{p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-          </tr>)}</tbody>
-        </table>}
-    </div>
-  )
-}
 
 // ── ConversaoFunilTable — taxas de conversão entre etapas (MTD atual vs mês anterior) ─
 interface ConversaoFunilTableProps {

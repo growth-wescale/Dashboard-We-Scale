@@ -122,3 +122,14 @@ a:hover { color: var(--ws-vinho-a); text-decoration: underline; }
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* Indicador "Ao vivo" das abas de Vendas (AoVivoIndicador). */
+@keyframes aoVivoPulso {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-positivo) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.ao-vivo-ponto--pulsando { animation: aoVivoPulso 2.4s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ao-vivo-ponto--pulsando { animation: none; }
+}

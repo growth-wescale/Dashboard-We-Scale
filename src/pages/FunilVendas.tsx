@@ -5,6 +5,7 @@ import { MetricCard } from '@/components/ui/MetricCard'
 import { Badge } from '@/components/ui/Badge'
 import { PageTop } from '@/components/ui/PageTop'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
+import { AoVivoIndicador } from '@/components/ui/AoVivoIndicador'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
@@ -816,7 +817,8 @@ export function FunilVendas() {
         title="Visão Macro"
         titleAside={<OrigemToggle />}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        actions={
+        actions={<>
+          <AoVivoIndicador comEtapas />
           <button
             onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `visao-macro-${marcasSelecionadas.map(b => b.key).join('-') || 'todas'}-${range.start}-${range.end}`)}
             disabled={!scoped.length}
@@ -825,7 +827,7 @@ export function FunilVendas() {
           >
             <Download size={14} /> Exportar
           </button>
-        }
+        </>}
       />
 
       <FilterBar

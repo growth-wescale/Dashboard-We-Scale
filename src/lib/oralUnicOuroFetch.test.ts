@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createOralUnicOuroFetch, ORAL_UNIC_MARKETING_ROUTES } from './oralUnicOuroFetch'
+import { marketingMqlRows, deduplicateLeads } from './leadUtils'
 import { filterRows } from './partnerOuroQuery'
 import { isOralUnicFranchiseLead } from './oralUnicOuroScope'
 const origin = 'https://marketing.test'
@@ -12,6 +13,26 @@ function setup(route = '/', rows = [lead('gold', undefined, undefined, null, { s
  return { referenceFetch, fetch, token, read: createOralUnicOuroFetch({ origin, route: () => route, fetch, referenceFetch, token }) }
 }
 describe('Oral Unic isolada em Marketing', () => {
+ it('conta negociações da mesma pessoa e sem contato, preservando contatos, LP, comunidade e paginação',async()=>{
+  const contact={...lead('contact',undefined,undefined,null,{segmento:'oral-unic',lead_type:'MQL'}),email:'same@example.test'}
+  const metric=(id:string,email:string|null)=>({...contact,id,email,dados_extras:{segmento:'oral-unic',metric_grain:'crm_deal',conta_id:'wescale_principal_crm',id_deal:id}})
+  const metrics=[metric('deal-a',contact.email),metric('deal-b',contact.email),metric('deal-missing',null)]
+  const s=setup('/',[contact]);s.fetch.mockImplementation(async()=>new Response(JSON.stringify({mode:'ouro',contract:'oral_unic_marketing_v1',rows:[contact],metric_rows:metrics})))
+  const rows=await(await s.read(`${origin}/rest/v1/leads?marca=eq.Oral%20Unic&order=id.asc`)).json()
+  expect(marketingMqlRows(rows).map(r=>r.id)).toEqual(['deal-a','deal-b','deal-missing'])
+  expect(deduplicateLeads(rows).map(r=>r.id)).toEqual(['cof','community','contact','history'])
+  const page=await(await s.read(`${origin}/rest/v1/leads?marca=eq.Oral%20Unic&order=id.asc&offset=3&limit=2&select=id`)).json()
+  expect(page).toEqual([{id:'deal-a'},{id:'deal-b'}])
+  expect(contact.dados_extras).not.toHaveProperty('metric_grain')
+ })
+ it('rejeita negociações duplicadas ou de outra marca',async()=>{
+  const metric=lead('deal',undefined,undefined,null,{segmento:'oral-unic',metric_grain:'crm_deal',conta_id:'wescale_principal_crm',id_deal:'deal'})
+  for(const metrics of [[metric,metric],[{...metric,marca:'Eletrovias'}]]){
+   const s=setup();s.fetch.mockImplementation(async()=>new Response(JSON.stringify({mode:'ouro',contract:'oral_unic_marketing_v1',rows:[],metric_rows:metrics})))
+   await expect(s.read(`${origin}/rest/v1/leads`)).rejects.toThrow('Escopo de negociações')
+  }
+ })
+
  it.each([...ORAL_UNIC_MARKETING_ROUTES])('preserva comunidade, COF, Legacy, outras marcas e história em %s', async route => {
   const s=setup(route)
   const data=await (await s.read(`${origin}/rest/v1/leads?select=id&order=id.asc`)).json()

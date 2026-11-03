@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -55,7 +56,32 @@ def missing_commercial_identity(row):
 
 def prepare_rows(dataset, rows):
  validate_rows(dataset, rows)
- return rows, []
+ # Preserve the contact dataset: an unlinked deal is a pending identity,
+ # not a synthetic contact and not a reason to discard all valid rows.
+ pending = [r for r in rows if dataset=='leads' and missing_commercial_identity(r)]
+ return ([r for r in rows if not (dataset=='leads' and missing_commercial_identity(r))],
+  [{'code':'accepted_missing_contact','count':len(pending)}] if pending else [])
+
+def prepare_deals(rows):
+ # The existing gold view exposes real deal IDs, including unlinked deals.
+ # Metric rows never create contacts or alter the contact dataset.
+ result = {}
+ for row in rows:
+  extra = row.get('dados_extras') or {}
+  if extra.get('classification_source') != 'deal_criado_crm': continue
+  deal = extra.get('id_deal')
+  if not isinstance(deal,str) or not deal: raise GatewayError(503,'missing_deal_id')
+  try:
+   created = dt.datetime.fromisoformat(str(extra['data_criacao_crm']).replace('Z','+00:00'))
+   if created.tzinfo is None: raise ValueError()
+  except (KeyError,TypeError,ValueError): raise GatewayError(503,'invalid_deal_creation') from None
+  day = created.astimezone(ZoneInfo('America/Sao_Paulo')).date().isoformat()
+  if not '2026-10-01' <= day < '2026-11-01': continue
+  if deal in result: continue
+  result[deal] = {**row,'id':'oral-unic-deal:wescale_principal_crm:'+deal,
+   'dia':day,'criado_em':created.isoformat(),
+   'dados_extras':{**extra,'metric_grain':'crm_deal','conta_id':'wescale_principal_crm'}}
+ return list(result.values())
 
 
 def validate_rows(dataset, rows):
@@ -64,8 +90,6 @@ def validate_rows(dataset, rows):
   or not '2026-10-01' <= r['dia'] < '2026-11-01' for r in rows):
   raise GatewayError(503, 'scope_violation')
  if len({r.get('id') for r in rows}) != len(rows): raise GatewayError(503,'duplicate_id')
- if dataset=='leads' and any(missing_commercial_identity(r) for r in rows):
-  raise GatewayError(409,'commercial_identity_incomplete')
  if dataset=='media' and any((r.get('canal'),r.get('conta_id'),r.get('campanha_id')) not in MEDIA_IDS for r in rows):
   raise GatewayError(503,'campaign_scope_violation')
  if dataset=='media' and any(r.get('spend_brl') is None or r['spend_brl']<0 or r.get('moeda')!='BRL' for r in rows):
@@ -127,6 +151,7 @@ class Service:
     contact_rows, warnings = prepare_rows(dataset, rows)
     result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':contact_rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
+    if dataset == 'leads': result['metric_rows'] = prepare_deals(rows)
     with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)
     return result
 

@@ -2,6 +2,16 @@
 
 **Publicação autorizada em 27/10/2026, em validação.** Views e gateway definitivos instalados; ativação incluída no PR285, alinhado à main53ae9bc. RD/fatos/Vendas e fontes das demais marcas preservados. Os três casos continuam com Maicon e não bloqueiam esta publicação.
 
+## Correção por negociação — aplicação autorizada em02/11/2026
+
+Gabriel autorizou aplicar e certificar após a limitação dos29 MQLs ter sido explicitada. Fonte viva, somente ouro: **32 negócios criados em outubro/Brasília**,21 SDR,7 Closer,2 Repasse,1 Prospecção Ativa e1 Funil de teste. Não excluir negócio pela etapa/funil/ausência de contato. Comparação por IDs entre `ouro.negocios_ciclos_dashboard` (último estado por conta/negócio, criação original) e a projeção comercial existente:32=32, zero faltantes/excedentes. Esta é certificação contra a ouro consultada, não uma nova auditoria direta do RD.
+
+A view atual já expõe os32 IDs e criação original; nenhum DDL novo é necessário. O gateway retorna42 registros identificados **sem modificar campos**, uma pendência de contato e32 `metric_rows`. Os contatos permanecem separados da métrica; cada negócio conta uma vez, inclusive o sem contato. LP não acrescenta MQL; duas negociações da mesma pessoa não se fundem. Consumidor só aplica esse grão a Oral Unic/outubro/Marketing, preservando comunidade/consultoria, histórico, demais marcas e Vendas. Sem migração adicional de Eletrovias nesta etapa.
+
+A causa do bloqueio era `commercial_identity_incomplete` em uma negociação de30/10; a atualização falhava e o cache expirava (`source_refresh_pending`). A pendência real de vínculo permanece, sem criar pessoa ou alterar RD/fatos. A autorização anterior apenas para prévia foi substituída pela autorização explícita de aplicar/certificar.
+
+Validação local:974 testes frontend,15 gateway Oral Unic, build e lint sem erros. Certificação por IDs/42 registros idênticos concluída; estado de implantação e QA de produção serão registrados após execução. PR298 acompanha o local. Rollback: restaurar o arquivo anterior do gateway e o pacote anterior do dashboard; não modificar dados ou credenciais.
+
 ## Gateway definitivo
 
 Serviço isolado `dashboard-oral-unic-ouro`, endpoint `/api/oral-unic-ouro/v1/read`, role `dashboard_oral_unic_ro`: SELECT apenas em `ouro.vw_oral_unic_dashboard_leads` e `ouro.vw_oral_unic_dashboard_midia`, zero privilégios DML. TLS `verify-full`, transações somente leitura, sessão/permissões Marketing validadas a cada pedido; sem sessão retorna401. Cache máximo5min sobre a carga horária existente; sem alterações no agendamento ou fontes. Container sem root, filesystem somente leitura e limites de CPU/memória.

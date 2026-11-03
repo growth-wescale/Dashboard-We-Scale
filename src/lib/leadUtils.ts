@@ -1,9 +1,9 @@
 import type { Lead } from '@/lib/types'
 
-// These markers are supplied only by the opt-in Eletrovias Marketing adapter.
+// These markers are supplied only by the scoped Marketing adapters.
 // Deal rows carry a metric, never a fabricated contact.
 export function isMarketingDeal(r: Pick<Lead, 'marca' | 'dados_extras'>): boolean {
-  return r.marca === 'Eletrovias' && r.dados_extras?.metric_grain === 'crm_deal'
+  return (r.marca === 'Eletrovias' || r.marca === 'Oral Unic') && r.dados_extras?.metric_grain === 'crm_deal'
 }
 
 export function isLeadMql(r: { dados_extras: Record<string, unknown> | null }): boolean {

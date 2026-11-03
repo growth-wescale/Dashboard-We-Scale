@@ -73,13 +73,13 @@ describe('fonte Legacy exclusiva da S&OP', () => {
     expect(mocks.scoped).toHaveBeenCalledWith('["expansao:sop_legacy_funil","2026-10-01",null]', expect.any(Function), true)
   })
 
-  it('isola a projeção de Eletrovias no cache da S&OP', () => {
-    useSopVendasFunil({ marca: 'Eletrovias', dataInicio: '2026-10-01', dataFim: '2026-10-03' })
+  it.each(['Eletrovias','Inpot','B2Case','Lisô Laser','Viva','Oral Unic'])('isola a projeção de %s no cache da S&OP', marca => {
+    useSopVendasFunil({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-03' })
     expect(mocks.standard.mock.calls[0][0].enabled).toBe(false)
-    expect(mocks.scoped.mock.calls[0]).toEqual(['["expansao:sop_eletrovias_funil","2026-10-01","2026-10-03"]', expect.any(Function), true])
+    expect(mocks.scoped.mock.calls[0]).toEqual([JSON.stringify(['expansao:sop_funil:' + marca,'2026-10-01','2026-10-03']), expect.any(Function), true])
   })
 
-  it.each(['Inpot', 'B2Case', 'Lisô Laser', 'Viva', 'Oral Unic', 'We Scale', undefined])('não muda a fonte da folha %s', marca => {
+  it.each(['We Scale', undefined])('não muda a fonte da folha %s', marca => {
     expect(useSopVendasFunil({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19' }).data).toEqual(['standard'])
     expect(mocks.standard).toHaveBeenCalledWith({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19', enabled: true }, marca === 'We Scale' ? undefined : expect.any(Function))
     expect(mocks.scoped.mock.calls[0][2]).toBe(false)

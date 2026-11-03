@@ -40,18 +40,19 @@ const colunasSop = [
 export type LinhaFunilSop = Pick<VwMarketingFunil, typeof colunasSop[number]>
 
 export async function fetchSopRows(filters: Filters, signal: AbortSignal, pageSize = 1000): Promise<LinhaFunilSop[]> {
-  const eletrovias = filters.marca === 'Eletrovias'
-  const colunas = eletrovias ? [...colunasSop, 'ciclo'].join(',') : '*'
+  const marca = filters.marca
+  const legacy = !marca || marca === 'Odonto Scale'
+  const colunas = legacy ? '*' : [...colunasSop, 'ciclo'].join(',')
   const rows: LinhaFunilSop[] = []
   for (let from = 0; ; from += pageSize) {
     if (signal.aborted) throw new Error('Consulta cancelada.')
     let q = supabaseVendas.from('vw_marketing_funil').select(colunas)
-      .in('funil', eletrovias ? ['SDR', 'Closer', 'Prospecção Ativa', 'Odonto Scale'] : ['Odonto Scale', 'Odonto Legacy'])
+      .in('funil', legacy ? ['Odonto Scale', 'Odonto Legacy'] : ['SDR', 'Closer', 'Prospecção Ativa', 'Odonto Scale'])
       .order('data_criacao_negociacao', { ascending: false })
       .range(from, from + pageSize - 1).abortSignal(signal)
 
-    if (eletrovias) q = q.eq('marca', 'Eletrovias')
-    if (eletrovias || pageSize < 1000) q = q.order('id_lead').order('ciclo')
+    if (!legacy) q = q.eq('marca', marca)
+    if (!legacy || pageSize < 1000) q = q.order('id_lead').order('ciclo')
     if (filters.dataInicio) q = q.or(
       `data_criacao_negociacao.gte.${filters.dataInicio},data_sql.gte.${filters.dataInicio},data_diagnostico.gte.${filters.dataInicio},data_sal.gte.${filters.dataInicio},data_venda.gte.${filters.dataInicio}`,
     )
@@ -66,13 +67,12 @@ export async function fetchSopRows(filters: Filters, signal: AbortSignal, pageSi
 
 export function useSopVendasFunil(filters: Filters = {}) {
   const { marca, dataInicio, dataFim, enabled = true } = filters
-  const escopoSop = marca === 'Odonto Scale' || marca === 'Eletrovias'
-  // O hook compartilhado e sua chave permanecem intactos nas demais folhas/páginas.
   const partner = marca === 'We Scale' || marca === 'Scale Partner'
+  const escopoSop = Boolean(marca) && !partner
   const standard = useVendasFunil({ marca, dataInicio, dataFim, enabled: enabled && !escopoSop }, partner ? undefined : lerMarca)
   const fetch = useCallback((signal: AbortSignal) => lerFunilSop(signal, pageSize => fetchSopRows({ marca, dataInicio, dataFim }, signal, pageSize)), [marca, dataInicio, dataFim])
   const scoped = useConsultaFiltrada(
-    JSON.stringify([marca === 'Eletrovias' ? 'expansao:sop_eletrovias_funil' : 'expansao:sop_legacy_funil', dataInicio, dataFim]), fetch, enabled && escopoSop,
+    JSON.stringify([marca === 'Odonto Scale' ? 'expansao:sop_legacy_funil' : 'expansao:sop_funil:' + marca, dataInicio, dataFim]), fetch, enabled && escopoSop,
   )
   return escopoSop ? scoped : standard
 }

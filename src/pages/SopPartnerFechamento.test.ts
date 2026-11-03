@@ -20,10 +20,6 @@ vi.mock('@/hooks/useMediaOdontoLegacy', () => ({ useMediaOdontoLegacy: () => ({ 
 vi.mock('@/hooks/useMediaComunidadeLegacy', () => ({ useMediaComunidadeLegacy: () => ({ data: [], loading: false, error: null }) }))
 vi.mock('@/hooks/useBeautyMarketing', () => ({ lisoOuroEnabled: false, useBeautyMarketing: () => ({ enabled: false, data: [], loading: false, error: null }) }))
 
-vi.mock('@/hooks/useParticipantesPartner', () => ({ useParticipantesPartner: () => ({
-  data: [{ dia: '2026-10-14', participante: 'Participante teste', valor: 299.70 }], loading: false, error: null,
-}) }))
-
 import { SopMarketing } from './SopMarketing'
 
 describe('Partner mantém a folha original com dados do fechamento', () => {
@@ -38,15 +34,19 @@ describe('Partner mantém a folha original com dados do fechamento', () => {
     expect(html).toContain('>98<')
     expect(html).toContain('>51<')
     expect(html).toContain('>6<')
-    expect(html).toContain('MQL Semanal')
-    expect(html).toContain('Participantes do evento Scale Partner')
-    expect(html).toContain('Participante teste')
-    expect(html).toContain('299,70')
+    expect(html).not.toContain('MQL Semanal')
+    expect(html).not.toContain('Participantes do evento')
+    expect(html).toContain('Comparativo histórico de Partner · 2026')
+    expect(html).toContain('01/05 a 12/08')
+    expect(html).toContain('15/08 a 19/10')
+    expect(html).toContain('43,2%')
+    expect(html).toContain('11,8%')
+    expect(html).toContain('Ritmo por 30 dias corridos')
     expect(html).toContain('BC · INSCRIÇÕES')
     expect(html).toContain('1/2') // Partner original + Funil Atual
     expect(html).not.toContain('Scale Partner — Fechamento')
     expect(state.requests.filter(p => p.marca === 'We Scale' && p.dataFim === '2026-10-19'))
-      .toContainEqual({ marca: 'We Scale', dataInicio: '2026-08-15', dataFim: '2026-10-19' })
+      .toContainEqual({ marca: 'We Scale', dataInicio: '2026-08-15', dataFim: '2026-10-19', enabled: false })
   })
 
   it('não aplica o período nem o snapshot a outra marca', () => {
@@ -54,6 +54,8 @@ describe('Partner mantém a folha original com dados do fechamento', () => {
     const html = renderToStaticMarkup(createElement(SopMarketing))
     expect(html).not.toContain('Fechamento 15/08 a 19/10')
     expect(html).not.toContain('13.718,00')
+    expect(html).not.toContain('Custos e ritmo de campanha')
+    expect(html).toContain('MQL Semanal')
     expect(state.requests.some(p => p.marca === 'Viva' && p.dataInicio === '2026-08-15')).toBe(false)
   })
 })

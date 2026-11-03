@@ -11,7 +11,7 @@ export function marcasLeadsSop(marca: string): string[] {
 
 // Exclusivo S&OP: aliases da mesma marca, em uma consulta. O dedupe existente
 // da página continua sendo aplicado dentro de cada janela, depois da união.
-export function useSopLeads({ marca, dataInicio, dataFim }: { marca: Marca; dataInicio: string; dataFim: string }) {
+export function useSopLeads({ marca, dataInicio, dataFim, enabled = true }: { marca: Marca; dataInicio: string; dataFim: string; enabled?: boolean }) {
   const fetch = useCallback(async (signal: AbortSignal) => {
     const rows: Lead[] = []
     for (let from = 0; ; from += 1000) {
@@ -27,5 +27,5 @@ export function useSopLeads({ marca, dataInicio, dataFim }: { marca: Marca; data
       if (!data || data.length < 1000) return rows
     }
   }, [marca, dataInicio, dataFim])
-  return useConsultaFiltrada(JSON.stringify(['sop:leads' + partnerMarketingCacheScope(), marca, dataInicio, dataFim]), fetch, true)
+  return useConsultaFiltrada(JSON.stringify(['sop:leads' + partnerMarketingCacheScope(), marca, dataInicio, dataFim]), fetch, enabled)
 }

@@ -3,6 +3,7 @@ import {
   diaDaCampanha,
   emJanelas,
   fatorMetaCloser,
+  fracoesSemanaisCloser,
   fatorMetaSdr,
   janelaLabel,
   janelasDasVoltas,
@@ -73,6 +74,32 @@ describe('fatorMetaCloser', () => {
   it('sem distribuição semanal, rateia pelos dias da volta', () => {
     expect(fatorMetaCloser(OUT, 'Bruna', [1])).toBeCloseTo(5 / 31)
     expect(fatorMetaCloser(SET, 'Paula Marinheiro', [4])).toBeCloseTo(9 / 30)
+  })
+})
+
+describe('fracoesSemanaisCloser', () => {
+  // Thaina em nov/26: Odonto Legacy (ticket 8.597) 1 venda nas semanas 1–5,
+  // Oral Unic (ticket 74.900) 1 venda na semana 4.
+  const linhas = [1, 2, 3, 4, 5].map(semana => ({ nome: 'Thaina Freitas', semana, vendas: 1, ticket: 8597 }))
+    .concat([{ nome: 'Thaina Freitas', semana: 4, vendas: 1, ticket: 74900 }])
+
+  it('unidades pela fração das vendas, R$ pelo ticket de cada venda', () => {
+    const { unidades, faturamento } = fracoesSemanaisCloser(linhas, 5)
+    expect(unidades.get('Thaina Freitas')![1]).toBeCloseTo(1 / 6)
+    expect(faturamento.get('Thaina Freitas')![1] * 117885).toBeCloseTo(8597)
+    expect(faturamento.get('Thaina Freitas')![3] * 117885).toBeCloseTo(8597 + 74900)
+    expect(faturamento.get('Thaina Freitas')!.reduce((a, b) => a + b, 0)).toBeCloseTo(1)
+  })
+
+  it('venda sem ticket faz o R$ cair na fração das unidades', () => {
+    const { unidades, faturamento } = fracoesSemanaisCloser(
+      [{ nome: 'Bruna', semana: 1, vendas: 1, ticket: 10000 }, { nome: 'Bruna', semana: 2, vendas: 1, ticket: null }], 2)
+    expect(faturamento.get('Bruna')).toEqual(unidades.get('Bruna'))
+  })
+
+  it('ignora semana fora do mês e Closer sem venda', () => {
+    const { unidades } = fracoesSemanaisCloser([{ nome: 'X', semana: 9, vendas: 1, ticket: 1 }], 5)
+    expect(unidades.size).toBe(0)
   })
 })
 

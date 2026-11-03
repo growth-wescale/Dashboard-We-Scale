@@ -77,7 +77,7 @@ export function CampanhaMetasTv() {
   const navigate = useNavigate()
   const agora = useAgora()
   const mes = mesAtualCampanha(agora)
-  const { semanas, fracoesCloser } = useSemanasCampanha(mes)
+  const { semanas, fracoesCloser, fracoesFatCloser } = useSemanasCampanha(mes)
   const campanha = useMemo(() => montarCampanha(mes, semanas), [mes, semanas])
   const dia = diaDaCampanha(campanha, agora)
   const volta = voltaDoDia(campanha, dia)
@@ -119,7 +119,7 @@ export function CampanhaMetasTv() {
   const closersVolta = useMemo(() =>
     closersVoltaRaw.map(c => {
       const f = fatorMetaCloser(campanha, c.nome, voltasSel, fracoesCloser)
-      const metaFinanceira = c.metaFinanceira * f
+      const metaFinanceira = c.metaFinanceira * fatorMetaCloser(campanha, c.nome, voltasSel, fracoesFatCloser)
       return {
         ...c,
         metaFinanceira,
@@ -127,7 +127,7 @@ export function CampanhaMetasTv() {
         pctAtingimento: metaFinanceira > 0 ? (c.realizado / metaFinanceira) * 100 : 0,
       }
     }),
-  [closersVoltaRaw, voltasSel, campanha, fracoesCloser])
+  [closersVoltaRaw, voltasSel, campanha, fracoesCloser, fracoesFatCloser])
 
   const closers = ehMes ? closersMes : closersVolta
   const loadingClosers = ehMes ? loadingMes : loadingVolta

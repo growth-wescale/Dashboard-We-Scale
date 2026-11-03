@@ -1,6 +1,9 @@
 import { eletroviasOuroEnabled } from '@/lib/eletroviasOuroScope'
 import { isOralUnicSopFranchiseMedia, type OralUnicMediaRow } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
+import { useReceitaLegacy, resumirReceitaLegacy } from '@/hooks/useReceitaLegacy'
+import { useSopMqlMetas } from '@/hooks/useSopMqlMetas'
+import { FRENTES_MISSAO, MESES_MISSAO } from '@/lib/missaoMetas'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { BeautyMarketingPanel } from '@/components/marketing/BeautyMarketingPanel'
 import { useBeautyMarketing, lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
@@ -830,6 +833,10 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
+  const usarReceita = isOdontoLegacy && legacyOuroEnabled && dates.mtdCurEnd >= '2026-01-01'
+  const receitaOuro = useReceitaLegacy(usarReceita)
+  const { pode } = useAcesso()
+  const temMetas = FRENTES_MISSAO.some(f => f.marca === slide.marca) && monthMode !== 'custom' && MESES_MISSAO.some(mes => mes === dates.monthStart) && pode('aba.okrs')
   const partnerFechamento = isWeScale ? getPartnerFechamento(dates.mtdCurStart, dates.mtdCurEnd, filterFonte) : null
   const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
   const beautyRes = useBeautyInscricoes(beautyEnabled)
@@ -917,6 +924,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const mediaPrev3Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev3.start,     dataFim: mtdN.prev3.end })
   const { data: allLeads } = leadsAll
   const { data: prevLeads } = leadsPrev
+  const missao = useSopMqlMetas(slide.marca, dates.monthStart, dates.mtdCurEnd, allLeads, temMetas && !leadsAll.loading && !leadsAll.error)
+  const captacao = temMetas ? missao.data[0] : null
   const { data: rawCrmCur } = crmCurRes
   const { data: rawCrmPrev } = crmPrevRes
   const { data: rawCrmWeek } = crmWeekRes
@@ -939,10 +948,10 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
+    !receitaOuro.loading && !missao.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
-  }, [allLoaded, onReady, partnerReadError, beautyRes.error, beautyMarketing.error])
+    if (allLoaded) onReady?.(receitaOuro.error || (temMetas && missao.error) || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
+  }, [allLoaded, onReady, receitaOuro.error, temMetas, missao.error, partnerReadError, beautyRes.error, beautyMarketing.error])
 
   const applyF = useCallback((rows: VwMarketingFunil[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -1210,15 +1219,16 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   // dos outros cards do slide). MTD do mês inteiro (do dia 1 até hoje) é
   // usado no extra pra comparar com a meta mensal, que vive num plano diferente
   // da janela de 7d — meta é mensal por natureza.
-  const somaGanhos = useCallback((rows: VwMarketingFunil[], di: string, df: string) =>
-    rows.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca))
-        .reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
-  , [])
+  const somaGanhos = useCallback((rows: VwMarketingFunil[], di: string, df: string, fonte = filterFonte) => {
+    const historico = rows.filter(r => (!usarReceita || (r.data_venda ?? '').slice(0, 10) < '2026-01-01') && r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca))
+      .reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
+    return historico + (usarReceita ? resumirReceitaLegacy(receitaOuro.data, di, df, fonte).total : 0)
+  }, [usarReceita, receitaOuro.data, filterFonte])
   const receitaCur   = useMemo(() => somaGanhos(crmCur,   mtdCurStart,     mtdCurEnd),     [somaGanhos, crmCur,   mtdCurStart,     mtdCurEnd])
   const receitaPrev  = useMemo(() => somaGanhos(crmPrev,  prevRangeStart,  prevRangeEnd),  [somaGanhos, crmPrev,  prevRangeStart,  prevRangeEnd])
   const receitaWeek  = useMemo(() => somaGanhos(crmWeek,  weekCurStart,    weekCurEnd),    [somaGanhos, crmWeek,  weekCurStart,    weekCurEnd])
   const receitaPrior = useMemo(() => somaGanhos(crmPrior, weekPriorStart,  weekPriorEnd),  [somaGanhos, crmPrior, weekPriorStart,  weekPriorEnd])
-  const receitaMtd   = useMemo(() => somaGanhos(rawCrmAll, dates.monthStart, mtdCurEnd),   [somaGanhos, rawCrmAll, dates.monthStart, mtdCurEnd])
+  const receitaMtd   = useMemo(() => somaGanhos(rawCrmAll, dates.monthStart, mtdCurEnd, '__all__'),   [somaGanhos, rawCrmAll, dates.monthStart, mtdCurEnd])
 
   const monthKeyCur    = dates.monthStart.slice(0, 7)
   const weScaleSnapshot = getWeScaleSop(monthKeyCur)
@@ -1319,13 +1329,13 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
             : c),
         {
           label: 'RECEITA',
-          value: fmtBRL(receitaWeek),
-          semAnt: dates.isClosed ? undefined : deltaLabel(receitaWeek, receitaPrior),
-          mtdAnt: deltaLabel(receitaCur, receitaPrev),
+          value: receitaOuro.loading || receitaOuro.error ? '—' : receitaWeek.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          semAnt: dates.isClosed || receitaOuro.error || receitaOuro.loading ? undefined : deltaLabel(receitaWeek, receitaPrior),
+          mtdAnt: receitaOuro.error || receitaOuro.loading ? undefined : deltaLabel(receitaCur, receitaPrev),
           extra: {
             label: `META ${mesLabelUpper}/${String(mesLblY).slice(-2)}`,
             value: metaReceita > 0 ? metaReceita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—',
-            subtext: metaReceita > 0
+            subtext: metaReceita > 0 && !receitaOuro.error && !receitaOuro.loading
               ? `${fmtBRL(receitaMtd)} MTD · ${pctReceita}% atingido`
               : undefined,
           },
@@ -1549,7 +1559,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         </button>
       </div>
 
-      {ouroReadRequired && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error]} />}
+      {(ouroReadRequired || temMetas) && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error, receitaOuro.error, temMetas ? missao.error : null]} />}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>
@@ -1593,6 +1603,18 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
                 </div>
                 )}
               </div>
+              )}
+              {card.label === 'MQL' && captacao && (
+                <div style={{ fontSize: 11, marginTop: 5 }}>
+                  {shortMonth(Number(dates.monthStart.slice(0,4)), Number(dates.monthStart.slice(5,7))-1)} · todas as fontes: {captacao.mql} / {captacao.metaMql ?? '—'}<br />
+                  Marketing · Inbound: {captacao.cobertura.inbound ?? 'Indisponível'} / {captacao.metaInbound ?? '—'}
+                  {captacao.cobertura.semOrigem > 0 && <small> · {captacao.cobertura.semOrigem} sem origem</small>}
+                </div>
+              )}
+              {card.label === 'RECEITA' && usarReceita && !receitaOuro.error && !receitaOuro.loading && (
+                <div style={{ fontSize: 11 }}>{resumirReceitaLegacy(receitaOuro.data, weekCurStart, weekCurEnd, filterFonte).produtos.map(item =>
+                  <div key={item.nome}>{item.nome} · {item.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
+                )}</div>
               )}
               {card.extra && (
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>

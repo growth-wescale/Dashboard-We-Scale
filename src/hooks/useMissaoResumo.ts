@@ -17,16 +17,17 @@ const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sessi
 })
 if (import.meta.hot) import.meta.hot.dispose(() => { subscription.unsubscribe(); cache.clear() })
 
-export function useMissaoResumo() {
+export function useMissaoResumo(ate?: string) {
   const { session } = useAuth()
   const [pedido, setPedido] = useState({ hoje: toLocalDate(new Date().toISOString())!, versao: 0 })
   const [bloqueado, setBloqueado] = useState(false)
-  const key = `${session?.user.id ?? ''}:${pedido.hoje}`
+  const fim = ate ?? pedido.hoje
+  const key = `${session?.user.id ?? ''}:${fim}`
   const [state, setState] = useState<LeituraMissao<DadosMissao> & { key: string; loading: boolean }>({ key: '', data: null, error: null, loading: true })
   useEffect(() => {
     if (!session?.user.id) return
     let active = true
-    const lease = cache.acquire(key, signal => consultarMissao(supabaseVendas, marketingDataClient(), pedido.hoje, signal), pedido.versao > 0)
+    const lease = cache.acquire(key, signal => consultarMissao(supabaseVendas, marketingDataClient(), fim, signal), pedido.versao > 0)
     setState({ key, data: null, error: null, loading: true })
     setBloqueado(true)
     const timer = setTimeout(() => { if (active) setBloqueado(false) }, MISSAO_INTERVALO)
@@ -36,7 +37,7 @@ export function useMissaoResumo() {
       if (active) setState({ key, data: null, loading: false, error: 'A leitura foi interrompida ou excedeu 20 segundos. Nenhum total parcial foi exibido. Tente novamente mais tarde.' })
     }).finally(lease.release)
     return () => { active = false; clearTimeout(timer); lease.release() }
-  }, [key, session?.user.id, pedido.hoje, pedido.versao])
+  }, [key, session?.user.id, fim, pedido.versao])
   const atualizar = useCallback(() => {
     if (bloqueado || state.loading) return
     setPedido(p => ({ hoje: toLocalDate(new Date().toISOString())!, versao: p.versao + 1 }))

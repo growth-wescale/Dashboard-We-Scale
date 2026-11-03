@@ -24,7 +24,7 @@ class GatewayError(Exception):
  def __init__(self, status, code): self.status, self.code = status, code
 
 
-def authorize(token, request_json, route):
+def authorize(token, request_json, route, dataset=None):
  if not token or len(token) > 8192: raise GatewayError(401, 'session_required')
  user = request_json('/auth/v1/user', token, None)
  if not isinstance(user, dict) or not user.get('id') or user.get('is_anonymous') is True:
@@ -37,7 +37,8 @@ def authorize(token, request_json, route):
  brands = access.get('marcas') or ([access['marca']] if access.get('marca') else [])
  if not isinstance(permissions, list) or ROUTES[route] not in permissions:
   raise GatewayError(403, 'tab_not_allowed')
- if not isinstance(brands, list) or any(not isinstance(x, str) for x in brands) or brands and not {'oral-unic','odonto-scale'}.intersection(brands):
+ allowed_brands = {'odonto-scale'} if dataset=='receita' else {'oral-unic','odonto-scale'}
+ if not isinstance(brands, list) or any(not isinstance(x, str) for x in brands) or brands and not allowed_brands.intersection(brands):
   raise GatewayError(403, 'brand_not_allowed')
 
 
@@ -65,6 +66,10 @@ def prepare_rows(dataset, rows):
 
 def validate_rows(dataset, rows):
  if len(rows) > 50000: raise GatewayError(503, 'result_too_large')
+ if dataset=='receita':
+  if any(r.get('marca')!='Odonto Scale' or not isinstance(r.get('dia'),str) or r['dia']<'2026-01-01' or r.get('valor') is None or not isinstance(r.get('produtos'),list) for r in rows): raise GatewayError(503,'invalid_revenue')
+  if len({r.get('id') for r in rows})!=len(rows): raise GatewayError(503,'duplicate_id')
+  return
  if any(r.get('marca') not in (('Odonto Scale',) if dataset=='leads' else ('Oral Unic',)) or not isinstance(r.get('dia'),str)
   or not '2026-10-01' <= r['dia'] < '2026-11-01' for r in rows):
   raise GatewayError(503, 'scope_violation')
@@ -77,6 +82,9 @@ def validate_rows(dataset, rows):
 
 class Service:
  def __init__(self, settings, connect=None, request_json=None):
+  self.queries = dict(QUERIES)
+  if settings.get("receita_enabled") is True:
+   self.queries["receita"] = "SELECT * FROM ouro.vw_legacy_dashboard_receita ORDER BY dia DESC,id LIMIT 50001"
   self.settings = settings
   self.slots = threading.BoundedSemaphore(1)
   self.cache = {}
@@ -107,9 +115,10 @@ class Service:
   except (OSError, ValueError): raise GatewayError(503, 'auth_unavailable') from None
 
  def read(self, body, token):
-  if not isinstance(body, dict) or set(body) != {'dataset','route'} or body.get('dataset') not in QUERIES or body.get('route') not in ROUTES:
+  if not isinstance(body, dict) or set(body) != {'dataset','route'} or body.get('dataset') not in self.queries or body.get('route') not in ROUTES:
    raise GatewayError(400, 'invalid_request')
-  authorize(token, self.request_json, body['route'])
+  if body['dataset']=='receita' and body['route']!='/sop-marketing': raise GatewayError(403,'tab_not_allowed')
+  authorize(token, self.request_json, body['route'], body['dataset'])
   if self.settings.get('mode') == 'legacy': return {'mode': 'legacy'}
   if self.settings.get('mode') != 'ouro': raise GatewayError(503, 'invalid_mode')
   dataset = body['dataset']
@@ -126,7 +135,7 @@ class Service:
     connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
     role = connection.execute("SELECT current_user u,(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) unsafe").fetchone()
     if role['u'] != 'dashboard_legacy_ro' or role['unsafe']: raise GatewayError(503, 'unsafe_role')
-    rows = connection.execute(QUERIES[dataset]).fetchall()
+    rows = connection.execute(self.queries[dataset]).fetchall()
     contact_rows, warnings = prepare_rows(dataset, rows)
     result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':contact_rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
@@ -168,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
 def maintain_cache(service):
  while True:
   time.sleep(240)
-  for dataset in QUERIES:
+  for dataset in service.queries:
    try: service.refresh_dataset(dataset)
    except Exception: pass  # Resposta expirada falha fechada; nunca expor diagnóstico/credencial.
 
@@ -177,7 +186,7 @@ def main():
  settings = json.loads(Path(os.environ.get('LEGACY_OURO_CONFIG', '/run/legacy/config.json')).read_text())
  Handler.service = Service(settings)
  if settings.get('mode') == 'ouro':
-  for dataset in QUERIES: Handler.service.refresh_dataset(dataset)
+  for dataset in Handler.service.queries: Handler.service.refresh_dataset(dataset)
   threading.Thread(target=maintain_cache,args=(Handler.service,),daemon=True).start()
  ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
 

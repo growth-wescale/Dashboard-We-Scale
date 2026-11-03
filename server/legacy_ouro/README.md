@@ -1,5 +1,14 @@
 # Legacy — integração ouro de Marketing (27/10/2026)
 
+## Receita por produto na S&OP · revisão de 03/11/2026
+
+A consulta proposta usa o último estado da negociação, vendas ganhas, data da venda em Brasília e uma linha por conta/ID. Soma os contratos Legacy independentemente do funil, incluindo OdontoClub. Itens Legacy identificados em contrato de outra marca entram pelo valor dos itens Legacy. Em contrato com vários produtos, a soma das linhas e eventual ajuste de contrato reconcilia com o total. A receita tem consulta própria e não muda o conjunto de leads, a comunidade ou as outras métricas do funil.
+
+Na consulta de 03/11, as **nove** vendas de 2026 coincidiram por ID e valor com o espelho de Vendas. Outubro: **R$ 58.958**, sendo R$ 23.961 em dois negócios Odonto Legacy e R$ 34.997 em um negócio OdontoClub. Meta mensal R$ 29.910. O dado da prévia vem do SELECT executado no Metabase, não de valores fixos.
+
+Antes de publicar o consumidor, instalar a projeção de leitura de `receita-view.sql` na ouro, conferir o grant SELECT exclusivo da role e habilitar `receita_enabled` no gateway Legacy atualizado. Conferir a resposta autenticada de `receita` em `/sop-marketing` contra `receita-source.sql`. Sem a opção o gateway continua lendo apenas seus dois datasets anteriores. O frontend com a mudança e a flag Legacy vigente requer o novo dataset. Erro de receita bloqueia o PDF; não converter falha em zero. Para reversão, reverter primeiro o consumidor e depois desabilitar o dataset.
+
+
 PR276: publicação autorizada em27/10 enquanto Maicon resolve quatro exceções de origem. **As seções de conferência anteriores são históricas; não bloqueiam a migração autorizada.** Outubro é o recorte inicial; histórico anterior, comunidade, consultoria manual, RD, fatos do DW, Vendas e demais marcas permanecem preservados. Oral Unic será outra entrega.
 
 ## Estado para publicação — validado em27/10/2026

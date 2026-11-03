@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from app import Service, GatewayError
+from app import Service, GatewayError, maintain_cache
 
 def auth(path, token, body):
  return {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'acesso_total':True}
@@ -77,6 +77,22 @@ class Tests(unittest.TestCase):
   r=s.refresh_dataset('leads')
   self.assertEqual(r['rows'],c.rows)
   self.assertEqual(r['warnings'],[])
+ def test_failed_lead_refresh_retries_without_delaying_media_or_extending_cache_age(self):
+  s,_=self.service([])
+  s.queries['receita']='receita'
+  s.cache={'leads':(0,{}),'media':(5,{}),'receita':(7,{})}
+  now=[0]; attempts=[]
+  def sleep(seconds): now[0]+=seconds
+  def refresh(dataset):
+   attempts.append((dataset,now[0]))
+   if len(attempts)==1:
+    now[0]+=45
+    raise TimeoutError()
+   if len(attempts)==5: raise SystemExit()
+  with patch('app.time.monotonic',side_effect=lambda:now[0]), patch('app.time.sleep',side_effect=sleep), patch.object(s,'refresh_dataset',side_effect=refresh):
+   with self.assertRaises(SystemExit):maintain_cache(s)
+  self.assertEqual(attempts[:4],[('leads',180),('media',225),('receita',225),('leads',240)])
+  self.assertEqual(s.cache['leads'][0],0)
  def test_cache_preserves_rows_and_rechecks_authorization(self):
   s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Odonto Scale','dados_extras':{}}])
   first=s.read({'dataset':'leads','route':'/'},'token')

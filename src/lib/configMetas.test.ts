@@ -183,7 +183,7 @@ describe('pendenciasMarca e statusMarca', () => {
     expect(statusMarca(m)).toBe('configurada')
   })
 
-  it('aponta ticket, pesos e Closer faltando', () => {
+  it('aponta ticket e pesos errados', () => {
     const m: MarcaConfig = {
       ...inpotOutubro(6),
       ticketMedio: null,
@@ -191,9 +191,26 @@ describe('pendenciasMarca e statusMarca', () => {
     }
     const textos = pendenciasMarca(m).map(p => p.texto)
     expect(textos).toContain('Informe a taxa de franquia média')
-    expect(textos).toContain('Adicione pelo menos um Closer')
     expect(textos.some(t => t.includes('SDRs somam 90%'))).toBe(true)
     expect(statusMarca(m)).toBe('em_configuracao')
+  })
+
+  it('marca sem Closer fica configurada e sem meta de Closer', () => {
+    const m: MarcaConfig = { ...inpotOutubro(6), pessoas: inpotOutubro(6).pessoas.filter(p => p.funcao === 'SDR') }
+    expect(pendenciasMarca(m)).toEqual([])
+    expect(metasPorPessoa(m, calcularFunil(m)).every(p => p.funcao === 'SDR')).toBe(true)
+  })
+
+  it('marca sem SDR fica configurada e sem meta de SDR, mesmo com etapas de SDR no funil', () => {
+    const m: MarcaConfig = { ...inpotOutubro(6), pessoas: inpotOutubro(6).pessoas.filter(p => p.funcao === 'Closer') }
+    expect(pendenciasMarca(m)).toEqual([])
+    expect(statusMarca(m)).toBe('configurada')
+    expect(metasPorPessoa(m, calcularFunil(m)).every(p => p.funcao === 'Closer')).toBe(true)
+  })
+
+  it('marca sem ninguém no time continua pendente', () => {
+    const m: MarcaConfig = { ...inpotOutubro(6), pessoas: [] }
+    expect(pendenciasMarca(m).map(p => p.texto)).toContain('Adicione pelo menos um SDR ou um Closer')
   })
 
   it('marca só com Closer não precisa de SDR quando as etapas de SDR estão sem meta', () => {

@@ -104,7 +104,8 @@ export function TimeMarca({ marca, funil, onMudarPessoas }: {
                 padding: '18px 16px', borderRadius: 'var(--radius-sm)', border: '1.5px dashed var(--ws-border-strong)',
                 fontSize: 13, color: 'var(--ws-text-secondary)', textAlign: 'center',
               }}>
-                Ninguém nesta função ainda. Escolha abaixo quem trabalha {marca.marca} como {funcao}.
+                <b>Sem {funcao} em {marca.marca}:</b> a marca fica sem meta de {funcao} neste mês.
+                {' '}Se alguém for trabalhar a marca como {funcao}, escolha abaixo.
               </div>
             ) : (
               <>

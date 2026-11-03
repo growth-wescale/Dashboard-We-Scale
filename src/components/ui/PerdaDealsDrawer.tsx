@@ -13,6 +13,7 @@ import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
 import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
 import { currentStage, stageOwnerRole, STAGE_LABEL } from '@/lib/metrics'
+import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
 interface PerdaDealsDrawerProps {
   open: boolean
@@ -105,6 +106,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                         <ExternalLink size={11} />
                       </a>
                       <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
+                      <LinkPontosCorrida row={r} cor={accent} />
                     </td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                     <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{motivoLimpo(r.motivo_perda)}</td>

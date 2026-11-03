@@ -492,6 +492,13 @@ src/hooks/useRepasseTaxas.ts      lê vw_repasse_taxa; publicarRepasse() grava p
 src/components/ui/DivisaoReceita.tsx  linha "We Scale / Marcas" dos cards de receita + bloco com quebra por marca
 src/components/metas/RepasseTaxas.tsx aba "Repasse das taxas" da Configuração das Metas (em vigor, histórico, versão nova)
 src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
+src/lib/corridaPerformance.ts     Corrida de Performance (Campanha de Metas): 1 lançamento por RR/venda com cada fator; o card de cada pessoa é a soma deles (puro, testado)
+src/lib/corridaDados.ts           linhas de vw_funil_vendas → unidades da Corrida + "não pontuou" (quem não tem meta no mês, campo vazio); limites do mês em Brasília (puro, testado)
+src/lib/corridaExtrato.ts         o porquê de cada fator em português, a conta da linha, motivo de não pontuar e a situação de um negócio + ciclo (puro, testado)
+src/hooks/useCorridaPerformance.ts  dados do mês da Corrida: cards, extrato, "não pontuou" e realizado do Grid dos SDRs
+src/hooks/usePontosDoNegocio.ts   Corrida do mês da RR/venda de UM negócio (cache de 2 min por mês), pro link "pontos" dos pop-ups
+src/components/corrida/ExtratoCorrida.tsx   extrato de pontos (Campanha de Metas › Corrida): visões SDR/Closer, filtro por pessoa, "Não pontuou"
+src/components/corrida/PontosDoNegocio.tsx  link "pontos" nos 4 pop-ups de negócio + janela com quanto o negócio deu (ou por que não deu)
 ```
 
 ### Os controles da barra
@@ -855,6 +862,59 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-03 — Corrida de Performance: extrato de cada ponto e "pontos" nos pop-ups de negócio
+
+Pedido do Junior depois da auditoria das regras da Corrida: transparência total
+de cada ponto pro time. Nenhuma regra de pontuação mudou; os números dos cards
+são os mesmos (conferido abaixo).
+
+**Motor.** `corridaPerformance.ts` passou a gerar **lançamentos**
+(`lancamentosSdr`/`lancamentosCloser`): 1 por RR (SDR) ou por venda (Closer),
+com negócio + ciclo, peso da fonte, unidades no dia e bônus, faixa de ticket,
+datas e faixa da velocidade, pontos por unidade e pontos. O card de cada
+pessoa (`LinhaTrilha`) agora é a soma deles (`somarLancamentos`), então extrato
+e card não divergem: teste novo garante soma das linhas = pontos, volume,
+ticket médio e mediana do card. Só o total é arredondado (1 casa), como antes.
+Na trilha Closer a venda é **uma linha** com "× N unidades" (venda de 2
+unidades = 2 no placar e já conta 2 unidades no dia pro bônus, igual antes).
+
+**Extrato** (Campanha de Metas › Corrida, botão "Ver extrato dos pontos" em
+cada card de trilha, ou clique na linha da pessoa, que já abre filtrado nela):
+gaveta com as visões SDR e Closer, na mesma janela da página (round(s) ou
+mês), filtro por pessoa (cada chip mostra o total, igual ao card) e uma
+seção por pessoa com data, negociação (link RD + Linha do Tempo, marca), os 4
+fatores com o porquê e a conta ("1 pt (Inbound) × 1,75 (Oral Unic) × 1,5
+(agendou 0,4 dia após o MQL) = 2,63 pts"). No fim, **"Não pontuou"**: RR/venda
+da janela que não entrou pra ninguém, com o motivo (campo vazio no RD, pessoa
+sem meta no mês na versão em vigor, nome fora do cadastro). Em out/26 são as
+19 RR do Thiago (saiu da meta na versão de 23/10) e 1 da Vanessa Daniel.
+
+**Pop-ups de negócio** (Visão Macro, Performance, Análise de Perda e
+repetidos: `StageDealsDrawer`/`StageDealsPanel`, `SimpleDealsDrawer`,
+`PerdaDealsDrawer`, `RepeatedDealsDrawer`): link **"pontos"** ao lado de
+"linha do tempo". Abre quanto aquele negócio + ciclo deu ao SDR (pela RR) e ao
+Closer (pela venda), com os fatores e o total da pessoa no mês, ou o motivo de
+não ter dado: sem reunião realizada, sem venda, venda desfeita, antes de
+setembro/2026, responsável vazio, sem meta no mês. Como o bônus depende das
+outras RR/vendas do dia, o link carrega o mês inteiro da Corrida (mesmas
+consultas e mesma conta, `usePontosDoNegocio`, cache de 2 min por mês).
+
+**Mês em Brasília.** As 4 consultas de `useCorridaPerformance` usavam os
+limites do mês em UTC: RR/venda entre 21h e meia-noite do último dia (Brasília)
+caía no mês seguinte e sumia do round 4/5. Agora `limitesDoMes` usa -03:00.
+Conferido no banco: nenhum caso desde setembro, nenhum número mudou. O rótulo
+de vários rounds também passou de "Voltas 2, 5" para "Rounds 2, 5".
+
+Conferido com dado real numa rota de prévia sem login (fora do commit),
+extrato × card pessoa a pessoa: set/26 Sarah 42 RR = 75,3, Xayane 24 = 50,
+Thiago 14 = 21,7 (12 não pontuaram: 6 da Vanessa, 6 sem SDR); Jéssica 11,
+Bruna 9, Douglas 8, Aurélio 3,5 (2 vendas sem Closer); out/26 Xayane 57,
+Sarah 48,1, Jéssica 26,1, Bruna 4,5, Douglas 3,5; rounds 2 e 5 de out/26
+também batem. Pop-up visto nos casos: venda retomada (2,25 pts à Xayane em
+set + 1,2 ao Douglas em out), venda de 15 unidades, RR do Thiago em out, venda
+de agosto, venda sem Closer, negócio sem RR. Celular: gaveta em tela cheia,
+tabela rolando de lado (`rs-scroll-x`). Build + 1.020 testes + oxlint.
 
 ### 2026-10-30 — Visão Geral fora do ar: negócio sem contato derrubava a ouro de Legacy
 

@@ -10,7 +10,9 @@ import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
 import { useCinturaoCloser, useCinturaoSdr } from '@/hooks/useCinturaoCloser'
 import { CLOSER_SPEED_TIERS, SDR_SPEED_TIERS, TICKET_FAIXAS } from '@/lib/corridaPerformance'
-import type { LinhaTrilha, SpeedTier } from '@/lib/corridaPerformance'
+import type { LinhaTrilha, SpeedTier, Trilha } from '@/lib/corridaPerformance'
+import { ExtratoCorridaDrawer } from '@/components/corrida/ExtratoCorrida'
+import { ScrollText } from 'lucide-react'
 import {
   janelasDasVoltas,
   janelaLabel,
@@ -36,7 +38,9 @@ import { fotoCampanha } from '@/lib/fotosCampanha'
 
 const POOL_PREMIOS = 12000
 type Ciclo = 'semanal' | 'mensal'
-const roundLabel = (text: string) => text.replace(/\bVolta\b/g, 'Round').replace(/\bvolta\b/g, 'round')
+const roundLabel = (text: string) => text
+  .replace(/\bVoltas\b/g, 'Rounds').replace(/\bvoltas\b/g, 'rounds')
+  .replace(/\bVolta\b/g, 'Round').replace(/\bvolta\b/g, 'round')
 
 const MARCA_COR: Record<string, string> = {
   'Oral Unic':  '#7F0C72',
@@ -103,7 +107,9 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
   const nomesCloser = useMemo(() => closersRaw.map(c => c.nome), [closersRaw])
   const pilotos = useMemo(() => ({ sdr: metasSdr.sdrs.map(s => s.nome), closer: nomesCloser }), [metasSdr.sdrs, nomesCloser])
   const { historico, meses: mesesHistorico, loading: loadingHist } = useHistoricoAtingimento(mes, nomesCloser)
-  const { sdrTrilha, closerTrilha, sdrRealizado, loading: loadingCorrida, error: erroCorrida } = useCorridaPerformance(mes, pilotos, janelas)
+  const { sdrTrilha, closerTrilha, sdr: corridaSdr, closer: corridaCloser, sdrRealizado, loading: loadingCorrida, error: erroCorrida } = useCorridaPerformance(mes, pilotos, janelas)
+  // Extrato de pontos da Corrida: aberto numa trilha (e, se veio do clique numa pessoa, já filtrado nela).
+  const [extrato, setExtrato] = useState<{ trilha: Trilha; pessoa: string | null } | null>(null)
   const visualCloser = useMemo(() => new Map(closersRaw.map(c => [c.nome, { iniciais: c.iniciais, cor: c.cor }])), [closersRaw])
   const visualSdr = useMemo(() => new Map(metasSdr.sdrs.map(s => [s.nome, { iniciais: s.iniciais, cor: s.cor }])), [metasSdr.sdrs])
 
@@ -219,7 +225,8 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
             notaJanela={notaJanela}
           />
 
-          <TrilhasGrid sdr={sdrTrilha} closer={closerTrilha} visualSdr={visualSdr} visualCloser={visualCloser} loading={loadingCorrida} />
+          <TrilhasGrid sdr={sdrTrilha} closer={closerTrilha} visualSdr={visualSdr} visualCloser={visualCloser} loading={loadingCorrida}
+            onExtrato={(trilha, pessoa) => setExtrato({ trilha, pessoa })} />
 
           <PilotosGrid closers={closers} historico={historico} loading={loadingClosers || loadingHist} />
         </div>
@@ -238,6 +245,21 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
       />
 
       <MetasMarcaSection mes={mes} />
+
+      {extrato && (
+        <ExtratoCorridaDrawer
+          onClose={() => setExtrato(null)}
+          trilhaInicial={extrato.trilha}
+          pessoaInicial={extrato.pessoa}
+          mes={mes}
+          rotuloJanela={roundLabel(rotuloJanela)}
+          sdr={corridaSdr}
+          closer={corridaCloser}
+          visualSdr={visualSdr}
+          visualCloser={visualCloser}
+          loading={loadingCorrida}
+        />
+      )}
     </div>
   )
 }
@@ -546,6 +568,7 @@ function MetaTimeCard({ loading, realFin, metaFin, realQtd, metaQtd, pctAtingido
 // 08/09): sem ranking cross-trilha, sem os guardrails de no-show/desconto.
 
 interface TrilhaRegra {
+  trilha: Trilha
   titulo: string
   /** Frase simples do que é medido e por que — pra quem nunca viu a régua entender de cara. */
   velocidadeDescricao: string
@@ -554,12 +577,14 @@ interface TrilhaRegra {
 }
 
 const TRILHA_SDR: TrilhaRegra = {
+  trilha: 'sdr',
   titulo: 'Trilha SDR',
   velocidadeDescricao: 'quanto mais rápido agendar a reunião depois do MQL, maior o multiplicador',
   tiers: SDR_SPEED_TIERS,
   unidade: 'RR',
 }
 const TRILHA_CLOSER: TrilhaRegra = {
+  trilha: 'closer',
   titulo: 'Trilha Closer',
   velocidadeDescricao: 'quanto mais rápido fechar a venda depois da reunião, maior o multiplicador',
   tiers: CLOSER_SPEED_TIERS,
@@ -602,19 +627,21 @@ function faixaVelocidadeLabel(tiers: readonly SpeedTier[], i: number): string {
   return `até ${diasFmt(atual.limiteDias)} ${diaLabel(atual.limiteDias)}`
 }
 
-function TrilhasGrid({ sdr, closer, visualSdr, visualCloser, loading }: {
+function TrilhasGrid({ sdr, closer, visualSdr, visualCloser, loading, onExtrato }: {
   sdr: LinhaTrilha[]
   closer: LinhaTrilha[]
   visualSdr: Map<string, { iniciais: string; cor: string }>
   visualCloser: Map<string, { iniciais: string; cor: string }>
   loading: boolean
+  /** Abre o extrato de pontos (trilha e, opcional, a pessoa clicada). */
+  onExtrato: (trilha: Trilha, pessoa: string | null) => void
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <RegraFonteTicketCard />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))', gap: 16 }}>
-        <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={visualSdr} loading={loading} />
-        <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={visualCloser} loading={loading} />
+        <TrilhaCard regra={TRILHA_SDR} linhas={sdr} visual={visualSdr} loading={loading} onExtrato={onExtrato} />
+        <TrilhaCard regra={TRILHA_CLOSER} linhas={closer} visual={visualCloser} loading={loading} onExtrato={onExtrato} />
       </div>
     </div>
   )
@@ -761,12 +788,13 @@ function RegraLinha({ rotulo, valor }: { rotulo: string; valor: string }) {
 }
 
 function TrilhaCard({
-  regra, linhas, visual, loading,
+  regra, linhas, visual, loading, onExtrato,
 }: {
   regra: TrilhaRegra
   linhas: LinhaTrilha[]
   visual: Map<string, { iniciais: string; cor: string }>
   loading: boolean
+  onExtrato: (trilha: Trilha, pessoa: string | null) => void
 }) {
   const ordenadas = [...linhas].sort((a, b) => b.pontos - a.pontos || b.volume - a.volume)
   const totalVol = linhas.reduce((s, l) => s + l.volume, 0)
@@ -776,9 +804,17 @@ function TrilhaCard({
       background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12,
       padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 8, height: 8, background: '#D4AF37' }} />
-        <span style={{ fontSize: 14, fontWeight: 600 }}>{regra.titulo}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ width: 8, height: 8, background: '#D4AF37' }} />
+        <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{regra.titulo}</span>
+        <button type="button" onClick={() => onExtrato(regra.trilha, null)} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 999,
+          border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C',
+          fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
+        }}>
+          <ScrollText size={13} />
+          Ver extrato dos pontos
+        </button>
       </div>
 
       <RegraBloco titulo="Velocidade" subtitulo={regra.velocidadeDescricao}>
@@ -817,10 +853,16 @@ function TrilhaCard({
           {ordenadas.map((l, i) => {
             const v = visual.get(l.nome)
             return (
-              <div key={l.nome} style={{
-                display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 10, alignItems: 'center',
-                padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)',
-              }}>
+              <div key={l.nome}
+                role="button"
+                tabIndex={0}
+                title={`Ver o extrato de pontos de ${l.nome}`}
+                onClick={() => onExtrato(regra.trilha, l.nome)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExtrato(regra.trilha, l.nome) } }}
+                style={{
+                  display: 'grid', gridTemplateColumns: '26px 1fr auto', gap: 10, alignItems: 'center', cursor: 'pointer',
+                  padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)',
+                }}>
                 <span style={{
                   width: 26, height: 26, borderRadius: 999, background: v?.cor ?? '#CBD5E1',
                   color: '#fff', fontSize: 9, fontWeight: 600,

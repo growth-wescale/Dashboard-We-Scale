@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from app import Service, GatewayError
+from app import Service, GatewayError, maintain_cache
 
 def auth(path, token, body):
  return {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'acesso_total':True}
@@ -85,6 +85,21 @@ class Tests(unittest.TestCase):
    with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
   self.assertEqual(e.exception.code,'source_refresh_pending')
   self.assertEqual(len(c.queries),queries)
+ def test_failed_lead_refresh_retries_without_delaying_media_or_extending_cache_age(self):
+  s,_=self.service([])
+  s.cache={'leads':(0,{}),'media':(5,{})}
+  now=[0]; attempts=[]
+  def sleep(seconds): now[0]+=seconds
+  def refresh(dataset):
+   attempts.append((dataset,now[0]))
+   if len(attempts)==1:
+    now[0]+=45
+    raise TimeoutError()
+   if len(attempts)==4: raise SystemExit()
+  with patch('app.time.monotonic',side_effect=lambda:now[0]), patch('app.time.sleep',side_effect=sleep), patch.object(s,'refresh_dataset',side_effect=refresh):
+   with self.assertRaises(SystemExit):maintain_cache(s)
+  self.assertEqual(attempts[:3],[('leads',180),('media',225),('leads',240)])
+  self.assertEqual(s.cache['leads'][0],0)
  def test_permissions_cannot_read_other_brands_or_tabs(self):
   s,c=self.service([])
   for access in [

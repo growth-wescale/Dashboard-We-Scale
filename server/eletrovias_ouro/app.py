@@ -208,11 +208,20 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def maintain_cache(service):
+ # Renovar antes dos 300s de validade, com prazo próprio para cada conjunto.
+ # Se uma consulta falhar, manter a última cópia só enquanto ela for válida.
+ with service.cache_lock:
+  # main já aqueceu todos os conjuntos habilitados, inclusive negócios quando ativo.
+  due = {dataset: cached[0] + 180 for dataset, cached in service.cache.items()}
  while True:
-  time.sleep(240)
-  for dataset in service.queries:
-   try: service.refresh_dataset(dataset)
-   except Exception: pass  # Resposta expirada falha fechada; nunca expor diagnóstico/credencial.
+  dataset = min(due, key=due.get)
+  time.sleep(max(0, due[dataset] - time.monotonic()))
+  try:
+   service.refresh_dataset(dataset)
+  except Exception:
+   due[dataset] = time.monotonic() + 15
+  else:
+   due[dataset] = time.monotonic() + 180
 
 
 def main():

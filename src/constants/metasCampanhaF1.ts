@@ -93,6 +93,22 @@ export function mesAtualCampanha(hoje: Date = new Date()): string {
   return atual < MES_INICIO_CAMPANHA ? MES_INICIO_CAMPANHA : atual
 }
 
+/**
+ * Mês que define o Cinturão: mês já fechado = ele mesmo; mês em curso (ou
+ * futuro) = o mês anterior, porque o cinturão fica com o campeão do último
+ * mês encerrado até alguém tomá-lo no fim do mês atual.
+ */
+export function mesDoCinturao(mes: string, hoje: Date = new Date()): string {
+  if (mes < chaveMes(hoje)) return mes
+  const [a, m] = mes.split('-').map(Number)
+  return chaveMes(new Date(a, m - 2, 1))
+}
+
+/** Nome do mês por extenso ("Outubro") a partir da chave `YYYY-MM-01`. */
+export function nomeDoMes(mes: string): string {
+  return NOMES_MES[Number(mes.split('-')[1]) - 1]
+}
+
 /** Meses selecionáveis: de setembro/2026 até o mês corrente. */
 export function mesesDaCampanha(hoje: Date = new Date()): string[] {
   const fim = mesAtualCampanha(hoje)

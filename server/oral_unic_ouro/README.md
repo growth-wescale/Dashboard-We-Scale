@@ -10,7 +10,11 @@ A view atual já expõe os32 IDs e criação original; nenhum DDL novo é necess
 
 A causa do bloqueio era `commercial_identity_incomplete` em uma negociação de30/10; a atualização falhava e o cache expirava (`source_refresh_pending`). A pendência real de vínculo permanece, sem criar pessoa ou alterar RD/fatos. A autorização anterior apenas para prévia foi substituída pela autorização explícita de aplicar/certificar.
 
-Validação local:974 testes frontend,15 gateway Oral Unic, build e lint sem erros. Certificação por IDs/42 registros idênticos concluída; estado de implantação e QA de produção serão registrados após execução. PR298 acompanha o local. Rollback: restaurar o arquivo anterior do gateway e o pacote anterior do dashboard; não modificar dados ou credenciais.
+Publicação da contagem concluída em02/11 às23:21 BRT: PR298/`a96e714`, deploy41565555992. Gateway Oral atualizado isoladamente, código anterior preservado para rollback; anônimo401, sessão autenticada200 com42 registros/32 métricas. Pacote local/main/produção:97 arquivos idênticos.974 testes frontend,15 gateway, build/lint/CI aprovados.
+
+QA de produção: Visão Geral/cards/funil/volume, Saúde/Franquia, campanhas/conjuntos/anúncios e S&OP32 MQLs;40 contatos únicos Franquia, investimentoR$5.465,37 eCP-MQLR$170,79. Semanas2+0+6+5+19=32;capital3+2+7+3+3+0+6+8=32. Meta & OKRs carregou preservada: a Missão só tem cards MQL para Inpot/Eletrovias/Lisô, portanto não alegar card Oral32 nessa tela. Nenhum RD/fato/DDL/Vendas ou ativação adicional Eletrovias.
+
+PDF real9 páginas exportado e revisado; a oitava linha de capital Oral ficava cortada. Complemento visual reduz apenas a altura do gráfico comparativo Oral quando há oito ou mais faixas, mantendo valores/layout das outras marcas. Build e prévia autenticada conferidos; conclusão da publicação desse complemento ficará no PR associado e no registro operacional. Evidência privada: `outputs/audits/oral-unic-certificacao-20261102.local/`. Rollback: restaurar o arquivo anterior do gateway e o pacote anterior do dashboard; não modificar dados ou credenciais.
 
 ## Gateway definitivo
 

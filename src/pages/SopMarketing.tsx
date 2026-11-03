@@ -1793,7 +1793,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
               ))}
             </select>
           </div>
-          <div style={{ height: slide.id === 'liso' && lisoOuroEnabled ? 190 : 240, flexShrink: 0 }}>
+          <div style={{ height: (slide.id === 'liso' && lisoOuroEnabled) || (slide.filterFranquia && mqlByCapital.length >= 8) ? 190 : 240, flexShrink: 0 }}>
             <MtdBarChart items={mtdItems} accent={acc} />
           </div>
           {investMetaPct !== null && (

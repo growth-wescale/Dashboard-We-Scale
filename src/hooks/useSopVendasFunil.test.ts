@@ -8,7 +8,7 @@ vi.mock('@/lib/supabaseVendas', () => ({ supabaseVendas: { from: mocks.from } })
 vi.mock('./useVendasFunil', () => ({ useVendasFunil: mocks.standard }))
 vi.mock('./useConsultaFiltrada', () => ({ useConsultaFiltrada: mocks.scoped }))
 
-import { fetchSopLegacyRows, useSopVendasFunil } from './useSopVendasFunil'
+import { fetchSopLegacyRows, lerFunilSop, useSopVendasFunil } from './useSopVendasFunil'
 
 function query(data: unknown[] | null = [], error: { message: string } | null = null) {
   const q = {
@@ -61,13 +61,13 @@ describe('fonte Legacy exclusiva da S&OP', () => {
 
   it('ativa somente a consulta Legacy e isola o cache da consulta compartilhada', () => {
     expect(useSopVendasFunil({ marca: 'Odonto Scale', dataInicio: '2026-10-01' }).data).toEqual(['legacy'])
-    expect(mocks.standard).toHaveBeenCalledWith({ marca: 'Odonto Scale', dataInicio: '2026-10-01', dataFim: undefined, enabled: false })
+    expect(mocks.standard).toHaveBeenCalledWith({ marca: 'Odonto Scale', dataInicio: '2026-10-01', dataFim: undefined, enabled: false }, expect.any(Function))
     expect(mocks.scoped).toHaveBeenCalledWith('["expansao:sop_legacy_funil","2026-10-01",null]', expect.any(Function), true)
   })
 
   it.each(['Eletrovias', 'Inpot', 'B2Case', 'Lisô Laser', 'Viva', 'Oral Unic', 'We Scale', undefined])('não muda a fonte da folha %s', marca => {
     expect(useSopVendasFunil({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19' }).data).toEqual(['standard'])
-    expect(mocks.standard).toHaveBeenCalledWith({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19', enabled: true })
+    expect(mocks.standard).toHaveBeenCalledWith({ marca, dataInicio: '2026-10-01', dataFim: '2026-10-19', enabled: true }, marca === 'We Scale' ? undefined : expect.any(Function))
     expect(mocks.scoped.mock.calls[0][2]).toBe(false)
   })
 
@@ -75,5 +75,27 @@ describe('fonte Legacy exclusiva da S&OP', () => {
     useSopVendasFunil({ marca: 'Odonto Scale', enabled: false })
     expect(mocks.standard.mock.calls[0][0].enabled).toBe(false)
     expect(mocks.scoped.mock.calls[0][2]).toBe(false)
+  })
+})
+
+describe('leituras concorrentes do PDF', () => {
+  it('espera a janela anterior e repete somente um timeout, com paginação menor', async () => {
+    let liberar!: () => void
+    const primeiro = lerFunilSop(new AbortController().signal, () => new Promise<void>(r => { liberar = r }))
+    const ler = vi.fn().mockRejectedValueOnce(Object.assign(new Error('timeout'), {code:'57014'})).mockResolvedValueOnce(['completo'])
+    const segundo = lerFunilSop(new AbortController().signal, ler)
+    await Promise.resolve()
+    expect(ler).not.toHaveBeenCalled()
+    liberar()
+    await primeiro
+    await expect(segundo).resolves.toEqual(['completo'])
+    expect(ler.mock.calls).toEqual([[1000], [250]])
+  })
+  it('preserva erro de acesso e não consulta pedidos cancelados na fila', async () => {
+    const ler = vi.fn().mockRejectedValue(Object.assign(new Error('negado'), {code:'42501'}))
+    await expect(lerFunilSop(new AbortController().signal, ler)).rejects.toThrow('negado')
+    const cancelado = new AbortController(); cancelado.abort()
+    await expect(lerFunilSop(cancelado.signal, ler)).rejects.toThrow()
+    expect(ler).toHaveBeenCalledTimes(1)
   })
 })

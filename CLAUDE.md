@@ -419,6 +419,20 @@ fecha ciclo se `_closed_at` cair em **dia posterior** (Brasília) ao da perda.
 Senão, o índice `ux_deal_eventos_perda_por_dia` descarta a 2ª perda e o
 retrabalho de minutos virava um "ciclo 2", contando SAL/etapa duas vezes.
 
+**Eco da retomada não é passagem** (desde 03/11/2026). Quando uma negociação
+perdida é retomada, o RD grava de novo a entrada na etapa em que ela estava, no
+minuto da retomada, e o sync vira isso num `mudanca_etapa` que abre o ciclo
+novo. Sem tratamento, o ciclo 2 ganhava reunião realizada, SAL ou COF "no
+minuto da retomada", sem reunião nenhuma. `vw_deal_eventos_ciclo.eh_eco_retomada`
+marca a passagem com o **mesmo `id_etapa` da passagem anterior** e **uma perda
+entre as duas** (ou um `deal_retomado` de 2 min antes a 1 h depois). O eco
+continua no ciclo (presença do ciclo, início, etapa final, camada e dono), mas
+fica fora das datas de etapa, de `passagens_no_ciclo` e de `ts_ini_closer` em
+`vw_deal_ciclo`, e fora de `vw_funil_etapas_v2`. Agregado novo de `vw_deal_ciclo`
+que represente marco de etapa tem que filtrar `NOT et.eh_eco_retomada`.
+Repetição na mesma etapa sem perda nem retomada perto não é tocada. SQL em
+`docs/sql/2026-11-03-eco-da-retomada.sql`.
+
 **Closer eleito nunca pode ter cargo SDR puro.** As três fontes de `nome_closer`
 (`evento`, `posse`, `posse_atual`) leem `responsavel`/`dono` — um campo de
 "quem está com o deal no RD agora", não "quem é Closer de verdade". Para um
@@ -834,6 +848,11 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   Macro = Resgate, e a fonte já dá os 2 pts. Prompt do projeto em
   `docs/superpowers/prompts/2026-11-03-super-prompt-crm-contato-negociacao.md` (pasta principal, não
   commitado); tarefa do Junior no Notion com prazo em 05/11. Ver entrada de 03/11 (2)
+- [ ] **Empate de horário no fim do ciclo:** `vw_deal_ciclo` escolhe marca, funil,
+  `etapa_final_ciclo` e `camada_atual` pelo último evento (`array_agg … ORDER BY data_evento DESC`), sem
+  desempate. Com dois eventos no mesmo instante, a escolha depende do plano da consulta: na correção do
+  eco da retomada (03/11), 27 ciclos de 2026 trocaram de valor, sem efeito na tela (marca, funil e etapa
+  da negociação atual vêm do snapshot). Desempatar por `id_evento` se algum dia aparecer na tela
 - [ ] **Corte de mês em UTC nos outros hooks da Campanha de Metas:** `useMetasClosers`,
   `useRealizadoPorMarca` e `useHistoricoAtingimento` filtram `data_venda` com `mesRef` e `…T23:59:59` sem
   fuso, e o banco lê em UTC: venda das 21h à meia-noite do último dia do mês (Brasília) cai no mês
@@ -949,6 +968,52 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-03 (8) — Eco da retomada não conta mais como passagem
+
+Achado ao conferir o extrato e o paliativo da Corrida (entradas de 03/11 mais
+abaixo); correção no banco pedida pelo Junior. Quando uma negociação perdida é
+retomada, o RD grava de novo a entrada na etapa em que ela estava, no minuto da
+retomada. Com a perda no Diagnóstico, o ciclo 2 ganhava uma "reunião realizada"
+no minuto da reabertura, e a Corrida contava como RR (com o paliativo, 2 pts).
+O mesmo valia para SAL, COF, No Show e etapas do SDR, e para o eco que o RD às
+vezes grava no próprio instante da perda.
+
+Regra na seção 4 ("Eco da retomada não é passagem"). Migration
+`eco_da_retomada_nao_conta_passagem`; SQL, conferência e como voltar atrás em
+`docs/sql/2026-11-03-eco-da-retomada.sql`. As abas pegaram sozinhas: a rodada
+das 18h24 do `dash_sincronizar` (versão 39) refez a matview e as cópias, sem
+erro.
+
+**Medido:** 225 ecos marcados; `vw_funil_etapas_v2` 26.242 → 26.073 linhas.
+Inbound, deals únicos: set/26 Diagnóstico 93 → 92, SAL 55 → 52, COF 32 → 29,
+Conexão 201 → 196; out/26 Diagnóstico 83 → 81, SAL 63 → 60, Interesse Reunião
+343 → 337; nov/26 Diagnóstico 4 → 3. `vw_funil_vendas`: RR de outubro 82 → 80,
+de novembro 4 → 3, SAL de outubro 60 → 57; linhas, ganhos, receita
+(R$ 3.625.328,98), perdidos e em andamento iguais.
+
+**Corrida e Grid dos SDRs:** Sarah set/26 80,5 → 77,1 pts (Leandro Rodrigues) e
+out/26 54,1 → 50,4 (Francesco Martinenghi); Cassiana nov/26 2 → 0 (Rafael Alves
+Lustosa, a única reunião dela). Nenhuma colocação de set/out muda, no mês ou no
+round; no round 2 de novembro a Cassiana cai de 2º para 3º. No Grid saem 1 RR e
+1 SAL da Sarah em setembro, 1 RR da Sarah e 1 SAL da Xayane em outubro e 1 RR
+da Cassiana em novembro (mais 2 SAL do Thiago em setembro).
+
+**SDR do handoff:** o eco numa etapa do Closer deixou de definir a entrada na
+camada do Closer. Um ciclo muda: Ricardo Balslaobre (ciclo 2) passa de Thiago
+para Cassiana Lavall, que reabriu e reagendou; a reunião sai do eco (31/10
+10:33) para a real (14:05).
+
+**Verificado:** antes de aplicar, views temporárias com a definição nova (só na
+consulta, nada gravado): 11.604 ciclos dos dois lados, nenhum some nem aparece;
+status, venda, perda e início do ciclo iguais. 27 ciclos de 2026 com dois
+eventos no mesmo instante trocam marca, funil ou etapa final por empate
+(pendência na seção 8), sem efeito na tela. Tempo: `vw_deal_ciclo` 3,1 → 3,2 s,
+`vw_funil_etapas_v2` 0,64 → 0,74 s. Depois de aplicar, o motor da Corrida
+rodado nos dados novos bateu com a simulação; extrato = card e pop-up = página
+nos 160 lançamentos de set a nov. Ficaram de fora 183 repetições na mesma etapa
+sem perda nem retomada perto (duplicatas antigas). Backup das 3 views em
+`_backup_viewdefs` (`*_pre_eco_retomada_20261103` e `*_pos_eco_retomada_20261103`).
 
 ### 2026-11-03 — Nomes completos das fotos da Campanha
 

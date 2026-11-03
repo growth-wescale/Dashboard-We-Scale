@@ -82,6 +82,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_deal_ciclo_enriquecido` | 1 linha por **ciclo de vida** do deal. Chave composta `id_lead + ciclo` |
 | **`vw_funil_vendas`** | **base das abas de Vendas.** Projeção da anterior com allowlist de funis, sem deals de teste e sem Excluído |
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
+| `dash_vendas` / `dash_etapas` | **cópias prontas** de `vw_funil_vendas` / `vw_funil_etapas_v2` que as abas de Vendas leem desde 03/11/2026: 1 linha por linha da view, com a `versao` em que mudou e lápide `removido`. Mantidas por `dash_sincronizar()` (pg_cron, a cada minuto); o navegador lê só pelas RPCs `dash_base`/`dash_mudancas`. Ver "Abas de Vendas ao vivo" |
 | `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
 | `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
@@ -250,6 +251,57 @@ tarefa a mais por dia. Sem o 1º WhatsApp enviado, o deal também não é movido
 sozinho de Novo MQL para Tentando Contato (`mover_no_disparo_*` e
 `mover_pendentes` dependem de um `enviado`). Lisô Laser está fora da lista
 desde 27/10.
+
+### Abas de Vendas ao vivo (desde 03/11/2026)
+
+Visão Macro, Performance, Análise de Perda e a lista da Linha do Tempo não leem
+mais `vw_funil_vendas`/`vw_funil_etapas_v2` página por página. O banco mantém
+cópias prontas (`dash_vendas`, `dash_etapas`) e o navegador guarda a base no
+IndexedDB e recebe só o que mudou. SQL e explicação completa:
+`docs/sql/2026-11-03-dashboard-vendas-tempo-real.sql`; código em `src/lib/aoVivo/`.
+
+- **As views continuam sendo a fonte da verdade.** `dash_*` é cópia mantida por
+  `dash_sincronizar()` (pg_cron `dash_sincronizar`, a cada minuto; ele também faz
+  o REFRESH de `mv_deal_ciclo_enriquecido`, no lugar do job 19, desativado).
+  Regra de negócio nova vai na view, nunca em `dash_*`.
+- **Só trabalha quando algo mudou:** compara contadores de escrita
+  (`pg_stat_user_tables`) das tabelas de que a matview e as views dependem e o
+  `xmin` das regras das views (`CREATE OR REPLACE VIEW` conta como mudança, na
+  rodada seguinte). Sem mudança, a rodada leva ~0,03 s; a cada 30 min roda de
+  qualquer jeito, por segurança.
+- **Coluna nova que o dashboard usa = dois lugares:** `dash_colunas()` (SQL) e
+  `COLUNAS_VENDAS`/`COLUNAS_ETAPAS` (`src/lib/aoVivo/definicoes.ts`). Um teste
+  compara as listas do arquivo SQL com as do código, e o navegador falha alto
+  ("veio sem as colunas") se faltar uma. O `create or replace` de
+  `dash_colunas` vai na MESMA transação do `select dash_sincronizar(true)`
+  (senão, por até 1 min, os arrays velhos saem com os nomes novos).
+- **Apelido de marca novo ou mudado** (`MARCA_ALIASES`, `brands.ts`): a base
+  guardada no navegador já tem o apelido aplicado, então a "assinatura" do
+  formato inclui a tabela de apelidos e o registro antigo é descartado sozinho.
+- **Aviso ao vivo:** `realtime.send` no canal público `dashboard-vendas`, evento
+  `versao`, payload só `{versao, epoca}` (nenhum dado). O navegador também
+  confere sozinho a cada 5 min (30 s se o canal cair), ao voltar para a aba,
+  quando a internet volta e no botão Atualizar.
+- **Ordem das linhas importa** e é a mesma das consultas antigas
+  (`definicoes.ts`): em "Deals únicos" fica o 1º evento de cada (deal, ciclo,
+  mês), e a data dele aparece nos popups.
+- **Só guarda no navegador quem vê todas as marcas** (`guardaLocal.ts`, ligado
+  pelo `AcessoContext`). Logout ou troca de usuário apagam a base guardada
+  (memória e IndexedDB `ws-dashboard-ao-vivo`) em qualquer tela; registro de
+  outro usuário ou de outro formato é ignorado. IndexedDB que não responde vira
+  "nada guardado" em 3 s.
+- **Selo da tela:** "Ao vivo" (aviso funcionando), "Atualiza a cada 30 s" (sem
+  o aviso), "Conferindo…" (mostrando a base guardada enquanto confere),
+  "Sem atualizar" (o navegador não alcança o banco) e **"Atrasado"** (a
+  sincronização no banco falhou — `dash_estado.ultimo_erro` — ou não roda há
+  mais de 40 min).
+- **Diagnóstico:** `select * from dash_estado` (`ultimo_resultado`,
+  `ultimo_erro`, `versao`, `mudou_em`) e `cron.job_run_details` do job
+  `dash_sincronizar`; falha do aviso em `dash_estado.aviso_erro`. Forçar todos
+  os navegadores a baixar a base de novo: `select dash_forcar_recarga();` (troca
+  a época, sincroniza e avisa).
+- **Do RD à tela:** o banco segue o RD pelo `wf_5` (5 min) e pelo
+  `espelho_rd_edge` (15 min), e isso não mudou; do banco à tela leva até ~1 min.
 
 ### Event Sourcing dirigido por configuração
 
@@ -460,7 +512,16 @@ src/lib/performanceRows.ts    agregação por SDR/Closer (aba Performance)
 src/lib/equipe.ts             quem é do time (`nome_cargo_foto.ativo`); o resto vira a linha "Ex-integrantes" nas visões por pessoa
 src/lib/reunioesCloser.ts     reuniões do MeetRox por tipo R1–R5: recorte pelos filtros da barra + agregação por Closer/marca (puro, testado)
 src/lib/paginacao.ts          busca paginada em paralelo (count na 1ª página), repete página que falha — exige ORDEM TOTAL na query
-src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useFunilVendas/useFunilEventos)
+src/lib/cacheConsulta.ts      cache em memória entre abas + dedup de carga em voo (usado por useReunioesCloser/useRepasseTaxas)
+src/lib/aoVivo/colecao.ts      bases ao vivo, parte pura: monta as linhas, aplica mudanças, comparadores de ordem (testado)
+src/lib/aoVivo/definicoes.ts   colunas/chave/ordem de dash_vendas e dash_etapas + recorte por origem (testado)
+src/lib/aoVivo/baseAoVivo.ts   base no navegador: memória → IndexedDB → dash_base, depois só dash_mudancas (testado)
+src/lib/aoVivo/canal.ts        aviso ao vivo (Realtime) + conferência de 30 s/5 min, ao voltar pra aba e no Atualizar (testado)
+src/lib/aoVivo/armazemLocal.ts IndexedDB `ws-dashboard-ao-vivo` (só aceleração; falha vira "nada guardado")
+src/lib/aoVivo/basesVendas.ts  liga as duas bases ao Supabase, ao canal e ao login (logout apaga)
+src/lib/aoVivo/guardaLocal.ts  quem pode guardar a base no navegador (todas as marcas) + limpeza no logout, carregado com o app
+src/hooks/useBaseAoVivo.ts     useSyncExternalStore das bases + status do canal
+src/components/ui/AoVivoIndicador.tsx  selo "Ao vivo" (Visão Macro, Performance, Análise de Perda)
 
 src/contexts/SharedFiltersContext.tsx   filtros compartilhados, persistidos em localStorage
 src/components/ui/FilterBar.tsx         barra sticky
@@ -482,8 +543,8 @@ src/pages/DistribuicaoLeads.tsx + src/components/distribuicao/*  aba Distribuiç
 supabase/functions/distribuir-lead/   webhook RD Marketing → RPCs → POST /deals (rd.ts tem os IDs de campo do CRM)
 supabase/functions/gravar-distribuicao/  escrita autenticada da configuração
 docs/sql/2026-10-16-distribuicao-leads.sql  todo o SQL aplicado (tabelas, RPCs, views) com os testes
-src/hooks/useFunilVendas.ts   lê vw_funil_vendas (sem filtro de data — o recorte é no metrics)
-src/hooks/useFunilEventos.ts  lê vw_funil_etapas_v2
+src/hooks/useFunilVendas.ts   base ao vivo de vw_funil_vendas (dash_vendas): sem filtro de data, origem recortada no cliente
+src/hooks/useFunilEventos.ts  base ao vivo de vw_funil_etapas_v2 (dash_etapas)
 src/hooks/useMetasPerformance.ts  metas por colaborador/mês + `useMetaResumo` (meta por marca, soma vários meses, sem quebra por pessoa)
 src/hooks/useMetasTimeResumo.ts   meta do time por marca (SDR+Closer) — sem consumidor desde 01/10/2026
 src/hooks/useReunioesCloser.ts    lê vw_closer_reunioes inteira (sem filtro de data — recorte em reunioesCloser.ts)
@@ -724,7 +785,7 @@ e revisar a ordenação total da paginação separadamente com acesso autorizado
 filtro rápido dispara várias consultas, e a rede devolve fora de ordem. Se o
 hook não confere depois do `await` que a chave (meses, origem, filtros) ainda
 é a ativa, a resposta mais lenta de uma seleção intermediária fica na tela até
-recarregar a página. Padrão: `chaveAtiva` (`useFunilVendas`, `useMetaResumo`)
+recarregar a página. Padrão: `chaveAtiva` (`useMetaResumo`)
 ou `useConsultaFiltrada`. O `cancelled` que muitos hooks têm só barra o polling
 depois de desmontar, não protege a resposta. Em 15/10 o card de meta somou
 Jul+Set com só Setembro selecionado.
@@ -799,7 +860,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   em etapas iniciais e as reuniões agendadas no período, pelos mesmos pesos) —
   segunda entrega da distribuição de leads, decisão do Junior em 16/10
 - [x] ~~Segmentações "Entrada Chatbot - <marca>" sem uso~~ — seguem em uso: a automação da COF continua disparando por elas (decisão de 19/10)
-- [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel
+- [ ] **Entrega 2 do controle de acessos: blindar os dados no banco.** Hoje a permissão vale no app e em `gravar-meta`; as 21 views `vw_*` de Expansão aceitam SELECT da chave anon sem sessão (`supabaseVendas.ts` usa `persistSession: false`) e 18 tabelas de Marketing têm policy pra anon/public. Precisa: Expansão validar o usuário do Marketing (JWT/claims) e usar `tem_permissao` nas views/RLS. Parte de Marketing exige OK do Gabriel. As RPCs `dash_base`/`dash_mudancas` (abas de Vendas ao vivo, 03/11) entram no mesmo pacote: são `security definer` executáveis pelo anon, com os mesmos dados das views
 - [ ] **Desligar cadastro público no Supabase de Marketing** (Auth → "Allow new users to sign up"). Conta criada por fora cai em "sem acesso", mas não deveria nem existir
 - [ ] **E-mail de convite e de "Esqueci minha senha" usam o SMTP padrão do Supabase** — remetente genérico, texto em inglês e limite baixo de envios/hora (o mesmo limite vale pros dois fluxos; estourou, a tela de esqueci senha pede pra esperar). Configurar SMTP próprio + template em pt-BR, e cadastrar `https://dashboard.srv1816822.hstgr.cloud/definir-senha` em Auth → Redirect URLs
 
@@ -874,6 +935,62 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-03 (7) — Abas de Vendas instantâneas e ao vivo
+
+Pedido do Junior: as abas de Vendas demoravam muito para carregar; queria algo
+instantâneo que acompanhasse o banco em tempo real.
+
+**Medido antes** (logs do Supabase e navegador): a Visão Macro levava **~14 s**.
+Cada página de `vw_funil_etapas_v2` recalculava a view inteira (~0,9 s com o
+banco ocioso, p50 1,1 s e até 2,7 s com carga; 25 páginas por carga) e a 1ª às
+vezes estourava os 3 s do anon (500 e nova tentativa). `vw_funil_vendas`: 8
+páginas, p50 0,6 s cada. Cada navegador baixava as duas bases inteiras ao abrir
+e de novo a cada 5 min: 13,7 mil requisições por dia só em `vw_funil_vendas`
+(3 mil delas cargas completas do escritório), ~81 min/dia de banco nas duas
+views, fora o REFRESH da matview a cada 2 min (4,5 s, ~54 min/dia).
+
+**Banco** (`docs/sql/2026-11-03-dashboard-vendas-tempo-real.sql`, aplicado):
+`dash_vendas`/`dash_etapas` = cópia linha a linha das duas views, com a versão
+em que cada linha mudou e lápide por 30 dias. `dash_sincronizar()` (pg_cron
+`dash_sincronizar`, a cada minuto; **job 19 do REFRESH desativado**, não
+apagado) só trabalha quando alguma fonte mudou (ou a cada 30 min): REFRESH da
+matview, MERGE só das linhas mudadas e aviso pelo Realtime. Rodada sem mudança:
+~0,03 s; com mudança: 7–9 s. Leitura: `dash_base` (base inteira num JSON, as
+duas em ~0,5 s) e `dash_mudancas` (~70 ms). Regras na seção "Abas de Vendas ao
+vivo".
+
+**Navegador** (`src/lib/aoVivo/`): abre da memória (troca de aba), do IndexedDB
+(reabrir, marcado com o usuário) ou do banco (1º acesso) e depois só busca o
+que mudou. `useFunilVendas`/`useFunilEventos` mantêm a mesma interface; as duas
+origens vêm juntas e trocar Inbound × Prospecção Ativa ficou instantâneo. Selo
+"Ao vivo" ao lado do Exportar na Visão Macro, Performance e Análise de Perda.
+
+**Depois:** 1ª abertura num navegador ~1 s (dev server: deals 0,86 s, eventos
+1,03 s); reabrindo ~0,5 s; troca de aba e de origem na hora. Do banco à tela
+até ~1 min.
+
+**Conferido:** `dash_*` = views linha a linha (0 diferenças, consulta no fim do
+SQL); no navegador as linhas, os valores e a **ordem** que chegam pelo caminho
+novo são idênticos aos das views (7.751 + 1.572 deals, 24.273 eventos); em 20
+min de mudanças reais chegaram 2 avisos (~1 s depois de cada sincronização) e a
+base montada por partes terminou igual a uma base nova (9.323 deals, 26.160
+eventos). Build + 1.070 testes (44 novos). A lápide (linha que some da view)
+está coberta por teste com banco falso; não apareceu caso real na validação, e
+o teste com dado real foi recusado (mexia em `dashboard_deal_oculto`).
+
+**Revisão independente** antes do merge achou e corrigiu: laço infinito
+quando o Supabase fecha o canal sozinho (o `removeChannel` devolve outro
+`CLOSED` na hora; com a biblioteca real eram 378 chamadas, agora 2); IndexedDB
+que não responde travava a carga (agora 3–5 s de prazo); parada da
+sincronização no banco ficava invisível (agora o selo mostra "Atrasado");
+apelido de marca mudado deixava a base guardada errada (agora invalida
+sozinho). Também: avisos no máximo 1 a cada 5 s por painel e espalhados até
+1,5 s (o canal é público), base guardada só para quem vê todas as marcas,
+logout limpa em qualquer tela e não baixa nada de novo.
+
+**Rollback:** `select cron.alter_job(19, active := true);`,
+`select cron.unschedule('dash_sincronizar');` e reverter o PR.
 
 ### 2026-11-03 (2) — Corrida de Performance: negociação retomada vale 2 pts (paliativo do resgate)
 

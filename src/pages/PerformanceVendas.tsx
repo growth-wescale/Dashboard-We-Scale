@@ -3,6 +3,7 @@ import { Download, Users, UserX, Handshake, Timer, Info } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
+import { AoVivoIndicador } from '@/components/ui/AoVivoIndicador'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
@@ -813,7 +814,8 @@ export function PerformanceVendas() {
         title="Performance"
         titleAside={<OrigemToggle />}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
-        actions={
+        actions={<>
+          <AoVivoIndicador comEtapas />
           <button
             onClick={() => downloadCsv(scoped as unknown as Record<string, unknown>[], `performance-${marcasSelecionadas.map(b => b.key).join('-') || 'todas'}-${range.start}-${range.end}`)}
             disabled={!scoped.length}
@@ -822,7 +824,7 @@ export function PerformanceVendas() {
           >
             <Download size={14} /> Exportar
           </button>
-        }
+        </>}
       />
 
       <FilterBar

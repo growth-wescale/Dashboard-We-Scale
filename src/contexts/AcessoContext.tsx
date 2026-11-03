@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { ACESSO_VAZIO, parseMinhasPermissoes, pode as podeFn, type EstadoAcesso } from '@/lib/permissoes'
+import { definirGuardaLocal } from '@/lib/aoVivo/guardaLocal'
 
 interface AcessoContextValue extends EstadoAcesso {
   carregando: boolean
@@ -54,6 +55,11 @@ export function AcessoProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisivel)
     return () => document.removeEventListener('visibilitychange', onVisivel)
   }, [userId, recarregar])
+
+  // Base de Vendas guardada no navegador: só para quem vê todas as marcas.
+  // Layout effect: roda antes das páginas assinarem as bases ao vivo.
+  const guardaLocal = !carregando && !erro && estado.ativo && estado.marcas === null
+  useLayoutEffect(() => { definirGuardaLocal(guardaLocal) }, [guardaLocal])
 
   const value = useMemo<AcessoContextValue>(() => ({
     ...estado,

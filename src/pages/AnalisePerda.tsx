@@ -3,6 +3,7 @@ import { Download } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
+import { AoVivoIndicador } from '@/components/ui/AoVivoIndicador'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { PerdaDealsDrawer } from '@/components/ui/PerdaDealsDrawer'
@@ -258,7 +259,8 @@ export function AnalisePerda() {
         title="Análise de Perda"
         titleAside={<OrigemToggle />}
         subtitle={drawerSubtitle}
-        actions={
+        actions={<>
+          <AoVivoIndicador />
           <button
             onClick={() => downloadCsv(perdas, `analise-perda-${scopeLabel}-${range.start}-${range.end}`)}
             disabled={!perdas.length}
@@ -272,7 +274,7 @@ export function AnalisePerda() {
             }}>
             <Download size={14} /> Exportar
           </button>
-        }
+        </>}
       />
 
       <FilterBar

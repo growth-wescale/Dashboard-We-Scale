@@ -71,7 +71,7 @@ export function findBrand(key: string | undefined): BrandDef | undefined {
  * Sem este alias os deals recém-migrados ficam numa marca "fantasma" que não
  * bate com nenhuma entrada de `BRAND_LIST` — somem do filtro e do funil.
  */
-const MARCA_ALIASES: Record<string, string> = {
+export const MARCA_ALIASES: Readonly<Record<string, string>> = {
   'Odonto Legacy': 'Odonto Scale',
   // 'Scale Partner': valor atual do campo "Marca" no RD para a marca que o
   // dashboard conhece como 'We Scale' (rótulo "Scale Partner" desde 21/09/2026).

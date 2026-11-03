@@ -430,9 +430,9 @@ export function pendenciasMarca(m: MarcaConfig, funil: FunilCalculado = calcular
 
   const sdrs = m.pessoas.filter(x => x.funcao === 'SDR')
   const closers = m.pessoas.filter(x => x.funcao === 'Closer')
-  const sdrComMeta = ETAPAS_SDR.some(e => funil.etapas[e].origem !== 'sem_meta')
-  if (closers.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um Closer' })
-  if (sdrComMeta && sdrs.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um SDR — ou marque as etapas de SDR como sem meta' })
+  // Função sem ninguém = marca sem meta daquela função no mês (nenhuma linha no
+  // espelho). Só trava se a marca não tiver ninguém: aí não haveria meta pra ninguém.
+  if (sdrs.length === 0 && closers.length === 0) p.push({ secao: 'time', texto: 'Adicione pelo menos um SDR ou um Closer' })
   const somaSdr = sdrs.reduce((s, x) => s + x.peso, 0)
   if (sdrs.length > 0 && Math.abs(somaSdr - 100) > 0.01) p.push({ secao: 'time', texto: textoSomaPesos('SDRs', somaSdr) })
   const somaCloser = closers.reduce((s, x) => s + x.peso, 0)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
+import { normalizeMarcaRaw } from '@/constants/brands'
 
 /**
  * Meta cadastrada (unidades e faturamento) por marca num mês específico —
@@ -35,11 +36,14 @@ async function fetchMetas(mesReferencia: string): Promise<{ rows: RawRow[]; erro
 function aggregate(rows: RawRow[]): Map<string, MetaPorMarca> {
   const map = new Map<string, MetaPorMarca>()
   for (const r of rows) {
-    if (!r.marca) continue
-    const cur = map.get(r.marca) ?? { marca: r.marca, metaQtd: 0, metaFaturamento: 0 }
+    // Normaliza alias ('Odonto Legacy' → 'Odonto Scale'): as vendas vêm com o
+    // nome novo do RD e as metas com o canônico — sem isso não se encontram.
+    const marca = normalizeMarcaRaw(r.marca)
+    if (!marca) continue
+    const cur = map.get(marca) ?? { marca, metaQtd: 0, metaFaturamento: 0 }
     cur.metaQtd += Number(r.meta_qtd_vendas) || 0
     cur.metaFaturamento += Number(r.meta_financeira) || 0
-    map.set(r.marca, cur)
+    map.set(marca, cur)
   }
   return map
 }

@@ -62,10 +62,12 @@ function volumeTexto(trilha: Trilha, n: number): string {
 
 const EXPLICACAO: Record<Trilha, string> = {
   sdr: 'Cada linha é uma reunião realizada (RR) de quem tem meta de SDR no mês. '
-    + 'Pontos = peso da fonte × bônus do dia × ticket da marca × velocidade (do MQL até o agendamento da reunião no funil do Closer).',
+    + 'Pontos = peso da fonte × bônus do dia × ticket da marca × velocidade (do MQL até o agendamento da reunião no funil do Closer). '
+    + 'Negociação retomada (perdida e reaberta) vale 2 pts como Resgate, qualquer que seja a Fonte Macro.',
   closer: 'Cada linha é uma venda de quem tem meta de Closer no mês. Cada unidade de franquia vendida conta como uma unidade do placar: '
     + 'a venda de 2 unidades aparece numa linha só, com “× 2 unidades” no fim da conta, e já vale como 2 unidades no dia para o bônus. '
-    + 'Pontos = peso da fonte × bônus do dia × ticket da marca × velocidade (da reunião realizada até a venda) × unidades.',
+    + 'Pontos = peso da fonte × bônus do dia × ticket da marca × velocidade (da reunião realizada até a venda) × unidades. '
+    + 'Negociação retomada (perdida e reaberta) vale 2 pts como Resgate, qualquer que seja a Fonte Macro.',
 }
 
 export function ExtratoCorridaDrawer({

@@ -1,7 +1,7 @@
 import { marcaLabel } from '@/constants/brands'
 import { MES_INICIO_CAMPANHA, nomeDoMes } from '@/constants/metasCampanhaF1'
 import { toLocalDate } from '@/lib/dateUtils'
-import { marcaTemFaixa, type Lancamento, type Trilha } from '@/lib/corridaPerformance'
+import { marcaTemFaixa, normalizarFonte, type Lancamento, type Trilha } from '@/lib/corridaPerformance'
 
 /**
  * Corrida de Performance — o "porquê" de cada ponto, em português simples.
@@ -71,9 +71,16 @@ function marcaNome(l: Lancamento): string {
   return marcaLabel(l.marca) || 'sem marca'
 }
 
-/** Fonte Macro → peso de volume. */
+/** Fonte Macro → peso de volume. Negociação retomada vale 2 pts como Resgate, qualquer que seja a fonte. */
 export function fatorFonte(l: Lancamento): Fator {
-  return { motivo: fonteLabel(l), valor: l.peso === 1 ? '1 pt' : `${l.peso} pts` }
+  const valor = l.peso === 1 ? '1 pt' : `${l.peso} pts`
+  if (l.retomada) {
+    const motivo = normalizarFonte(l.fonte) === 'resgate'
+      ? 'Negociação retomada (resgate)'
+      : `Negociação retomada (resgate) · no RD: ${fonteLabel(l)}`
+    return { motivo, valor }
+  }
+  return { motivo: fonteLabel(l), valor }
 }
 
 /** Bônus de mais de 1 unidade no mesmo dia, dizendo quantas foram. */
@@ -128,7 +135,7 @@ export function fatorVelocidade(l: Lancamento): Fator {
  * O bônus só aparece quando vale (×1,5); as unidades, quando a venda tem mais de 1.
  */
 export function contaTexto(l: Lancamento): string {
-  const partes = [`${fatorFonte(l).valor} (${fonteLabel(l)})`]
+  const partes = [`${fatorFonte(l).valor} (${l.retomada ? 'negociação retomada' : fonteLabel(l)})`]
   if (l.bonus > 1) partes.push(`${numMult(l.bonus)} (mesmo dia)`)
   partes.push(`${numMult(l.ticket.mult)} (${marcaNome(l)})`)
   const vel = l.leadtimeDias === null ? `${velocidadeCurta(l)} → neutro` : velocidadeCurta(l)

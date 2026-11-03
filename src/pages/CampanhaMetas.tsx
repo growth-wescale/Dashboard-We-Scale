@@ -679,6 +679,7 @@ function RegraFonteTicketCard() {
         <RegraBloco titulo="Fonte" subtitulo="peso pela Fonte Macro do deal">
           <RegraLinha rotulo="1 pt" valor="Inbound · Indicação · Parceiro · Repasse · sem classificação" />
           <RegraLinha rotulo="2 pts" valor="Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado" />
+          <RegraLinha rotulo="2 pts" valor="Negociação retomada (resgate), qualquer que seja a Fonte Macro" />
         </RegraBloco>
 
         <RegraBloco titulo="Ticket" subtitulo="investimento do franqueado na marca">
@@ -751,7 +752,7 @@ function RegraBloco({ titulo, subtitulo, children }: { titulo: string; subtitulo
 }
 
 /**
- * 1 "estatística" rotulada na linha de uma pessoa (Volume / Fonte 2 pts /
+ * 1 "estatística" rotulada na linha de uma pessoa (Volume / Peso 2 pts /
  * Ticket / Velocidade) — cada fator que entra na multiplicação que gera
  * "Pontos" vira um chip com nome, não um texto corrido separado por "·"
  * (ficava difícil de ler o que cada número queria dizer).
@@ -873,7 +874,7 @@ function TrilhaCard({
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                     <EstatChip rotulo="Volume" valor={`${l.volume} ${unidadeLabel(regra.unidade, l.volume)}`} />
                     {l.volume2pts > 0 && (
-                      <EstatChip rotulo="Fonte 2 pts" valor={`${l.volume2pts} de ${l.volume}`} />
+                      <EstatChip rotulo="Peso 2 pts" valor={`${l.volume2pts} de ${l.volume}`} />
                     )}
                     {l.ticketMedio !== 1 && (
                       <EstatChip rotulo="Ticket" valor={multFmt(l.ticketMedio)} />

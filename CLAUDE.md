@@ -863,6 +863,32 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-11-03 (2) — Corrida de Performance: negociação retomada vale 2 pts (paliativo do resgate)
+
+Pedido do Junior, depois do extrato no ar (entrada abaixo). No RD a Fonte
+Macro quase nunca é trocada para Resgate quando o SDR reabre uma negociação
+perdida (out/26: 1 de 11 reuniões realizadas em negociação reaberta estava
+como Resgate). Paliativo: **negociação retomada (perdida e reaberta em outro
+dia = `vw_funil_vendas.ciclo > 1`) vale 2 pts como Resgate, qualquer que seja
+a Fonte Macro**, nas duas trilhas (Fonte Resgate já valia 2 pts pro Closer).
+`pesoDaUnidade`/`ehRetomada` em `corridaPerformance.ts`; o lançamento ganhou
+`retomada`. A velocidade não muda: o ciclo novo não tem data de MQL e fica
+neutro, como antes.
+
+Na tela: a régua "Como a pontuação funciona" ganhou a linha "2 pts ·
+Negociação retomada (resgate), qualquer que seja a Fonte Macro"; o extrato
+mostra "2 pts · Negociação retomada (resgate) · no RD: Inbound" e a conta
+"2 pts (negociação retomada) × …"; o chip "Fonte 2 pts" do card virou "Peso 2
+pts" (conta fonte de 2 pts e retomada). Retroativo, porque a pontuação é
+calculada na hora.
+
+Antes → depois (ciclo mensal, conferido na tela com dado real, igual à
+simulação em SQL de 03/11): set/26 Sarah 75,3 → 80,5 (3 RR retomadas), Xayane
+50 → 52,3 (1), Thiago 21,7 → 21,7; Closers iguais. out/26 Xayane 57 → 60 (2),
+Sarah 48,1 → 54,1 (4 + 1 que já era Resgate), Douglas 3,5 → 4,7 (venda
+retomada da Elaine, Inpot: 1,2 → 2,4; passa a Bruna, 4,5), Jéssica 26,1 e
+Bruna 4,5 iguais. Build + 1.026 testes + oxlint.
+
 ### 2026-11-03 — Corrida de Performance: extrato de cada ponto e "pontos" nos pop-ups de negócio
 
 Pedido do Junior depois da auditoria das regras da Corrida: transparência total

@@ -17,6 +17,10 @@ import { toLocalDate } from '@/lib/dateUtils'
  * `vw_funil_vendas`, o mesmo que o filtro de Fonte do dashboard usa).
  *   1 ponto:  Inbound · Indicação · Parceiro · inbound - Repasse · Sem Classificação (e vazio)
  *   2 pontos: todo o restante (Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado · …)
+ * Negociação retomada (perdida e reaberta em outro dia = `ciclo > 1`) vale 2
+ * pontos como Resgate, qualquer que seja a Fonte Macro: no RD quase nunca
+ * trocam a fonte pra Resgate quando o SDR reabre a negociação (paliativo de
+ * 03/11/2026, decisão do Junior; vale pras duas trilhas).
  * Se a pessoa fez mais de uma unidade no mesmo dia, todas as unidades desse
  * dia ganham +1,5×.
  *
@@ -93,6 +97,16 @@ export function pesoFonte(fonte: string | null | undefined): 1 | 2 {
   const f = normalizarFonte(fonte)
   if (f === '') return 1
   return FONTES_UM_PONTO.has(f) ? 1 : 2
+}
+
+/** Negociação retomada: perdida e reaberta em outro dia (`ciclo > 1` em `vw_funil_vendas`). */
+export function ehRetomada(ciclo: number | null | undefined): boolean {
+  return (ciclo ?? 1) > 1
+}
+
+/** Peso de volume da unidade: negociação retomada vale 2 (como Resgate); senão, pela Fonte Macro. */
+export function pesoDaUnidade(fonte: string | null | undefined, ciclo: number | null | undefined): 1 | 2 {
+  return ehRetomada(ciclo) ? 2 : pesoFonte(fonte)
 }
 
 /* ── Multiplicador de ticket por marca ─────────────────────────────────── */
@@ -255,7 +269,9 @@ export interface Lancamento {
   unidadesNoDia: number
   /** 1,5 quando a pessoa fez mais de 1 unidade no dia; senão 1. */
   bonus: number
-  /** Peso de volume pela Fonte Macro. */
+  /** Negociação retomada (`ciclo > 1`): o peso é 2, como Resgate, qualquer que seja a fonte. */
+  retomada: boolean
+  /** Peso de volume: 2 se retomada; senão pela Fonte Macro. */
   peso: 1 | 2
   /** Faixa de ticket da marca. */
   ticket: TicketTier
@@ -276,7 +292,7 @@ export interface LinhaTrilha {
   nome: string
   /** nº de RR (SDR) ou de unidades vendidas (Closer) no mês. */
   volume: number
-  /** quantas dessas unidades vieram de fonte que pesa 2 pts. */
+  /** quantas dessas unidades pesam 2 pts (fonte de 2 pts ou negociação retomada). */
   volume2pts: number
   /** Σ (volume_unidade × mult_velocidade), arredondado a 1 casa decimal. */
   pontos: number
@@ -331,7 +347,8 @@ function montarLancamentos(trilha: Trilha, entradas: EntradaLancamento[], nomes:
     const dia = dias[i]
     const unidadesNoDia = dia ? porDia.get(`${e.nome}|${dia}`) ?? e.unidades : e.unidades
     const bonus = dia && unidadesNoDia > 1 ? 1.5 : 1
-    const peso = pesoFonte(e.fonte)
+    const retomada = ehRetomada(e.ciclo)
+    const peso = pesoDaUnidade(e.fonte, e.ciclo)
     const ticket = ticketTierDe(e.marca)
     const leadtimeDias = difDias(e.inicioVelocidade, e.fimVelocidade)
     const velocidade = classificarVelocidade(leadtimeDias, tiers)
@@ -342,6 +359,7 @@ function montarLancamentos(trilha: Trilha, entradas: EntradaLancamento[], nomes:
       dia,
       unidadesNoDia,
       bonus,
+      retomada,
       peso,
       ticket,
       leadtimeDias,

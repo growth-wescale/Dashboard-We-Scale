@@ -1,5 +1,11 @@
 # Missão Impossível — acompanhamento isolado de metas
 
+## Revisão preparada em 03/11/2026
+
+O seletor usa o fim do mês em Brasília para meses fechados e a data de hoje para o mês corrente. Metas, realizados, comparativos, investimento e referências de ritmo acompanham a seleção. Na S&OP, as três frentes prioritárias mostram o resumo mensal para usuários com acesso a Metas.
+
+A primeira barra mantém o MQL total da marca. A barra de Marketing compara negócios com Fonte Macro Inbound com a meta projetada para mídia. A origem vem da negociação da mesma marca por ID. Quando o MQL não traz ID, aceita-se apenas um ID de negócio registrado na distribuição para o mesmo e-mail, marca e dia em Brasília. Contatos com várias negociações possíveis não são atribuídos por aproximação. O realizado conta cada ID Inbound uma vez. A tela indica quantos MQLs ficaram sem confirmação e distingue ausência de cobertura de zero. Os registros históricos abaixo descrevem a versão anterior.
+
 ## Escopo autorizado em 07/10/2026
 
 Somente `/okrs` → **Acompanhamento Meta**. A aba OKRs, Meta de vendas,

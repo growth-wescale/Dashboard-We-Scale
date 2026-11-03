@@ -34,6 +34,18 @@ class Tests(unittest.TestCase):
   for body in [{'dataset':'leads','route':'/funil-vendas'}, {'dataset':'crm','route':'/marca'}]:
    with self.assertRaises(GatewayError): s.read(body,'token')
   self.assertEqual(c.queries,[])
+ def test_revenue_is_opt_in_scoped_and_read_only(self):
+  row={'id':'account:1','marca':'Odonto Scale','dia':'2026-10-27','valor':34997,'produtos':[{'nome':'OdontoClub','valor':34997}]}
+  request={'dataset':'receita','route':'/sop-marketing'}
+  default,c=self.service([row])
+  with self.assertRaises(GatewayError):default.read(request,'token')
+  self.assertEqual(c.queries,[])
+  enabled=Service({'mode':'ouro','receita_enabled':True},connect=lambda:c,request_json=auth)
+  self.assertEqual(enabled.read(request,'token')['rows'],[row])
+  self.assertTrue(any('ouro.vw_legacy_dashboard_receita' in q for q in c.queries))
+  with self.assertRaises(GatewayError):enabled.read(dict(request,route='/marca'),'token')
+  enabled.request_json=lambda path,*args: {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'marcas':['oral-unic'],'permissoes':['aba.sop-marketing']}
+  with self.assertRaises(GatewayError):enabled.read(request,'token')
  def test_legacy_never_connects(self):
   s,c=self.service([],mode='legacy')
   self.assertEqual(s.read({'dataset':'leads','route':'/'},'token'),{'mode':'legacy'})

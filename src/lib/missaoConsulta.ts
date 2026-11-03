@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { consultarInbound } from './mqlInbound'
 import type { Lead } from './types'
 import { FRENTES_MISSAO, MARCAS_META_PERIODO_MISSAO, MESES_MISSAO, proximoDia, type DadosMissao, type VendaMissaoRow, type MetaMissaoRow, type EtapaMissaoRow, type MidiaMissaoRow } from './missaoMetas'
 
@@ -60,7 +61,10 @@ export async function consultarMissao(vendasDb: SupabaseClient, marketingDb: Sup
           .order('dia', { ascending: false }).order('id', { ascending: true })
           .range(de, de + 499).abortSignal(signal), 'leads do mês', 500)
         leads.push(...loteLeads)
-        if (loteLeads.length < 500) return { hoje, atualizadoEm: new Date().toISOString(), vendas, metas, etapas, midia, metasMql, leads }
+        if (loteLeads.length < 500) {
+          const inbound = await consultarInbound(vendasDb, leads, marcas, signal)
+          return { hoje, atualizadoEm: new Date().toISOString(), vendas, metas, etapas, midia, metasMql, leads, inbound }
+        }
       }
       throw new Error('Limite de leitura de leads atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.')
     }

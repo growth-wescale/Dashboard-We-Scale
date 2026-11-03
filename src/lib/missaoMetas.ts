@@ -36,6 +36,7 @@ export interface EtapaMissaoRow {
 }
 export interface MidiaMissaoRow { id: string; dia: string; marca: string; canal: string; spend_brl: number | null }
 export interface DadosMissao {
+  inbound?: Record<string, import('./mqlInbound').CoberturaInbound>
   hoje: string; atualizadoEm: string; metas: MetaMissaoRow[]; vendas: VendaMissaoRow[]
   etapas: EtapaMissaoRow[]; midia: MidiaMissaoRow[]
   leads?: Lead[]; metasMql?: Array<{ marca: string; valor_meta: number }>

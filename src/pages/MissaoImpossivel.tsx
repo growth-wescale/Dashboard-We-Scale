@@ -1,9 +1,10 @@
+import { useState } from 'react'
 import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
 import { RefreshCw, Target } from 'lucide-react'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
 import { BRAND_ACCENT } from '@/constants/brands'
-import { daysInMonth, fmtBR, monthLabelLong, shortMonth } from '@/lib/dateUtils'
+import { daysInMonth, fmtBR, toLocalDate, monthLabelLong, shortMonth } from '@/lib/dateUtils'
 import { FRENTES_MISSAO, MESES_MISSAO, MISSAO, captacaoMissao, etapasMissao, funilInversoMissao, metaPeriodoMissao, orcamentoMensalMissao, pacingMissao, pacingTrimestre, projecaoMqlMidia, realizadoMissao, type DadosMissao } from '@/lib/missaoMetas'
 import './missaoImpossivel.css'
 
@@ -71,8 +72,11 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
       <Indicador label="MQL" atual={captacao.mql} meta={captacao.metaMql} referencia={referencia} />
       {funil.vendas.valor !== null && <p className="missao-footnote">Meta pelo funil inverso · base: {numero(funil.vendas.valor)} vendas cadastradas no mês.</p>}
       {projecao && <>
-        <Indicador label="MQL total vs. meta projetada de mídia paga" atual={captacao.mql} meta={projecao.mql} referencia={referencia} />
-        <p className="missao-footnote">Meta da mídia: {money(projecao.orcamento)} de investimento projetado ÷ {money(captacao.metaCpMql)} de CP-MQL projetado. Realizado inclui MQLs de todos os canais.</p>
+        {dados.inbound?.[frente.marca]?.inbound != null
+          ? <Indicador label="Marketing · MQLs Inbound" atual={dados.inbound[frente.marca].inbound!} meta={projecao.mql} referencia={referencia} />
+          : <p className="missao-aviso">Marketing · MQLs Inbound: indisponível / {projecao.mql}</p>}
+        {Boolean(dados.inbound?.[frente.marca]?.semOrigem) && <p className="missao-footnote">{dados.inbound![frente.marca].semOrigem} MQL(s) sem origem confirmada.</p>}
+        <p className="missao-footnote">Meta da mídia: {money(projecao.orcamento)} de investimento projetado ÷ {money(captacao.metaCpMql)} de CP-MQL projetado. Realizado: Fonte Macro Inbound no CRM. O traço indica a parcela transcorrida do mês.</p>
       </>}
       <div className="missao-indicador"><div className="missao-indicador-titulo"><span>CP-MQL</span><strong>{captacao.cpmql === null ? '—' : money(captacao.cpmql)}</strong></div>
         <p className="missao-footnote">Meta ≤ {money(captacao.metaCpMql)}</p>
@@ -80,7 +84,7 @@ function Marca({ frente, dados, noTrimestre }: { frente: typeof FRENTES_MISSAO[n
         <p className="missao-footnote">{captacao.cpmql === null ? 'Sem MQL: custo não calculável.' : `${captacao.cpmql <= captacao.metaCpMql ? 'Dentro' : 'Acima'} da meta · diferença ${money(Math.abs(captacao.cpmql - captacao.metaCpMql))}`}</p>
       </div></article>
       <article className="missao-marca missao-marca-compacta" aria-label={`SQL e SAL · ${frente.marca}`}>
-      <h4 className="missao-subtitulo">SQL e SAL · mês vigente</h4>
+      <h4 className="missao-subtitulo">SQL e SAL · {monthLabelLong(mes)}</h4>
       <div className="missao-reunioes-compactas">
         <Indicador label="SQL · reuniões agendadas" atual={etapas.sql} meta={funil.sql} referencia={referencia} />
         <Indicador label="SAL" atual={etapas.sal} meta={funil.sal} referencia={referencia} />
@@ -138,7 +142,7 @@ export function MissaoPainel({ dados }: { dados: DadosMissao }) {
   return <>
     <div className="missao-placares"><Placar titulo="Meta anual · 2026" meta={MISSAO.anual} inicio="2026-01-01" dados={dados} /><Placar titulo="Missão · outubro a dezembro" meta={MISSAO.trimestre} inicio={MISSAO.inicio} dados={dados} /></div>
     <p className="missao-footnote">Metas fixas e independentes: o saldo anual usa a receita do ano; o saldo da missão usa somente outubro a dezembro. As metas cadastradas por marca não substituem esses dois valores.</p>
-    <section className="missao-section" aria-labelledby="missao-frentes"><h2 id="missao-frentes">As três frentes prioritárias</h2><p className="missao-muted">MQL, CP-MQL, SQL, SAL e investimento · mês vigente.</p>
+    <section className="missao-section" aria-labelledby="missao-frentes"><h2 id="missao-frentes">As três frentes prioritárias</h2><p className="missao-muted">MQL, CP-MQL, SQL, SAL e investimento até {fmtBR(dados.hoje)}.</p>
       {!noTrimestre && <p role="status" className="missao-aviso">O mês vigente está fora de outubro–dezembro de 2026. Os blocos mensais e o pacing da missão não se aplicam.</p>}
       <div className="missao-marcas">{FRENTES_MISSAO.map(frente => <Marca key={frente.marca} frente={frente} dados={dados} noTrimestre={noTrimestre} />)}</div>
     </section>
@@ -147,7 +151,7 @@ export function MissaoPainel({ dados }: { dados: DadosMissao }) {
     <details className="missao-metodologia"><summary>Fontes e critérios dos indicadores</summary>
       <p>Metas mensais de MQL, SQL e SAL calculadas apenas nesta página pelo funil inverso, a partir da soma das metas de vendas cadastradas para os Closers da marca no mês. SAL = vendas ÷ taxa SAL → Venda; SQL = SAL ÷ taxa SQL → SAL; MQL = SQL ÷ taxa MQL → SQL. Cada etapa é arredondada para cima antes da anterior. Não descontamos as vendas realizadas da meta mensal. Cadastro ausente ou incompleto mantém os três alvos pendentes; zero explícito é respeitado, sem repetir outubro nos meses seguintes.</p>
       <p>Taxas entre etapas do print, aprovadas em 20/10: Inpot 23% / 39% / 20%; Eletrovias 10% / 36% / 28%; Lisô Laser 15% / 30% / 28%, respectivamente MQL → SQL / SQL → SAL / SAL → Venda. São referências de planejamento, não conversões observadas no CRM. A âncora direta MQL → Venda e as antigas metas fixas MQL não entram no cálculo. As configurações comerciais e as metas das outras páginas não são alteradas.</p>
-      <p>MQL realizado usa leads do mês da base Marketing, com a classificação e deduplicação dos KPIs do dashboard. Na linha “MQL total vs. meta projetada de mídia paga”, o numerador é o mesmo MQL realizado, de todos os canais; o denominador é o investimento mensal projetado dividido pelo CP-MQL meta, arredondado ao inteiro mais próximo. Esta página não identifica MQLs realizados exclusivamente por mídia paga. CP-MQL realizado é investimento dividido pelos MQLs; sem MQL não é calculável. Metas de custo preservadas: Inpot R$ 220, Eletrovias R$ 37 e Lisô Laser R$ 300. Consultas continuam sequenciais, limitadas e exclusivas desta página, sem novas leituras para a projeção.</p>
+      <p>MQL realizado usa leads do mês da base Marketing, com a classificação e deduplicação dos KPIs do dashboard. Na linha de Marketing entram os MQLs vinculados por ID a uma negociação da mesma marca com Fonte Macro Inbound. A meta é o investimento mensal projetado dividido pelo CP-MQL meta, arredondado ao inteiro mais próximo. CP-MQL realizado é investimento dividido pelos MQLs; sem MQL não é calculável. Metas de custo preservadas: Inpot R$ 220, Eletrovias R$ 37 e Lisô Laser R$ 300. Consultas continuam sequenciais, limitadas e exclusivas desta página, sem novas leituras para a projeção.</p>
       <p>Receita considera apenas negócios Ganhos, pela data da venda em Brasília. Soma o valor de cada contrato uma vez por ciclo, sem multiplicar por unidades. Unidades seguem o dashboard de Vendas: quantidade informada ou uma unidade quando não preenchida/válida.</p>
       <p>SQL e SAL contam negócios únicos por ciclo que têm a data consolidada da respectiva etapa no mês vigente, até hoje. SQL é reunião agendada. SAL é usada como referência de realizada apenas nesta tela; não substitui Diagnóstico. Não contamos reentradas nem somamos eventos de handoff SDR–Closer. Negócios criados antes do mês também entram se avançaram ou venderam nele.</p>
       <p>CRM: Supabase de Expansão. Investimento: Supabase de Marketing. Leitura sequencial e limitada, sem histórico completo de eventos e sem atualização automática. O cache dura 15 minutos; Atualizar permite nova leitura com intervalo mínimo de um minuto. Falhas e limites não viram zero.</p>
@@ -156,9 +160,20 @@ export function MissaoPainel({ dados }: { dados: DadosMissao }) {
 }
 
 function MissaoConteudo() {
-  const dados = useMissaoResumo()
+  const hoje = toLocalDate(new Date().toISOString())!
+  const mesAtual = hoje.slice(0, 7)
+  const [escolha, setEscolha] = useState('')
+  const mes = escolha || mesAtual
+  const ate = mes === mesAtual ? hoje : `${mes}-${daysInMonth(mes)}`
+  const dados = useMissaoResumo(ate)
   return <div className="missao-page">
     <header className="missao-header"><div><p className="missao-kicker">Metas · reta final de 2026</p><h1>Missão Impossível</h1><p>Uma meta de receita. Todas as marcas na conquista.</p></div>
+      <label>Mês de referência{' '}
+        <select value={mes} onChange={e => setEscolha(e.target.value)}>
+          {[...new Set([...MESES_MISSAO.map(value => value.slice(0, 7)).filter(value => value <= mesAtual), mesAtual])].map(value =>
+            <option key={value} value={value}>{monthLabelLong(value + '-01')}{value === mesAtual ? ' · até hoje' : ' · fechado'}</option>)}
+        </select>
+      </label>
       <button type="button" disabled={dados.loading || dados.bloqueado} onClick={dados.atualizar}><RefreshCw size={15} aria-hidden="true" />{dados.loading ? 'Carregando…' : dados.bloqueado ? 'Aguarde para atualizar' : 'Atualizar'}</button>
     </header>
     {dados.data && <BeautyMarketingBlock start={dados.data.hoje.slice(0, 7) + '-01'} end={dados.data.hoje} />}

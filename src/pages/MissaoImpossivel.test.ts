@@ -8,7 +8,7 @@ vi.mock('@/hooks/useMissaoResumo', () => ({ useMissaoResumo: mocks.hook }))
 import { MissaoImpossivel, MissaoPainel } from './MissaoImpossivel'
 import { pacingTrimestre } from '@/lib/missaoMetas'
 
-const dados: DadosMissao = { hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [],
+const dados: DadosMissao = { inbound: { Inpot: { inbound: 36, semOrigem: 0 }, Eletrovias: { inbound: 0, semOrigem: 0 }, 'Lisô Laser': { inbound: 0, semOrigem: 0 } }, hoje: '2026-10-07', atualizadoEm: '2026-10-07T12:00:00Z', vendas: [],
   metas: ['Inpot', 'Eletrovias', 'Lisô Laser'].map(marca => ({ mes_referencia: '2026-10-01', marca, funcao: 'Closer', meta_qtd_vendas: marca === 'Lisô Laser' ? 2 : 3, meta_financeira: null, meta_sql: null, meta_volume_sal: null })), etapas: [], midia: [] }
 describe('Missão: apresentação e isolamento', () => {
   it('marca pacing mensal e anual, e CP-MQL usa referência de eficiência', () => {
@@ -46,11 +46,11 @@ describe('Missão: apresentação e isolamento', () => {
     expect(html).toContain('MQL e CP-MQL · Inpot')
     expect(html).toContain('SQL · reuniões agendadas'); expect(html).toContain('>SAL<')
     expect(html).toContain('Pacing de investimento'); expect(html).toContain('CP-MQL'); expect(html).toContain('/ 170'); expect(html).toContain('/ 310'); expect(html).toContain('/ 180')
-    expect((html.match(/<span>MQL total vs. meta projetada de mídia paga<\/span>/g) ?? []).length).toBe(3)
-    expect(html.indexOf('<span>MQL</span>')).toBeLessThan(html.indexOf('<span>MQL total vs. meta projetada de mídia paga</span>'))
-    expect(html.indexOf('<span>MQL total vs. meta projetada de mídia paga</span>')).toBeLessThan(html.indexOf('<span>CP-MQL</span>'))
+    expect((html.match(/<span>Marketing · MQLs Inbound<\/span>/g) ?? []).length).toBe(3)
+    expect(html.indexOf('<span>MQL</span>')).toBeLessThan(html.indexOf('<span>Marketing · MQLs Inbound</span>'))
+    expect(html.indexOf('<span>Marketing · MQLs Inbound</span>')).toBeLessThan(html.indexOf('<span>CP-MQL</span>'))
     expect(html).toContain('/ 164'); expect(html).toContain('/ 757'); expect(html).toContain('/ 96')
-    expect(html).toContain('aria-label="MQL total vs. meta projetada de mídia paga"')
+    expect(html).toContain('aria-label="Marketing · MQLs Inbound"')
     expect(html).toContain('36.000,00 de investimento projetado ÷')
     expect(html).toContain('220,00 de CP-MQL projetado')
     expect(html).toContain('Taxas do print: MQL → SQL 23% · SQL → SAL 39% · SAL → Venda 20%')
@@ -67,14 +67,14 @@ describe('Missão: apresentação e isolamento', () => {
     expect(html).toContain('>Viva</th><td>—</td>')
     expect((html.match(/<tr/g) ?? []).length).toBeGreaterThanOrEqual(9)
   })
-  it('no recorte do print, Inpot mostra 108 realizados frente à projeção de 164', () => {
+  it('separa os 36 Inbound dos 108 MQLs totais na projeção de 164', () => {
     const metas = dados.metas.map(m => m.marca === 'Inpot' ? { ...m, meta_qtd_vendas: 4 } : m)
     const leads: NonNullable<DadosMissao['leads']> = Array.from({ length: 108 }, (_, i) => ({ id: `lead-${i}`, dia: '2026-10-07', marca: 'Inpot', nome: null, email: `lead-${i}@example.test`, telefone: null, uf: null, cidade: null, utm_source: null, utm_medium: null, utm_campaign: null, formulario: null, dados_extras: { lead_type: 'MQL' }, row_hash: null, criado_em: '2026-10-07T12:00:00Z' }))
     const html = renderToStaticMarkup(createElement(MissaoPainel, { dados: { ...dados, metas, leads } }))
     expect(html).toContain('108</strong><span>/ 227</span>')
-    expect(html).toContain('108</strong><span>/ 164</span>')
-    expect(html).toContain('65,85% atingidos')
-    expect(html).toContain('Falta atingir: 56')
+    expect(html).toContain('36</strong><span>/ 164</span>')
+    expect(html).toContain('21,95% atingidos')
+    expect(html).toContain('Falta atingir: 128')
   })
   it('metas não diminuem com vendas realizadas; zero não divide por zero', () => {
     const venda = { id_lead: 'ganho', ciclo: 1, marca: 'Inpot', status_atual: 'Ganho', valor_contrato: 100, quantidade_unidades: 1, data_venda: '2026-10-02' }

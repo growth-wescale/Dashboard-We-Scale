@@ -161,6 +161,10 @@ class Service:
     if role['u']!='dashboard_scale_partner_ro' or role['unsafe']:raise GatewayError(503,'unsafe_role')
     ids=[r['id_lead'] for r in c.execute('SELECT id_lead FROM ouro.vw_scale_partner_dashboard_identidades ORDER BY id_lead')]
     if detail and body['route'].rsplit('/',1)[-1] not in ids:return {'mode':'legacy'}
+    if dataset=='leads' and body['route']=='/sop-marketing':
+     # A consulta de contatos da S&OP leva mais de 20s. Ajustes só desta transação.
+     c.execute("SET LOCAL statement_timeout = '45s'")
+     c.execute("SET LOCAL jit = off")
     rows=c.execute(query+' LIMIT 50001').fetchall()
     if detail:
      target=body['route'].rsplit('/',1)[-1]

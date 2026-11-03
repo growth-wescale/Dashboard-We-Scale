@@ -2275,7 +2275,7 @@ export function SopMarketing() {
         setPdfProgress(`Carregando slide ${i + 1}/${totalSlides}...`)
 
         // Aguarda o SopSlide/SopKanbanSlide sinalizar que todos os fetches terminaram (via onReady).
-        // Timeout de 30s por slide como fallback.
+        // Os hooks têm até 60s para concluir ou informar uma falha.
         await new Promise<void>((resolve, reject) => {
           const finish = (error?: string) => {
             clearTimeout(timer)
@@ -2291,9 +2291,9 @@ export function SopMarketing() {
               else if (slides[i]?.marca === 'Odonto Scale' && legacyOuroEnabled) reject(new Error('Aguarde o carregamento de Legacy antes de exportar.'))
               else if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
               else if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
-              else resolve()
+              else reject(new Error('Aguarde o carregamento da folha antes de exportar.'))
             }
-          }, 30000)
+          }, 65_000)
           setExportingIdx(i)
         })
 
@@ -2302,7 +2302,7 @@ export function SopMarketing() {
         await new Promise(r => setTimeout(r, 400))
 
         const el = exportSlideRef.current
-        if (!el) continue
+        if (!el) throw new Error('Não foi possível renderizar a folha da S&OP.')
         setPdfProgress(`Renderizando slide ${i + 1}/${totalSlides}...`)
 
         const canvas = await html2canvas(el, {

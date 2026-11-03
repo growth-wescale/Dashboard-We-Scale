@@ -1,3 +1,4 @@
+import { leituraOuroSop } from './leituraOuroSop'
 import { inEletroviasWindow, isEletroviasMigrationMedia, isEletroviasMigrationLead } from './eletroviasOuroScope'
 import { filterRows, sortRows, projectRows, type RecordRow } from './partnerOuroQuery'
 
@@ -27,11 +28,11 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     let goldEntry = goldCache.get(goldKey)
     if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
       const value = (async () => {
-        const response = await nativeFetch('/api/eletrovias-ouro/v1/read', {
+        const response = await leituraOuroSop(nativeFetch, '/api/eletrovias-ouro/v1/read', {
           method: 'POST', signal: AbortSignal.timeout(60_000),
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataset: dataset, route }),
-        })
+        }, route)
         if (!response.ok) throw new Error('Não foi possível consultar a ouro de Eletrovias. Atualize os dados para tentar novamente.')
         return await response.json() as GoldReply
       })()

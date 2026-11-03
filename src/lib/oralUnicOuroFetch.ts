@@ -4,7 +4,7 @@ import { filterRows, sortRows, projectRows, type RecordRow } from './partnerOuro
 export const ORAL_UNIC_MARKETING_ROUTES = new Set(['/', '/marca', '/sop-marketing', '/okrs', '/copa-b2b'])
 
 const TABLES: Record<string, { dataset: string }> = { leads: { dataset: 'leads' }, media_daily_raw: { dataset: 'media' } }
-interface GoldReply { mode: 'legacy' | 'ouro'; rows: RecordRow[];  contract: string; observed_at: string | null; warnings: string[] }
+interface GoldReply { mode: 'legacy' | 'ouro'; rows: RecordRow[]; metric_rows?: RecordRow[]; contract: string; observed_at: string | null; warnings: string[] }
 interface Options {
   origin: string
   token: () => Promise<string | null>
@@ -101,7 +101,20 @@ export function createOralUnicOuroFetch(options: Options): typeof fetch {
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     const scoped = (r: RecordRow) => inOralUnicWindow(r) && (table === 'leads' ? isOralUnicMigrationLead(r) : isOralUnicMigrationMedia(r))
     if (reply.rows.some(r => !scoped(r))) throw new Error('Escopo Oral Unic inválido.')
-    const merged = sortRows([...rows.filter(r => !scoped(r)), ...filterRows(reply.rows, requested)], requested.get('order'))
+    let goldRows = reply.rows
+    if (table === 'leads' && reply.metric_rows !== undefined) {
+      if (!Array.isArray(reply.metric_rows)) throw new Error('Contrato de negociações Oral Unic inválido.')
+      const ids = new Set<string>()
+      for (const row of reply.metric_rows) {
+        const extra = row.dados_extras as Record<string, unknown> | null
+        const key = JSON.stringify([extra?.conta_id, extra?.id_deal])
+        if (!scoped(row) || extra?.metric_grain !== 'crm_deal' || extra?.conta_id !== 'wescale_principal_crm'
+          || typeof extra?.id_deal !== 'string' || !extra.id_deal || ids.has(key)) throw new Error('Escopo de negociações Oral Unic inválido.')
+        ids.add(key)
+      }
+      goldRows = [...reply.rows.map(row => ({ ...row, dados_extras: { ...(row.dados_extras as object ?? {}), metric_grain: 'contact_only' } })), ...reply.metric_rows]
+    }
+    const merged = sortRows([...rows.filter(r => !scoped(r)), ...filterRows(goldRows, requested)], requested.get('order'))
     const offset = Number(requested.get('offset') ?? 0), limit = Number(requested.get('limit') ?? merged.length)
     if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(limit) || offset < 0 || limit < 0) throw new Error('Página de dados inválida.')
     const page = projectRows(merged.slice(offset, offset + limit), select)

@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from app import Service, GatewayError
+from app import Service, GatewayError, prepare_deals
 
 def auth(path, token, body):
  return {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'acesso_total':True}
@@ -39,13 +39,13 @@ class Tests(unittest.TestCase):
   self.assertEqual(s.read({'dataset':'leads','route':'/'},'token'),{'mode':'legacy'})
   self.assertEqual(c.queries,[])
  def test_missing_commercial_identity_is_not_silently_counted(self):
-  s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm'}}])
+  s,c=self.service([{'id':'a','dia':'2026-10-10','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'deal-b','data_criacao_crm':'2026-10-30T12:00:00Z'}}])
   result=s.read({'dataset':'leads','route':'/'},'token')
   self.assertEqual(result['rows'],[])
   self.assertEqual(result['warnings'],[{'code':'accepted_missing_contact','count':1}])
  def test_pending_identity_does_not_modify_valid_rows_or_refresh(self):
-  valid={'id':'a','dia':'2026-10-10','marca':'Oral Unic','contato_id':'c','email':'example@example.test','dados_extras':{'classification_source':'deal_criado_crm','original':'preserved'}}
-  pending={'id':'b','dia':'2026-10-30','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm'}}
+  valid={'id':'a','dia':'2026-10-10','marca':'Oral Unic','contato_id':'c','email':'example@example.test','dados_extras':{'classification_source':'deal_criado_crm','original':'preserved','id_deal':'deal-a','data_criacao_crm':'2026-10-10T12:00:00Z'}}
+  pending={'id':'b','dia':'2026-10-30','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'deal-b','data_criacao_crm':'2026-10-30T12:00:00Z'}}
   s,c=self.service([valid,pending])
   with patch('app.time.monotonic',return_value=100):s.refresh_dataset('leads')
   with patch('app.time.monotonic',return_value=340):s.refresh_dataset('leads')
@@ -55,7 +55,7 @@ class Tests(unittest.TestCase):
   self.assertEqual(c.rows,[valid,pending])
   self.assertEqual(result['warnings'],[{'code':'accepted_missing_contact','count':1}])
  def test_pending_identity_cannot_hide_scope_or_duplicate_errors(self):
-  pending={'id':'a','dia':'2026-10-30','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm'}}
+  pending={'id':'a','dia':'2026-10-30','marca':'Oral Unic','dados_extras':{'classification_source':'deal_criado_crm','id_deal':'deal-b','data_criacao_crm':'2026-10-30T12:00:00Z'}}
   for rows,code in [([pending,pending],'duplicate_id'),([dict(pending,marca='Outra')],'scope_violation'),([dict(pending,dia='2026-11-01')],'scope_violation')]:
    s,c=self.service(rows)
    with self.assertRaises(GatewayError) as error:s.read({'dataset':'leads','route':'/'},'token')
@@ -103,5 +103,18 @@ class Tests(unittest.TestCase):
   with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'')
   self.assertEqual(e.exception.status,401)
   self.assertEqual(c.queries,[])
+
+ def test_deals_count_unlinked_and_shared_contact_once_per_id(self):
+  def row(deal,created='2026-10-20T12:00:00Z'):
+   return {'id':deal,'marca':'Oral Unic','dia':'2026-10-20','email':None,'contato_id':None,'dados_extras':{'classification_source':'deal_criado_crm','id_deal':deal,'data_criacao_crm':created,'segmento':'oral-unic'}}
+  rows=[row('a'),row('b'),row('a'),row('utc-october','2026-10-01T01:00:00Z'),row('brasilia-october','2026-11-01T01:00:00Z')]
+  result=prepare_deals(rows)
+  self.assertEqual([r['dados_extras']['id_deal'] for r in result],['a','b','brasilia-october'])
+  self.assertTrue(all(r['email'] is None and r['contato_id'] is None for r in result))
+  self.assertEqual(result[-1]['dia'],'2026-10-31')
+  self.assertNotIn('metric_grain',rows[0]['dados_extras'])
+ def test_invalid_deal_identity_or_creation_fails_closed(self):
+  for extra in [{},{'id_deal':'a'},{'id_deal':'a','data_criacao_crm':'2026-10-10T12:00:00'}]:
+   with self.assertRaises(GatewayError):prepare_deals([{'dados_extras':{'classification_source':'deal_criado_crm',**extra}}])
 
 if __name__=='__main__':unittest.main()

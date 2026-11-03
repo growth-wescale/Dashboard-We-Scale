@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -60,6 +61,27 @@ def prepare_rows(dataset, rows):
  pending = [r for r in rows if dataset=='leads' and missing_commercial_identity(r)]
  return ([r for r in rows if not (dataset=='leads' and missing_commercial_identity(r))],
   [{'code':'accepted_missing_contact','count':len(pending)}] if pending else [])
+
+def prepare_deals(rows):
+ # The existing gold view exposes real deal IDs, including unlinked deals.
+ # Metric rows never create contacts or alter the contact dataset.
+ result = {}
+ for row in rows:
+  extra = row.get('dados_extras') or {}
+  if extra.get('classification_source') != 'deal_criado_crm': continue
+  deal = extra.get('id_deal')
+  if not isinstance(deal,str) or not deal: raise GatewayError(503,'missing_deal_id')
+  try:
+   created = dt.datetime.fromisoformat(str(extra['data_criacao_crm']).replace('Z','+00:00'))
+   if created.tzinfo is None: raise ValueError()
+  except (KeyError,TypeError,ValueError): raise GatewayError(503,'invalid_deal_creation') from None
+  day = created.astimezone(ZoneInfo('America/Sao_Paulo')).date().isoformat()
+  if not '2026-10-01' <= day < '2026-11-01': continue
+  if deal in result: continue
+  result[deal] = {**row,'id':'oral-unic-deal:wescale_principal_crm:'+deal,
+   'dia':day,'criado_em':created.isoformat(),
+   'dados_extras':{**extra,'metric_grain':'crm_deal','conta_id':'wescale_principal_crm'}}
+ return list(result.values())
 
 
 def validate_rows(dataset, rows):
@@ -129,6 +151,7 @@ class Service:
     contact_rows, warnings = prepare_rows(dataset, rows)
     result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':contact_rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
+    if dataset == 'leads': result['metric_rows'] = prepare_deals(rows)
     with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)
     return result
 

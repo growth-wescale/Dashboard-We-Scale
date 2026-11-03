@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabase'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { criarBaseAoVivo, type BaseAoVivo, type DependenciasBase } from './baseAoVivo'
 import { criarCanal, type AvisoVersao } from './canal'
-import { apagarRegistros, gravarRegistro, lerRegistro } from './armazemLocal'
+import { gravarRegistro, lerRegistro } from './armazemLocal'
+import { guardaLocalPermitida } from './guardaLocal'
 import { DEFINICAO_ETAPAS, DEFINICAO_VENDAS, type EventoFunil } from './definicoes'
 
 /**
@@ -15,8 +16,8 @@ import { DEFINICAO_ETAPAS, DEFINICAO_VENDAS, type EventoFunil } from './definico
 export { porOrigem, type EventoFunil } from './definicoes'
 
 /* ── Usuário logado (Supabase de Marketing) ─────────────────────────────────
- * O armazenamento local fica marcado com o dono. Logout ou troca de usuário
- * apagam tudo, na memória e no navegador.
+ * O armazenamento local fica marcado com o dono e só é usado por quem pode
+ * guardar (`guardaLocal.ts`, que também apaga tudo no logout).
  */
 let usuarioAtual: string | null = null
 let marcarAuthPronto: () => void = () => {}
@@ -25,7 +26,7 @@ const authPronto = new Promise<void>(resolve => { marcarAuthPronto = resolve })
 async function usuario(): Promise<string | null> {
   // INITIAL_SESSION chega em milissegundos; o limite é só para nunca travar a carga.
   await Promise.race([authPronto, new Promise(r => setTimeout(r, 3_000))])
-  return usuarioAtual
+  return guardaLocalPermitida() ? usuarioAtual : null
 }
 
 const canal = criarCanal({
@@ -55,13 +56,16 @@ export const baseVendas: BaseAoVivo<FunnelRow> = criarBaseAoVivo(DEFINICAO_VENDA
 export const baseEtapas: BaseAoVivo<EventoFunil> = criarBaseAoVivo(DEFINICAO_ETAPAS, dependencias)
 export const canalVendas = canal
 
+// Logout ou troca de usuário: esquece a base da memória. No logout não busca
+// nada (a tela vai para o login); na troca, quem estiver na tela recarrega.
 const { data: { subscription } } = supabase.auth.onAuthStateChange((evento, sessao) => {
   const novo = sessao?.user.id ?? null
   const trocou = usuarioAtual !== null && novo !== null && novo !== usuarioAtual
   if (evento === 'SIGNED_OUT' || trocou) {
-    baseVendas.limpar()
-    baseEtapas.limpar()
-    void apagarRegistros()
+    for (const base of [baseVendas, baseEtapas] as BaseAoVivo<unknown>[]) {
+      base.limpar()
+      if (trocou && base.emUso() > 0) void base.sincronizar()
+    }
   }
   usuarioAtual = novo
   marcarAuthPronto()

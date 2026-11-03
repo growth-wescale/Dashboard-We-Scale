@@ -1,4 +1,4 @@
-import { normalizeMarcaRaw } from '@/constants/brands'
+import { MARCA_ALIASES, normalizeMarcaRaw } from '@/constants/brands'
 import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
 import type { FunnelEventRow } from '@/lib/metrics'
 import { asc, desc, type DefinicaoBase } from './colecao'
@@ -49,6 +49,9 @@ export const DEFINICAO_VENDAS: DefinicaoBase<FunnelRow> = {
   // Alias de marca (ex.: 'Odonto Legacy' → 'Odonto Scale') antes de qualquer
   // filtro/agrupamento — ver MARCA_ALIASES em brands.ts.
   ajustar: r => { r.marca = normalizeMarcaRaw(r.marca) ?? r.marca },
+  // A linha fica guardada no navegador já com o alias aplicado: mexeu nos
+  // aliases, o que estava guardado deixa de valer.
+  assinatura: `aliases=${JSON.stringify(MARCA_ALIASES)}`,
 }
 
 export const DEFINICAO_ETAPAS: DefinicaoBase<EventoFunil> = {

@@ -272,8 +272,12 @@ IndexedDB e recebe só o que mudou. SQL e explicação completa:
 - **Coluna nova que o dashboard usa = dois lugares:** `dash_colunas()` (SQL) e
   `COLUNAS_VENDAS`/`COLUNAS_ETAPAS` (`src/lib/aoVivo/definicoes.ts`). Um teste
   compara as listas do arquivo SQL com as do código, e o navegador falha alto
-  ("veio sem as colunas") se faltar uma. Depois de mudar `dash_colunas`, rodar
-  `select dash_sincronizar(true)`.
+  ("veio sem as colunas") se faltar uma. O `create or replace` de
+  `dash_colunas` vai na MESMA transação do `select dash_sincronizar(true)`
+  (senão, por até 1 min, os arrays velhos saem com os nomes novos).
+- **Apelido de marca novo ou mudado** (`MARCA_ALIASES`, `brands.ts`): a base
+  guardada no navegador já tem o apelido aplicado, então a "assinatura" do
+  formato inclui a tabela de apelidos e o registro antigo é descartado sozinho.
 - **Aviso ao vivo:** `realtime.send` no canal público `dashboard-vendas`, evento
   `versao`, payload só `{versao, epoca}` (nenhum dado). O navegador também
   confere sozinho a cada 5 min (30 s se o canal cair), ao voltar para a aba,
@@ -281,13 +285,21 @@ IndexedDB e recebe só o que mudou. SQL e explicação completa:
 - **Ordem das linhas importa** e é a mesma das consultas antigas
   (`definicoes.ts`): em "Deals únicos" fica o 1º evento de cada (deal, ciclo,
   mês), e a data dele aparece nos popups.
-- **Logout ou troca de usuário apagam a base guardada** (memória e IndexedDB
-  `ws-dashboard-ao-vivo`); registro de outro usuário ou de outro formato é
-  ignorado.
+- **Só guarda no navegador quem vê todas as marcas** (`guardaLocal.ts`, ligado
+  pelo `AcessoContext`). Logout ou troca de usuário apagam a base guardada
+  (memória e IndexedDB `ws-dashboard-ao-vivo`) em qualquer tela; registro de
+  outro usuário ou de outro formato é ignorado. IndexedDB que não responde vira
+  "nada guardado" em 3 s.
+- **Selo da tela:** "Ao vivo" (aviso funcionando), "Atualiza a cada 30 s" (sem
+  o aviso), "Conferindo…" (mostrando a base guardada enquanto confere),
+  "Sem atualizar" (o navegador não alcança o banco) e **"Atrasado"** (a
+  sincronização no banco falhou — `dash_estado.ultimo_erro` — ou não roda há
+  mais de 40 min).
 - **Diagnóstico:** `select * from dash_estado` (`ultimo_resultado`,
   `ultimo_erro`, `versao`, `mudou_em`) e `cron.job_run_details` do job
-  `dash_sincronizar`. Forçar todos os navegadores a baixar a base de novo:
-  `update dash_estado set epoca = epoca + 1; select dash_sincronizar(true);`.
+  `dash_sincronizar`; falha do aviso em `dash_estado.aviso_erro`. Forçar todos
+  os navegadores a baixar a base de novo: `select dash_forcar_recarga();` (troca
+  a época, sincroniza e avisa).
 - **Do RD à tela:** o banco segue o RD pelo `wf_5` (5 min) e pelo
   `espelho_rd_edge` (15 min), e isso não mudou; do banco à tela leva até ~1 min.
 
@@ -507,6 +519,7 @@ src/lib/aoVivo/baseAoVivo.ts   base no navegador: memória → IndexedDB → das
 src/lib/aoVivo/canal.ts        aviso ao vivo (Realtime) + conferência de 30 s/5 min, ao voltar pra aba e no Atualizar (testado)
 src/lib/aoVivo/armazemLocal.ts IndexedDB `ws-dashboard-ao-vivo` (só aceleração; falha vira "nada guardado")
 src/lib/aoVivo/basesVendas.ts  liga as duas bases ao Supabase, ao canal e ao login (logout apaga)
+src/lib/aoVivo/guardaLocal.ts  quem pode guardar a base no navegador (todas as marcas) + limpeza no logout, carregado com o app
 src/hooks/useBaseAoVivo.ts     useSyncExternalStore das bases + status do canal
 src/components/ui/AoVivoIndicador.tsx  selo "Ao vivo" (Visão Macro, Performance, Análise de Perda)
 
@@ -962,9 +975,19 @@ SQL); no navegador as linhas, os valores e a **ordem** que chegam pelo caminho
 novo são idênticos aos das views (7.751 + 1.572 deals, 24.273 eventos); em 20
 min de mudanças reais chegaram 2 avisos (~1 s depois de cada sincronização) e a
 base montada por partes terminou igual a uma base nova (9.323 deals, 26.160
-eventos). Build + 1.059 testes (33 novos). A lápide (linha que some da view)
+eventos). Build + 1.070 testes (44 novos). A lápide (linha que some da view)
 está coberta por teste com banco falso; não apareceu caso real na validação, e
 o teste com dado real foi recusado (mexia em `dashboard_deal_oculto`).
+
+**Revisão independente** antes do merge achou e corrigiu: laço infinito
+quando o Supabase fecha o canal sozinho (o `removeChannel` devolve outro
+`CLOSED` na hora; com a biblioteca real eram 378 chamadas, agora 2); IndexedDB
+que não responde travava a carga (agora 3–5 s de prazo); parada da
+sincronização no banco ficava invisível (agora o selo mostra "Atrasado");
+apelido de marca mudado deixava a base guardada errada (agora invalida
+sozinho). Também: avisos no máximo 1 a cada 5 s por painel e espalhados até
+1,5 s (o canal é público), base guardada só para quem vê todas as marcas,
+logout limpa em qualquer tela e não baixa nada de novo.
 
 **Rollback:** `select cron.alter_job(19, active := true);`,
 `select cron.unschedule('dash_sincronizar');` e reverter o PR.

@@ -3,13 +3,16 @@
  *
  * Toda vez que `dash_sincronizar()` grava uma mudança, o banco manda pelo
  * Realtime do Supabase (Broadcast, canal público `dashboard-vendas`, evento
- * `versao`) só o número da versão nova — nenhum dado. Cada base em uso que
- * estiver atrás dessa versão pede o que mudou.
+ * `versao`) só o número da versão nova e a época — nenhum dado. Cada base em
+ * uso que estiver atrás dessa versão (ou em outra época) pede o que mudou.
  *
  * O aviso acelera, mas não é a garantia: sem canal (rede do escritório
  * bloqueando WebSocket, Realtime fora) a página confere sozinha a cada 30 s;
  * com canal, a cada 5 min. Também confere ao voltar para a aba, quando a
  * internet volta e no botão Atualizar.
+ *
+ * O canal é público (a chave anon pode publicar nele): aviso só dispara busca
+ * de mudanças, que é barata, e no máximo uma a cada 5 s.
  *
  * O canal só fica aberto enquanto alguma base está em uso; fecha 1 min depois
  * da última sair (trocar de aba não derruba a conexão).
@@ -28,19 +31,22 @@ export interface ConexaoCanal {
 
 /** O que o canal precisa de uma base. */
 export interface Sincronizavel {
-  obter: () => { versao: number | null }
+  obter: () => { versao: number | null; epoca: number | null }
   sincronizar: () => Promise<void>
 }
 
 export interface DependenciasCanal {
   /**
    * Abre o canal. `aoStatus` recebe o status do Supabase ('SUBSCRIBED',
-   * 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED').
+   * 'CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED') — às vezes na hora, dentro do
+   * próprio `fechar()`.
    */
   abrir: (aoAviso: (aviso: AvisoVersao) => void, aoStatus: (status: string) => void) => ConexaoCanal
   /** Agenda e devolve o cancelamento. Padrão: setTimeout. */
   agendar?: (fn: () => void, ms: number) => () => void
   agora?: () => number
+  /** Sorteio para espalhar as buscas depois de um aviso. Padrão: Math.random. */
+  aleatorio?: () => number
   /** Eventos do navegador; ausente nos testes. */
   janela?: Pick<Window, 'addEventListener' | 'removeEventListener'> & { document?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'> }
 }
@@ -59,6 +65,10 @@ export const CONFERENCIA_SEM_CANAL_MS = 30_000
 export const ESPERA_FECHAR_MS = 60_000
 /** Avisos em rajada viram uma busca só. */
 export const JUNTAR_AVISOS_MS = 300
+/** Espalha as buscas dos painéis abertos depois de um aviso (não chegam todas juntas no banco). */
+export const ESPALHAR_AVISOS_MS = 1_500
+/** Intervalo mínimo entre buscas disparadas por aviso. */
+export const INTERVALO_MIN_AVISOS_MS = 5_000
 export const REABRIR_MS = 5_000
 /** Ao voltar para a aba, só confere se a última conferência tiver mais que isso. */
 const CONFERIR_AO_VOLTAR_MS = 10_000
@@ -69,6 +79,7 @@ export function criarCanal(deps: DependenciasCanal): Canal {
     return () => clearTimeout(t)
   })
   const agora = deps.agora ?? Date.now
+  const aleatorio = deps.aleatorio ?? Math.random
 
   const ativas = new Set<Sincronizavel>()
   const ouvintesStatus = new Set<() => void>()
@@ -76,6 +87,8 @@ export function criarCanal(deps: DependenciasCanal): Canal {
   let conexao: ConexaoCanal | null = null
   let jaConectou = false
   let maiorAviso = 0
+  let epocaAviso: number | null = null
+  let ultimoDisparo = -Infinity
   let ultimaConferencia = 0
   let cancelarConferencia: (() => void) | null = null
   let cancelarFechamento: (() => void) | null = null
@@ -111,14 +124,36 @@ export function criarCanal(deps: DependenciasCanal): Canal {
     const versao = Number(aviso?.versao)
     if (!Number.isFinite(versao)) return
     maiorAviso = Math.max(maiorAviso, versao)
+    const epoca = Number(aviso?.epoca)
+    if (aviso?.epoca !== undefined && Number.isFinite(epoca)) epocaAviso = epoca
     if (cancelarAviso) return
+    const espera = Math.max(
+      JUNTAR_AVISOS_MS + aleatorio() * ESPALHAR_AVISOS_MS,
+      ultimoDisparo + INTERVALO_MIN_AVISOS_MS - agora(),
+    )
     cancelarAviso = agendar(() => {
       cancelarAviso = null
+      ultimoDisparo = agora()
+      const alvo = maiorAviso
+      const epocaAlvo = epocaAviso
+      // Zera depois de usar: um aviso forjado com versão enorme não fica valendo para sempre.
+      maiorAviso = 0
+      epocaAviso = null
       for (const base of [...ativas]) {
-        const local = base.obter().versao
-        if (local === null || local < maiorAviso) void base.sincronizar()
+        const local = base.obter()
+        const atras = local.versao === null || local.versao < alvo
+        const outraEpoca = epocaAlvo !== null && local.epoca !== null && local.epoca !== epocaAlvo
+        if (atras || outraEpoca) void base.sincronizar()
       }
-    }, JUNTAR_AVISOS_MS)
+    }, espera)
+  }
+
+  function agendarReabertura() {
+    cancelarReabertura?.()
+    cancelarReabertura = agendar(() => {
+      cancelarReabertura = null
+      if (ativas.size && !conexao) abrir()
+    }, REABRIR_MS)
   }
 
   function abrir() {
@@ -126,8 +161,12 @@ export function criarCanal(deps: DependenciasCanal): Canal {
     cancelarReabertura = null
     mudarStatus(jaConectou ? 'sem-canal' : 'conectando')
     const minha: { c: ConexaoCanal | null } = { c: null }
+    // Status que chega antes de `abrir` devolver a conexão espera ela existir.
+    let pronto = false
+    const pendentes: string[] = []
     const aoStatus = (s: string) => {
-      if (conexao !== minha.c) return // resposta de uma conexão já fechada
+      if (!pronto) { pendentes.push(s); return }
+      if (conexao !== minha.c) return // conexão já fechada ou trocada
       if (s === 'SUBSCRIBED') {
         const reconectou = jaConectou && estado !== 'ao-vivo'
         jaConectou = true
@@ -138,11 +177,14 @@ export function criarCanal(deps: DependenciasCanal): Canal {
         // O Supabase tenta de novo sozinho; enquanto isso, conferência de 30 s.
         mudarStatus('sem-canal')
       } else if (s === 'CLOSED') {
-        // Fechado sem ter sido pedido: reabre daqui a pouco.
-        mudarStatus('sem-canal')
-        conexao?.fechar()
+        // Fechado sem ter sido pedido. Solta a conexão ANTES de fechar: o
+        // removeChannel do Supabase devolve outro CLOSED na hora, e com a
+        // conexão ainda presa aqui isso virava um laço sem fim.
+        const c = conexao
         conexao = null
-        if (ativas.size) cancelarReabertura = agendar(() => { cancelarReabertura = null; if (ativas.size && !conexao) abrir() }, REABRIR_MS)
+        c?.fechar()
+        mudarStatus('sem-canal')
+        if (ativas.size) agendarReabertura()
       }
     }
     try {
@@ -151,8 +193,11 @@ export function criarCanal(deps: DependenciasCanal): Canal {
     } catch {
       conexao = null
       mudarStatus('sem-canal')
-      cancelarReabertura = agendar(() => { cancelarReabertura = null; if (ativas.size && !conexao) abrir() }, REABRIR_MS)
+      agendarReabertura()
+      return
     }
+    pronto = true
+    for (const s of pendentes.splice(0)) aoStatus(s)
   }
 
   function fechar() {

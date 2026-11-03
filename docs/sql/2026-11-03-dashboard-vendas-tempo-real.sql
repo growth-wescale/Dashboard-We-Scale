@@ -45,7 +45,10 @@ create table if not exists public.dash_estado (
   ultima_duracao_ms int,
   ultimo_resultado  jsonb,
   ultimo_erro       text,
-  ultimo_erro_em    timestamptz
+  ultimo_erro_em    timestamptz,
+  -- Falha do aviso pelo Realtime (o navegador ainda confere sozinho).
+  aviso_erro        text,
+  aviso_erro_em     timestamptz
 );
 insert into public.dash_estado (id) values (1) on conflict (id) do nothing;
 
@@ -117,6 +120,9 @@ $$;
 -- sobem depois do commit, então nada se perde: no pior caso a rodada seguinte
 -- refaz o trabalho. A matview fica de fora dos contadores (o próprio REFRESH
 -- mexe neles).
+-- Não enxerga: tabela lida dentro de função usada numa view, TRUNCATE,
+-- partição e tabela estrangeira (em 03/11 a cadeia não tinha nenhum desses).
+-- Para esses casos existe a rodada forçada de 30 min.
 create or replace function public.dash_impressao_fontes()
 returns text
 language sql
@@ -282,7 +288,7 @@ begin
         jsonb_build_object('versao', v_versao, 'epoca', v_estado.epoca),
         'versao', 'dashboard-vendas', false);
     exception when others then
-      null;
+      update public.dash_estado set aviso_erro = sqlerrm, aviso_erro_em = now() where id = 1;
     end;
   end if;
 
@@ -292,12 +298,15 @@ $fn$;
 
 -- 6. Leitura pelo navegador (chave anon) ------------------------------------
 -- Uma chamada só por base, num único snapshot: versão e linhas sempre batem.
+-- `sincronizado_em`/`atraso_s`/`ultimo_erro` deixam o selo da tela mostrar
+-- "Atrasado" quando a sincronização para ou falha (rodada sem mudança não
+-- grava `sincronizado_em`; a forçada roda a cada 30 min).
 create or replace function public.dash_base(p_base text)
 returns json
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $fn$
 declare
   r json;
@@ -305,6 +314,9 @@ begin
   if p_base = 'vendas' then
     select json_build_object(
              'base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em,
+             'sincronizado_em', e.sincronizado_em,
+             'atraso_s', floor(extract(epoch from now() - e.sincronizado_em))::int,
+             'ultimo_erro', e.ultimo_erro,
              'cols', to_json(public.dash_colunas(p_base)),
              'linhas', coalesce((select json_agg(d.dados) from public.dash_vendas d where not d.removido), '[]'::json))
       into r
@@ -312,6 +324,9 @@ begin
   elsif p_base = 'etapas' then
     select json_build_object(
              'base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em,
+             'sincronizado_em', e.sincronizado_em,
+             'atraso_s', floor(extract(epoch from now() - e.sincronizado_em))::int,
+             'ultimo_erro', e.ultimo_erro,
              'cols', to_json(public.dash_colunas(p_base)),
              'linhas', coalesce((select json_agg(d.dados) from public.dash_etapas d where not d.removido), '[]'::json))
       into r
@@ -331,7 +346,7 @@ returns json
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $fn$
 declare
   r json;
@@ -340,9 +355,15 @@ begin
     select case
              when p_desde is null or p_epoca is distinct from e.epoca
                   or p_desde < e.purgado_ate or p_desde > e.versao then
-               json_build_object('base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em, 'reset', true)
+               json_build_object('base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em,
+                 'sincronizado_em', e.sincronizado_em,
+                 'atraso_s', floor(extract(epoch from now() - e.sincronizado_em))::int,
+                 'ultimo_erro', e.ultimo_erro, 'reset', true)
              else json_build_object(
-               'base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em, 'reset', false,
+               'base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em,
+               'sincronizado_em', e.sincronizado_em,
+               'atraso_s', floor(extract(epoch from now() - e.sincronizado_em))::int,
+               'ultimo_erro', e.ultimo_erro, 'reset', false,
                'cols', to_json(public.dash_colunas(p_base)),
                'linhas', coalesce((select json_agg(d.dados) from public.dash_vendas d
                                    where d.versao > p_desde and not d.removido), '[]'::json),
@@ -355,9 +376,15 @@ begin
     select case
              when p_desde is null or p_epoca is distinct from e.epoca
                   or p_desde < e.purgado_ate or p_desde > e.versao then
-               json_build_object('base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em, 'reset', true)
+               json_build_object('base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em,
+                 'sincronizado_em', e.sincronizado_em,
+                 'atraso_s', floor(extract(epoch from now() - e.sincronizado_em))::int,
+                 'ultimo_erro', e.ultimo_erro, 'reset', true)
              else json_build_object(
-               'base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em, 'reset', false,
+               'base', p_base, 'epoca', e.epoca, 'versao', e.versao, 'atualizado_em', e.mudou_em,
+               'sincronizado_em', e.sincronizado_em,
+               'atraso_s', floor(extract(epoch from now() - e.sincronizado_em))::int,
+               'ultimo_erro', e.ultimo_erro, 'reset', false,
                'cols', to_json(public.dash_colunas(p_base)),
                'linhas', coalesce((select json_agg(d.dados) from public.dash_etapas d
                                    where d.versao > p_desde and not d.removido), '[]'::json),
@@ -373,14 +400,38 @@ begin
 end
 $fn$;
 
+-- Força todo navegador a baixar a base inteira (troca a época e avisa).
+create or replace function public.dash_forcar_recarga()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $fn$
+declare
+  v_resultado jsonb;
+  e public.dash_estado%rowtype;
+begin
+  update public.dash_estado set epoca = epoca + 1 where id = 1;
+  v_resultado := public.dash_sincronizar(true);
+  select * into e from public.dash_estado where id = 1;
+  perform realtime.send(jsonb_build_object('versao', e.versao, 'epoca', e.epoca), 'versao', 'dashboard-vendas', false);
+  return v_resultado || jsonb_build_object('epoca', e.epoca);
+end
+$fn$;
+
 -- 7. Permissões -------------------------------------------------------------
 -- Supabase concede EXECUTE a anon/authenticated em toda função nova do public:
 -- as internas precisam de revoke explícito.
 revoke all on function public.dash_sincronizar(boolean) from public, anon, authenticated;
 revoke all on function public.dash_impressao_fontes() from public, anon, authenticated;
+revoke all on function public.dash_forcar_recarga() from public, anon, authenticated;
 grant execute on function public.dash_colunas(text) to anon, authenticated;
 grant execute on function public.dash_base(text) to anon, authenticated;
 grant execute on function public.dash_mudancas(text, bigint, int) to anon, authenticated;
+
+-- Mudar `dash_colunas()`: na MESMA transação do `select dash_sincronizar(true)`
+-- (senão, por até 1 min, os arrays velhos saem com os nomes novos). E mudar
+-- `COLUNAS_*` em src/lib/aoVivo/definicoes.ts junto.
 
 -- 8. Carga inicial (rodar uma vez) -----------------------------------------
 -- select public.dash_sincronizar(true);

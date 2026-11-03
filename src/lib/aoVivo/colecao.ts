@@ -12,7 +12,17 @@
  * objetos que o PostgREST devolvia das views, com os mesmos valores.
  */
 
-export interface PacoteBase {
+/** Saúde da sincronização no banco, que vem junto de toda resposta. */
+export interface SaudeServidor {
+  /** Última rodada que de fato sincronizou (ISO). Rodada sem mudança não grava. */
+  sincronizado_em?: string | null
+  /** Segundos desde `sincronizado_em`, pelo relógio do banco. */
+  atraso_s?: number | null
+  /** Erro da última rodada, se ela falhou (a cópia pode estar parada). */
+  ultimo_erro?: string | null
+}
+
+export interface PacoteBase extends SaudeServidor {
   base: string
   epoca: number
   versao: number
@@ -23,7 +33,7 @@ export interface PacoteBase {
   atualizado_em?: string | null
 }
 
-export interface PacoteMudancas {
+export interface PacoteMudancas extends SaudeServidor {
   base: string
   epoca: number
   versao: number
@@ -48,6 +58,12 @@ export interface DefinicaoBase<T> {
   comparar: (a: T, b: T) => number
   /** Ajuste por linha depois de montar o objeto (ex.: alias de marca). */
   ajustar?: (linha: T) => void
+  /**
+   * Resumo do que `ajustar` faz (ex.: a tabela de aliases de marca). O
+   * armazenamento local guarda a linha já ajustada; mudou o ajuste, muda a
+   * assinatura e o registro guardado é descartado.
+   */
+  assinatura?: string
 }
 
 export interface Colecao<T> {
@@ -59,14 +75,19 @@ export interface Colecao<T> {
   atualizadoEm: string | null
 }
 
+/**
+ * Arrays → objetos com exatamente `def.colunas` (coluna extra do banco é
+ * ignorada: toda linha tem as mesmas chaves, venha do banco ou do navegador).
+ */
 export function montarLinhas<T>(def: DefinicaoBase<T>, cols: readonly string[], linhas: readonly unknown[][]): T[] {
-  const faltando = def.colunas.filter(c => !cols.includes(c))
+  const posicoes = def.colunas.map(c => cols.indexOf(c))
+  const faltando = def.colunas.filter((_, i) => posicoes[i] < 0)
   if (faltando.length) throw new Error(`Base "${def.nome}" veio sem as colunas: ${faltando.join(', ')}`)
   const out = new Array<T>(linhas.length)
   for (let i = 0; i < linhas.length; i++) {
     const valores = linhas[i]
     const obj: Record<string, unknown> = {}
-    for (let j = 0; j < cols.length; j++) obj[cols[j]] = valores[j] ?? null
+    for (let j = 0; j < posicoes.length; j++) obj[def.colunas[j]] = valores[posicoes[j]] ?? null
     const linha = obj as T
     def.ajustar?.(linha)
     out[i] = linha

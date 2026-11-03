@@ -28,6 +28,12 @@ describe('montarLinhas', () => {
     expect(linha.data_venda).toBeNull()
   })
 
+  it('coluna a mais do banco é ignorada: toda linha tem as mesmas chaves', () => {
+    const cols = [...COLUNAS_VENDAS, 'coluna_nova']
+    const [linha] = montarLinhas(DEFINICAO_VENDAS, cols, [[...vendaArr({ id_lead: 'a', ciclo: 1 }), 'x']])
+    expect(Object.keys(linha)).toEqual([...COLUNAS_VENDAS])
+  })
+
   it('falha alto se o banco não mandar uma coluna que o dashboard usa', () => {
     const cols = COLUNAS_VENDAS.filter(c => c !== 'valor_produto')
     expect(() => montarLinhas(DEFINICAO_VENDAS, cols, [])).toThrow(/valor_produto/)

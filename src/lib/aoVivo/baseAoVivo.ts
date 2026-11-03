@@ -1,6 +1,6 @@
 import {
   aplicarMudancas, colecaoDaBase, paraArrays,
-  type Colecao, type DefinicaoBase, type PacoteBase, type PacoteMudancas,
+  type Colecao, type DefinicaoBase, type PacoteBase, type PacoteMudancas, type SaudeServidor,
 } from './colecao'
 import type { RegistroLocal } from './armazemLocal'
 
@@ -24,7 +24,7 @@ export interface DependenciasBase {
   rpc: (nome: 'dash_base' | 'dash_mudancas', args: Record<string, unknown>, sinal: AbortSignal) => Promise<unknown>
   ler: (nome: string) => Promise<RegistroLocal | null>
   gravar: (registro: RegistroLocal) => Promise<void>
-  /** Usuário logado agora (null = ninguém: não lê nem grava nada local). */
+  /** Usuário dono do armazenamento local (null = não lê nem grava nada local). */
   usuario: () => Promise<string | null>
   /** Avisos de uso: o canal só fica aberto enquanto alguma base está em uso. */
   ativou?: (base: BaseAoVivo<unknown>) => void
@@ -33,21 +33,30 @@ export interface DependenciasBase {
   esperar?: (ms: number) => Promise<void>
   /** Atraso da gravação local depois de uma mudança (junta rajadas). Padrão 5 s. */
   atrasoGravacaoMs?: number
+  /** Prazo da leitura local; passou, segue para o banco. Padrão 5 s. */
+  prazoArmazemMs?: number
 }
 
 export interface EstadoBase<T> {
   linhas: readonly T[]
-  /** Ainda sem nenhuma linha para mostrar (1ª carga neste navegador). */
+  /** Ainda sem nenhuma linha para mostrar (1ª carga, ou lendo o armazenamento local). */
   carregando: boolean
-  /** Última tentativa falhou; `linhas` seguem sendo as últimas boas. */
+  /** Última tentativa de falar com o banco falhou; `linhas` seguem sendo as últimas boas. */
   erro: string | null
   versao: number | null
-  /** Quando conferiu com o banco pela última vez (ms). */
+  epoca: number | null
+  /** Quando conferiu com o banco pela última vez (ms, relógio do navegador). */
   conferidoEm: number | null
   /** Última mudança no banco (ISO), como o banco informou. */
   atualizadoEm: string | null
   /** Veio do armazenamento local e ainda não foi conferida com o banco. */
   doArmazem: boolean
+  /** Última rodada de sincronização no banco (ISO). */
+  sincronizadoEm: string | null
+  /** Segundos desde `sincronizadoEm`, pelo relógio do banco, no momento de `conferidoEm`. */
+  atrasoS: number | null
+  /** A última sincronização no banco falhou: a cópia pode estar parada. */
+  erroServidor: string | null
 }
 
 export interface BaseAoVivo<T> {
@@ -56,7 +65,10 @@ export interface BaseAoVivo<T> {
   assinar: (ouvinte: () => void) => () => void
   /** Garante dados (memória → local → banco) e busca o que mudou. Nunca lança. */
   sincronizar: () => Promise<void>
-  /** Esquece a coleção da memória (logout). O armazenamento local é apagado à parte. */
+  /**
+   * Esquece a coleção da memória (logout, troca de usuário) e descarta o que
+   * estava a caminho. Não busca nada de novo; o armazenamento local é apagado à parte.
+   */
   limpar: () => void
   /** Componentes usando a base agora. */
   emUso: () => number
@@ -74,9 +86,13 @@ export const ESTADO_VAZIO: EstadoBase<never> = Object.freeze({
   carregando: false,
   erro: null,
   versao: null,
+  epoca: null,
   conferidoEm: null,
   atualizadoEm: null,
   doArmazem: false,
+  sincronizadoEm: null,
+  atrasoS: null,
+  erroServidor: null,
 })
 
 function mensagem(e: unknown): string {
@@ -85,12 +101,21 @@ function mensagem(e: unknown): string {
   return String(e)
 }
 
+function saude(p: SaudeServidor) {
+  return {
+    sincronizadoEm: p.sincronizado_em ?? null,
+    atrasoS: typeof p.atraso_s === 'number' ? p.atraso_s : null,
+    erroServidor: p.ultimo_erro ?? null,
+  }
+}
+
 export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase): BaseAoVivo<T> {
   const agora = deps.agora ?? Date.now
   const esperar = deps.esperar ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)))
   const atrasoGravacao = deps.atrasoGravacaoMs ?? 5_000
-  // Registro local de outro formato (colunas mudaram, mudou a montagem) é ignorado.
-  const formato = `${def.nome}:1:${def.colunas.join(',')}`
+  const prazoArmazem = deps.prazoArmazemMs ?? 5_000
+  // Registro local de outro formato (colunas, montagem ou ajuste diferentes) é ignorado.
+  const formato = `${def.nome}:1:${def.colunas.join(',')}:${def.assinatura ?? ''}`
 
   let colecao: Colecao<T> | null = null
   let estado: EstadoBase<T> = ESTADO_VAZIO
@@ -106,16 +131,18 @@ export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase
     for (const ouvinte of [...ouvintes]) ouvinte()
   }
 
-  function usar(nova: Colecao<T>, doArmazem: boolean) {
+  function usar(nova: Colecao<T>, doArmazem: boolean, pacote?: SaudeServidor) {
     colecao = nova
     publicar({
       linhas: nova.linhas,
       versao: nova.versao,
+      epoca: nova.epoca,
       atualizadoEm: nova.atualizadoEm,
       carregando: false,
       erro: null,
       doArmazem,
       ...(doArmazem ? {} : { conferidoEm: agora() }),
+      ...(pacote ? saude(pacote) : {}),
     })
   }
 
@@ -162,8 +189,11 @@ export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase
   }
 
   async function lerArmazem(g: number): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      const [registro, usuario] = await Promise.all([deps.ler(def.nome), deps.usuario()])
+      // Armazenamento que não responde não pode segurar a carga: no prazo, segue para o banco.
+      const prazo = new Promise<[null, null]>(r => { timer = setTimeout(() => r([null, null]), prazoArmazem) })
+      const [registro, usuario] = await Promise.race([Promise.all([deps.ler(def.nome), deps.usuario()]), prazo])
       if (g !== geracao) return false
       if (colecao) return true
       if (!registro || registro.formato !== formato || !usuario || registro.usuario !== usuario) return false
@@ -174,22 +204,28 @@ export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase
       return true
     } catch {
       return false
+    } finally {
+      clearTimeout(timer)
     }
   }
 
   async function baixarTudo(g: number) {
-    if (!estado.linhas.length) publicar({ carregando: true })
+    if (!estado.linhas.length && !estado.carregando) publicar({ carregando: true })
     const pacote = await chamar<PacoteBase>('dash_base', { p_base: def.nome }, TEMPO_BASE_MS)
     if (g !== geracao) return
-    usar(colecaoDaBase(def, pacote), false)
+    usar(colecaoDaBase(def, pacote), false, pacote)
     agendarGravacao()
   }
 
-  async function rodar() {
-    const g = geracao
-    if (!colecao && !(await lerArmazem(g))) {
-      if (g === geracao) await baixarTudo(g)
-      return
+  async function rodar(g: number) {
+    if (!colecao) {
+      // Nada na tela ainda: "carregando" já durante a leitura local, para a
+      // página não mostrar zeros como se fossem números.
+      if (!estado.linhas.length && !estado.carregando) publicar({ carregando: true })
+      if (!(await lerArmazem(g))) {
+        if (g === geracao) await baixarTudo(g)
+        return
+      }
     }
     if (g !== geracao || !colecao) return
     const atual = colecao
@@ -200,10 +236,12 @@ export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase
     if (resultado === 'reset') {
       await baixarTudo(g)
     } else if (resultado !== atual) {
-      usar(resultado, false)
-      agendarGravacao()
+      usar(resultado, false, pacote)
+      // Mudou só o número da versão (a mudança foi na outra base): não regrava
+      // a base inteira no navegador por isso.
+      if (resultado.linhas !== atual.linhas) agendarGravacao()
     } else {
-      publicar({ conferidoEm: agora(), erro: null, doArmazem: false })
+      publicar({ conferidoEm: agora(), erro: null, doArmazem: false, ...saude(pacote) })
     }
   }
 
@@ -217,10 +255,14 @@ export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase
       try {
         do {
           deNovo = false
-          await rodar()
+          const g = geracao
+          try {
+            await rodar(g)
+          } catch (e) {
+            // Erro de uma rodada anterior a um limpar() não é publicado para quem entrou depois.
+            if (g === geracao) publicar({ erro: mensagem(e), carregando: false })
+          }
         } while (deNovo)
-      } catch (e) {
-        publicar({ erro: mensagem(e), carregando: false })
       } finally {
         emVoo = null
       }
@@ -250,7 +292,6 @@ export function criarBaseAoVivo<T>(def: DefinicaoBase<T>, deps: DependenciasBase
       deNovo = false
       if (gravacao) { clearTimeout(gravacao); gravacao = null }
       publicar(ESTADO_VAZIO)
-      if (ouvintes.size > 0) void sincronizar()
     },
     emUso: () => ouvintes.size,
   }

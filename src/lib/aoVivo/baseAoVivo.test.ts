@@ -13,7 +13,7 @@ const DEF: DefinicaoBase<Linha> = {
   chaveRemovido: k => String(k),
   comparar: (a, b) => asc(a.id, b.id),
 }
-const FORMATO = 'teste:1:id,v'
+const FORMATO = 'teste:1:id,v:'
 
 /**
  * Banco falso com a mesma regra de `dash_base`/`dash_mudancas`: cada linha
@@ -25,11 +25,14 @@ function bancoFalso() {
   const chamadas: string[] = []
   let falhasRestantes = 0
   let pendurar: Promise<void> | null = null
+  const saude = { sincronizado_em: '2026-11-03T15:00:00+00:00', atraso_s: 30, ultimo_erro: null as string | null }
   return {
     chamadas,
+    saude,
     falhar(n: number) { falhasRestantes = n },
     segurar() { let soltar!: () => void; pendurar = new Promise(r => { soltar = r }); return () => { pendurar = null; soltar() } },
-    publicar(mudancas: Record<string, number | null>) {
+    /** Muda linhas numa versão nova. Sem argumento: só a versão sobe (mudança foi na outra base). */
+    publicar(mudancas: Record<string, number | null> = {}) {
       versao++
       for (const [id, v] of Object.entries(mudancas)) {
         if (v === null) { const l = linhas.get(id); if (l) { l.removido = true; l.versao = versao } }
@@ -41,34 +44,39 @@ function bancoFalso() {
       if (pendurar) await pendurar
       if (falhasRestantes > 0) { falhasRestantes--; throw new Error('timeout do banco') }
       if (nome === 'dash_base') {
-        return { base: 'teste', epoca: 1, versao, cols: ['id', 'v'],
+        return { base: 'teste', epoca: 1, versao, cols: ['id', 'v'], ...saude,
           linhas: [...linhas].filter(([, l]) => !l.removido).map(([id, l]) => [id, l.v]) }
       }
       const desde = Number(args.p_desde)
-      if (desde > versao) return { base: 'teste', epoca: 1, versao, reset: true }
+      if (desde > versao) return { base: 'teste', epoca: 1, versao, reset: true, ...saude }
       const mudou = [...linhas].filter(([, l]) => l.versao > desde)
-      return { base: 'teste', epoca: 1, versao, reset: false, cols: ['id', 'v'],
+      return { base: 'teste', epoca: 1, versao, reset: false, cols: ['id', 'v'], ...saude,
         linhas: mudou.filter(([, l]) => !l.removido).map(([id, l]) => [id, l.v]),
         removidos: mudou.filter(([, l]) => l.removido).map(([id]) => id) }
     },
   }
 }
 
-function montar(banco: ReturnType<typeof bancoFalso>, opts: { registro?: RegistroLocal | null; usuario?: string | null } = {}) {
+function montar(banco: ReturnType<typeof bancoFalso>, opts: {
+  registro?: RegistroLocal | null
+  usuario?: string | null
+  ler?: DependenciasBase['ler']
+} = {}) {
   const gravados: RegistroLocal[] = []
   const deps: DependenciasBase = {
     rpc: (nome, args) => banco.rpc(nome, args),
-    ler: async () => opts.registro ?? null,
+    ler: opts.ler ?? (async () => opts.registro ?? null),
     gravar: async r => { gravados.push(r) },
     usuario: async () => (opts.usuario === undefined ? 'u1' : opts.usuario),
     esperar: async () => {},
     atrasoGravacaoMs: 0,
+    prazoArmazemMs: 20,
   }
   return { base: criarBaseAoVivo(DEF, deps), gravados }
 }
 
 const ids = (linhas: readonly Linha[]) => linhas.map(l => `${l.id}=${l.v}`)
-const tick = () => new Promise(r => setTimeout(r, 5))
+const tick = (ms = 5) => new Promise(r => setTimeout(r, ms))
 
 describe('base ao vivo', () => {
   it('1º acesso: baixa a base inteira numa chamada e guarda no navegador', async () => {
@@ -87,6 +95,30 @@ describe('base ao vivo', () => {
     expect(gravados.at(-1)).toMatchObject({ nome: 'teste', formato: FORMATO, usuario: 'u1', versao: 1, linhas: [['a', 1], ['b', 2]] })
   })
 
+  it('"carregando" já durante a leitura do navegador (a página não mostra zeros)', async () => {
+    const banco = bancoFalso()
+    banco.publicar({ a: 1 })
+    let soltar!: () => void
+    const { base } = montar(banco, { ler: () => new Promise(r => { soltar = () => r(null) }) })
+    base.assinar(() => {})
+    await tick(1)
+    expect(base.obter().carregando).toBe(true)
+    expect(banco.chamadas).toEqual([])
+    soltar()
+    await tick()
+    expect(base.obter().carregando).toBe(false)
+    expect(ids(base.obter().linhas)).toEqual(['a=1'])
+  })
+
+  it('armazenamento do navegador que não responde não segura a carga', async () => {
+    const banco = bancoFalso()
+    banco.publicar({ a: 1 })
+    const { base } = montar(banco, { ler: () => new Promise(() => {}) })
+    await base.sincronizar()
+    expect(banco.chamadas).toEqual(['dash_base'])
+    expect(ids(base.obter().linhas)).toEqual(['a=1'])
+  })
+
   it('com base guardada no navegador: mostra na hora e só busca o que mudou', async () => {
     const banco = bancoFalso()
     banco.publicar({ a: 1, b: 2 })
@@ -94,11 +126,11 @@ describe('base ao vivo', () => {
     const registro: RegistroLocal = { nome: 'teste', formato: FORMATO, usuario: 'u1', epoca: 1, versao: 1,
       cols: ['id', 'v'], linhas: [['a', 1], ['b', 2]], atualizadoEm: null, salvoEm: 0 }
     const { base } = montar(banco, { registro })
-    const primeiras: string[][] = []
-    base.assinar(() => { if (!primeiras.length) primeiras.push(ids(base.obter().linhas)) })
+    const vistas: string[][] = []
+    base.assinar(() => { if (base.obter().linhas.length) vistas.push(ids(base.obter().linhas)) })
     await tick()
     await base.sincronizar()
-    expect(primeiras[0]).toEqual(['a=1', 'b=2'])
+    expect(vistas[0]).toEqual(['a=1', 'b=2'])
     expect(banco.chamadas).not.toContain('dash_base')
     expect(ids(base.obter().linhas)).toEqual(['a=1', 'b=3', 'c=4'])
     expect(base.obter().doArmazem).toBe(false)
@@ -107,7 +139,7 @@ describe('base ao vivo', () => {
   it('base guardada de outro usuário ou de outro formato não é usada', async () => {
     for (const registro of [
       { nome: 'teste', formato: FORMATO, usuario: 'outro', epoca: 1, versao: 1, cols: ['id', 'v'], linhas: [['x', 9]], atualizadoEm: null, salvoEm: 0 },
-      { nome: 'teste', formato: 'teste:0:id', usuario: 'u1', epoca: 1, versao: 1, cols: ['id'], linhas: [['x']], atualizadoEm: null, salvoEm: 0 },
+      { nome: 'teste', formato: 'teste:1:id,v:aliases={}', usuario: 'u1', epoca: 1, versao: 1, cols: ['id', 'v'], linhas: [['x', 9]], atualizadoEm: null, salvoEm: 0 },
     ]) {
       const banco = bancoFalso()
       banco.publicar({ a: 1 })
@@ -139,6 +171,31 @@ describe('base ao vivo', () => {
     const antes = base.obter().linhas
     await base.sincronizar()
     expect(base.obter().linhas).toBe(antes)
+  })
+
+  it('versão nova sem linha nova (mudança na outra base) não regrava o navegador', async () => {
+    const banco = bancoFalso()
+    banco.publicar({ a: 1 })
+    const { base, gravados } = montar(banco)
+    await base.sincronizar()
+    await tick()
+    const gravacoes = gravados.length
+    banco.publicar()
+    await base.sincronizar()
+    await tick()
+    expect(base.obter().versao).toBe(2)
+    expect(gravados.length).toBe(gravacoes)
+  })
+
+  it('traz a saúde da sincronização do banco para o selo', async () => {
+    const banco = bancoFalso()
+    banco.publicar({ a: 1 })
+    const { base } = montar(banco)
+    await base.sincronizar()
+    expect(base.obter()).toMatchObject({ sincronizadoEm: '2026-11-03T15:00:00+00:00', atrasoS: 30, erroServidor: null })
+    banco.saude.ultimo_erro = 'duplicate key value'
+    await base.sincronizar()
+    expect(base.obter().erroServidor).toBe('duplicate key value')
   })
 
   it('reset do banco: baixa a base inteira de novo', async () => {
@@ -194,23 +251,58 @@ describe('base ao vivo', () => {
     expect(ids(base.obter().linhas)).toEqual(['a=2'])
   })
 
-  it('limpar (logout) descarta a resposta que estava a caminho', async () => {
+  it('pedido no meio de uma busca que falha ainda roda no fim', async () => {
     const banco = bancoFalso()
     banco.publicar({ a: 1 })
     const { base } = montar(banco)
     await base.sincronizar()
+    banco.falhar(3)
+    const soltar = banco.segurar()
+    const p1 = base.sincronizar()
     banco.publicar({ a: 2 })
+    const p2 = base.sincronizar()
+    soltar()
+    await Promise.all([p1, p2])
+    expect(base.obter().erro).toBeNull()
+    expect(ids(base.obter().linhas)).toEqual(['a=2'])
+  })
+
+  it('limpar (logout) descarta a resposta a caminho e não busca nada de novo', async () => {
+    const banco = bancoFalso()
+    banco.publicar({ a: 1 })
+    const { base } = montar(banco)
+    base.assinar(() => {})
+    await tick()
+    banco.publicar({ a: 2 })
+    const soltar = banco.segurar()
+    const p = base.sincronizar()
+    await tick()
+    banco.chamadas.length = 0
+    base.limpar()
+    soltar()
+    await p
+    await tick()
+    expect(base.obter().linhas).toEqual([])
+    expect(base.obter().versao).toBeNull()
+    expect(banco.chamadas).toEqual([])
+  })
+
+  it('erro de uma busca de antes do logout não aparece para quem entrou depois', async () => {
+    const banco = bancoFalso()
+    banco.publicar({ a: 1 })
+    const { base } = montar(banco)
+    await base.sincronizar()
+    banco.falhar(3)
     const soltar = banco.segurar()
     const p = base.sincronizar()
     await tick()
     base.limpar()
     soltar()
     await p
-    expect(base.obter().linhas).toEqual([])
-    expect(base.obter().versao).toBeNull()
+    expect(base.obter().erro).toBeNull()
   })
 
-  it('sem usuário logado não grava nada no navegador', async () => {
+  it('sem usuário que possa guardar, não grava nada no navegador', async () => {
     const banco = bancoFalso()
     banco.publicar({ a: 1 })
     const { base, gravados } = montar(banco, { usuario: null })

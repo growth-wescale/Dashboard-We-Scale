@@ -54,3 +54,18 @@ export function rankingOctogono(
     }).sort(ordenar),
   }
 }
+
+/**
+ * Campeão do Cinturão · Closer de um mês fechado: maior % da própria meta
+ * financeira, desempate pelo realizado. Quem não vendeu nada não leva o
+ * cinturão — sem nenhuma venda no mês, não há campeão.
+ */
+export function campeaoCloser<T extends { nome: string; realizado: number; metaFinanceira: number }>(
+  closers: readonly T[],
+): (T & { pct: number }) | null {
+  const candidatos = closers
+    .filter(c => c.metaFinanceira > 0 && c.realizado > 0)
+    .map(c => ({ ...c, pct: c.realizado / c.metaFinanceira * 100 }))
+    .sort((a, b) => b.pct - a.pct || b.realizado - a.realizado || a.nome.localeCompare(b.nome, 'pt-BR'))
+  return candidatos[0] ?? null
+}

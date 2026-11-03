@@ -8,6 +8,7 @@ import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
 import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
+import { useCinturaoCloser } from '@/hooks/useCinturaoCloser'
 import { CLOSER_SPEED_TIERS, SDR_SPEED_TIERS, TICKET_FAIXAS } from '@/lib/corridaPerformance'
 import type { LinhaTrilha, SpeedTier } from '@/lib/corridaPerformance'
 import {
@@ -126,7 +127,8 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
     () => [...closers].sort((a, b) => b.pctAtingimento - a.pctAtingimento || b.realizado - a.realizado),
     [closers],
   )
-  const pole = ranking[0] ?? null
+  // Cinturão: campeão do mês se já fechou; do mês anterior se ainda está em curso.
+  const cinturao = useCinturaoCloser(mes)
 
   // Totais do time
   const totais = useMemo(() => {
@@ -193,7 +195,7 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
         </div>
       )}
 
-      <HeroBanner volta={volta} totalVoltas={campanha.voltas.length} rotuloMes={campanha.rotulo} diasRestantes={diasRestantes} pole={pole} poleSdr={poleSdr} />
+      <HeroBanner volta={volta} totalVoltas={campanha.voltas.length} rotuloMes={campanha.rotulo} diasRestantes={diasRestantes} cinturao={cinturao} poleSdr={poleSdr} />
 
       <CicloVoltas
         ciclo={ciclo}
@@ -257,12 +259,12 @@ interface PoleSdr {
   pct: number
 }
 
-function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, pole, poleSdr }: {
+function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, cinturao, poleSdr }: {
   volta: number
   totalVoltas: number
   rotuloMes: string
   diasRestantes: number
-  pole: CloserMeta | null
+  cinturao: ReturnType<typeof useCinturaoCloser>
   poleSdr: PoleSdr | null
 }) {
   return (
@@ -305,10 +307,14 @@ function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, pole, poleSd
       }}>
         <PolePositionCard
           titulo="Cinturão · Closer"
-          iniciais={pole?.iniciais}
-          cor={pole?.cor}
-          nome={pole?.nome}
-          detalhe={pole ? `${pct(pole.pctAtingimento, 0)} da meta · ${money(pole.realizado)}` : null}
+          iniciais={cinturao.campeao?.iniciais}
+          cor={cinturao.campeao?.cor}
+          nome={cinturao.campeao?.nome}
+          detalhe={cinturao.loading
+            ? 'carregando…'
+            : cinturao.campeao
+              ? `Melhor de ${cinturao.nomeMesCinturao.toLowerCase()} · ${pct(cinturao.campeao.pct, 0)} da meta · ${money(cinturao.campeao.realizado)}`
+              : `sem vendas em ${cinturao.nomeMesCinturao.toLowerCase()}`}
         />
         <PolePositionCard
           titulo="Cinturão · SDR"

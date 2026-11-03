@@ -36,6 +36,9 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 Thaina (Closer) aos nomes informados por Gabriel. Assets próprios em
 `public/assets/campanha-ufc/`; mesmo recorte dos cards existentes. A alteração
 fica no mapa local da Campanha, sem escrever no cadastro ou mudar metas.
+Conferência autenticada em 03/11 identificou os nomes completos usados nos
+cards: `Cassiana Lavall` e `Thaina Freitas`. O mapa usa essas chaves exatas;
+os nomes curtos anteriores não encontravam os retratos no cadastro real.
 Retratos aprovados por Gabriel em 03/11, com PR e publicação autorizados.
 Branch `codex/fotos-cassiana-thaina`, base `1d237ea` (PR314). Build, oito
 testes existentes, lint e prévia dos cards em desktop/celular aprovados.
@@ -946,6 +949,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-03 — Nomes completos das fotos da Campanha
+
+A tela autenticada de produção mostrou o card de Thaina Freitas com iniciais,
+e a leitura dos elementos confirmou Cassiana Lavall. O mapa anterior usava
+somente os primeiros nomes. Corrigidas as duas chaves em `fotosCampanha.ts`,
+preservando os retratos aprovados e as demais associações. Nenhum cadastro,
+meta, cálculo ou imagem alterado. Fechamento da publicação e QA no vault e
+AGENTS.md.
 
 ### 2026-11-03 — Fotos de Cassiana (SDR) e Thaina (Closer)
 

@@ -8,7 +8,7 @@ import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
 import { useMetaPorMarca } from '@/hooks/useMetaPorMarca'
 import { useRealizadoPorMarca } from '@/hooks/useRealizadoPorMarca'
 import { useCorridaPerformance, type SdrRealizado } from '@/hooks/useCorridaPerformance'
-import { useCinturaoCloser } from '@/hooks/useCinturaoCloser'
+import { useCinturaoCloser, useCinturaoSdr } from '@/hooks/useCinturaoCloser'
 import { CLOSER_SPEED_TIERS, SDR_SPEED_TIERS, TICKET_FAIXAS } from '@/lib/corridaPerformance'
 import type { LinhaTrilha, SpeedTier } from '@/lib/corridaPerformance'
 import {
@@ -149,18 +149,8 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
   const diasRestantes = Math.max(0, campanha.diasMes - dia)
   const volta = voltaDoDia(campanha, dia)
 
-  // SDR na frente: % da meta de SQL na janela (meta rateada como no Grid),
-  // desempate por SQL e depois por RR.
-  const poleSdr = useMemo<PoleSdr | null>(() => {
-    const linhas = metasSdr.sdrs.map(s => {
-      const real = sdrRealizado.get(s.nome) ?? { sql: 0, rr: 0, sal: 0 }
-      const meta = s.metaSql * metaFatorSdr
-      return { sdr: s, sql: real.sql, rr: real.rr, pct: meta > 0 ? (real.sql / meta) * 100 : 0 }
-    })
-    linhas.sort((a, b) => b.pct - a.pct || b.sql - a.sql || b.rr - a.rr)
-    const top = linhas[0]
-    return top && (top.sql > 0 || top.rr > 0) ? top : null
-  }, [metasSdr.sdrs, sdrRealizado, metaFatorSdr])
+  // Cinturão SDR: mesma regra de mês do Closer, pela % da meta de SQL do mês.
+  const cinturaoSdr = useCinturaoSdr(mes)
 
   const rankingsOctogono = useMemo(
     () => rankingOctogono(closers, metasSdr.sdrs, sdrRealizado, metaFatorSdr),
@@ -195,7 +185,7 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
         </div>
       )}
 
-      <HeroBanner volta={volta} totalVoltas={campanha.voltas.length} rotuloMes={campanha.rotulo} diasRestantes={diasRestantes} cinturao={cinturao} poleSdr={poleSdr} />
+      <HeroBanner volta={volta} totalVoltas={campanha.voltas.length} rotuloMes={campanha.rotulo} diasRestantes={diasRestantes} cinturao={cinturao} cinturaoSdr={cinturaoSdr} />
 
       <CicloVoltas
         ciclo={ciclo}
@@ -252,20 +242,13 @@ function CampanhaDoMes({ mes, onMes }: { mes: string; onMes: (m: string) => void
 
 const CAGE_BG = 'repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 1px, transparent 1px 22px), repeating-linear-gradient(-45deg, rgba(255,255,255,.04) 0 1px, transparent 1px 22px)'
 
-interface PoleSdr {
-  sdr: SdrMeta
-  sql: number
-  rr: number
-  pct: number
-}
-
-function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, cinturao, poleSdr }: {
+function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, cinturao, cinturaoSdr }: {
   volta: number
   totalVoltas: number
   rotuloMes: string
   diasRestantes: number
   cinturao: ReturnType<typeof useCinturaoCloser>
-  poleSdr: PoleSdr | null
+  cinturaoSdr: ReturnType<typeof useCinturaoSdr>
 }) {
   return (
     <div style={{
@@ -318,12 +301,14 @@ function HeroBanner({ volta, totalVoltas, rotuloMes, diasRestantes, cinturao, po
         />
         <PolePositionCard
           titulo="Cinturão · SDR"
-          iniciais={poleSdr?.sdr.iniciais}
-          cor={poleSdr?.sdr.cor}
-          nome={poleSdr?.sdr.nome}
-          detalhe={poleSdr
-            ? `${poleSdr.sdr.metaSql > 0 ? `${pct(poleSdr.pct, 0)} da meta · ` : ''}${poleSdr.sql} SQL · ${poleSdr.rr} DIAG`
-            : null}
+          iniciais={cinturaoSdr.campeao?.sdr.iniciais}
+          cor={cinturaoSdr.campeao?.sdr.cor}
+          nome={cinturaoSdr.campeao?.sdr.nome}
+          detalhe={cinturaoSdr.loading
+            ? 'carregando…'
+            : cinturaoSdr.campeao
+              ? `Melhor de ${cinturaoSdr.nomeMesCinturao.toLowerCase()} · ${pct(cinturaoSdr.campeao.pct, 0)} da meta · ${cinturaoSdr.campeao.sql} SQL · ${cinturaoSdr.campeao.rr} DIAG`
+              : `sem SQL em ${cinturaoSdr.nomeMesCinturao.toLowerCase()}`}
         />
       </div>
     </div>

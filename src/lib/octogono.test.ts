@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { campeaoCloser, rankingOctogono } from './octogono'
+import { campeaoCloser, campeaoSdr, rankingOctogono } from './octogono'
 import { mesDoCinturao } from '@/constants/metasCampanhaF1'
 
 describe('Octógono: apresentação sem alterar as métricas', () => {
@@ -58,5 +58,21 @@ describe('mesDoCinturao', () => {
   })
   it('virada de ano', () => {
     expect(mesDoCinturao('2027-01-01', new Date(2027, 0, 5))).toBe('2026-12-01')
+  })
+})
+
+describe('Cinturão · SDR', () => {
+  const sdrs = [
+    { nome: 'Xayane', metaSql: 103 },
+    { nome: 'Sarah Padilha', metaSql: 81 },
+    { nome: 'Cassiana Lavall', metaSql: 0 },
+  ]
+  it('fica com a maior % da meta de SQL do mês', () => {
+    const c = campeaoSdr(sdrs, new Map([['Xayane', { sql: 45, rr: 30 }], ['Sarah Padilha', { sql: 54, rr: 32 }]]))
+    expect(c?.sdr.nome).toBe('Sarah Padilha')
+    expect(c?.pct).toBeCloseTo(66.7, 1)
+  })
+  it('sem SQL no mês não há campeão', () => {
+    expect(campeaoSdr(sdrs, new Map([['Xayane', { sql: 0, rr: 3 }]]))).toBeNull()
   })
 })

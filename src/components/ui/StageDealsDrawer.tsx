@@ -10,6 +10,7 @@ import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBad
 import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
+import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
 /** Filtro com o nome em cima, igual à FilterBar — o botão do MultiSelect
  *  sozinho mostra só o resumo ("Todas"), que não diz qual campo é. */
@@ -175,6 +176,7 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
                     <ExternalLink size={11} />
                   </a>
                   <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
+                  <LinkPontosCorrida row={r} cor={accent} />
                 </td>
                 <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_funil)}</td>
                 <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>

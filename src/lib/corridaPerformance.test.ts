@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest'
 import {
   classificarVelocidade,
   difDias,
+  lancamentosCloser,
+  lancamentosSdr,
   multTicket,
   normalizarFonte,
   normalizarMarca,
   pesoFonte,
   pontosCloser,
   pontosSdr,
+  somarLancamentos,
   ticketTierDe,
   SDR_SPEED_TIERS,
   CLOSER_SPEED_TIERS,
@@ -377,5 +380,137 @@ describe('pontosCloser — conta unidade vendida, não deal fechado', () => {
     ], ['A'])
     // (3 × 2,0 + 1 × 1,0) / 4 = 1,75
     expect(linha.ticketMedio).toBe(1.75)
+  })
+})
+
+/* ── Lançamentos: o extrato que soma o card ─────────────────────────────── */
+
+describe('lancamentosSdr — 1 lançamento por RR, com cada fator', () => {
+  it('exemplo do extrato: Inbound × Oral Unic × agendou 0,4 dia após o MQL = 2,625', () => {
+    const [l] = lancamentosSdr([
+      { ...rr('Sarah', 14, 0.4, 'Inbound', 'Oral Unic'), idLead: 'abc', ciclo: 1, negociacao: 'Clínica X' },
+    ], ['Sarah'])
+    expect(l).toMatchObject({
+      trilha: 'sdr', nome: 'Sarah', idLead: 'abc', ciclo: 1, negociacao: 'Clínica X',
+      marca: 'Oral Unic', fonte: 'Inbound', unidades: 1, unidadesNoDia: 1, bonus: 1, peso: 1,
+      dia: '2026-09-14',
+    })
+    expect(l.ticket).toMatchObject({ tier: 3, mult: 1.75 })
+    expect(l.velocidade).toMatchObject({ mult: 1.5, tag: 'Resposta Relâmpago' })
+    expect(l.leadtimeDias).toBeCloseTo(0.4, 5)
+    expect(l.pontosUnidade).toBeCloseTo(2.625, 10)
+    expect(l.pontos).toBeCloseTo(2.625, 10)
+    // datas usadas na velocidade vão junto, pra explicar o "sem data"
+    expect(l.inicioVelocidade).toBe('2026-08-20T00:00:00Z')
+    expect(l.fimVelocidade).not.toBeNull()
+  })
+
+  it('bônus do mesmo dia: as 2 RR do dia levam ×1,5 e sabem quantas foram', () => {
+    const base: Omit<RrUnidade, 'dataRr'> = {
+      nome: 'A', fonte: 'Inbound', marca: 'B2Case',
+      dataMql: '2026-09-01T00:00:00Z', dataAgendamento: '2026-09-03T00:00:00Z',
+    }
+    const ls = lancamentosSdr([
+      { ...base, dataRr: '2026-09-05T13:00:00Z' },
+      { ...base, dataRr: '2026-09-05T22:00:00Z' },
+      { ...base, dataRr: '2026-09-06T13:00:00Z' },
+    ], ['A'])
+    expect(ls.map(l => [l.dia, l.unidadesNoDia, l.bonus])).toEqual([
+      ['2026-09-05', 2, 1.5],
+      ['2026-09-05', 2, 1.5],
+      ['2026-09-06', 1, 1],
+    ])
+  })
+
+  it('sem data de MQL → velocidade neutra, com a data que falta vazia', () => {
+    const [l] = lancamentosSdr([
+      { nome: 'A', fonte: 'Inbound', marca: 'B2Case', dataMql: null, dataAgendamento: '2026-09-03T00:00:00Z', dataRr: '2026-09-05T13:00:00Z' },
+    ], ['A'])
+    expect(l.leadtimeDias).toBeNull()
+    expect(l.inicioVelocidade).toBeNull()
+    expect(l.velocidade).toMatchObject({ mult: 1, tag: '—' })
+    expect(l.pontos).toBe(1)
+  })
+
+  it('quem não está entre os pilotos não gera lançamento', () => {
+    const ls = lancamentosSdr([rr('Fulano', 1, 0.4), rr('A', 2, 0.4)], ['A'])
+    expect(ls.map(l => l.nome)).toEqual(['A'])
+  })
+
+  it('sem identificação do negócio: id vazio e ciclo 1', () => {
+    const [l] = lancamentosSdr([rr('A', 2, 0.4)], ['A'])
+    expect(l.idLead).toBe('')
+    expect(l.ciclo).toBe(1)
+    expect(l.negociacao).toBeNull()
+  })
+})
+
+describe('lancamentosCloser — 1 lançamento por venda, × unidades', () => {
+  const venda = (nome: string, unidades: number, extra: Partial<VendaUnidade> = {}): VendaUnidade => ({
+    nome, fonte: 'Inbound', marca: 'B2Case',
+    dataRr: '2026-08-01T12:00:00Z', dataVenda: '2026-08-15T12:00:00Z', unidades, ...extra,
+  })
+
+  it('venda de 2 unidades: uma linha só, bônus do dia e pontos × 2', () => {
+    const [l] = lancamentosCloser([venda('B', 2, { idLead: 'x1', ciclo: 2 })], ['B'])
+    expect(l).toMatchObject({ trilha: 'closer', idLead: 'x1', ciclo: 2, unidades: 2, unidadesNoDia: 2, bonus: 1.5 })
+    // 1 pt × 1,5 bônus × 1,0 ticket × 1,5 velocidade (14 dias) = 2,25 por unidade
+    expect(l.pontosUnidade).toBeCloseTo(2.25, 10)
+    expect(l.pontos).toBeCloseTo(4.5, 10)
+  })
+
+  it('unidades do dia somam vendas diferentes da mesma pessoa', () => {
+    const ls = lancamentosCloser([venda('B', 2), venda('B', 1)], ['B'])
+    expect(ls.map(l => l.unidadesNoDia)).toEqual([3, 3])
+    expect(ls.every(l => l.bonus === 1.5)).toBe(true)
+  })
+
+  it('quantidade inválida vira 1 unidade', () => {
+    const [l] = lancamentosCloser([venda('B', 0)], ['B'])
+    expect(l.unidades).toBe(1)
+    expect(l.bonus).toBe(1)
+  })
+})
+
+describe('somarLancamentos — o card é a soma do extrato', () => {
+  // Mistura de fontes, marcas, dias repetidos e datas faltando — o total por
+  // pessoa do extrato tem que bater com pontosSdr/pontosCloser.
+  const rrs: RrUnidade[] = [
+    rr('A', 1, 0.4, 'Inbound', 'Oral Unic'),
+    rr('A', 1, 2, 'Resgate', 'Viva'),
+    rr('A', 3, 8, 'Indicação', 'Inpot'),
+    rr('B', 3, 0.9, 'Prospecção Ativa', 'Lisô Laser'),
+    rr('B', 4, 5, null, 'Marca Nova'),
+    { nome: 'B', fonte: 'Evento', marca: 'Eletrovias', dataMql: null, dataAgendamento: null, dataRr: '2026-09-04T20:00:00Z' },
+  ]
+  const vendas: VendaUnidade[] = [
+    { nome: 'C', fonte: 'Inbound', marca: 'Oral Unic', dataRr: '2026-08-01T12:00:00Z', dataVenda: '2026-08-16T12:00:00Z', unidades: 3 },
+    { nome: 'C', fonte: 'Franqueado', marca: 'Viva', dataRr: null, dataVenda: '2026-08-20T12:00:00Z', unidades: 1 },
+    { nome: 'D', fonte: 'Resgate', marca: 'Inpot', dataRr: '2026-07-01T12:00:00Z', dataVenda: '2026-08-21T12:00:00Z', unidades: 2 },
+  ]
+
+  it('SDR: soma das linhas = pontos, volume e Fonte 2 pts do card', () => {
+    const nomes = ['A', 'B', 'Z']
+    const lancs = lancamentosSdr(rrs, nomes)
+    const linhas = pontosSdr(rrs, nomes)
+    expect(somarLancamentos(nomes, lancs, SDR_SPEED_TIERS)).toEqual(linhas)
+    for (const linha of linhas) {
+      const daPessoa = lancs.filter(l => l.nome === linha.nome)
+      expect(Math.round(daPessoa.reduce((s, l) => s + l.pontos, 0) * 10) / 10).toBe(linha.pontos)
+      expect(daPessoa.reduce((s, l) => s + l.unidades, 0)).toBe(linha.volume)
+    }
+    expect(linhas.find(l => l.nome === 'Z')).toMatchObject({ volume: 0, pontos: 0 })
+  })
+
+  it('Closer: soma das linhas = pontos, volume, ticket médio e mediana do card', () => {
+    const nomes = ['C', 'D']
+    const lancs = lancamentosCloser(vendas, nomes)
+    const linhas = pontosCloser(vendas, nomes)
+    expect(somarLancamentos(nomes, lancs, CLOSER_SPEED_TIERS)).toEqual(linhas)
+    expect(linhas.find(l => l.nome === 'C')!.volume).toBe(4)
+    for (const linha of linhas) {
+      const daPessoa = lancs.filter(l => l.nome === linha.nome)
+      expect(Math.round(daPessoa.reduce((s, l) => s + l.pontos, 0) * 10) / 10).toBe(linha.pontos)
+    }
   })
 })

@@ -29,6 +29,11 @@ import { toLocalDate } from '@/lib/dateUtils'
  * desconto máximo. Contamos só RR/venda que de fato aconteceu
  * (`data_reuniao_realizada` / `data_venda` preenchida), então o guardrail de
  * no-show já cai por construção.
+ *
+ * Extrato (transparência, 03/11): `lancamentosSdr`/`lancamentosCloser` devolvem
+ * 1 lançamento por RR/venda com cada fator da conta, e o card de cada pessoa
+ * (`pontosSdr`/`pontosCloser`) é a soma deles (`somarLancamentos`). O texto em
+ * português de cada fator mora em `corridaExtrato.ts`.
  */
 
 export interface SpeedTier {
@@ -155,6 +160,11 @@ export function ticketTierDe(marca: string | null | undefined): TicketTier {
   return TICKET_POR_MARCA.get(normalizarMarca(marca)) ?? TICKET_PADRAO
 }
 
+/** true se a marca está em `TICKET_FAIXAS`; false = caiu no padrão ×1,0 por não ter faixa. */
+export function marcaTemFaixa(marca: string | null | undefined): boolean {
+  return TICKET_POR_MARCA.has(normalizarMarca(marca))
+}
+
 /** Multiplicador de ticket da marca — atalho pra `ticketTierDe(marca).mult`. */
 export function multTicket(marca: string | null | undefined): number {
   return ticketTierDe(marca).mult
@@ -184,8 +194,19 @@ export function classificarVelocidade(dias: number | null, tiers: readonly Speed
 
 /* ── Entrada ────────────────────────────────────────────────────────────── */
 
+/**
+ * Identificação do negócio de onde veio a unidade. Opcional só pra não
+ * obrigar teste a montar negócio: o hook sempre manda, e é ela que liga o
+ * extrato de pontos ao pop-up do negócio (grão = `id_lead` + `ciclo`).
+ */
+interface NegocioDaUnidade {
+  idLead?: string
+  ciclo?: number
+  negociacao?: string | null
+}
+
 /** 1 RR realizada no mês (trilha SDR). */
-export interface RrUnidade {
+export interface RrUnidade extends NegocioDaUnidade {
   nome: string // nome_sdr canônico
   fonte: string | null // fonte_macro
   marca: string | null // marca do deal
@@ -195,7 +216,7 @@ export interface RrUnidade {
 }
 
 /** 1 venda (deal ganho) no mês (trilha Closer) — pontua por unidade de franquia vendida nela. */
-export interface VendaUnidade {
+export interface VendaUnidade extends NegocioDaUnidade {
   nome: string // nome_closer canônico
   fonte: string | null // fonte_macro
   marca: string | null // marca do deal
@@ -205,6 +226,51 @@ export interface VendaUnidade {
 }
 
 /* ── Saída ──────────────────────────────────────────────────────────────── */
+
+export type Trilha = 'sdr' | 'closer'
+
+/**
+ * Um lançamento do extrato de pontos: uma RR (trilha SDR) ou uma venda
+ * (trilha Closer), com cada fator da conta. Venda de 2 unidades é UM
+ * lançamento com `unidades: 2` — os pontos são `pontosUnidade × unidades`.
+ * O card de cada pessoa (`LinhaTrilha`) é a soma dos lançamentos dela
+ * (`somarLancamentos`), então extrato e card nunca divergem.
+ */
+export interface Lancamento {
+  trilha: Trilha
+  /** Piloto (nome canônico, como em `nomes`). */
+  nome: string
+  idLead: string
+  ciclo: number
+  negociacao: string | null
+  marca: string | null
+  fonte: string | null
+  /** RR realizada (SDR) ou venda (Closer) — timestamp ISO. */
+  data: string
+  /** Dia (Brasília) da RR/venda; `null` se a data for inválida (aí não há bônus). */
+  dia: string | null
+  /** Unidades do placar: 1 RR (SDR) ou as unidades vendidas no negócio (Closer). */
+  unidades: number
+  /** Quantas unidades a pessoa fez nesse dia, contando as deste lançamento. */
+  unidadesNoDia: number
+  /** 1,5 quando a pessoa fez mais de 1 unidade no dia; senão 1. */
+  bonus: number
+  /** Peso de volume pela Fonte Macro. */
+  peso: 1 | 2
+  /** Faixa de ticket da marca. */
+  ticket: TicketTier
+  /** Início e fim do tempo da velocidade: MQL → agendamento (SDR) ou RR → venda (Closer). */
+  inicioVelocidade: string | null
+  fimVelocidade: string | null
+  /** Tempo em dias (`fim − início`); `null` quando falta uma das datas. */
+  leadtimeDias: number | null
+  /** Faixa de velocidade — multiplicador neutro 1 e tag '—' quando falta data. */
+  velocidade: SpeedTier
+  /** peso × bônus × ticket × velocidade. */
+  pontosUnidade: number
+  /** pontosUnidade × unidades, SEM arredondar (o card arredonda só o total). */
+  pontos: number
+}
 
 export interface LinhaTrilha {
   nome: string
@@ -222,31 +288,18 @@ export interface LinhaTrilha {
   tagVelocidade: string
 }
 
-interface UnidadeCalc {
+/** O que cada trilha manda pro cálculo dos lançamentos. */
+interface EntradaLancamento {
   nome: string
-  fonte: string | null
+  idLead: string
+  ciclo: number
+  negociacao: string | null
   marca: string | null
-  leadtime: number | null
-  /** Dia (Brasília) que define o bônus "+1 no mesmo dia"; `null` = fora do agrupamento. */
-  diaBonus: string | null
-}
-
-/** Marca cada unidade como pertencente (ou não) a um dia com >1 unidade da mesma pessoa. */
-function bonusMesmoDia(unidades: UnidadeCalc[]): Map<UnidadeCalc, boolean> {
-  const porChave = new Map<string, UnidadeCalc[]>()
-  for (const u of unidades) {
-    if (!u.diaBonus) continue
-    const chave = `${u.nome}|${u.diaBonus}`
-    const arr = porChave.get(chave) ?? []
-    arr.push(u)
-    porChave.set(chave, arr)
-  }
-  const res = new Map<UnidadeCalc, boolean>()
-  for (const arr of porChave.values()) {
-    const temBonus = arr.length > 1
-    for (const u of arr) res.set(u, temBonus)
-  }
-  return res
+  fonte: string | null
+  data: string
+  unidades: number
+  inicioVelocidade: string | null
+  fimVelocidade: string | null
 }
 
 function mediana(xs: number[]): number | null {
@@ -256,22 +309,66 @@ function mediana(xs: number[]): number | null {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
 
-function agrega(nomes: string[], unidades: UnidadeCalc[], tiers: readonly SpeedTier[]): LinhaTrilha[] {
-  const bonus = bonusMesmoDia(unidades)
-  const acc = new Map<string, { volume: number; dois: number; pontos: number; ticketSum: number; leadtimes: number[] }>()
+/**
+ * Calcula os fatores de cada unidade. Só gera lançamento pra quem está em
+ * `nomes` (os pilotos do mês). O bônus olha as unidades da MESMA pessoa no
+ * mesmo dia (Brasília): mais de 1 → ×1,5 em todas elas — inclusive quando é
+ * uma venda só de 2 unidades.
+ */
+function montarLancamentos(trilha: Trilha, entradas: EntradaLancamento[], nomes: readonly string[], tiers: readonly SpeedTier[]): Lancamento[] {
+  const pilotos = new Set(nomes)
+  const doTime = entradas.filter(e => pilotos.has(e.nome))
+  const dias = doTime.map(e => toLocalDate(e.data))
+  const porDia = new Map<string, number>()
+  doTime.forEach((e, i) => {
+    const dia = dias[i]
+    if (!dia) return
+    const chave = `${e.nome}|${dia}`
+    porDia.set(chave, (porDia.get(chave) ?? 0) + e.unidades)
+  })
 
-  for (const u of unidades) {
-    const cur = acc.get(u.nome) ?? { volume: 0, dois: 0, pontos: 0, ticketSum: 0, leadtimes: [] }
-    const peso = pesoFonte(u.fonte)
-    const ticket = multTicket(u.marca)
-    const base = peso * (bonus.get(u) ? 1.5 : 1) * ticket
-    const mult = classificarVelocidade(u.leadtime, tiers).mult
-    cur.volume += 1
-    if (peso === 2) cur.dois += 1
-    cur.pontos += base * mult
-    cur.ticketSum += ticket
-    if (u.leadtime !== null) cur.leadtimes.push(Math.max(0, u.leadtime))
-    acc.set(u.nome, cur)
+  return doTime.map((e, i) => {
+    const dia = dias[i]
+    const unidadesNoDia = dia ? porDia.get(`${e.nome}|${dia}`) ?? e.unidades : e.unidades
+    const bonus = dia && unidadesNoDia > 1 ? 1.5 : 1
+    const peso = pesoFonte(e.fonte)
+    const ticket = ticketTierDe(e.marca)
+    const leadtimeDias = difDias(e.inicioVelocidade, e.fimVelocidade)
+    const velocidade = classificarVelocidade(leadtimeDias, tiers)
+    const pontosUnidade = peso * bonus * ticket.mult * velocidade.mult
+    return {
+      ...e,
+      trilha,
+      dia,
+      unidadesNoDia,
+      bonus,
+      peso,
+      ticket,
+      leadtimeDias,
+      velocidade,
+      pontosUnidade,
+      pontos: pontosUnidade * e.unidades,
+    }
+  })
+}
+
+/**
+ * Card de cada pessoa a partir dos lançamentos dela. `nomes` fixa a ordem e
+ * garante linha (zerada) pra quem não pontuou. Os pontos somam os valores
+ * exatos e só o total é arredondado (1 casa) — é o número do card.
+ */
+export function somarLancamentos(nomes: readonly string[], lancamentos: readonly Lancamento[], tiers: readonly SpeedTier[]): LinhaTrilha[] {
+  const acc = new Map<string, { volume: number; dois: number; pontos: number; ticketSum: number; leadtimes: number[] }>()
+  for (const l of lancamentos) {
+    const cur = acc.get(l.nome) ?? { volume: 0, dois: 0, pontos: 0, ticketSum: 0, leadtimes: [] }
+    cur.volume += l.unidades
+    if (l.peso === 2) cur.dois += l.unidades
+    cur.pontos += l.pontos
+    cur.ticketSum += l.ticket.mult * l.unidades
+    if (l.leadtimeDias !== null) {
+      for (let k = 0; k < l.unidades; k++) cur.leadtimes.push(Math.max(0, l.leadtimeDias))
+    }
+    acc.set(l.nome, cur)
   }
 
   return nomes.map(nome => {
@@ -289,19 +386,30 @@ function agrega(nomes: string[], unidades: UnidadeCalc[], tiers: readonly SpeedT
   })
 }
 
-/** Pontos da trilha SDR por pessoa. `nomes` fixa a ordem e garante linha (zerada) pra quem não teve RR. */
-export function pontosSdr(rrs: RrUnidade[], nomes: string[]): LinhaTrilha[] {
-  return agrega(
-    nomes,
+/** Lançamentos da trilha SDR: 1 por RR realizada de piloto. Velocidade = MQL → agendamento do SQL. */
+export function lancamentosSdr(rrs: RrUnidade[], nomes: readonly string[]): Lancamento[] {
+  return montarLancamentos(
+    'sdr',
     rrs.map(r => ({
       nome: r.nome,
-      fonte: r.fonte,
+      idLead: r.idLead ?? '',
+      ciclo: r.ciclo ?? 1,
+      negociacao: r.negociacao ?? null,
       marca: r.marca,
-      leadtime: difDias(r.dataMql, r.dataAgendamento),
-      diaBonus: toLocalDate(r.dataRr),
+      fonte: r.fonte,
+      data: r.dataRr,
+      unidades: 1,
+      inicioVelocidade: r.dataMql,
+      fimVelocidade: r.dataAgendamento,
     })),
+    nomes,
     SDR_SPEED_TIERS,
   )
+}
+
+/** Pontos da trilha SDR por pessoa. `nomes` fixa a ordem e garante linha (zerada) pra quem não teve RR. */
+export function pontosSdr(rrs: RrUnidade[], nomes: string[]): LinhaTrilha[] {
+  return somarLancamentos(nomes, lancamentosSdr(rrs, nomes), SDR_SPEED_TIERS)
 }
 
 /** Quantas unidades a venda vale no placar: inteiro ≥ 1 — venda nunca some nem vale menos que 1. */
@@ -311,25 +419,35 @@ function unidadesDaVenda(v: VendaUnidade): number {
 }
 
 /**
+ * Lançamentos da trilha Closer: 1 por venda de piloto, com as unidades
+ * vendidas nela. Velocidade = reunião realizada → venda.
+ */
+export function lancamentosCloser(vendas: VendaUnidade[], nomes: readonly string[]): Lancamento[] {
+  return montarLancamentos(
+    'closer',
+    vendas.map(v => ({
+      nome: v.nome,
+      idLead: v.idLead ?? '',
+      ciclo: v.ciclo ?? 1,
+      negociacao: v.negociacao ?? null,
+      marca: v.marca,
+      fonte: v.fonte,
+      data: v.dataVenda,
+      unidades: unidadesDaVenda(v),
+      inicioVelocidade: v.dataRr,
+      fimVelocidade: v.dataVenda,
+    })),
+    nomes,
+    CLOSER_SPEED_TIERS,
+  )
+}
+
+/**
  * Pontos da trilha Closer por pessoa. Cada unidade vendida entra como uma
  * unidade do placar (venda de 2 unidades = 2 no volume, nos pontos e no bônus
  * de "mais de 1 unidade no mesmo dia"). `nomes` fixa a ordem e garante linha
  * (zerada) pra quem não vendeu.
  */
 export function pontosCloser(vendas: VendaUnidade[], nomes: string[]): LinhaTrilha[] {
-  return agrega(
-    nomes,
-    vendas.flatMap(v => {
-      const leadtime = difDias(v.dataRr, v.dataVenda)
-      const diaBonus = toLocalDate(v.dataVenda)
-      return Array.from({ length: unidadesDaVenda(v) }, () => ({
-        nome: v.nome,
-        fonte: v.fonte,
-        marca: v.marca,
-        leadtime,
-        diaBonus,
-      }))
-    }),
-    CLOSER_SPEED_TIERS,
-  )
+  return somarLancamentos(nomes, lancamentosCloser(vendas, nomes), CLOSER_SPEED_TIERS)
 }

@@ -12,6 +12,7 @@ import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
 import { dividirVenda, pctWeScale, type VersaoRepasse } from '@/lib/repasse'
 import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
+import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -98,6 +99,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                       <ExternalLink size={11} />
                     </a>
                     <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
+                    <LinkPontosCorrida row={r} cor={accent} />
                   </td>
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                   <td style={{

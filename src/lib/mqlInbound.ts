@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Lead } from './types'
 import { toLocalDate } from './dateUtils'
+import { vinculosInpot } from './vinculosInpot'
 import { marketingMqlRows } from './leadUtils'
 
 type Origem = { marca: string; id_lead: string; fonte_macro: string | null; ciclo: number }
@@ -62,7 +63,11 @@ export async function consultarInbound(db: SupabaseClient, leads: Lead[], marcas
   for (const marca of marcas) {
     const rows = marketingMqlRows(leads.filter(row => row.marca === marca))
     const index = await vinculosDistribuicao(db, marca, rows, signal)
-    const vinculados = rows.map(row => idConfirmado(row, index))
+    const diretos = rows.map(row => idConfirmado(row, index))
+    const historicos = marca === 'Inpot' ? await vinculosInpot(db, rows.filter((row, i) =>
+      !diretos[i] && !index.get(JSON.stringify([row.marca, row.dia, emailKey(row.email)]))?.size
+    ), signal) : new Map<string, string>()
+    const vinculados = rows.map((row, i) => diretos[i] ?? historicos.get(row.id) ?? null)
     const ids = [...new Set(vinculados.filter((id): id is string => id !== null))]
     const porId = new Map<string, Origem>()
     let disponivel = true

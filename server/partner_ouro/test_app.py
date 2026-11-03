@@ -29,6 +29,14 @@ class SecurityTests(unittest.TestCase):
    access=self.base();access.update(acesso_total=True)
    s=Service({'mode':'ouro'},connect=lambda:self.fail('sales must not connect to gold'),request_json=self.request(access))
    self.assertEqual(s.read({'dataset':'cycles','route':route},'session'),{'mode':'legacy'})
+ def test_event_roster_requires_partner_and_sop(self):
+  access=self.base();access.update(permissoes=['aba.sop-marketing'],marcas=['inpot'])
+  service=Service({'mode':'ouro'},connect=lambda:self.fail('roster must not connect'),request_json=self.request(access))
+  body={'dataset':'participantesEvento','route':'/sop-marketing'}
+  self.assertEqual(service.read(body,'session'),{'mode':'legacy'})
+  access['marcas']=['we-scale']
+  with self.assertRaises(GatewayError):service.read(dict(body,route='/marca'),'session')
+  with self.assertRaises(GatewayError):service.read(body,'')
  def test_payload_allowlist_and_sell_lock_preserved(self):
   r=mapped('cycles',[{'id_lead':'d','marca':'Scale Partner','status_atual':'Perdido','data_venda':'2026-10-20','payload':{'secret':1}}])[0]
   self.assertEqual(r['marca'],'We Scale');self.assertEqual(r['status_atual'],'Perdido');self.assertNotIn('payload',r)

@@ -20,6 +20,10 @@ vi.mock('@/hooks/useMediaOdontoLegacy', () => ({ useMediaOdontoLegacy: () => ({ 
 vi.mock('@/hooks/useMediaComunidadeLegacy', () => ({ useMediaComunidadeLegacy: () => ({ data: [], loading: false, error: null }) }))
 vi.mock('@/hooks/useBeautyMarketing', () => ({ lisoOuroEnabled: false, useBeautyMarketing: () => ({ enabled: false, data: [], loading: false, error: null }) }))
 
+vi.mock('@/hooks/useParticipantesPartner', () => ({ useParticipantesPartner: () => ({
+  data: [{ dia: '2026-10-14', participante: 'Participante teste', valor: 299.70 }], loading: false, error: null,
+}) }))
+
 import { SopMarketing } from './SopMarketing'
 
 describe('Partner mantém a folha original com dados do fechamento', () => {
@@ -35,9 +39,9 @@ describe('Partner mantém a folha original com dados do fechamento', () => {
     expect(html).toContain('>51<')
     expect(html).toContain('>6<')
     expect(html).toContain('MQL Semanal')
-    expect(html).toContain('Leads mapeados por evento')
-    expect(html).toContain('Fixture 0') // agosto não pode desaparecer por carregar só cinco semanas
-    expect(html).toContain('Fixture 1')
+    expect(html).toContain('Participantes do evento Scale Partner')
+    expect(html).toContain('Participante teste')
+    expect(html).toContain('299,70')
     expect(html).toContain('BC · INSCRIÇÕES')
     expect(html).toContain('1/2') // Partner original + Funil Atual
     expect(html).not.toContain('Scale Partner — Fechamento')

@@ -25,7 +25,7 @@ ROUTES = {
 }
 ROUTE_DATASETS = {
  '/': {'cycles','legacyCycles','leads','media'}, '/marca': {'cycles','legacyCycles','leads','media'},
- '/sop-marketing': {'cycles','legacyCycles','leads','media','passages'},
+ '/sop-marketing': {'cycles','legacyCycles','leads','media','passages','participantesEvento'},
  '/funil-vendas': {'cycles','passages','media'}, '/performance-vendas': {'cycles','passages','media','compatCycles'},
  '/analise-perda': {'cycles','passages','media'}, '/okrs': {'cycles','media','leads'},
  '/gp-setembro': {'cycles','media','leads'}, '/gp-setembro/tv': {'cycles','media','leads'},
@@ -42,7 +42,7 @@ DATASETS = {
  'tasks': 'SELECT * FROM ouro.vw_scale_partner_dashboard_tarefas ORDER BY deal_id,task_id',
  'timeline': 'SELECT * FROM ouro.vw_scale_partner_dashboard_timeline ORDER BY id_deal,data_evento,id_evento',
  # MeetRox não existe no contrato ouro atual. Nunca substituir ausência por zero.
- 'meetings': None, 'closerMeetings': None,
+ 'meetings': None, 'closerMeetings': None, 'participantesEvento': None,
 }
 CYCLE_FIELDS = '''id_lead ciclo eh_reciclagem eh_ciclo_atual marca nome_funil etapa_funil id_etapa_atual status_atual
  nome_sdr nome_closer nome_negociacao fonte_macro sub_fonte sub_fonte_crm utm_source utm_medium utm_campaign utm_term utm_content
@@ -139,7 +139,19 @@ class Service:
   # A migração autorizada é somente Marketing. Clientes de Vendas permanecem nativos.
   if body['route'] not in ('/','/marca','/sop-marketing','/okrs','/copa-b2b'):return {'mode':'legacy'}
   if not related or self.settings.get('mode')=='legacy':return {'mode':'legacy'}
-  dataset=body['dataset'];query=DATASETS[dataset]
+  dataset=body['dataset']
+  if dataset=='participantesEvento':
+   path=Path(self.settings.get('event_roster','/run/partner/participantes-evento.json'))
+   try:
+    rows=json.loads(path.read_text())
+    if not isinstance(rows,list) or len(rows)!=5 or any(
+     not isinstance(r,dict) or set(r)!={'participante','dia','valor'} or not isinstance(r['participante'],str)
+     or not r['participante'].strip() or not dt.date.fromisoformat(r['dia'])
+     or not isinstance(r['valor'],(int,float)) or not 0<r['valor']<100000 for r in rows
+    ):raise ValueError()
+   except (OSError,ValueError,TypeError):raise GatewayError(503,'event_roster_unavailable') from None
+   return {'contract':'partner_evento_stripe_v1','rows':rows}
+  query=DATASETS[dataset]
   if query is None:raise GatewayError(409,'ouro_contract_missing')
   if not self.slots.acquire(timeout=10):raise GatewayError(429,'busy')
   try:
@@ -149,6 +161,10 @@ class Service:
     if role['u']!='dashboard_scale_partner_ro' or role['unsafe']:raise GatewayError(503,'unsafe_role')
     ids=[r['id_lead'] for r in c.execute('SELECT id_lead FROM ouro.vw_scale_partner_dashboard_identidades ORDER BY id_lead')]
     if detail and body['route'].rsplit('/',1)[-1] not in ids:return {'mode':'legacy'}
+    if dataset=='leads' and body['route']=='/sop-marketing':
+     # A consulta de contatos da S&OP leva mais de 20s. Ajustes só desta transação.
+     c.execute("SET LOCAL statement_timeout = '45s'")
+     c.execute("SET LOCAL jit = off")
     rows=c.execute(query+' LIMIT 50001').fetchall()
     if detail:
      target=body['route'].rsplit('/',1)[-1]

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import MagicMock
 from app import authorization, GatewayError, mapped, Service
 class SecurityTests(unittest.TestCase):
  def request(self,access,user=None):
@@ -29,6 +30,27 @@ class SecurityTests(unittest.TestCase):
    access=self.base();access.update(acesso_total=True)
    s=Service({'mode':'ouro'},connect=lambda:self.fail('sales must not connect to gold'),request_json=self.request(access))
    self.assertEqual(s.read({'dataset':'cycles','route':route},'session'),{'mode':'legacy'})
+ def test_event_roster_requires_partner_and_sop(self):
+  access=self.base();access.update(permissoes=['aba.sop-marketing'],marcas=['inpot'])
+  service=Service({'mode':'ouro'},connect=lambda:self.fail('roster must not connect'),request_json=self.request(access))
+  body={'dataset':'participantesEvento','route':'/sop-marketing'}
+  self.assertEqual(service.read(body,'session'),{'mode':'legacy'})
+  access['marcas']=['we-scale']
+  with self.assertRaises(GatewayError):service.read(dict(body,route='/marca'),'session')
+  with self.assertRaises(GatewayError):service.read(body,'')
+ def test_sop_lead_limits_only_apply_to_the_selected_read(self):
+  access=self.base();access['acesso_total']=True
+  for dataset,route,adjust in [('leads','/sop-marketing',True),('media','/sop-marketing',False),('leads','/okrs',False)]:
+   with self.subTest(dataset=dataset,route=route):
+    connection=MagicMock();connection.__enter__.return_value=connection
+    connection.execute.return_value.fetchone.return_value={'u':'dashboard_scale_partner_ro','unsafe':False,'t':None}
+    service=Service({'mode':'ouro'},connect=lambda:connection,request_json=self.request(access))
+    reply=service.read({'dataset':dataset,'route':route},'session')
+    queries=[call.args[0] for call in connection.execute.call_args_list]
+    self.assertEqual("SET LOCAL statement_timeout = '45s'" in queries,adjust)
+    self.assertEqual("SET LOCAL jit = off" in queries,adjust)
+    self.assertEqual(queries[0],'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+    self.assertEqual(reply['rows'],[])
  def test_payload_allowlist_and_sell_lock_preserved(self):
   r=mapped('cycles',[{'id_lead':'d','marca':'Scale Partner','status_atual':'Perdido','data_venda':'2026-10-20','payload':{'secret':1}}])[0]
   self.assertEqual(r['marca'],'We Scale');self.assertEqual(r['status_atual'],'Perdido');self.assertNotIn('payload',r)

@@ -22,6 +22,14 @@ interface Options {
   fetch?: typeof fetch
   enabled?: boolean
 }
+// Os dois clientes da S&OP usam o mesmo gateway. Compartilham a fila, sem compartilhar respostas.
+let ultimaLeituraSop: Promise<void> = Promise.resolve()
+function lerOuroSop(ler: () => Promise<GoldReply>) {
+  const leitura = ultimaLeituraSop.then(ler)
+  ultimaLeituraSop = leitura.then(() => {}, () => {})
+  return leitura
+}
+
 // Não guarda sessão nem dados pessoais em armazenamento persistente.
 export function createPartnerOuroFetch(options: Options): typeof fetch {
   const nativeFetch = options.fetch ?? globalThis.fetch.bind(globalThis)
@@ -46,7 +54,7 @@ export function createPartnerOuroFetch(options: Options): typeof fetch {
     const goldKey = `${route}:${config.dataset}`
     let goldEntry = goldCache.get(goldKey)
     if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
-      const value = (async () => {
+      const ler = async () => {
         const response = await nativeFetch('/api/partner-ouro/v1/read', {
           method: 'POST', signal: AbortSignal.timeout(60_000),
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -54,7 +62,8 @@ export function createPartnerOuroFetch(options: Options): typeof fetch {
         })
         if (!response.ok) throw new Error('Não foi possível consultar a ouro de Scale Partner. Atualize os dados para tentar novamente.')
         return await response.json() as GoldReply
-      })()
+      }
+      const value = route === '/sop-marketing' ? lerOuroSop(ler) : ler()
       goldEntry = { at: Infinity, value }; goldCache.set(goldKey, goldEntry)
       value.then(() => { const e = goldCache.get(goldKey); if (e?.value === value) e.at = Date.now() }, () => {})
       value.catch(() => { if (goldCache.get(goldKey)?.value === value) goldCache.delete(goldKey) })

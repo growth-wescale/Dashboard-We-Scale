@@ -35,6 +35,26 @@ describe('provider Partner exclusivo de Marketing', () => {
     await expect(read('https://sales.test/rest/v1/vw_funil_vendas')).rejects.toThrow('ouro')
     expect(native).toHaveBeenCalledTimes(1)
   })
+  it('S&OP organiza as leituras de Partner dos dois clientes e libera a fila depois de uma falha', async () => {
+    let liberar!: () => void
+    const espera = new Promise<void>(resolve => { liberar = resolve })
+    const leituras: string[] = []
+    const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).startsWith('/api/')) return new Response('[]')
+      const { dataset } = JSON.parse(String(init?.body))
+      leituras.push(dataset)
+      if (dataset === 'leads') { await espera; return new Response('{}', { status: 503 }) }
+      return new Response(JSON.stringify({ mode: 'legacy' }))
+    }
+    const opts = { origin: 'https://native.test', route: () => '/sop-marketing', token: async () => 'sessao', fetch }
+    const leads = createPartnerOuroFetch({ ...opts, source: 'marketing' })('https://native.test/rest/v1/leads')
+    const ciclos = createPartnerOuroFetch({ ...opts, source: 'vendas' })('https://native.test/rest/v1/vw_funil_vendas')
+    await vi.waitFor(() => expect(leituras).toEqual(['leads']))
+    liberar()
+    await expect(leads).rejects.toThrow('ouro')
+    expect((await ciclos).ok).toBe(true)
+    expect(leituras).toEqual(['leads', 'cycles'])
+  })
   it('gateway recebe só o domínio fixo e a rota; filtros e SQL não são enviados', async () => {
     const h = harness();await h.read('https://sales.test/rest/v1/vw_funil_vendas?select=*&id_lead=eq.par')
     const first = h.fetch.mock.calls[0] as unknown as [string, RequestInit]

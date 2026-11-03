@@ -2,8 +2,6 @@ import { eletroviasOuroEnabled } from '@/lib/eletroviasOuroScope'
 import { isOralUnicSopFranchiseMedia, type OralUnicMediaRow } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
 import { useReceitaLegacy, resumirReceitaLegacy } from '@/hooks/useReceitaLegacy'
-import { useSopMqlMetas } from '@/hooks/useSopMqlMetas'
-import { FRENTES_MISSAO, MESES_MISSAO } from '@/lib/missaoMetas'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { BeautyMarketingPanel } from '@/components/marketing/BeautyMarketingPanel'
 import { useBeautyMarketing, lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
@@ -15,10 +13,11 @@ import { useMarketingMediaData as useMediaData } from '@/hooks/useMediaData'
 import { useSopLeads as useLeads } from '@/hooks/useSopLeads'
 import { useSopVendasFunil as useVendasFunil } from '@/hooks/useSopVendasFunil'
 import { useSopSqlEvents } from '@/hooks/useSopSqlEvents'
+import { useParticipantesPartner, type ParticipantePartner } from '@/hooks/useParticipantesPartner'
 import { useSopScalePartnerSales } from '@/hooks/useSopScalePartnerSales'
 import { beautyOuroEnabled, useBeautyInscricoes } from '@/hooks/useBeautyInscricoes'
 import { beautyInscricoesNoPeriodo } from '@/lib/beautyInscricoes'
-import { partnerEventCounts, partnerSalesInPeriod } from '@/lib/sopScalePartner'
+import { partnerSalesInPeriod } from '@/lib/sopScalePartner'
 import { useMarketingFunilVendas as useFunilVendas } from '@/hooks/useMarketingFunilVendas'
 import { montarKanban } from '@/lib/timeline/kanban'
 import { DealCardKanban } from '@/components/timeline/DealCardKanban'
@@ -26,7 +25,7 @@ import { stageLabel, toWindow, type FunnelEventRow } from '@/lib/metrics'
 import { dealNaJanela } from '@/lib/funilFilterOptions'
 import { nf } from '@/lib/format'
 import { fmtBR } from '@/lib/dateUtils'
-import type { VwMarketingFunil } from '@/hooks/useVendasFunil'
+import type { LinhaFunilSop } from '@/hooks/useSopVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
 import { deduplicateLeads, isLeadMql, marketingMqlRows, isMarketingDeal } from '@/lib/leadUtils'
@@ -258,12 +257,12 @@ interface Funnel {
   perdido: { mql: number; sql: number; diagnostico: number; sal: number }
 }
 
-function unidadesVendidas(r: VwMarketingFunil): number {
+function unidadesVendidas(r: LinhaFunilSop): number {
   const q = Number(r.quantidade_unidades)
   return Number.isFinite(q) && q > 0 ? q : 1
 }
 
-function buildFunnel(rows: VwMarketingFunil[], sqlEvents: FunnelEventRow[], di: string, df: string): Funnel {
+function buildFunnel(rows: LinhaFunilSop[], sqlEvents: FunnelEventRow[], di: string, df: string): Funnel {
   const d = rows.filter(r => r.status_atual !== 'Excluído')
   return {
     mql:              d.filter(r => inPeriod(r.data_mql, di, df, r.marca)).length,
@@ -835,12 +834,11 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
   const usarReceita = isOdontoLegacy && legacyOuroEnabled && dates.mtdCurEnd >= '2026-01-01'
   const receitaOuro = useReceitaLegacy(usarReceita)
-  const { pode } = useAcesso()
-  const temMetas = FRENTES_MISSAO.some(f => f.marca === slide.marca) && monthMode !== 'custom' && MESES_MISSAO.some(mes => mes === dates.monthStart) && pode('aba.okrs')
   const partnerFechamento = isWeScale ? getPartnerFechamento(dates.mtdCurStart, dates.mtdCurEnd, filterFonte) : null
   const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
   const beautyRes = useBeautyInscricoes(beautyEnabled)
   const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
+  const presencas = useParticipantesPartner(isWeScale)
   const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale })
   const partnerSales = useMemo(() => partnerSalesInPeriod(partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte), [partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte])
   const partnerRevenue = partnerSales.reduce((total, sale) => total + (sale.valor_contrato ?? 0), 0)
@@ -926,8 +924,6 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const mediaPrev3Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev3.start,     dataFim: mtdN.prev3.end })
   const { data: allLeads } = leadsAll
   const { data: prevLeads } = leadsPrev
-  const missao = useSopMqlMetas(slide.marca, dates.monthStart, dates.mtdCurEnd, allLeads, temMetas && !leadsAll.loading && !leadsAll.error)
-  const captacao = temMetas ? missao.data[0] : null
   const { data: rawCrmCur } = crmCurRes
   const { data: rawCrmPrev } = crmPrevRes
   const { data: rawCrmWeek } = crmWeekRes
@@ -951,12 +947,12 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !receitaOuro.loading && !missao.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
+    !receitaOuro.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !presencas.loading && !beautyRes.loading && !beautyMarketing.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || (temMetas && missao.error) || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
-  }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, temMetas, missao.error, partnerReadError, beautyRes.error, beautyMarketing.error])
+    if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || presencas.error || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
+  }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, presencas.error, partnerReadError, beautyRes.error, beautyMarketing.error])
 
-  const applyF = useCallback((rows: VwMarketingFunil[]) =>
+  const applyF = useCallback((rows: LinhaFunilSop[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
     [filterFonte])
   const crmCur   = useMemo(() => applyF(rawCrmCur),   [rawCrmCur,   applyF])
@@ -1222,7 +1218,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   // dos outros cards do slide). MTD do mês inteiro (do dia 1 até hoje) é
   // usado no extra pra comparar com a meta mensal, que vive num plano diferente
   // da janela de 7d — meta é mensal por natureza.
-  const somaGanhos = useCallback((rows: VwMarketingFunil[], di: string, df: string, fonte = filterFonte) => {
+  const somaGanhos = useCallback((rows: LinhaFunilSop[], di: string, df: string, fonte = filterFonte) => {
     const historico = rows.filter(r => (!usarReceita || (r.data_venda ?? '').slice(0, 10) < '2026-01-01') && r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca))
       .reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
     return historico + (usarReceita ? resumirReceitaLegacy(receitaOuro.data, di, df, fonte).total : 0)
@@ -1562,7 +1558,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         </button>
       </div>
 
-      {(ouroReadRequired || temMetas) && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error, receitaOuro.error, temMetas ? missao.error : null]} />}
+      {ouroReadRequired && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error, receitaOuro.error]} />}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
       <div style={{ flexShrink: 0 }}>
@@ -1606,13 +1602,6 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
                 </div>
                 )}
               </div>
-              )}
-              {card.label === 'MQL' && captacao && (
-                <div style={{ fontSize: 11, marginTop: 5 }}>
-                  {shortMonth(Number(dates.monthStart.slice(0,4)), Number(dates.monthStart.slice(5,7))-1)} · todas as fontes: {captacao.mql} / {captacao.metaMql ?? '—'}<br />
-                  Marketing · Inbound: {captacao.cobertura.inbound ?? 'Indisponível'} / {captacao.metaInbound ?? '—'}
-                  {captacao.cobertura.semOrigem > 0 && <small> · {captacao.cobertura.semOrigem} sem origem</small>}
-                </div>
               )}
               {card.label === 'RECEITA' && usarReceita && !receitaOuro.error && !receitaOuro.loading && (
                 <div style={{ fontSize: 11 }}>{resumirReceitaLegacy(receitaOuro.data, weekCurStart, weekCurEnd, filterFonte).produtos.map(item =>
@@ -1910,13 +1899,12 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         </div>
         )}
 
-        {/* Col 3: Taxas de conversão — para Odonto Legacy widget da comunidade; para We Scale quadro MQL por evento */}
+        {/* Col 3: Taxas de conversão — para Odonto Legacy widget da comunidade; para We Scale participantes do evento */}
         {isOdontoLegacy ? (
           <ComunidadeLegacyPanel data={monthKeyCur === '2026-10' ? COMUNIDADE_LEGACY_OUTUBRO : COMUNIDADE_LEGACY_ATUAL} accent={acc} />
         ) : isWeScale ? (
-          <WeScaleMqlPorEvento leads={mtdLeads} accent={acc} monthLabel={dates.mtdLabel}
-            loading={partnerSalesRes.loading} error={partnerSalesRes.error}
-            missingSaleValue={partnerSales.some(sale => sale.valor_contrato == null)} />
+          <PartnerParticipantes participantes={presencas.data.filter(p => p.dia >= dates.mtdCurStart && p.dia <= dates.mtdCurEnd)}
+            accent={acc} loading={presencas.loading} error={presencas.error} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable
@@ -1970,80 +1958,22 @@ function colTitle(accent: string): React.CSSProperties {
 }
 
 
-// ── WeScaleMqlPorEvento — quadro MQL por evento (só We Scale) ────────────────
-// Agrupa leads MTD por adset e mapeia para o evento correspondente. Substitui o
-// Funil Inverso, que não faz sentido enquanto o funil de Eventos no CRM não tem deals.
-function WeScaleMqlPorEvento({ leads, accent, monthLabel, loading, error, missingSaleValue }: {
-  leads: Lead[]; accent: string; monthLabel: string
-  loading: boolean; error: string | null; missingSaleValue: boolean
+function PartnerParticipantes({ participantes, accent, loading, error }: {
+  participantes: ParticipantePartner[]; accent: string; loading: boolean; error: string | null
 }) {
-  const contagem = partnerEventCounts(leads)
-  const total = contagem.reduce((s, e) => s + e.n, 0)
-  const max = Math.max(...contagem.map(e => e.n), 1)
-  const fmtDia = (dia: string) => {
-    const [, m, d] = dia.split('-')
-    return `${d}/${m}`
-  }
   return (
-    <div style={{ ...cardStyle, overflowY: 'auto' }}>
-      <div style={{ marginBottom: 10, flexShrink: 0, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-        <div style={colTitle(accent)}>Leads mapeados por evento — {monthLabel}</div>
-        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', fontWeight: 600 }}>{total} leads no período</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {contagem.map(e => {
-          const pct = total > 0 ? Math.round((e.n / total) * 100) : 0
-          const barPct = Math.max(2, (e.n / max) * 100)
-          return (
-            <div key={e.label} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 60px', gap: 10, alignItems: 'center' }}>
-              <div style={{ fontSize: 12, color: 'var(--ws-text-primary)', fontWeight: 600 }}>{e.label}</div>
-              <div style={{ height: 20, background: '#f1f5f9', borderRadius: 6, overflow: 'hidden' }}>
-                <div style={{ width: `${barPct}%`, height: '100%', background: accent, transition: 'width .5s cubic-bezier(.2,.7,.2,1)' }} />
-              </div>
-              <div style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontSize: 12, fontWeight: 700, color: 'var(--ws-text-primary)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                {e.n} <span style={{ color: '#94a3b8', fontWeight: 500 }}>· {pct}%</span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      {error && <p role="alert" style={{ fontSize: 12, color: '#b91c1c' }}>Não foi possível carregar as vendas: {error}</p>}
-      {!loading && !error && missingSaleValue && <p style={{ fontSize: 11, color: '#b45309' }}>Há venda sem valor de contrato; ela conta nas vendas, mas não acrescenta receita.</p>}
-      {/* Lista detalhada de leads por evento */}
-      <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {contagem.filter(e => e.rows.length > 0).map(e => (
-          <details key={e.label} open style={{ border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff' }}>
-            <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, fontWeight: 700, color: accent, listStyle: 'none' }}>
-              {e.label} — {e.n} lead{e.n !== 1 ? 's' : ''}
-            </summary>
-            <div style={{ padding: '0 12px 10px' }}>
-              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ color: 'var(--ws-text-secondary)', fontWeight: 600, textTransform: 'uppercase', fontSize: 9, letterSpacing: '0.04em' }}>
-                    <th style={{ textAlign: 'left', padding: '4px 6px 4px 0' }}>Data</th>
-                    <th style={{ textAlign: 'left', padding: '4px 6px' }}>Nome</th>
-                    <th style={{ textAlign: 'left', padding: '4px 6px' }}>Empresa</th>
-                    <th style={{ textAlign: 'left', padding: '4px 0 4px 6px' }}>Local</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...e.rows].sort((a, b) => a.dia.localeCompare(b.dia)).map(l => (
-                    <tr key={l.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '5px 6px 5px 0', color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtDia(l.dia)}</td>
-                      <td style={{ padding: '5px 6px', color: 'var(--ws-text-primary)', fontWeight: 500 }}>{l.nome ?? '—'}</td>
-                      <td style={{ padding: '5px 6px', color: 'var(--ws-text-secondary)' }}>{String(l.dados_extras?.empresa ?? '—')}</td>
-                      <td style={{ padding: '5px 0 5px 6px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{[l.cidade, l.uf].filter(Boolean).join('/') || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
-        ))}
-      </div>
-      <div style={{ marginTop: 12, padding: '8px 10px', background: '#f8fafc', borderRadius: 6, fontSize: 11, color: 'var(--ws-text-secondary)', lineHeight: 1.5 }}>
-        Origem do evento: adset ou UTM preservada do RD (<b>ODONTOLOGIA</b> → Odonto; <b>LLK</b> → geral). Demais origens ficam sem evento identificado até confirmação.
-      </div>
+    <div style={cardStyle}>
+      <div style={colTitle(accent)}>Participantes do evento Scale Partner</div>
+      {loading ? <p>Carregando participantes…</p> : error ? <p role="alert">{error}</p> :
+        <table style={{ width: '100%', textAlign: 'left', fontSize: 12, borderCollapse: 'collapse' }}>
+          <caption style={{ textAlign: 'left', padding: '8px 0' }}>{participantes.length} participantes · pagamentos no período · todos os canais</caption>
+          <thead><tr><th>Participante</th><th>Pagamento</th><th>Valor</th></tr></thead>
+          <tbody>{participantes.map(p => <tr key={p.dia + p.participante} style={{ borderTop: '1px solid #e2e8f0' }}>
+            <td style={{ padding: '6px 4px 6px 0', overflowWrap: 'anywhere' }}>{p.participante}</td>
+            <td>{fmtBR(p.dia)}</td>
+            <td>{p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+          </tr>)}</tbody>
+        </table>}
     </div>
   )
 }
@@ -2345,7 +2275,7 @@ export function SopMarketing() {
         setPdfProgress(`Carregando slide ${i + 1}/${totalSlides}...`)
 
         // Aguarda o SopSlide/SopKanbanSlide sinalizar que todos os fetches terminaram (via onReady).
-        // Timeout de 30s por slide como fallback.
+        // Os hooks têm até 60s para concluir ou informar uma falha.
         await new Promise<void>((resolve, reject) => {
           const finish = (error?: string) => {
             clearTimeout(timer)
@@ -2361,9 +2291,9 @@ export function SopMarketing() {
               else if (slides[i]?.marca === 'Odonto Scale' && legacyOuroEnabled) reject(new Error('Aguarde o carregamento de Legacy antes de exportar.'))
               else if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
               else if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
-              else resolve()
+              else reject(new Error('Aguarde o carregamento da folha antes de exportar.'))
             }
-          }, 30000)
+          }, 65_000)
           setExportingIdx(i)
         })
 
@@ -2372,7 +2302,7 @@ export function SopMarketing() {
         await new Promise(r => setTimeout(r, 400))
 
         const el = exportSlideRef.current
-        if (!el) continue
+        if (!el) throw new Error('Não foi possível renderizar a folha da S&OP.')
         setPdfProgress(`Renderizando slide ${i + 1}/${totalSlides}...`)
 
         const canvas = await html2canvas(el, {

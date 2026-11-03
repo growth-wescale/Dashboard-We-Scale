@@ -1,3 +1,4 @@
+import { leituraOuroSop } from './leituraOuroSop'
 import { filterRows, sortRows, projectRows, type RecordRow } from './partnerOuroQuery'
 
 export const LISO_MARKETING_ROUTES = new Set(['/', '/marca', '/sop-marketing', '/okrs', '/copa-b2b'])
@@ -38,11 +39,11 @@ export function createLisoOuroFetch(options: Options): typeof fetch {
     let goldEntry = goldCache.get(goldKey)
     if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
       const value = (async () => {
-        const response = await nativeFetch('/api/liso-ouro/v1/read', {
+        const response = await leituraOuroSop(nativeFetch, '/api/liso-ouro/v1/read', {
           method: 'POST', signal: AbortSignal.timeout(60_000),
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataset: config.dataset, route }),
-        })
+        }, route)
         if (!response.ok) throw new Error('Não foi possível consultar a ouro de Lisô e Beauty. Atualize os dados para tentar novamente.')
         return await response.json() as GoldReply
       })()

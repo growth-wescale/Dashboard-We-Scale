@@ -13,3 +13,7 @@ Atualizar o serviço existente: transferir `app.py` ao diretório próprio, conf
 Retorno imediato à fonte original: editar somente `mode` para `legacy` no config protegido sem imprimir o arquivo, preservar proprietário/permissões, reiniciar apenas esse contêiner e recarregar o dashboard. Testes unitários comprovam que legacy não conecta ao DW e devolve a consulta original. Vendas independe desse modo.
 
 Testes locais sem banco: `python3 -m unittest discover -s server/partner_ouro -p 'test_*.py'`. Testes frontend cobrem sessão, marca, rotas comerciais intactas, rollback, filtros, projeção e paginação. Não há endpoint para receber SQL nem para gravar.
+
+### Lista de participantes na S&OP
+
+A lista histórica do evento vem das cinco compras pagas do export Stripe fornecido em 03/11/2026. O export CRM fornece o nome do contato apenas quando o e-mail identifica um único nome. Para preparar o arquivo privado, execute `preparar_participantes.py STRIPE.csv CRM.csv participantes-evento.json`. Instale o JSON em `/run/partner/participantes-evento.json` na montagem protegida já existente, com leitura para o usuário do serviço. A rota de S&OP verifica a sessão e a marca antes de servir a lista. A falta do arquivo bloqueia o PDF e sinaliza erro na folha. Mantenha os exports e o JSON fora do Git e dos arquivos públicos do site.

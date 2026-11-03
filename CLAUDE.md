@@ -36,9 +36,10 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 Thaina (Closer) aos nomes informados por Gabriel. Assets próprios em
 `public/assets/campanha-ufc/`; mesmo recorte dos cards existentes. A alteração
 fica no mapa local da Campanha, sem escrever no cadastro ou mudar metas.
-Preparação na branch `codex/fotos-cassiana-thaina`, base `1d237ea` (PR314).
-Build, oito testes existentes, lint e prévia dos cards em desktop/celular
-aprovados. Sem merge/deploy ou conferência autenticada dos nomes/metas.
+Retratos aprovados por Gabriel em 03/11, com PR e publicação autorizados.
+Branch `codex/fotos-cassiana-thaina`, base `1d237ea` (PR314). Build, oito
+testes existentes, lint e prévia dos cards em desktop/celular aprovados.
+Publicação e verificação viva são registradas no projeto do vault e AGENTS.md.
 
 ### S&OP — dados de fechamento Scale Partner (27/10/2026)
 
@@ -952,11 +953,12 @@ Dois retratos derivados das fotos fornecidas por Gabriel, seguindo o uniforme
 preto/dourado e o fundo de octógono da Campanha. Acrescentados apenas os dois
 assets e suas associações em `fotosCampanha.ts`. Base `1d237ea`/PR314 em
 cópia isolada; checkout principal preservado. Build, oito testes existentes
-de fotos, lint e prévia com o componente real `VendedorFoto` em 1200 e390px
-aprovados; imagens carregadas1024×1536, sem erro ou rolagem horizontal.
+de fotos, lint e prévia com o componente real `VendedorFoto` em 1200 e 390 px
+aprovados; imagens carregadas em 1024×1536, sem erro ou rolagem horizontal.
 Nomes/cargos são informação do usuário, sem leitura/escrita de tabelas.
-Sem merge/deploy; aceite visual e conferência autenticada após publicação
-permanecem separados. TV, perfis F1, outras páginas e cálculos preservados.
+Gabriel aprovou os retratos e autorizou PR/publicação em 03/11. O fechamento
+no vault e em AGENTS.md registra merge, deploy e verificação viva separados.
+TV, perfis F1, outras páginas e cálculos preservados.
 
 ### 2026-11-03 (7) — Abas de Vendas instantâneas e ao vivo
 

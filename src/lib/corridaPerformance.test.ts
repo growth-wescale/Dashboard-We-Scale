@@ -452,8 +452,8 @@ describe('lancamentosCloser — 1 lançamento por venda, × unidades', () => {
   })
 
   it('venda de 2 unidades: uma linha só, bônus do dia e pontos × 2', () => {
-    const [l] = lancamentosCloser([venda('B', 2, { idLead: 'x1', ciclo: 2 })], ['B'])
-    expect(l).toMatchObject({ trilha: 'closer', idLead: 'x1', ciclo: 2, unidades: 2, unidadesNoDia: 2, bonus: 1.5 })
+    const [l] = lancamentosCloser([venda('B', 2, { idLead: 'x1', ciclo: 1 })], ['B'])
+    expect(l).toMatchObject({ trilha: 'closer', idLead: 'x1', ciclo: 1, unidades: 2, unidadesNoDia: 2, bonus: 1.5 })
     // 1 pt × 1,5 bônus × 1,0 ticket × 1,5 velocidade (14 dias) = 2,25 por unidade
     expect(l.pontosUnidade).toBeCloseTo(2.25, 10)
     expect(l.pontos).toBeCloseTo(4.5, 10)
@@ -512,5 +512,46 @@ describe('somarLancamentos — o card é a soma do extrato', () => {
       const daPessoa = lancs.filter(l => l.nome === linha.nome)
       expect(Math.round(daPessoa.reduce((s, l) => s + l.pontos, 0) * 10) / 10).toBe(linha.pontos)
     }
+  })
+})
+
+/* ── Paliativo do resgate: negociação retomada vale 2 pts ───────────────── */
+
+describe('negociação retomada (ciclo > 1) vale 2 pts como Resgate', () => {
+  it('SDR: RR de negócio retomado pesa 2 pts, qualquer que seja a Fonte Macro', () => {
+    const [nova, retomada, retomadaResgate] = lancamentosSdr([
+      { ...rr('A', 1, 0.4, 'Inbound'), idLead: 'n1', ciclo: 1 },
+      { ...rr('A', 2, 0.4, 'Inbound'), idLead: 'r1', ciclo: 2 },
+      { ...rr('A', 3, 0.4, 'Resgate'), idLead: 'r2', ciclo: 3 },
+    ], ['A'])
+    expect([nova.peso, nova.retomada]).toEqual([1, false])
+    expect([retomada.peso, retomada.retomada]).toEqual([2, true])
+    expect([retomadaResgate.peso, retomadaResgate.retomada]).toEqual([2, true])
+    expect(retomada.pontos).toBeCloseTo(nova.pontos * 2, 10)
+  })
+
+  it('SDR: card conta a retomada em "2 pts" e nos pontos', () => {
+    const [linha] = pontosSdr([
+      { ...rr('A', 1, 0.4, 'Inbound'), ciclo: 1 },
+      { ...rr('A', 2, 0.4, 'Indicação'), ciclo: 2 },
+    ], ['A'])
+    expect(linha.volume2pts).toBe(1)
+    // 1 × 1,0 × 1,5 + 2 × 1,0 × 1,5 = 4,5
+    expect(linha.pontos).toBe(4.5)
+  })
+
+  it('Closer: venda de negócio retomado também pesa 2 pts', () => {
+    const [l] = lancamentosCloser([{
+      nome: 'D', idLead: 'x', ciclo: 2, fonte: 'Inbound', marca: 'Inpot',
+      dataRr: '2026-09-30T18:55:36Z', dataVenda: '2026-10-30T21:10:42Z', unidades: 1,
+    }], ['D'])
+    expect([l.peso, l.retomada]).toEqual([2, true])
+    // 2 × 1,5 (Inpot) × 0,8 (30,1 dias) = 2,4 — o caso real do Douglas em out/26
+    expect(l.pontos).toBeCloseTo(2.4, 10)
+  })
+
+  it('sem ciclo informado conta como negociação original', () => {
+    const [l] = lancamentosSdr([rr('A', 2, 0.4, 'Inbound')], ['A'])
+    expect([l.peso, l.retomada]).toEqual([1, false])
   })
 })

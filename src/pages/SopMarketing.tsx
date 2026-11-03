@@ -884,7 +884,9 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
   const crmWeekRes = useVendasFunil({ marca: slide.marca, dataInicio: weekCurStart,   dataFim: weekCurEnd })
   const crmPriorRes= useVendasFunil({ marca: slide.marca, dataInicio: weekPriorStart, dataFim: weekPriorEnd })
-  const crmAllRes  = useVendasFunil({ marca: slide.marca })
+  // The all-history dataset only supplies Legacy revenue before gold coverage.
+  const precisaHistorico = isWeScale || (isOdontoLegacy && (!usarReceita || dates.monthStart < '2026-01-01'))
+  const crmAllRes = useVendasFunil({ marca: slide.marca, enabled: precisaHistorico })
   const metasRes   = useMetas({ marca: slide.marca, mes: dates.monthStart })
   const sqlEventsStart = [dates.fiveWeeksStart, prevRangeStart].sort()[0]
   const sqlEventsEnd = [mtdCurEnd, prevRangeEnd].sort().at(-1)!
@@ -940,6 +942,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const partnerKpiPending = ouroReadRequired && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
 
   // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
+  const erroJanelaCrm = isWeScale ? null : crmCurRes.error || crmPrevRes.error || crmWeekRes.error || crmPriorRes.error
   const allLoaded =
     !mediaAllStd.loading && !mediaPrevStd.loading &&
     !mediaAllOdl.loading && !mediaPrevOdl.loading &&
@@ -950,8 +953,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     !crmWeekRes.loading && !crmPriorRes.loading &&
     !receitaOuro.loading && !missao.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(receitaOuro.error || (temMetas && missao.error) || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
-  }, [allLoaded, onReady, receitaOuro.error, temMetas, missao.error, partnerReadError, beautyRes.error, beautyMarketing.error])
+    if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || (temMetas && missao.error) || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
+  }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, temMetas, missao.error, partnerReadError, beautyRes.error, beautyMarketing.error])
 
   const applyF = useCallback((rows: VwMarketingFunil[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),

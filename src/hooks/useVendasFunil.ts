@@ -47,14 +47,14 @@ interface UseVendasFunilResult {
 
 const PAGE_SIZE = 1000
 
-async function fetchVendasRows(filters: Filters, signal: AbortSignal): Promise<VwMarketingFunil[]> {
+export async function fetchVendasRows(filters: Filters, signal: AbortSignal, pageSize = PAGE_SIZE): Promise<VwMarketingFunil[]> {
   const allRows: VwMarketingFunil[] = []
   let page = 0
 
   while (true) {
     if (signal.aborted) throw new Error('Consulta cancelada.')
-    const from = page * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
+    const from = page * pageSize
+    const to = from + pageSize - 1
 
     let q = marketingCrmClient()
       .from('vw_marketing_funil')
@@ -62,6 +62,8 @@ async function fetchVendasRows(filters: Filters, signal: AbortSignal): Promise<V
       .order('data_criacao_negociacao', { ascending: false })
       .range(from, to)
       .abortSignal(signal)
+
+    if (pageSize < PAGE_SIZE) q = q.order('id_lead').order('ciclo')
 
     // Allowlist rigoroso alinhado ao app de referência (P7)
     // Filtro de funil só se marca não é Odonto Scale (que já sobrepõe abaixo)
@@ -83,18 +85,18 @@ async function fetchVendasRows(filters: Filters, signal: AbortSignal): Promise<V
     if (filters.dataFim) q = q.lte('data_criacao_negociacao', filters.dataFim + 'T23:59:59')
 
     const { data: rows, error: err } = await q
-    if (err) throw new Error(err.message)
+    if (err) throw Object.assign(new Error(err.message), { code: err.code })
 
     allRows.push(...((rows ?? []) as VwMarketingFunil[]))
-    if (!rows || rows.length < PAGE_SIZE) break
+    if (!rows || rows.length < pageSize) break
     page++
   }
 
   return allRows
 }
 
-export function useVendasFunil(filters: Filters = {}): UseVendasFunilResult {
+export function useVendasFunil(filters: Filters = {}, ler = fetchVendasRows): UseVendasFunilResult {
   const { marca, dataInicio, dataFim, enabled = true } = filters
-  const fetch = useCallback((signal: AbortSignal) => fetchVendasRows({ marca, dataInicio, dataFim }, signal), [marca, dataInicio, dataFim])
+  const fetch = useCallback((signal: AbortSignal) => ler({ marca, dataInicio, dataFim }, signal), [marca, dataInicio, dataFim, ler])
   return useConsultaFiltrada(JSON.stringify(['expansao:marketing_funil' + partnerMarketingCacheScope(), marca, dataInicio, dataFim]), fetch, enabled)
 }

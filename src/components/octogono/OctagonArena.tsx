@@ -5,7 +5,7 @@ import { useMetasClosers } from '@/hooks/useMetasClosers'
 import { useMetasSDRs } from '@/hooks/useMetasSDRs'
 import { useCorridaPerformance } from '@/hooks/useCorridaPerformance'
 import { useSemanasCampanha } from '@/hooks/useSemanasCampanha'
-import { useCinturaoCloser } from '@/hooks/useCinturaoCloser'
+import { useCinturaoCloser, useCinturaoSdr } from '@/hooks/useCinturaoCloser'
 import { diaDaCampanha, mesAtualCampanha, montarCampanha, voltaDoDia } from '@/constants/metasCampanhaF1'
 import { rankingOctogono, type Competidor } from '@/lib/octogono'
 
@@ -16,13 +16,13 @@ const valor = (p: Competidor, n: number) => p.unidade === 'R$'
   ? `R$ ${Math.round(n).toLocaleString('pt-BR')}`
   : `${num(n)} SQL`
 
-export function OctagonStage({ mes, round, rounds, rankings, cinturaoCloser, action }: {
+export function OctagonStage({ mes, round, rounds, cinturaoCloser, cinturaoSdr, action }: {
   mes: string
   /** Campeão do último mês fechado (ver `useCinturaoCloser`); null = sem campeão. */
   cinturaoCloser?: { nome: string; pct: number } | null
+  cinturaoSdr?: { nome: string; pct: number } | null
   round: number
   rounds: number
-  rankings: OctagonRankings
   action?: ReactNode
 }) {
   return (
@@ -32,7 +32,7 @@ export function OctagonStage({ mes, round, rounds, rankings, cinturaoCloser, act
       <p>Todos os Closers disputam juntos. Todos os SDRs disputam juntos. Cada pessoa avança pelo atingimento da própria meta.</p>
       <div className="oct-stage__leaders">
         {cinturaoCloser && <span>Cinturão Closer <b>{cinturaoCloser.nome} · {num(cinturaoCloser.pct)}%</b></span>}
-        {rankings.sdrs[0] && <span>Cinturão SDR <b>{rankings.sdrs[0].nome} · {num(rankings.sdrs[0].pct)}%</b></span>}
+        {cinturaoSdr && <span>Cinturão SDR <b>{cinturaoSdr.nome} · {num(cinturaoSdr.pct)}%</b></span>}
         {action}
       </div>
       <div className="oct-stage__rounds" aria-label={`Round ${round} de ${rounds}`}>
@@ -108,10 +108,12 @@ function OctagonOverviewData() {
   const { sdrRealizado, loading: l3, error: e3 } = useCorridaPerformance(mes, pilotos)
   const rankings = useMemo(() => rankingOctogono(closers, sdrs, sdrRealizado), [closers, sdrs, sdrRealizado])
   const { campeao } = useCinturaoCloser(mes)
+  const { campeao: campeaoSdrMes } = useCinturaoSdr(mes)
   const round = voltaDoDia(campanha, diaDaCampanha(campanha))
 
   return <div className="oct-overview">
-    <OctagonStage mes={campanha.rotulo} round={round} rounds={campanha.voltas.length} rankings={rankings} cinturaoCloser={campeao}
+    <OctagonStage mes={campanha.rotulo} round={round} rounds={campanha.voltas.length} cinturaoCloser={campeao}
+      cinturaoSdr={campeaoSdrMes && { nome: campeaoSdrMes.sdr.nome, pct: campeaoSdrMes.pct }}
       action={<button type="button" onClick={() => navigate('/gp-setembro')}>Ver campanha completa →</button>} />
     <OctagonFightCard rankings={rankings} mes={campanha.rotulo} loading={l1 || l2 || l3} error={e1 || e2 || e3} />
     <p className="oct-overview__note">Disputa da campanha de {campanha.rotulo}. Os indicadores de Marketing abaixo mantêm seus próprios filtros e períodos.</p>

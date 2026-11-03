@@ -69,3 +69,22 @@ export function campeaoCloser<T extends { nome: string; realizado: number; metaF
     .sort((a, b) => b.pct - a.pct || b.realizado - a.realizado || a.nome.localeCompare(b.nome, 'pt-BR'))
   return candidatos[0] ?? null
 }
+
+/**
+ * Campeão do Cinturão · SDR de um mês fechado: maior % da meta de SQL do mês,
+ * desempate por SQL e depois por Diagnóstico (RR). Sem nenhum SQL no mês, não
+ * há campeão.
+ */
+export function campeaoSdr<T extends { nome: string; metaSql: number }>(
+  sdrs: readonly T[],
+  realizado: ReadonlyMap<string, { sql: number; rr: number }>,
+): { sdr: T; sql: number; rr: number; pct: number } | null {
+  const candidatos = sdrs
+    .filter(s => s.metaSql > 0 && (realizado.get(s.nome)?.sql ?? 0) > 0)
+    .map(s => {
+      const real = realizado.get(s.nome)!
+      return { sdr: s, sql: real.sql, rr: real.rr, pct: real.sql / s.metaSql * 100 }
+    })
+    .sort((a, b) => b.pct - a.pct || b.sql - a.sql || b.rr - a.rr || a.sdr.nome.localeCompare(b.sdr.nome, 'pt-BR'))
+  return candidatos[0] ?? null
+}

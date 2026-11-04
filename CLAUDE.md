@@ -953,6 +953,14 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-11-04 (3) — Campanha de Metas: fotos sem o nome da escuderia de F1
+
+Pedido do Junior. Os cards de Closer e de SDR mostravam o nome da equipe de F1
+(McLaren, Aston Martin, Mercedes AMG Petronas, Mercedes SDR) em cima da foto.
+`VendedorFoto` (`CampanhaMetas.tsx`) deixou de desenhar esse rótulo. A faixa
+colorida à esquerda da foto continua. O campo `escuderia` segue em `pilotos.ts`,
+sem uso na tela. Build + testes; não visto renderizado (exige login).
+
 ### 2026-11-04 — Fotos compartilhadas entre páginas e avatares
 
 A auditoria anterior ao merge encontrou os dois retratos apenas no mapa local

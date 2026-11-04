@@ -958,7 +958,7 @@ function PilotoCard({
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
-      <VendedorFoto foto={closer.foto} iniciais={closer.iniciais} cor={closer.cor} nome={closer.nome} escuderia={closer.escuderia} />
+      <VendedorFoto foto={closer.foto} iniciais={closer.iniciais} cor={closer.cor} nome={closer.nome} />
 
       <div style={{ padding: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -1011,13 +1011,12 @@ function PilotoCard({
  *  em círculo colorido sobre textura de arena. Usado por PilotoCard
  *  (closers) e SdrCard (SDRs). */
 function VendedorFoto({
-  foto, iniciais, cor, nome, escuderia, altura = 200,
+  foto, iniciais, cor, nome, altura = 200,
 }: {
   foto?: string
   iniciais: string
   cor: string
   nome: string
-  escuderia?: string
   altura?: number
 }) {
   foto = fotoCampanha(nome, foto)
@@ -1046,15 +1045,6 @@ function VendedorFoto({
           background: 'linear-gradient(to top, rgba(20,20,25,0.65) 0%, transparent 45%)',
           pointerEvents: 'none',
         }} />
-        {escuderia && (
-          <div style={{
-            position: 'absolute', bottom: 8, left: 14, right: 14,
-            fontSize: 10, fontWeight: 600, letterSpacing: '.14em', textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.75)',
-          }}>
-            {escuderia}
-          </div>
-        )}
       </div>
     )
   }
@@ -1268,7 +1258,7 @@ function SdrCard({
 }) {
   return (
     <div style={{ background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 12, overflow: 'hidden' }}>
-      <VendedorFoto foto={sdr.foto} iniciais={sdr.iniciais} cor={sdr.cor} nome={sdr.nome} escuderia={sdr.escuderia} />
+      <VendedorFoto foto={sdr.foto} iniciais={sdr.iniciais} cor={sdr.cor} nome={sdr.nome} />
 
       <div style={{ padding: 16 }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>{sdr.nome}</div>

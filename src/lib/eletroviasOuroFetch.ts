@@ -7,6 +7,7 @@ export const ELETROVIAS_MARKETING_ROUTES = new Set(['/', '/marca', '/sop-marketi
 const TABLES: Record<string, { dataset: string }> = { leads: { dataset: 'leads' }, media_daily_raw: { dataset: 'media' } }
 interface GoldReply { mode: 'legacy' | 'ouro'; rows: RecordRow[];  contract: string; observed_at: string | null; warnings: string[] }
 interface Options {
+  marketingScope?: { brands: readonly string[]; endpoint: string; contract: string; includes: (row: RecordRow, table: string) => boolean }
   origin: string
   token: () => Promise<string | null>
   route: () => string
@@ -17,6 +18,8 @@ interface Options {
 }
 // Não guarda sessão nem dados pessoais em armazenamento persistente.
 export function createEletroviasOuroFetch(options: Options): typeof fetch {
+  const scope = options.marketingScope
+  const label = scope?.brands.join(', ') ?? 'Eletrovias'
   const nativeFetch = options.fetch ?? globalThis.fetch.bind(globalThis)
   const referenceFetch = options.referenceFetch ?? nativeFetch
   const goldCache = new Map<string, { at: number; value: Promise<GoldReply> }>()
@@ -28,12 +31,12 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     let goldEntry = goldCache.get(goldKey)
     if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
       const value = (async () => {
-        const response = await leituraOuroSop(nativeFetch, '/api/eletrovias-ouro/v1/read', {
+        const response = await leituraOuroSop(nativeFetch, scope?.endpoint ?? '/api/eletrovias-ouro/v1/read', {
           method: 'POST', signal: AbortSignal.timeout(60_000),
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ dataset: dataset, route }),
         }, route)
-        if (!response.ok) throw new Error('Não foi possível consultar a ouro de Eletrovias. Atualize os dados para tentar novamente.')
+        if (!response.ok) throw new Error(`Não foi possível consultar a ouro de ${label}. Atualize os dados para tentar novamente.`)
         return await response.json() as GoldReply
       })()
       goldEntry = { at: Infinity, value }; goldCache.set(goldKey, goldEntry)
@@ -51,7 +54,7 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     const route = options.route()
     if (!ELETROVIAS_MARKETING_ROUTES.has(route)) return referenceFetch(input, init)
     const marca = url.searchParams.get('marca')
-    const candidateBrands = ['Eletrovias']
+    const candidateBrands = scope?.brands ?? ['Eletrovias']
     // Inclui filtros in.(...) da S&OP: falha Eletrovias não pode zerar outra marca.
     if (marca && !filterRows(candidateBrands.map(marca => ({ marca })), new URLSearchParams({ marca })).length) return referenceFetch(input, init)
     const outsideWindow = url.searchParams.getAll('dia').some(value => {
@@ -62,12 +65,12 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     })
     if (outsideWindow) return referenceFetch(input, init)
     const token = await options.token()
-    if (!token) throw new Error('Entre novamente para consultar Eletrovias.')
+    if (!token) throw new Error(`Entre novamente para consultar ${label}.`)
     if (token !== currentToken) { goldCache.clear(); legacyCache.clear(); currentToken = token }
     const reply = await getGold(config.dataset, route, token)
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     if (reply.mode === 'legacy') return referenceFetch(input, init)
-    if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || reply.contract !== 'eletrovias_marketing_v1') throw new Error('Contrato de Eletrovias inválido.')
+    if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || reply.contract !== (scope?.contract ?? 'eletrovias_marketing_v1')) throw new Error(`Contrato de ${label} inválido.`)
     const requested = url.searchParams
     const extra = table === 'media_daily_raw' ? ['marca', 'dia', 'campanha', 'canal'] : ['marca', 'dia', 'formulario', 'dados_extras', 'utm_campaign']
     const select = requested.get('select') ?? '*'
@@ -104,8 +107,8 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     }
     const rows = await legacyEntry.value
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
-    const scoped = (r: RecordRow) => inEletroviasWindow(r) && (table === 'leads' ? isEletroviasMigrationLead(r) : isEletroviasMigrationMedia(r))
-    if (reply.rows.some(r => !scoped(r))) throw new Error('Escopo Eletrovias inválido.')
+    const scoped = (r: RecordRow) => inEletroviasWindow(r) && (scope ? scope.includes(r, table) : table === 'leads' ? isEletroviasMigrationLead(r) : isEletroviasMigrationMedia(r))
+    if (reply.rows.some(r => !scoped(r))) throw new Error(`Escopo de ${label} inválido.`)
     let goldRows = reply.rows
     if (table === 'leads' && options.dealsEnabled) {
       const deals = await getGold('negocios', route, token)
@@ -141,7 +144,7 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     const page = projectRows(merged.slice(offset, offset + limit), select)
     const end = offset + page.length - 1
     const out = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Content-Range': `${page.length ? `${offset}-${end}` : '*'}/${merged.length}` })
-    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('eletrovias-ouro:read', { detail: { observedAt: reply.observed_at, warnings: reply.warnings } }))
+    if (!scope && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('eletrovias-ouro:read', { detail: { observedAt: reply.observed_at, warnings: reply.warnings } }))
     return new Response(method === 'HEAD' ? null : JSON.stringify(page), { status: 200, headers: out })
   }
 }

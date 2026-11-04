@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Lead } from './types'
 import { toLocalDate } from './dateUtils'
 import { vinculosInpot } from './vinculosInpot'
+import { negocioOuroOutubro } from './outubroOuro'
 import { marketingMqlRows } from './leadUtils'
 
 type Origem = { marca: string; id_lead: string; fonte_macro: string | null; ciclo: number }
@@ -61,7 +62,12 @@ function idConfirmado(row: Lead, index: Map<string, Set<string>>) {
 export async function consultarInbound(db: SupabaseClient, leads: Lead[], marcas: string[], signal: AbortSignal) {
   const result: Record<string, CoberturaInbound> = {}
   for (const marca of marcas) {
-    const rows = marketingMqlRows(leads.filter(row => row.marca === marca))
+    const candidatos = marketingMqlRows(leads.filter(row => row.marca === marca))
+    const ouro = candidatos.filter(negocioOuroOutubro)
+    const rows = candidatos.filter(row => !negocioOuroOutubro(row))
+    const origensOuro = ouro.map(row => String(row.dados_extras?.fonte_macro ?? '').trim().toLowerCase())
+    const inboundOuro = origensOuro.filter(origem => origem === 'inbound').length
+    const semOrigemOuro = origensOuro.filter(origem => !origem).length
     const index = await vinculosDistribuicao(db, marca, rows, signal)
     const diretos = rows.map(row => idConfirmado(row, index))
     const historicos = marca === 'Inpot' ? await vinculosInpot(db, rows.filter((row, i) =>
@@ -83,8 +89,8 @@ export async function consultarInbound(db: SupabaseClient, leads: Lead[], marcas
     const semOrigem = origens.filter(origem => !origem).length
     const confirmados = new Set(vinculados.filter((_, i) => origens[i] === 'inbound'))
     result[marca] = {
-      inbound: disponivel && (!rows.length || porId.size > 0) ? confirmados.size : null,
-      semOrigem: disponivel ? semOrigem : rows.length,
+      inbound: disponivel && (!rows.length || porId.size > 0) ? confirmados.size + inboundOuro : null,
+      semOrigem: (disponivel ? semOrigem : rows.length) + semOrigemOuro,
     }
   }
   return result

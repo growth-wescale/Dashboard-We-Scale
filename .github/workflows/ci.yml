@@ -25,6 +25,7 @@ jobs:
 
       - name: Build
         env:
+          VITE_OUTUBRO_OURO_ENABLED: 'true'
           VITE_LISO_OURO_ENABLED: 'true'
           VITE_LEGACY_OURO_ENABLED: 'true'
           VITE_ORAL_UNIC_OURO_ENABLED: 'true'
@@ -42,6 +43,9 @@ jobs:
           VITE_SUPABASE_VENDAS_URL: ${{ secrets.VITE_SUPABASE_VENDAS_URL }}
           VITE_SUPABASE_VENDAS_ANON_KEY: ${{ secrets.VITE_SUPABASE_VENDAS_ANON_KEY }}
         run: npm test
+
+      - name: Test October Marketing gateway
+        run: python3 -m unittest discover -s server/outubro_ouro -p 'test_*.py'
 
       - name: Test readonly gateway
         run: python3 -m unittest discover -s server/partner_ouro -p 'test_*.py'

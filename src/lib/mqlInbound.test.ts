@@ -18,6 +18,17 @@ describe('realizado Inbound', () => {
     expect((await consultarInbound(db,leads,['Inpot'],new AbortController().signal)).Inpot).toEqual({inbound:1,semOrigem:2})
     expect(chain.eq).toHaveBeenCalledWith('marca','Inpot')
   })
+  it('conta uma vez a fonte explícita da ouro mesmo quando o negócio ainda falta no espelho', async () => {
+    const { db, chain } = crm([])
+    const negocio = (id: string, fonte: string) => ({
+      ...mql(id), dados_extras: { origem_leitura: 'ouro_outubro_2026', metric_grain: 'crm_deal',
+        conta_id: 'wescale_principal_crm', id_deal: id, fonte_macro: fonte },
+    })
+    const rows = [negocio('1', 'Inbound'), negocio('1', 'Inbound'), negocio('2', 'Prospecção Ativa')]
+    expect((await consultarInbound(db, rows, ['Inpot'], new AbortController().signal)).Inpot)
+      .toEqual({ inbound: 1, semOrigem: 0 })
+    expect(chain.select).not.toHaveBeenCalled()
+  })
   it('recupera vínculo único pela distribuição e rejeita ambiguidade e outra data em Brasília',async()=>{
     const {db, log}=crm([{ id_lead:'unico', fonte_macro:'Inbound' }, {id_lead:'amb1', fonte_macro:'Inbound'}])
     const atribuicao=(lead_email:string,id_deal:string,recebido_em:string)=>({marca:'Inpot',lead_email,id_deal,recebido_em})

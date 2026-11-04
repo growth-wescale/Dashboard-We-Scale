@@ -27,6 +27,7 @@ import { fmtBR } from '@/lib/dateUtils'
 import type { LinhaFunilSop } from '@/hooks/useSopVendasFunil'
 import { mapFonte, FONTE_CATEGORIAS, inPeriod } from '@/lib/vendasUtils'
 import { useMetas } from '@/hooks/useMetas'
+import { negocioOuroOutubro } from '@/lib/outubroOuro'
 import { deduplicateLeads, isLeadMql, marketingMqlRows, isMarketingDeal } from '@/lib/leadUtils'
 import type { Lead, Marca, MediaDailyRaw } from '@/lib/types'
 import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
@@ -1430,6 +1431,12 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         const raw = l.dados_extras?.['capital'] ?? l.dados_extras?.['capital_disponivel']
         const vazio = typeof raw !== 'string' || raw.trim() === ''
         if (vazio && !isMarketingDeal(l) && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
+        if (negocioOuroOutubro(l) && raw === 'Ainda não tenho') {
+          const faixa = acc.get(raw)
+          if (faixa) faixa.count += 1
+          else acc.set(raw, { label: raw, sort: 0, count: 1 })
+          continue
+        }
         const b = parseCapital(typeof raw === 'string' ? raw : '')
         if (b.kind === 'unknown' && !isMarketingDeal(l) && !isOdontoLegacy && !(slide.id === 'liso' && lisoOuroEnabled)) continue
         const k = vazio ? 'sem-capital' : b.kind === 'unknown' ? 'capital-nao-reconhecido' : bucketKey(b)

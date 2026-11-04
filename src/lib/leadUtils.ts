@@ -1,8 +1,10 @@
+import { negocioOuroOutubro } from './outubroOuro'
 import type { Lead } from '@/lib/types'
 
 // These markers are supplied only by the scoped Marketing adapters.
 // Deal rows carry a metric, never a fabricated contact.
 export function isMarketingDeal(r: Pick<Lead, 'marca' | 'dados_extras'>): boolean {
+  if (negocioOuroOutubro(r)) return true
   return (r.marca === 'Eletrovias' || r.marca === 'Oral Unic') && r.dados_extras?.metric_grain === 'crm_deal'
 }
 

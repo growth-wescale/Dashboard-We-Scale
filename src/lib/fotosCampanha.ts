@@ -1,5 +1,6 @@
-// Fotos aprovadas exclusivas da página Campanha de Metas.
-// Não altera o cadastro compartilhado nem as imagens da TV/outras páginas.
+import { fotoVendedor } from './fotosVendedores'
+
+// Retratos específicos da Campanha; as duas novas vendedoras usam o mapa compartilhado.
 const FOTOS: Record<string, string> = {
   'Bruna': '/assets/campanha-ufc/bruna.png',
   'Douglas': '/assets/campanha-ufc/douglas.png',
@@ -8,10 +9,8 @@ const FOTOS: Record<string, string> = {
   'Sarah Padilha': '/assets/campanha-ufc/sarah.png',
   'Thiago': '/assets/campanha-ufc/thiago.png',
   'Xayane': '/assets/campanha-ufc/xayane.png',
-  'Cassiana Lavall': '/assets/campanha-ufc/cassiana.png',
-  'Thaina Freitas': '/assets/campanha-ufc/thaina.png',
 }
 
 export function fotoCampanha(nome: string, fotoAtual?: string): string | undefined {
-  return FOTOS[nome.trim()] ?? fotoAtual
+  return FOTOS[nome.trim()] ?? fotoVendedor(nome, fotoAtual)
 }

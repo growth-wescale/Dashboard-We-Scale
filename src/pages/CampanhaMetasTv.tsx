@@ -17,6 +17,7 @@ import {
 } from '@/constants/metasCampanhaF1'
 import { money, pct, nfCeil } from '@/lib/format'
 import { rankingOctogono } from '@/lib/octogono'
+import { FotoPessoa } from '@/components/ui/FotoPessoa'
 
 /**
  * Campanha de Metas em modo TV (`/gp-setembro/tv`) — tela do time, sempre no
@@ -416,8 +417,7 @@ function Painel({ titulo, sub, children }: { titulo: string; sub: string; childr
   )
 }
 
-function Avatar({ foto, iniciais, cor, tamanho }: { foto?: string; iniciais: string; cor: string; tamanho: number }) {
-  const [falhou, setFalhou] = useState(false)
+function Avatar({ nome, foto, iniciais, cor, tamanho }: { nome: string; foto?: string; iniciais: string; cor: string; tamanho: number }) {
   return (
     <div style={{
       width: vh(tamanho), height: vh(tamanho), borderRadius: 999, flexShrink: 0, overflow: 'hidden',
@@ -425,9 +425,7 @@ function Avatar({ foto, iniciais, cor, tamanho }: { foto?: string; iniciais: str
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: vh(tamanho * 0.3), fontWeight: 600, color: cor,
     }}>
-      {foto && !falhou
-        ? <img src={foto} alt="" onError={() => setFalhou(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%' }} />
-        : iniciais}
+      <FotoPessoa nome={nome} foto={foto} fallback={iniciais} style={{ objectPosition: 'center 15%' }} />
     </div>
   )
 }
@@ -452,7 +450,7 @@ function ClosersPodio({ ranking, loading }: { ranking: CloserMeta[]; loading: bo
           <div key={c.nome} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: 0 }}>
             <div style={{ height: vh(2.6), fontSize: vh(2.2), lineHeight: 1 }}>{lider ? '👑' : ''}</div>
             <div style={{ position: 'relative' }}>
-              <Avatar foto={c.foto} iniciais={c.iniciais} cor={c.cor} tamanho={10} />
+              <Avatar nome={c.nome} foto={c.foto} iniciais={c.iniciais} cor={c.cor} tamanho={10} />
               <span style={{
                 position: 'absolute', bottom: `-${vh(0.6)}`, left: '50%', transform: 'translateX(-50%)',
                 background: lider ? VERMELHO : '#26262f', border: `1px solid ${BORDA}`,
@@ -497,7 +495,7 @@ function SdrLinha({ nome, foto, iniciais, cor, sql, metaSql, rr, metaRr, loading
 }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `auto ${vh(13)} 1fr 1fr`, alignItems: 'center', gap: vh(1.8) }}>
-      <Avatar foto={foto} iniciais={iniciais} cor={cor} tamanho={6.4} />
+      <Avatar nome={nome} foto={foto} iniciais={iniciais} cor={cor} tamanho={6.4} />
       <div style={{ fontSize: vh(2.1), fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {primeiroNome(nome)}
       </div>

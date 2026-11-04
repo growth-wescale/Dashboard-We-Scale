@@ -18,6 +18,7 @@ import {
   type PessoaCadastro,
 } from '@/lib/corridaExtrato'
 import { LinkLinhaDoTempo } from '@/components/ui/dealDrawerShared'
+import { FotoPessoa } from '@/components/ui/FotoPessoa'
 
 /**
  * Extrato de pontos da Corrida de Performance (Campanha de Metas): cada RR
@@ -257,9 +258,9 @@ function SecaoPessoa({ trilha, linha, lancamentos, visual }: {
     <section className="rs-drawer-sec" style={{ padding: '18px 24px', borderBottom: '1px solid var(--ws-border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
         <span style={{
-          width: 30, height: 30, borderRadius: 999, background: visual?.cor ?? '#CBD5E1', color: '#fff',
+          width: 30, height: 30, borderRadius: 999, background: visual?.cor ?? '#CBD5E1', color: '#fff', overflow: 'hidden',
           fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}>{visual?.iniciais ?? linha.nome.slice(0, 3).toUpperCase()}</span>
+        }}><FotoPessoa nome={linha.nome} fallback={visual?.iniciais ?? linha.nome.slice(0, 3).toUpperCase()} /></span>
         <div style={{ flex: 1, minWidth: 140 }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>{linha.nome}</div>
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>

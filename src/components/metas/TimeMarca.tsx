@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Check, GripVertical, Plus, Scale, X } from 'lucide-react'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
+import { FotoPessoa } from '@/components/ui/FotoPessoa'
 import {
   dividirIgualmente, encaixarFaixas, faixaCloser, metasPorPessoa, moverDivisa, normalizarPesos, pesoNaFaixa, ROTULO_ETAPA, textoSomaPesos,
   type EtapaMetaConfig, type FunilCalculado, type MarcaConfig, type MetaPessoa,
@@ -279,7 +280,6 @@ function CartaoPessoa({ pessoa, cor, foto, sozinha, passo, inativa, invalido, me
   onPeso: (peso: number) => void
   onRemover: () => void
 }) {
-  const [fotoFalhou, setFotoFalhou] = useState(false)
   const etapas = ETAPAS_PESSOA[pessoa.funcao].filter(e => meta?.valores[e] != null)
 
   return (
@@ -290,9 +290,7 @@ function CartaoPessoa({ pessoa, cor, foto, sozinha, passo, inativa, invalido, me
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
           boxShadow: `0 0 0 2px var(--ws-surface), 0 0 0 4px ${cor}`,
         }}>
-          {foto && !fotoFalhou
-            ? <img src={foto} alt="" onError={() => setFotoFalhou(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : iniciais(pessoa.nome)}
+          <FotoPessoa nome={pessoa.nome} foto={foto} fallback={iniciais(pessoa.nome)} style={{ objectPosition: 'center' }} />
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pessoa.nome}</div>

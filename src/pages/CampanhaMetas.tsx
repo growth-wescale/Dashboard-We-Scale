@@ -35,6 +35,7 @@ import { marcaLabel } from '@/constants/brands'
 import { OctagonFightCard } from '@/components/octogono/OctagonArena'
 import { rankingOctogono } from '@/lib/octogono'
 import { fotoCampanha } from '@/lib/fotosCampanha'
+import { FotoPessoa } from '@/components/ui/FotoPessoa'
 
 const POOL_PREMIOS = 12000
 type Ciclo = 'semanal' | 'mensal'
@@ -371,12 +372,12 @@ function PolePositionCard({ titulo, iniciais, cor, nome, detalhe }: {
       </div>
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 999,
+          width: 40, height: 40, borderRadius: 999, overflow: 'hidden', flexShrink: 0,
           background: cor ?? 'rgba(255,255,255,0.15)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#fff', fontSize: 12, fontWeight: 600, letterSpacing: 0.5,
         }}>
-          {iniciais ?? '—'}
+          <FotoPessoa nome={nome ?? ''} fallback={iniciais ?? '—'} />
         </div>
         <div>
           <div style={{ color: '#fff', fontSize: 15, fontWeight: 500 }}>{nome ?? '—'}</div>
@@ -865,10 +866,10 @@ function TrilhaCard({
                   padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)',
                 }}>
                 <span style={{
-                  width: 26, height: 26, borderRadius: 999, background: v?.cor ?? '#CBD5E1',
+                  width: 26, height: 26, borderRadius: 999, background: v?.cor ?? '#CBD5E1', overflow: 'hidden',
                   color: '#fff', fontSize: 9, fontWeight: 600,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>{v?.iniciais ?? l.nome.slice(0, 3).toUpperCase()}</span>
+                }}><FotoPessoa nome={l.nome} fallback={v?.iniciais ?? l.nome.slice(0, 3).toUpperCase()} /></span>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{l.nome}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>

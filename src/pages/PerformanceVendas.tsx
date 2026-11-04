@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Download, Users, UserX, Handshake, Timer, Info } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
+import { FotoPessoa } from '@/components/ui/FotoPessoa'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
 import { AoVivoIndicador } from '@/components/ui/AoVivoIndicador'
@@ -163,7 +164,8 @@ function Avatar({ nome, accent }: { nome: string; accent: string }) {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       fontSize: 11, fontWeight: 600, fontFamily: 'var(--font-body)',
       background: 'var(--ws-surface)',
-    }}>{initial}</div>
+      overflow: 'hidden', flexShrink: 0,
+    }}><FotoPessoa nome={nome} fallback={initial} /></div>
   )
 }
 

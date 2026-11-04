@@ -30,19 +30,22 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
-### Fotos da Campanha de Metas — Cassiana e Thaina (03/11/2026)
+### Fotos de Cassiana e Thaina — cobertura compartilhada (04/11/2026)
 
-`fotosCampanha.ts` associa os retratos preto e dourado de Cassiana (SDR) e
-Thaina (Closer) aos nomes informados por Gabriel. Assets próprios em
-`public/assets/campanha-ufc/`; mesmo recorte dos cards existentes. A alteração
-fica no mapa local da Campanha, sem escrever no cadastro ou mudar metas.
-Conferência autenticada em 03/11 identificou os nomes completos usados nos
-cards: `Cassiana Lavall` e `Thaina Freitas`. O mapa usa essas chaves exatas;
-os nomes curtos anteriores não encontravam os retratos no cadastro real.
-Retratos aprovados por Gabriel em 03/11, com PR e publicação autorizados.
-Branch `codex/fotos-cassiana-thaina`, base `1d237ea` (PR314). Build, oito
-testes existentes, lint e prévia dos cards em desktop/celular aprovados.
-Publicação e verificação viva são registradas no projeto do vault e AGENTS.md.
+`fotosVendedores.ts` centraliza os retratos aprovados de `Cassiana Lavall`
+(SDR) e `Thaina Freitas` (Closer), reutilizando os assets publicados. O perfil
+compartilhado alimenta a TV; `FotoPessoa` atende os avatares da Configuração
+de Metas, Performance, cinturão, trilhas e extrato. Os cards da Campanha usam
+o mesmo mapa, com o recorte grande anterior; os avatares focam o rosto.
+Foto ausente ou inválida volta às iniciais. Fotos e perfis das demais pessoas
+mantêm as fontes anteriores; sem operações de banco ou mudança de cálculos.
+
+Preparação em `codex/fotos-vendedoras-todas-paginas`, base `f57d3a8`/PR316.
+Prévia isolada com recortes dos componentes reais: sete locais × duas
+vendedoras, desktop/celular, falha de imagem, troca de pessoa e foto anterior
+conferidos. 1.081 testes existentes, build e lint aprovados. Sem merge/deploy
+desta ampliação; produção de 03/11 segue homologada apenas nos cards da
+Campanha. Publicação e QA autenticado global permanecem gates separados.
 
 ### S&OP — dados de fechamento Scale Partner (27/10/2026)
 
@@ -949,6 +952,18 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-04 — Fotos compartilhadas entre páginas e avatares
+
+A auditoria anterior ao merge encontrou os dois retratos apenas no mapa local
+dos cards da Campanha. Preparada associação única pelos nomes completos,
+com renderer de imagem que preserva as iniciais em falha de carregamento.
+Cobertura: Campanha (cards, cinturão e trilhas), extrato, modo TV, time da
+Configuração de Metas e Performance de Vendas. A imagem aprovada é a mesma;
+avatares pequenos focam o rosto. Nenhum cadastro, consulta, meta ou cálculo
+alterado. Prévia local de 14 combinações em desktop/celular, recuperação após
+falha e foto F1 existente preservada; 1.081 testes existentes aprovados com
+configuração fictícia, sem acesso ao banco. Sem merge ou publicação.
 
 ### 2026-11-03 — Nomes completos das fotos da Campanha
 

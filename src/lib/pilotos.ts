@@ -1,3 +1,5 @@
+import { fotoVendedor } from './fotosVendedores'
+
 /**
  * Pilotos da Campanha de Metas: quem aparece em cada mês é quem tem meta
  * naquele mês (`DB_Metas_Performance`), não uma lista fixa no código.
@@ -50,7 +52,7 @@ export function perfilPiloto(nome: string, fotoCadastro?: string | null): Perfil
     nome: limpo,
     iniciais: primeiro.slice(0, 3).toUpperCase(),
     cor: corEstavel(limpo),
-    foto: fotoCadastro ?? undefined,
+    foto: fotoVendedor(limpo, fotoCadastro),
   }
 }
 

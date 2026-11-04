@@ -1,3 +1,4 @@
+import { PeriodoDisponivel } from '@/components/marketing/CoberturaMensalPrevia'
 import { isOralUnicFranchiseMedia, isOralUnicCommunityMedia } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
@@ -2066,6 +2067,7 @@ export function SaudeDaMarca() {
           </>
         }
       />
+      <PeriodoDisponivel inicio={dataInicio}>
       {activeBrand === 'liso-laser' && <BeautyMarketingBlock start={dataInicio} end={dataFim} />}
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
@@ -2074,6 +2076,7 @@ export function SaudeDaMarca() {
       {partnerDataPending ? <div role="status" style={{ padding: '24px 0', color: 'var(--ws-text-secondary)' }}>Carregando dados…</div> : !partnerDataFailed && <div style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : undefined, transition: 'opacity 0.2s' }}>
         {body}
       </div>}
+      </PeriodoDisponivel>
       <MqlDrawer open={mqlDrawerOpen} onClose={() => setMqlDrawerOpen(false)} leads={mqlLeads} />
     </div>
   )

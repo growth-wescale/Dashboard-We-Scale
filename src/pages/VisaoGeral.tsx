@@ -1,3 +1,4 @@
+import { PeriodoDisponivel } from '@/components/marketing/CoberturaMensalPrevia'
 import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
 /* Visão Geral — dados reais via Supabase */
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
@@ -991,6 +992,7 @@ export function VisaoGeral() {
         }
       />
 
+      <PeriodoDisponivel inicio={range.start}>
       {(isConsolidado || marcasEfetivas.includes('Lisô Laser')) && <BeautyMarketingBlock start={range.start} end={range.end} />}
       <QueryErrorBanner errors={[mediaError, leadsError, crmError]} scope="período selecionado" />
       <QueryErrorBanner errors={[ec1, ec2, ec3]} scope="comparação" />
@@ -1020,6 +1022,7 @@ export function VisaoGeral() {
         pageBrandKeys={brandKeys} allowedBrandKeys={marcasPermitidas}
         loading={l1 || l9} error={mediaError || leadsError}
       />
+      </PeriodoDisponivel>
     </div>
 
     <MqlDrawer open={mqlDrawerOpen && !l9 && !leadsError} onClose={() => setMqlDrawerOpen(false)} leads={mqlLeads} />

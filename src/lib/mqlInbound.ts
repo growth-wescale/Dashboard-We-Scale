@@ -1,3 +1,4 @@
+import { negocioMensal } from './negocioMensal'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Lead } from './types'
 import { toLocalDate } from './dateUtils'
@@ -63,8 +64,9 @@ export async function consultarInbound(db: SupabaseClient, leads: Lead[], marcas
   const result: Record<string, CoberturaInbound> = {}
   for (const marca of marcas) {
     const candidatos = marketingMqlRows(leads.filter(row => row.marca === marca))
-    const ouro = candidatos.filter(negocioOuroOutubro)
-    const rows = candidatos.filter(row => !negocioOuroOutubro(row))
+    const daOuro = (row: Lead) => negocioOuroOutubro(row) || negocioMensal(row)
+    const ouro = candidatos.filter(daOuro)
+    const rows = candidatos.filter(row => !daOuro(row))
     const origensOuro = ouro.map(row => String(row.dados_extras?.fonte_macro ?? '').trim().toLowerCase())
     const inboundOuro = origensOuro.filter(origem => origem === 'inbound').length
     const semOrigemOuro = origensOuro.filter(origem => !origem).length

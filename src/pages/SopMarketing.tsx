@@ -43,6 +43,7 @@ import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { closedMonthWeekRanges, fullCalendarMonthKey, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
 import { countSopSqlDeals } from '@/lib/sopFunnel'
+import { isLisoSopFranchiseLead } from '@/lib/lisoSopScope'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
 interface WeekRange { start: string; end: string; label: string }
@@ -328,7 +329,7 @@ const SLIDES: SlideConfig[] = [
   { id: 'eletrovias',    label: 'Eletrovias',   marca: 'Eletrovias',   accent: '#ED6D3A' },
   { id: 'inpot',         label: 'Inpot',        marca: 'Inpot',        accent: '#C6D32D' },
   { id: 'b2case',        label: 'B2Case',       marca: 'B2Case',       accent: '#0169F2' },
-  { id: 'liso',          label: 'Lisô Laser',   marca: 'Lisô Laser',   accent: '#FF6643' },
+  { id: 'liso',          label: 'Lisô Laser',   subLabel: 'Franquia',  marca: 'Lisô Laser',   accent: '#FF6643' },
   { id: 'viva',          label: 'Viva',         marca: 'Viva',         accent: '#FF0069' },
   { id: 'ou-franquia',   label: 'Oral Unic',    subLabel: 'Franquia',  marca: 'Oral Unic',    accent: '#7F0C72', filterFranquia: true },
   { id: 'odonto-scale',  label: 'Odonto Legacy', marca: 'Odonto Scale', accent: '#7f0c72' },
@@ -924,8 +925,12 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const mediaAllComunidade   = useMediaComunidadeLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
   const mediaPrev2Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev2.start,     dataFim: mtdN.prev2.end })
   const mediaPrev3Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev3.start,     dataFim: mtdN.prev3.end })
-  const { data: allLeads } = leadsAll
-  const { data: prevLeads } = leadsPrev
+  // Separar antes do dedupe evita que a inscrição Beauty esconda uma resposta
+  // da franquia com o mesmo contato, inclusive nos comparativos históricos.
+  const allLeads = useMemo(() => slide.id === 'liso'
+    ? leadsAll.data.filter(isLisoSopFranchiseLead) : leadsAll.data, [slide.id, leadsAll.data])
+  const prevLeads = useMemo(() => slide.id === 'liso'
+    ? leadsPrev.data.filter(isLisoSopFranchiseLead) : leadsPrev.data, [slide.id, leadsPrev.data])
   const { data: rawCrmCur } = crmCurRes
   const { data: rawCrmPrev } = crmPrevRes
   const { data: rawCrmWeek } = crmWeekRes
@@ -1518,6 +1523,9 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
           <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
             {partnerFechamento ? `Fechamento ${partnerFechamento.label} · Holding sem IDA/LISO Evento${partnerFechamento === PARTNER_FECHAMENTO_ATUAL ? ' · sem Google' : ' · com Google'}` : `${dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM`}
           </div>
+          {slide.id === 'liso' && <div style={{ fontSize: 10, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
+            MQLs da franquia · Beauty Connection contabilizado separadamente
+          </div>}
         </div>
         <BeautyMarketingPanel result={beautyMarketing} compact />
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>

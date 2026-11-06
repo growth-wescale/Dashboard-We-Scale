@@ -1,3 +1,4 @@
+import { mensalStatusEndpoint, previaMensal } from '@/lib/previaMensal'
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 const Publicacao = createContext<string | undefined>(undefined)
@@ -9,7 +10,7 @@ export function usePeriodoSemPublicacao(inicio: string) {
 
 export function PeriodoDisponivel({ inicio, children }: { inicio: string; children: ReactNode }) {
   if (usePeriodoSemPublicacao(inicio))
-    return <p role="status">Aguardando publicação da ouro para o período selecionado.</p>
+    return <p role="status">Dados do período ainda não disponíveis.</p>
   return <>{children}</>
 }
 
@@ -21,7 +22,7 @@ export function CoberturaMensalPrevia({ children, ativa }: { children: ReactNode
     const ctrl = new AbortController()
     const atualizar = async () => {
       try {
-        const r = await fetch('/api/previa-mensal/status', { signal: ctrl.signal, cache: 'no-store' })
+        const r = await fetch(mensalStatusEndpoint, { signal: ctrl.signal, cache: 'no-store' })
         if (!r.ok) throw new Error()
         const { publicado, dia: snapshot } = await r.json()
         const data = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(publicado))
@@ -36,5 +37,5 @@ export function CoberturaMensalPrevia({ children, ativa }: { children: ReactNode
     return () => { ctrl.abort(); clearInterval(timer) }
   }, [ativa])
   if (!ativa) return <>{children}</>
-  return <Publicacao.Provider value={dia}><aside style={{ padding: '8px 16px', background: '#fff4d3', color: '#523c10' }}>Prévia mensal de Marketing · {carga}</aside>{children}</Publicacao.Provider>
+  return <Publicacao.Provider value={dia}>{previaMensal && <aside style={{ padding: '8px 16px', background: '#fff4d3', color: '#523c10' }}>Prévia mensal de Marketing · {carga}</aside>}{children}</Publicacao.Provider>
 }

@@ -1,5 +1,5 @@
 import { PeriodoDisponivel, usePeriodoSemPublicacao } from '@/components/marketing/CoberturaMensalPrevia'
-import { previaMensal } from '@/lib/previaMensal'
+import { marketingMensalAtivo } from '@/lib/previaMensal'
 import { eletroviasOuroEnabled } from '@/lib/eletroviasOuroScope'
 import { isOralUnicSopFranchiseMedia, type OralUnicMediaRow } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
@@ -793,7 +793,7 @@ interface SopSlideProps {
 function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
   const isWeScale = slide.marca === 'We Scale'
   // O fechamento atravessa meses. Só a folha Partner assume essa janela na abertura.
-  const dates = useMemo(() => isWeScale && !previaMensal && monthMode === 'current'
+  const dates = useMemo(() => isWeScale && !marketingMensalAtivo && monthMode === 'current'
     ? computeCustomRanges(PARTNER_FECHAMENTO_ATUAL.start, PARTNER_FECHAMENTO_ATUAL.end)
     : selectedDates, [isWeScale, monthMode, selectedDates])
   const semPublicacao = usePeriodoSemPublicacao(dates.mtdCurStart)
@@ -842,7 +842,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const weScaleSnapshot = isWeScale ? getWeScaleSop(dates.monthStart.slice(0, 7)) : null
   const lerIndicadores = !partnerFechamento && !weScaleSnapshot
   const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
-  const inscricoesMensais = previaMensal && slide.id === 'liso' && dates.mtdCurEnd >= '2026-11-01'
+  const inscricoesMensais = marketingMensalAtivo && slide.id === 'liso' && dates.mtdCurEnd >= '2026-11-01'
   const beautyRes = useBeautyInscricoes(beautyEnabled || inscricoesMensais)
   const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
   const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale && lerIndicadores })
@@ -1526,7 +1526,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         <BeautyMarketingPanel result={beautyMarketing} compact inscricoes={inscricoesMensais ? (beautyRes.loading || beautyRes.error ? null : beautyInscricoes) : undefined} />
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
         <select
-          value={previaMensal && isWeScale && monthMode === 'custom' && dates.mtdCurStart === PARTNER_FECHAMENTO_ATUAL.start && dates.mtdCurEnd === PARTNER_FECHAMENTO_ATUAL.end ? 'partner-historico' : monthMode}
+          value={marketingMensalAtivo && isWeScale && monthMode === 'custom' && dates.mtdCurStart === PARTNER_FECHAMENTO_ATUAL.start && dates.mtdCurEnd === PARTNER_FECHAMENTO_ATUAL.end ? 'partner-historico' : monthMode}
           onChange={e => {
             if (e.target.value === 'partner-historico') {
               onCustomStartChange(PARTNER_FECHAMENTO_ATUAL.start)
@@ -1536,9 +1536,9 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
           }}
           style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
         >
-          {previaMensal && isWeScale && <option value="partner-historico">Fechamento {PARTNER_FECHAMENTO_ATUAL.label}</option>}
+          {marketingMensalAtivo && isWeScale && <option value="partner-historico">Fechamento {PARTNER_FECHAMENTO_ATUAL.label}</option>}
           {SOP_MONTH_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value}>{isWeScale && !previaMensal && opt.value === 'current' ? `Fechamento ${PARTNER_FECHAMENTO_ATUAL.label}` : opt.label}</option>
+            <option key={opt.value} value={opt.value}>{isWeScale && !marketingMensalAtivo && opt.value === 'current' ? `Fechamento ${PARTNER_FECHAMENTO_ATUAL.label}` : opt.label}</option>
           ))}
         </select>
         {monthMode === 'custom' && (

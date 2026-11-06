@@ -1,4 +1,4 @@
-import { previaMensal } from '@/lib/previaMensal'
+import { marketingMensalAtivo } from '@/lib/previaMensal'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { useCallback } from 'react'
 import { marketingDataClient } from '@/lib/partnerMarketingSources'
@@ -9,9 +9,9 @@ export const lisoOuroEnabled = import.meta.env.VITE_LISO_OURO_ENABLED === 'true'
 export function useBeautyMarketing(start: string, end: string, active = true) {
   const acesso = useAcesso()
   const allowed = acesso.registrado && acesso.ativo && (acesso.acessoTotal || acesso.marcas === null || acesso.marcas.includes('liso-laser'))
-  const enabled = allowed && lisoOuroEnabled && active && (previaMensal || start <= '2026-10-31') && end >= '2026-10-01'
+  const enabled = allowed && lisoOuroEnabled && active && (marketingMensalAtivo || start <= '2026-10-31') && end >= '2026-10-01'
   const from = start < '2026-10-01' ? '2026-10-01' : start
-  const to = !previaMensal && end > '2026-10-31' ? '2026-10-31' : end
+  const to = !marketingMensalAtivo && end > '2026-10-31' ? '2026-10-31' : end
   const fetch = useCallback(async (signal: AbortSignal) => {
     const db = marketingDataClient()
     const leads: Lead[] = []

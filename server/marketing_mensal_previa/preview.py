@@ -19,6 +19,7 @@ HOST = 'https://dashboard.srv1816822.hstgr.cloud'
 LOCAL = 'http://127.0.0.1:4173'
 METABASE = 'https://metabase.wescale.com.br/api/dataset'
 OLD = {'/api/' + name + '-ouro/v1/read' for name in ('outubro','oral-unic','legacy','liso','beauty','eletrovias','partner')}
+OLD.add('/api/marketing-mensal-ouro/v1/read')
 ROUTES = {'/', '/marca', '/okrs', '/sop-marketing', '/copa-b2b'}
 
 
@@ -112,6 +113,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.headers.get('Host') != urlsplit(LOCAL).netloc:
             return self.send_error(403)
+        if self.path == '/api/marketing-mensal-ouro/status':
+            try:
+                with urlopen(HOST+self.path, timeout=10) as response:
+                    return self.reply(200,json.load(response))
+            except Exception:
+                return self.reply(503,{'code':'source_unavailable'})
         if self.path == '/api/previa-mensal/status':
             try:
                 return self.reply(200,coverage(int(time.monotonic()//60)))

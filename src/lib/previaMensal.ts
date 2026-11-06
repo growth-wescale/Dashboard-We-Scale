@@ -3,6 +3,11 @@ import { isLegacyMigrationMedia } from './legacyOuroScope'
 
 export const previaMensal = import.meta.env.VITE_PREVIA_MENSAL === 'true' &&
   ['localhost', '127.0.0.1'].includes(globalThis.location?.hostname)
+export const marketingMensalOuroEnabled = import.meta.env.VITE_MARKETING_MENSAL_OURO_ENABLED === 'true'
+export const marketingMensalAtivo = marketingMensalOuroEnabled || previaMensal
+export const mensalEndpoint = marketingMensalOuroEnabled ? '/api/marketing-mensal-ouro/v1/read' : '/api/previa-mensal/v1/read'
+export const mensalContract = marketingMensalOuroEnabled ? 'marketing_mensal_v1' : 'marketing_mensal_previa'
+export const mensalStatusEndpoint = marketingMensalOuroEnabled ? '/api/marketing-mensal-ouro/status' : '/api/previa-mensal/status'
 
 export const marcasMensais = ['Inpot','B2Case','Viva','Eletrovias','Lisô Laser','Beauty Connection','Odonto Scale','Odonto Legacy','Oral Unic']
 export interface PeriodoMensal { inicio: string; fim: string }

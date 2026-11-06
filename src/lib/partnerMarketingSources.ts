@@ -1,3 +1,4 @@
+import { marketingMensalAtivo, mensalEndpoint, mensalContract, marcasMensais, linhaMensal } from './previaMensal'
 import { linhaOuroOutubro, marcasOuroOutubro } from './outubroOuro'
 import { createEletroviasOuroFetch } from './eletroviasOuroFetch'
 import { eletroviasOuroEnabled } from './eletroviasOuroScope'
@@ -21,7 +22,7 @@ const outubroOuroEnabled = import.meta.env.VITE_OUTUBRO_OURO_ENABLED === 'true'
 const lisoEnabled = import.meta.env.VITE_LISO_OURO_ENABLED === 'true'
 export function partnerMarketingCacheScope(optIn = true) {
   if (!optIn) return ''
-  return (outubroOuroEnabled ? ':outubro:ouro:v1' : '') + (enabled ? ':partner-ouro:marketing:v1' : '') + (lisoEnabled ? ':liso-ouro:marketing:v1' : '') + (legacyOuroEnabled ? ':legacy-ouro:marketing:v1' : '') + (oralUnicOuroEnabled ? ':oral-unic-ouro:marketing:v1' : '') + (eletroviasOuroEnabled ? (eletroviasDealsEnabled ? ':eletrovias-ouro:negocios:v1' : ':eletrovias-ouro:marketing:v1') : '')
+  return (marketingMensalAtivo ? ':previa-mensal' : '') + (outubroOuroEnabled ? ':outubro:ouro:v1' : '') + (enabled ? ':partner-ouro:marketing:v1' : '') + (lisoEnabled ? ':liso-ouro:marketing:v1' : '') + (legacyOuroEnabled ? ':legacy-ouro:marketing:v1' : '') + (oralUnicOuroEnabled ? ':oral-unic-ouro:marketing:v1' : '') + (eletroviasOuroEnabled ? (eletroviasDealsEnabled ? ':eletrovias-ouro:negocios:v1' : ':eletrovias-ouro:marketing:v1') : '')
 }
 function client(source: 'marketing' | 'vendas') {
   const vendas = source === 'vendas'
@@ -39,10 +40,14 @@ function client(source: 'marketing' | 'vendas') {
     ? createOralUnicOuroFetch({ ...options, referenceFetch: legacyFetch }) : legacyFetch
   const eletroviasFetch = !vendas && eletroviasOuroEnabled
     ? createEletroviasOuroFetch({ ...options, referenceFetch: oralFetch, dealsEnabled: eletroviasDealsEnabled }) : oralFetch
-  const fetch = !vendas && outubroOuroEnabled ? createEletroviasOuroFetch({ ...options, referenceFetch: eletroviasFetch,
+  const outubroFetch = !vendas && outubroOuroEnabled ? createEletroviasOuroFetch({ ...options, referenceFetch: eletroviasFetch,
     marketingScope: { brands: marcasOuroOutubro, endpoint: '/api/outubro-ouro/v1/read', contract: 'outubro_marketing_v1',
       includes: linhaOuroOutubro },
   }) : eletroviasFetch
+  const fetch = !vendas && marketingMensalAtivo ? createEletroviasOuroFetch({ ...options, referenceFetch: outubroFetch,
+    marketingScope: { mensal: true, brands: marcasMensais, endpoint: mensalEndpoint,
+      contract: mensalContract, includes: linhaMensal },
+  }) : outubroFetch
   return createClient(
     vendas ? import.meta.env.VITE_SUPABASE_VENDAS_URL : import.meta.env.VITE_SUPABASE_URL,
     vendas ? import.meta.env.VITE_SUPABASE_VENDAS_ANON_KEY : import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -56,7 +61,7 @@ function client(source: 'marketing' | 'vendas') {
   )
 }
 export function marketingDataClient(optIn = true): SupabaseClient {
-  if ((!outubroOuroEnabled && !enabled && !lisoEnabled && !legacyOuroEnabled && !oralUnicOuroEnabled && !eletroviasOuroEnabled) || !optIn) return supabase
+  if ((!marketingMensalAtivo && !outubroOuroEnabled && !enabled && !lisoEnabled && !legacyOuroEnabled && !oralUnicOuroEnabled && !eletroviasOuroEnabled) || !optIn) return supabase
   return marketing ??= client('marketing')
 }
 export function marketingCrmClient(optIn = true): SupabaseClient {

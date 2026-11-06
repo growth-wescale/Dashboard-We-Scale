@@ -1,5 +1,5 @@
 import { useBeautyMarketing, type BeautyMarketingResult } from '@/hooks/useBeautyMarketing'
-export function BeautyMarketingPanel({ result, compact = false }: { result: BeautyMarketingResult; compact?: boolean }) {
+export function BeautyMarketingPanel({ result, compact = false, inscricoes }: { result: BeautyMarketingResult; compact?: boolean; inscricoes?: number | null }) {
   if (!result.enabled) return null
   const value = result.data[0]
   const period = `${result.start.slice(8, 10)}/${result.start.slice(5, 7)}–${result.end.slice(8, 10)}/${result.end.slice(5, 7)}`
@@ -8,6 +8,7 @@ export function BeautyMarketingPanel({ result, compact = false }: { result: Beau
     <div style={{ fontSize: compact ? 9 : 11, marginTop: 2 }}>{period} · Todas as origens</div>
     {result.loading ? <p role="status">Carregando Beauty Connection…</p> : result.error ? <p role="alert">Não foi possível carregar Beauty Connection. Atualize para tentar novamente.</p> : value &&
       <div style={{ display: 'flex', gap: compact ? 12 : 28, flexWrap: 'wrap', marginTop: 7, fontSize: compact ? 10 : 12 }}>
+         {inscricoes !== undefined && <span>Inscrições <strong>{inscricoes ?? '—'}</strong></span>}
         <span>MQLs · negócios <strong>{value.deals}</strong></span>
         <span>Contatos MQL <strong>{value.contacts}</strong></span>
         <span>Investimento <strong>{value.spend.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></span>

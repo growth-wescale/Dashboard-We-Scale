@@ -1,3 +1,4 @@
+import { periodoMensal, type PeriodoMensal } from './previaMensal'
 import { leituraOuroSop } from './leituraOuroSop'
 import { inEletroviasWindow, isEletroviasMigrationMedia, isEletroviasMigrationLead } from './eletroviasOuroScope'
 import { filterRows, sortRows, projectRows, type RecordRow } from './partnerOuroQuery'
@@ -7,7 +8,7 @@ export const ELETROVIAS_MARKETING_ROUTES = new Set(['/', '/marca', '/sop-marketi
 const TABLES: Record<string, { dataset: string }> = { leads: { dataset: 'leads' }, media_daily_raw: { dataset: 'media' } }
 interface GoldReply { mode: 'legacy' | 'ouro'; rows: RecordRow[];  contract: string; observed_at: string | null; warnings: string[] }
 interface Options {
-  marketingScope?: { brands: readonly string[]; endpoint: string; contract: string; includes: (row: RecordRow, table: string) => boolean }
+  marketingScope?: { mensal?: boolean; brands: readonly string[]; endpoint: string; contract: string; includes: (row: RecordRow, table: string) => boolean }
   origin: string
   token: () => Promise<string | null>
   route: () => string
@@ -26,16 +27,20 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
   const legacyCache = new Map<string, { at: number; value: Promise<RecordRow[]> }>()
   let currentToken: string | null = null
   if (typeof window !== 'undefined') window.addEventListener('dashboard:refresh', () => { goldCache.clear(); legacyCache.clear() })
-  async function getGold(dataset: string, route: string, token: string): Promise<GoldReply> {
-    const goldKey = `${route}:${dataset}`
+  async function getGold(dataset: string, route: string, token: string, periodo?: PeriodoMensal): Promise<GoldReply> {
+    const goldKey = `${route}:${dataset}:${periodo?.inicio ?? ''}:${periodo?.fim ?? ''}`
     let goldEntry = goldCache.get(goldKey)
     if (!goldEntry || Date.now() - goldEntry.at > 60_000) {
       const value = (async () => {
         const response = await leituraOuroSop(nativeFetch, scope?.endpoint ?? '/api/eletrovias-ouro/v1/read', {
           method: 'POST', signal: AbortSignal.timeout(60_000),
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dataset: dataset, route }),
+          body: JSON.stringify({ dataset, route, periodo }),
         }, route)
+        if (periodo && response.status === 409) {
+          const erro = await response.json()
+          if (erro.code === 'periodo_sem_publicacao') throw new Error('A ouro ainda não publicou dados para o período selecionado.')
+        }
         if (!response.ok) throw new Error(`Não foi possível consultar a ouro de ${label}. Atualize os dados para tentar novamente.`)
         return await response.json() as GoldReply
       })()
@@ -63,11 +68,12 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
         || (op === 'gt' && day >= '2026-10-31') || (op === 'gte' && day >= '2026-11-01')
         || (op === 'eq' && (day < '2026-10-01' || day >= '2026-11-01'))
     })
-    if (outsideWindow) return referenceFetch(input, init)
+    const periodo = scope?.mensal ? periodoMensal(url.searchParams) : undefined
+    if (scope?.mensal ? !periodo : outsideWindow) return referenceFetch(input, init)
     const token = await options.token()
     if (!token) throw new Error(`Entre novamente para consultar ${label}.`)
     if (token !== currentToken) { goldCache.clear(); legacyCache.clear(); currentToken = token }
-    const reply = await getGold(config.dataset, route, token)
+    const reply = await getGold(config.dataset, route, token, periodo)
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     if (reply.mode === 'legacy') return referenceFetch(input, init)
     if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || reply.contract !== (scope?.contract ?? 'eletrovias_marketing_v1')) throw new Error(`Contrato de ${label} inválido.`)
@@ -107,7 +113,7 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     }
     const rows = await legacyEntry.value
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
-    const scoped = (r: RecordRow) => inEletroviasWindow(r) && (scope ? scope.includes(r, table) : table === 'leads' ? isEletroviasMigrationLead(r) : isEletroviasMigrationMedia(r))
+    const scoped = (r: RecordRow) => (periodo ? typeof r.dia === 'string' && r.dia >= periodo.inicio && r.dia <= periodo.fim : inEletroviasWindow(r)) && (scope ? scope.includes(r, table) : table === 'leads' ? isEletroviasMigrationLead(r) : isEletroviasMigrationMedia(r))
     if (reply.rows.some(r => !scoped(r))) throw new Error(`Escopo de ${label} inválido.`)
     let goldRows = reply.rows
     if (table === 'leads' && options.dealsEnabled) {

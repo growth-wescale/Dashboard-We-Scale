@@ -1,3 +1,5 @@
+import { marketingMensalAtivo } from '@/lib/previaMensal'
+import { CoberturaMensalPrevia } from '@/components/marketing/CoberturaMensalPrevia'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
 import { Login } from '@/pages/Login'
@@ -75,6 +77,7 @@ function RoutedContent() {
     <ErrorBoundary key={pathname} scope={pathname}>
       <Suspense fallback={<PageLoader />}>
        <GuardaRota pathname={pathname}>
+        <CoberturaMensalPrevia ativa={marketingMensalAtivo && ['/', '/marca', '/okrs', '/sop-marketing'].includes(pathname)}>
         <Routes>
           <Route path="/acessos"       element={<Acessos />} />
           <Route path="/"              element={<VisaoGeral />} />
@@ -96,6 +99,7 @@ function RoutedContent() {
           <Route path="/analise-termos"    element={<Navigate to="/marca" replace />} />
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Routes>
+       </CoberturaMensalPrevia>
        </GuardaRota>
       </Suspense>
     </ErrorBoundary>

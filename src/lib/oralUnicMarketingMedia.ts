@@ -5,6 +5,7 @@ import { LEGACY_MEDIA } from './legacyOuroScope'
 export interface OralUnicMediaRow {
   marca?: unknown; dia?: unknown; canal?: unknown; campanha?: string | null
   conta_id?: unknown; campanha_id?: unknown
+  origem_leitura?: unknown
 }
 export type OralUnicMediaFront = 'franquia' | 'avaliadores' | 'comunidade'
 
@@ -16,8 +17,15 @@ const CAMPAIGNS = [
   { canal: 'meta', account: '24763396173316651', id: '120249260819990752', names: ['CMD Aquisição (comunidade) I Engajamento Whats'], front: 'comunidade' as const },
 ]
 
+// Somente linhas do novo leitor mensal estendem o recorte aprovado. A Esteira,
+// Vendas e a referência histórica não recebem esse marcador.
+function inMarketingWindow(row: OralUnicMediaRow) {
+  return inOralUnicWindow(row) || (row.origem_leitura === 'ouro_marketing_mensal'
+    && typeof row.dia === 'string' && row.dia >= '2026-11-01')
+}
+
 export function oralUnicMediaFront(row: OralUnicMediaRow, enabled = oralUnicOuroEnabled): OralUnicMediaFront | null {
-  if (!enabled || row.marca !== 'Oral Unic' || !inOralUnicWindow(row)) return null
+  if (!enabled || row.marca !== 'Oral Unic' || !inMarketingWindow(row)) return null
   const campaign = CAMPAIGNS.find(c => c.canal === row.canal
     && (row.conta_id == null || String(row.conta_id) === c.account)
     && (row.campanha_id != null ? String(row.campanha_id) === c.id : c.names.some(n => n === row.campanha)))
@@ -38,7 +46,7 @@ export function isOralUnicCommunityMedia(row: OralUnicMediaRow): boolean {
 // Não altera sua fonte, atribuição ou presença no slide de Legacy.
 const CONSULTORIA_GOOGLE = LEGACY_MEDIA.filter(c => c.canal === 'google')
 export function isOralUnicSopFranchiseMedia(row: OralUnicMediaRow): boolean {
-  if (oralUnicOuroEnabled && row.marca === 'Oral Unic' && inOralUnicWindow(row)
+  if (oralUnicOuroEnabled && row.marca === 'Oral Unic' && inMarketingWindow(row)
     && CONSULTORIA_GOOGLE.some(c => row.canal === c.canal
       && (row.conta_id == null || String(row.conta_id) === c.account)
       && (row.campanha_id != null ? String(row.campanha_id) === c.id : c.names.some(n => n === row.campanha)))) return false

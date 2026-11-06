@@ -1,3 +1,5 @@
+import { PeriodoDisponivel, usePeriodoSemPublicacao } from '@/components/marketing/CoberturaMensalPrevia'
+import { marketingMensalAtivo } from '@/lib/previaMensal'
 import { eletroviasOuroEnabled } from '@/lib/eletroviasOuroScope'
 import { isOralUnicSopFranchiseMedia, type OralUnicMediaRow } from '@/lib/oralUnicMarketingMedia'
 import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuroScope'
@@ -791,9 +793,10 @@ interface SopSlideProps {
 function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNext, isFullscreen, onToggleFullscreen, exportHeight, monthMode, onMonthModeChange, customStart, onCustomStartChange, customEnd, onCustomEndChange, onReady }: SopSlideProps) {
   const isWeScale = slide.marca === 'We Scale'
   // O fechamento atravessa meses. Só a folha Partner assume essa janela na abertura.
-  const dates = useMemo(() => isWeScale && monthMode === 'current'
+  const dates = useMemo(() => isWeScale && !marketingMensalAtivo && monthMode === 'current'
     ? computeCustomRanges(PARTNER_FECHAMENTO_ATUAL.start, PARTNER_FECHAMENTO_ATUAL.end)
     : selectedDates, [isWeScale, monthMode, selectedDates])
+  const semPublicacao = usePeriodoSemPublicacao(dates.mtdCurStart)
   const acc = slide.accent
   const beautyMarketing = useBeautyMarketing(dates.mtdCurStart, dates.mtdCurEnd, slide.id === 'liso')
   const [filterFonte, setFilterFonte] = useState('__all__')
@@ -839,7 +842,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const weScaleSnapshot = isWeScale ? getWeScaleSop(dates.monthStart.slice(0, 7)) : null
   const lerIndicadores = !partnerFechamento && !weScaleSnapshot
   const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
-  const beautyRes = useBeautyInscricoes(beautyEnabled)
+  const inscricoesMensais = marketingMensalAtivo && slide.id === 'liso' && dates.mtdCurEnd >= '2026-11-01'
+  const beautyRes = useBeautyInscricoes(beautyEnabled || inscricoesMensais)
   const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
   const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale && lerIndicadores })
   const partnerSales = useMemo(() => partnerSalesInPeriod(partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte), [partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte])
@@ -1470,25 +1474,25 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     { label: 'Fechado',     count: fechOverride ?? funnelMtd.fech },
   ]
 
-  if (eletroviasReadRequired && (!allLoaded || partnerReadError)) {
+  if (!semPublicacao && eletroviasReadRequired && (!allLoaded || partnerReadError)) {
     return <div role={partnerReadError ? 'alert' : 'status'} style={{ padding: 36 }}>
       {partnerReadError ? 'Não foi possível carregar Eletrovias. Atualize para tentar novamente.' : 'Carregando Eletrovias…'}
     </div>
   }
 
-  if (slide.filterFranquia && oralUnicOuroEnabled && (!allLoaded || partnerReadError)) {
+  if (!semPublicacao && slide.filterFranquia && oralUnicOuroEnabled && (!allLoaded || partnerReadError)) {
     return <div role={partnerReadError ? 'alert' : 'status'} style={{ padding: 36 }}>
       {partnerReadError ? 'Não foi possível carregar Oral Unic. Atualize para tentar novamente.' : 'Carregando Oral Unic…'}
     </div>
   }
 
-  if (isOdontoLegacy && legacyOuroEnabled && (!allLoaded || partnerReadError)) {
+  if (!semPublicacao && isOdontoLegacy && legacyOuroEnabled && (!allLoaded || partnerReadError)) {
     return <div role={partnerReadError ? 'alert' : 'status'} style={{ padding: 36 }}>
       {partnerReadError ? 'Não foi possível carregar Legacy. Atualize para tentar novamente.' : 'Carregando Legacy…'}
     </div>
   }
 
-  if (slide.id === 'liso' && lisoOuroEnabled && (!allLoaded || partnerReadError || beautyMarketing.error)) {
+  if (!semPublicacao && slide.id === 'liso' && lisoOuroEnabled && (!allLoaded || partnerReadError || beautyMarketing.error)) {
     return <div role={partnerReadError || beautyMarketing.error ? 'alert' : 'status'} style={{ padding: 36 }}>
       {partnerReadError || beautyMarketing.error ? 'Não foi possível carregar Lisô e Beauty. Atualize para tentar novamente.' : 'Carregando Lisô e Beauty…'}
     </div>
@@ -1519,15 +1523,22 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
             {partnerFechamento ? `Fechamento ${partnerFechamento.label} · Holding sem IDA/LISO Evento${partnerFechamento === PARTNER_FECHAMENTO_ATUAL ? ' · sem Google' : ' · com Google'}` : `${dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM`}
           </div>
         </div>
-        <BeautyMarketingPanel result={beautyMarketing} compact />
+        <BeautyMarketingPanel result={beautyMarketing} compact inscricoes={inscricoesMensais ? (beautyRes.loading || beautyRes.error ? null : beautyInscricoes) : undefined} />
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
         <select
-          value={monthMode}
-          onChange={e => onMonthModeChange(e.target.value)}
+          value={marketingMensalAtivo && isWeScale && monthMode === 'custom' && dates.mtdCurStart === PARTNER_FECHAMENTO_ATUAL.start && dates.mtdCurEnd === PARTNER_FECHAMENTO_ATUAL.end ? 'partner-historico' : monthMode}
+          onChange={e => {
+            if (e.target.value === 'partner-historico') {
+              onCustomStartChange(PARTNER_FECHAMENTO_ATUAL.start)
+              onCustomEndChange(PARTNER_FECHAMENTO_ATUAL.end)
+              onMonthModeChange('custom')
+            } else onMonthModeChange(e.target.value)
+          }}
           style={{ appearance: 'none', padding: '4px 10px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 11, fontWeight: 700, background: '#fff', color: 'var(--ws-text-primary)', cursor: 'pointer', outline: 'none' }}
         >
+          {marketingMensalAtivo && isWeScale && <option value="partner-historico">Fechamento {PARTNER_FECHAMENTO_ATUAL.label}</option>}
           {SOP_MONTH_OPTIONS.map(opt => (
-            <option key={opt.value} value={opt.value}>{isWeScale && opt.value === 'current' ? `Fechamento ${PARTNER_FECHAMENTO_ATUAL.label}` : opt.label}</option>
+            <option key={opt.value} value={opt.value}>{isWeScale && !marketingMensalAtivo && opt.value === 'current' ? `Fechamento ${PARTNER_FECHAMENTO_ATUAL.label}` : opt.label}</option>
           ))}
         </select>
         {monthMode === 'custom' && (
@@ -1565,6 +1576,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
         </button>
       </div>
 
+      <PeriodoDisponivel inicio={dates.mtdCurStart}>
       {ouroReadRequired && <QueryErrorBanner errors={[partnerReadError ?? null, beautyRes.error, receitaOuro.error]} />}
 
       {/* ── KPI strip: semana no MTD; mês inteiro quando fechado ── */}
@@ -1899,6 +1911,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
       {/* ── Footer bar ── */}
       <div style={{ height: 4, background: acc, borderRadius: 2, flexShrink: 0 }} />
+      </PeriodoDisponivel>
     </div>
   )
 }

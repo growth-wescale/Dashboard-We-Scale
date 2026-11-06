@@ -20,6 +20,9 @@ export type Metrica =
 
 // === MÍDIA PAGA ===
 export interface MediaDailyRaw {
+  origem_leitura?: string
+  conta_id?: string
+  campanha_id?: string
   id: string
   dia: string              // ISO date
   marca: Marca

@@ -50,6 +50,20 @@ export const COMUNIDADE_LEGACY_ATUAL: ComunidadeLegacy = {
   duplicados: { leads: 12, pico: '1 pessoa se cadastrou 5x' },
 }
 
+// Total ativo confirmado por Gabriel em 06/11/2026. O perfil continua sendo
+// a amostra de outubro; não inferir composição ou evolução diária dos membros.
+export const COMUNIDADE_LEGACY_NOVEMBRO: ComunidadeLegacy = {
+  ...COMUNIDADE_LEGACY_OUTUBRO,
+  ate: '06/11',
+  total: 217,
+}
+
+export function comunidadeLegacyDoMes(monthKey: string): ComunidadeLegacy {
+  if (monthKey >= '2026-11') return COMUNIDADE_LEGACY_NOVEMBRO
+  if (monthKey === '2026-10') return COMUNIDADE_LEGACY_OUTUBRO
+  return COMUNIDADE_LEGACY_ATUAL
+}
+
 /**
  * Snapshot manual do funil de negociações da Odonto Legacy (Consultoria).
  * Junior atualiza semanalmente — número de deals em cada etapa direto do RD,

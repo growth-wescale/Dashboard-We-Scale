@@ -1,4 +1,4 @@
-# Proposta de instalação. Não executada automaticamente pelo deploy do dashboard.
+# Modelo de instalação. Não executada automaticamente pelo deploy do dashboard.
 services:
   marketing-mensal-ouro:
     image: ${MARKETING_MENSAL_IMAGE:?Informe a imagem Python/psycopg homologada}
@@ -9,6 +9,8 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
+    pids_limit: 96
+    mem_limit: 512m
     volumes:
       - .:/app/marketing_mensal_ouro:ro
       - ../outubro_ouro/perfil.py:/app/outubro_ouro/perfil.py:ro
@@ -21,9 +23,11 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
+      - traefik.docker.network=dashboard_default
+      - traefik.http.routers.marketing-mensal-ouro.priority=110
       - traefik.http.routers.marketing-mensal-ouro.rule=Host(`dashboard.srv1816822.hstgr.cloud`) && PathPrefix(`/api/marketing-mensal-ouro/`)
       - traefik.http.routers.marketing-mensal-ouro.entrypoints=websecure
-      - traefik.http.routers.marketing-mensal-ouro.tls=true
+      - traefik.http.routers.marketing-mensal-ouro.tls.certresolver=letsencrypt
       - traefik.http.services.marketing-mensal-ouro.loadbalancer.server.port=8080
 networks:
   dashboard:

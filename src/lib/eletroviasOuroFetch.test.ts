@@ -72,3 +72,48 @@ describe('dataset de negociações opt-in', () => {
   await expect(read(`${origin}/rest/v1/leads`)).rejects.toThrow('Contrato de negociações')
  })
 })
+
+describe('gateway mensal de Marketing', () => {
+ function monthly(route = '/') {
+  const referenceFetch = vi.fn(async () => new Response(JSON.stringify([
+   lead('october', 'Inpot', '2026-10-10'), lead('old-nov', 'Inpot', '2026-11-02'),
+   lead('partner', 'We Scale', '2026-11-02'),
+  ])))
+  const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+   const { periodo } = JSON.parse(String(init?.body))
+   return new Response(JSON.stringify({ mode: 'ouro', contract: 'marketing_mensal_v1',
+    rows: [lead('gold-' + periodo.inicio, 'Inpot', periodo.inicio)] }))
+  })
+  const read = createEletroviasOuroFetch({ origin, route: () => route, token: async () => 'token',
+   fetch, referenceFetch, marketingScope: { mensal: true, brands: ['Inpot'],
+    endpoint: '/api/marketing-mensal-ouro/v1/read', contract: 'marketing_mensal_v1', includes: r => r.marca === 'Inpot' } })
+  return { read, fetch, referenceFetch }
+ }
+ it('preserva outubro e Partner no intervalo misto e separa o cache por mês', async () => {
+  const s = monthly()
+  const rows = await (await s.read(`${origin}/rest/v1/leads?dia=gte.2026-10-01&dia=lte.2026-11-06&order=id.asc`)).json()
+  expect(rows.map((r: { id: string }) => r.id)).toEqual(['gold-2026-11-01', 'october', 'partner'])
+  expect(JSON.parse(String(s.fetch.mock.calls[0][1]?.body)).periodo).toEqual({ inicio: '2026-11-01', fim: '2026-11-06' })
+  await s.read(`${origin}/rest/v1/leads?dia=gte.2026-12-01&dia=lte.2026-12-31`)
+  expect(s.fetch).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(String(s.fetch.mock.calls[1][1]?.body)).periodo).toEqual({ inicio: '2026-12-01', fim: '2026-12-31' })
+ })
+ it.each(['/funil-vendas', '/performance-vendas', '/esteira'])('não consulta o mensal em %s', async route => {
+  const s = monthly(route)
+  await s.read(`${origin}/rest/v1/leads?dia=gte.2026-11-01`)
+  expect(s.fetch).not.toHaveBeenCalled()
+  expect(s.referenceFetch).toHaveBeenCalledOnce()
+ })
+ it('delega outubro integralmente ao leitor existente', async () => {
+  const s = monthly()
+  await s.read(`${origin}/rest/v1/leads?dia=gte.2026-10-01&dia=lte.2026-10-31`)
+  expect(s.fetch).not.toHaveBeenCalled()
+  expect(s.referenceFetch).toHaveBeenCalledOnce()
+ })
+ it('não troca publicação ausente por zero ou fonte antiga', async () => {
+  const s = monthly()
+  s.fetch.mockImplementation(async () => new Response(JSON.stringify({ code: 'periodo_sem_publicacao' }), { status: 409 }))
+  await expect(s.read(`${origin}/rest/v1/leads?dia=gte.2026-12-01`)).rejects.toThrow('ainda não publicou')
+  expect(s.referenceFetch).not.toHaveBeenCalled()
+ })
+})

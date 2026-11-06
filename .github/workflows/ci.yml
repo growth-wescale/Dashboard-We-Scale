@@ -47,6 +47,9 @@ jobs:
       - name: Test October Marketing gateway
         run: python3 -m unittest discover -s server/outubro_ouro -p 'test_*.py'
 
+      - name: Test monthly Marketing gateway
+        run: python3 -B -m unittest discover -s server/marketing_mensal_ouro -p 'test_*.py'
+
       - name: Test readonly gateway
         run: python3 -m unittest discover -s server/partner_ouro -p 'test_*.py'
 

@@ -10,6 +10,7 @@ WITH contas(marca,plataforma,conta_id) AS (VALUES
  ('Oral Unic','google','9733883995','24054007136'),('Oral Unic','google','9733883995','24054143009')
 )
 SELECT m.registro_key AS id,to_char(m.data_evento,'YYYY-MM-DD') AS dia,coalesce(c.marca,s.marca) AS marca,
+ 'ouro_marketing_mensal'::text AS origem_leitura,m.conta_id,m.campanha_id,
  m.plataforma AS canal,m.campanha_nome AS campanha,m.grupo_nome AS conjunto,m.anuncio_nome AS anuncio,
  m.gasto AS spend_brl,m.impressoes,m.cliques_link,m.lpv,m.leads_plataforma AS leads,m.video_p50,m.video_thruplay,
  CASE WHEN m.impressoes>0 THEN m.gasto*1000/m.impressoes END AS cpm,

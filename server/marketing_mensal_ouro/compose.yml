@@ -1,0 +1,31 @@
+# Proposta de instalação. Não executada automaticamente pelo deploy do dashboard.
+services:
+  marketing-mensal-ouro:
+    image: ${MARKETING_MENSAL_IMAGE:?Informe a imagem Python/psycopg homologada}
+    container_name: dashboard-marketing-mensal-ouro
+    command: [python, -B, /app/marketing_mensal_ouro/app.py]
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    volumes:
+      - .:/app/marketing_mensal_ouro:ro
+      - ../outubro_ouro/perfil.py:/app/outubro_ouro/perfil.py:ro
+      - ${MARKETING_MENSAL_CONFIG_DIR:?Informe o diretorio protegido}:/run/marketing-mensal:ro
+    networks: [dashboard]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.marketing-mensal-ouro.rule=Host(`dashboard.srv1816822.hstgr.cloud`) && PathPrefix(`/api/marketing-mensal-ouro/`)
+      - traefik.http.routers.marketing-mensal-ouro.entrypoints=websecure
+      - traefik.http.routers.marketing-mensal-ouro.tls=true
+      - traefik.http.services.marketing-mensal-ouro.loadbalancer.server.port=8080
+networks:
+  dashboard:
+    external: true
+    name: dashboard_default

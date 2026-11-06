@@ -1,0 +1,14 @@
+{
+  "supabase_url": "https://jmuluoksnlqrvzbcltim.supabase.co",
+  "supabase_anon_key": "PREENCHER_FORA_DO_REPOSITORIO",
+  "postgres": {
+    "host": "PREENCHER_HOST_DO_CERTIFICADO",
+    "hostaddr": "PREENCHER_IP_PRIVADO",
+    "port": 5432,
+    "dbname": "oralunic_dw",
+    "user": "dashboard_marketing_mensal_ro",
+    "password": "PROVISIONAR_FORA_DO_REPOSITORIO",
+    "sslmode": "verify-full",
+    "sslrootcert": "/run/marketing-mensal/ca.crt"
+  }
+}

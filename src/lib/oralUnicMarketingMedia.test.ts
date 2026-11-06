@@ -20,6 +20,34 @@ const rows = [
 ]
 const cents = (rs: MediaDailyRaw[]) => rs.reduce((n, r) => n + Math.round(r.spend_brl * 100), 0)
 
+describe('recorte mensal de Marketing identificado pela origem da leitura', () => {
+  it.each(['2026-11-06', '2026-12-10', '2027-01-15'])('mantém os mesmos numeradores em todas as telas em %s', dia => {
+    const origem = { dia, origem_leitura: 'ouro_marketing_mensal' }
+    const rs = [
+      row(rows[0].campanha!, 1623.45, { ...origem, conta_id: '24763396173316651', campanha_id: '120249498633040752' }),
+      row(rows[1].campanha!, 544.42, { ...origem, conta_id: '24763396173316651', campanha_id: '120246002967810752' }),
+      row('[SEARCH] Intenção - Defesa de Marca', 715.26, { ...origem, canal: 'google', conta_id: '9733883995', campanha_id: '24054007136' }),
+      row('[SEARCH] Intenção - Gestão & escala de clínica', 952.93, { ...origem, canal: 'google', conta_id: '9733883995', campanha_id: '24054143009' }),
+      row('[ODL] Consultoria I LEADS I SITE LEGACY', 2280.87, origem),
+    ]
+    const before = structuredClone(rs)
+    expect(cents(filterMediaByMarca(rs, 'Oral Unic'))).toBe(162345)
+    expect(cents(rs.filter(isOralUnicFranchiseMedia))).toBe(162345)
+    expect(cents(rs.filter(isOralUnicSopFranchiseMedia))).toBe(162345)
+    expect(cents(filterMediaByMarca(rs, 'Odonto Scale'))).toBe(394906)
+    expect(cents(rs.filter(r => oralUnicMediaFront(r) === 'avaliadores'))).toBe(54442)
+    expect(rs).toEqual(before)
+  })
+
+  it('não estende recorte a linhas nativas de Esteira/Vendas nem a outras contas', () => {
+    const native = { ...rows[1], dia: '2026-11-06' }
+    expect(oralUnicMediaFront(native)).toBeNull()
+    expect(isOralUnicFranchiseMedia(native)).toBe(true)
+    expect(oralUnicMediaFront({ ...native, origem_leitura: 'ouro_marketing_mensal', conta_id: 'outra' })).toBeNull()
+    expect(oralUnicMediaFront({ ...native, origem_leitura: 'ouro_marketing_mensal', marca: 'Inpot' })).toBeNull()
+  })
+})
+
 describe('recorte de mídia Oral Unic aprovado, exclusivo de Marketing/outubro', () => {
   const consultoria = [
     row('[SEARCH] Intenção - Defesa de Marca', 1080.37, { canal: 'google', conta_id: '9733883995', campanha_id: '24054007136' }),

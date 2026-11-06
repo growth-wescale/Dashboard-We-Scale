@@ -161,6 +161,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(409,{'code':'periodo_sem_publicacao','dia':receipt['dia']})
             return self.reply(200,monthly(b['dataset'],start,min(end,through),receipt['publicado']))
         except HTTPError as error:
+            if self.path == '/api/marketing-mensal-ouro/v1/read' and error.code == 409:
+                return self.reply(409,{'code':'periodo_sem_publicacao'})
             return self.reply(error.code,{'code':'upstream_error'})
         except (TypeError,ValueError,KeyError):
             return self.reply(400,{'code':'invalid_request'})

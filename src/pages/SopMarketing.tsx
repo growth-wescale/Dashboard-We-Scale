@@ -37,7 +37,7 @@ import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { PartnerComparativo } from '@/components/sop/PartnerComparativo'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
-import { COMUNIDADE_LEGACY_ATUAL, COMUNIDADE_LEGACY_OUTUBRO, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { COMUNIDADE_LEGACY_ATUAL, comunidadeLegacyDoMes, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
 import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getPartnerFechamento, PARTNER_FECHAMENTO_ATUAL } from '@/constants/partnerFechamento'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
@@ -1315,7 +1315,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     add(mediaAllComunidade.data)
     add(mediaPrev2Comunidade.data)
     add(mediaPrev3Comunidade.data)
-    const membros = dates.monthStart.startsWith('2026-10') ? COMUNIDADE_LEGACY_OUTUBRO.total : COMUNIDADE_LEGACY_ATUAL.total
+    const membros = comunidadeLegacyDoMes(dates.monthStart.slice(0, 7)).total
     return total / membros
   }, [isOdontoLegacy, dates.monthStart, mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data])
 
@@ -1880,7 +1880,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
         {/* Col 3: Taxas de conversão ou comunidade Legacy */}
         {isOdontoLegacy ? (
-          <ComunidadeLegacyPanel data={monthKeyCur === '2026-10' ? COMUNIDADE_LEGACY_OUTUBRO : COMUNIDADE_LEGACY_ATUAL} accent={acc} />
+          <ComunidadeLegacyPanel data={comunidadeLegacyDoMes(monthKeyCur)} accent={acc} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable

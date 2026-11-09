@@ -798,7 +798,8 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     : selectedDates, [isWeScale, monthMode, selectedDates])
   const semPublicacao = usePeriodoSemPublicacao(dates.mtdCurStart)
   const acc = slide.accent
-  const beautyMarketing = useBeautyMarketing(dates.mtdCurStart, dates.mtdCurEnd, slide.id === 'liso')
+  const exibirEventoLiso = slide.id === 'liso' && dates.mtdCurEnd < '2026-11-01'
+  const beautyMarketing = useBeautyMarketing(dates.mtdCurStart, dates.mtdCurEnd, exibirEventoLiso)
   const [filterFonte, setFilterFonte] = useState('__all__')
   const [compareMonthKey, setCompareMonthKey] = useState<string | null>(null)
 
@@ -842,8 +843,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const weScaleSnapshot = isWeScale ? getWeScaleSop(dates.monthStart.slice(0, 7)) : null
   const lerIndicadores = !partnerFechamento && !weScaleSnapshot
   const beautyEnabled = isWeScale && beautyOuroEnabled && (dates.monthStart.slice(0, 7) === '2026-10' || !!partnerFechamento && dates.mtdCurEnd.startsWith('2026-10')) && !getWeScaleSop('2026-10')
-  const inscricoesMensais = marketingMensalAtivo && slide.id === 'liso' && dates.mtdCurEnd >= '2026-11-01'
-  const beautyRes = useBeautyInscricoes(beautyEnabled || inscricoesMensais)
+  const beautyRes = useBeautyInscricoes(beautyEnabled)
   const beautyInscricoes = beautyInscricoesNoPeriodo(beautyRes.data, dates.mtdCurStart, dates.mtdCurEnd)
   const partnerSalesRes = useSopScalePartnerSales({ start: dates.mtdCurStart, end: dates.mtdCurEnd, enabled: isWeScale && lerIndicadores })
   const partnerSales = useMemo(() => partnerSalesInPeriod(partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte), [partnerSalesRes.sales, dates.mtdCurStart, dates.mtdCurEnd, filterFonte])
@@ -1494,7 +1494,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
   if (!semPublicacao && slide.id === 'liso' && lisoOuroEnabled && (!allLoaded || partnerReadError || beautyMarketing.error)) {
     return <div role={partnerReadError || beautyMarketing.error ? 'alert' : 'status'} style={{ padding: 36 }}>
-      {partnerReadError || beautyMarketing.error ? 'Não foi possível carregar Lisô e Beauty. Atualize para tentar novamente.' : 'Carregando Lisô e Beauty…'}
+      {partnerReadError || beautyMarketing.error ? 'Não foi possível carregar Lisô Laser. Atualize para tentar novamente.' : 'Carregando Lisô Laser…'}
     </div>
   }
 
@@ -1523,7 +1523,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
             {partnerFechamento ? `Fechamento ${partnerFechamento.label} · Holding sem IDA/LISO Evento${partnerFechamento === PARTNER_FECHAMENTO_ATUAL ? ' · sem Google' : ' · com Google'}` : `${dates.isClosed ? `${dates.mtdLabel} fechado` : effectiveWeeks.at(-1)?.label} · visão executiva de performance e CRM`}
           </div>
         </div>
-        <BeautyMarketingPanel result={beautyMarketing} compact inscricoes={inscricoesMensais ? (beautyRes.loading || beautyRes.error ? null : beautyInscricoes) : undefined} />
+        {exibirEventoLiso && <BeautyMarketingPanel result={beautyMarketing} compact />}
         <span style={{ fontSize: 10, color: 'var(--ws-text-secondary)' }}>{slideIndex + 1}/{total}</span>
         <select
           value={marketingMensalAtivo && isWeScale && monthMode === 'custom' && dates.mtdCurStart === PARTNER_FECHAMENTO_ATUAL.start && dates.mtdCurEnd === PARTNER_FECHAMENTO_ATUAL.end ? 'partner-historico' : monthMode}
@@ -2247,7 +2247,7 @@ export function SopMarketing() {
               if (slides[i]?.marca === 'Eletrovias' && eletroviasOuroEnabled) reject(new Error('Aguarde o carregamento de Eletrovias antes de exportar.'))
               else if (slides[i]?.filterFranquia && oralUnicOuroEnabled) reject(new Error('Aguarde o carregamento de Oral Unic antes de exportar.'))
               else if (slides[i]?.marca === 'Odonto Scale' && legacyOuroEnabled) reject(new Error('Aguarde o carregamento de Legacy antes de exportar.'))
-              else if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô e Beauty antes de exportar.'))
+              else if (slides[i]?.id === 'liso' && lisoOuroEnabled) reject(new Error('Aguarde o carregamento de Lisô Laser antes de exportar.'))
               else if (partner && import.meta.env.VITE_PARTNER_OURO_ENABLED === 'true') reject(new Error('Aguarde o carregamento de Partner antes de exportar.'))
               else reject(new Error('Aguarde o carregamento da folha antes de exportar.'))
             }

@@ -64,6 +64,19 @@ export function comunidadeLegacyDoMes(monthKey: string): ComunidadeLegacy {
   return COMUNIDADE_LEGACY_ATUAL
 }
 
+// Quatro relatórios de inscrição da mesma reunião recorrente, extraídos em 09/11.
+// Contagens pela primeira inscrição aprovada na série. Equipe e cancelamentos
+// excluídos antes da agregação; a folha recebe somente totais sem identificadores.
+export const SERIE_LIVES_LEGACY = {
+  nome: 'Odonto Legacy',
+  inicio: '2026-10-01',
+  atualizadoAte: '2026-11-09',
+  inscricoes: [
+    { dia: '2026-10-29', pessoas: 8 },
+    { dia: '2026-11-05', pessoas: 3 },
+  ],
+}
+
 /**
  * Snapshot manual do funil de negociações da Odonto Legacy (Consultoria).
  * Junior atualiza semanalmente — número de deals em cada etapa direto do RD,

@@ -6,13 +6,20 @@ WITH catalogo AS MATERIALIZED (
   WHERE s.resource='message_templates' AND s.status='loaded'
     AND coalesce(c.raw_snapshot,s.raw_snapshot)->>'catalog_complete'='true'
   ORDER BY s.waba_id,s.observed_at DESC,s.snapshot_id DESC
+), marcas AS MATERIALIZED (
+  SELECT DISTINCT ON(waba_id) waba_id,marca FROM bronze.whatsapp_collection ORDER BY waba_id,observed_at DESC,receipt_id DESC
 ), modelos AS MATERIALIZED (
-  SELECT c.waba_id,t->>'id' id,t->>'name' nome,t->>'category' categoria
-  FROM catalogo c CROSS JOIN LATERAL jsonb_array_elements(c.raw_snapshot->'templates') t
+  SELECT c.waba_id,t->>'id' id,t->>'name' nome,t->>'category' categoria, b.marca
+  FROM catalogo c JOIN marcas b USING(waba_id) CROSS JOIN LATERAL jsonb_array_elements(c.raw_snapshot->'templates') t
 ), mapeados AS MATERIALIZED (
   SELECT *,CASE
     WHEN nome ~ '^live_btg_' THEN 'btg'
     WHEN nome ~ '^live0311(convite(ev|in|ll|vi)|(ev|in|ll|vi)2)_' THEN 'diretores'
+    -- Convenção específica da régua de cadência: passo, marca da conta e versão.
+    WHEN nome ~ '^cad_(m1|c1|c2|t0[4-9]|t10)_(b2case|eletrovias|inpot|liso|oralunic|viva)_v[0-9]+[a-z]?$'
+      AND split_part(nome,'_',3) = CASE marca WHEN 'B2Case' THEN 'b2case' WHEN 'Eletrovias' THEN 'eletrovias'
+        WHEN 'Inpot' THEN 'inpot' WHEN 'Lisô Laser' THEN 'liso' WHEN 'Oral Unic' THEN 'oralunic' WHEN 'Viva' THEN 'viva' END
+      THEN 'rotina'
   END evento FROM modelos
 ), grupos AS MATERIALIZED (
   SELECT waba_id,array_agg(id) ids FROM mapeados WHERE evento IS NOT NULL GROUP BY waba_id
@@ -47,9 +54,7 @@ WITH catalogo AS MATERIALIZED (
   JOIN mapeados m ON m.evento IS NOT NULL AND m.waba_id=s.waba_id AND m.id=p->>'template_id'
   WHERE c.raw_snapshot->>'page_complete'='true'
   ORDER BY s.waba_id,s.produto,p->>'template_id',p->>'start',p->>'end',s.observed_at DESC,s.snapshot_id DESC
-), marcas AS MATERIALIZED (
-  SELECT DISTINCT ON(waba_id) waba_id,marca FROM bronze.whatsapp_collection ORDER BY waba_id,observed_at DESC,receipt_id DESC
-)
+), por_produto AS (
 SELECT m.evento,m.nome modelo,m.id,m.waba_id conta,CASE WHEN b.marca='WeScale' THEN 'We Scale' ELSE b.marca END marca,t.product_type produto,
   to_char(t.day_utc,'YYYY-MM-DD') dia,t.sent enviados,t.delivered entregues,t.read_latest lidos,
   t.data_stale desatualizado,
@@ -63,4 +68,8 @@ LEFT JOIN prata.whatsapp_tarifa_rd tarifa
   AND t.day_utc>=tarifa.valid_from AND (tarifa.valid_to IS NULL OR t.day_utc<tarifa.valid_to)
 WHERE m.evento IS NOT NULL AND t.day_utc BETWEEN DATE '{inicio}' AND DATE '{fim}'
   AND (t.sent>0 OR t.delivered>0 OR t.read_latest>0)
-ORDER BY t.day_utc,m.waba_id,m.id,t.product_type
+ )
+-- Lotes por conta/dia preservam o grão dos modelos e evitam truncar a
+-- resposta do Metabase. A contagem de séries é conferida no leitor.
+SELECT conta,dia,count(*) quantidade,jsonb_agg(to_jsonb(p)-'conta'-'dia' ORDER BY id,produto) series
+FROM por_produto p GROUP BY conta,dia ORDER BY conta,dia

@@ -2,19 +2,21 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, MessageSquare, CheckCheck, Wallet } from 'lucide-react'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { supabase } from '@/lib/supabase'
+import { dividirEnvios, type EvidenciaEnvio } from '@/lib/finalidadesWhatsapp'
 import './GastosWhatsapp.css'
 
 type DiaConta = {
   conta: string; marca: string; dia: string; enviados: number | null; entregues: number | null
   precificados: number | null; custo: number | null; sem_tarifa: number
   entrega_ok: boolean; preco_ok: boolean; parcial: boolean; erro: boolean; vazio: boolean
+  entrega_completa: boolean | null
 }
 type Medicao = {
   evento: string; modelo: string; id: string; conta: string; marca: string; produto: string
   dia: string; enviados: number | null; entregues: number | null; lidos: number | null
   desatualizado: boolean; projecao: number | null
 }
-type Dados = { inicio: string; fim: string; gerado: string; contas: DiaConta[]; eventos: Medicao[] }
+type Dados = { versao: number; inicio: string; fim: string; gerado: string; contas: DiaConta[]; eventos: Medicao[]; finalidades: EvidenciaEnvio[] }
 
 const eventos = [
   { id: 'btg', nome: 'Live do Leo com BTG', periodo: 'Outubro', fonte: 'Modelos identificados como live_btg.' },
@@ -35,6 +37,25 @@ function status(rows: DiaConta[], dias: number) {
   if (rows.some(r => r.sem_tarifa > 0)) return 'Tarifa pendente'
   if (rows.length < dias || rows.some(r => r.parcial || !r.entrega_ok || !r.preco_ok)) return 'Parcial'
   return 'Completa'
+}
+function EnviosPorFinalidade({ dados, inicio, fim, marca }: { dados: Dados; inicio: string; fim: string; marca: string }) {
+  const rows = useMemo(
+    () => dividirEnvios(dados.contas, dados.finalidades, inicio, fim, marca),
+    [dados, inicio, fim, marca],
+  )
+  const colunas = ['rotina','evento','pendente','total'] as const
+  return <section className="wa-section" aria-labelledby="wa-finalidades">
+    <h2 id="wa-finalidades">Envios por finalidade</h2>
+    <p>Rotina reúne modelos identificados da cadência da marca. Evento reúne modelos das lives mapeadas. O saldo do total observado fica a classificar.</p>
+    <div className="wa-scroll"><table aria-label="Envios por marca e finalidade">
+      <thead><tr>{['Marca','Rotina','Evento','A classificar','Total de envios'].map(c=><th scope="col" key={c}>{c}</th>)}</tr></thead>
+      <tbody>{rows.map(r=><tr key={r.marca}><th scope="row">{r.marca}</th>
+        {colunas.map(c=><td key={c}>{num(r[c])}</td>)}</tr>)}</tbody>
+      <tfoot><tr><th scope="row">Total observado</th>
+        {colunas.map(c=><td key={c}>{num(soma(rows.map(r=>r[c])))}</td>)}</tr></tfoot>
+    </table></div>
+    <small>As medições dos modelos são diárias em UTC. Só classificamos envios com a janela inteira dentro do período selecionado em Brasília e compatíveis com o volume da conta. O traço indica ausência de cobertura.</small>
+  </section>
 }
 function Eventos({ rows }: { rows: Medicao[] }) {
   return <section className="wa-section"><h2>Gastos por evento de disparo</h2>
@@ -87,6 +108,7 @@ function Resumo({ dados }: { dados: Dados }) {
         {title:'Custo RD estimado',value:brl(custo(rows)),icon:Wallet},
       ].map(k=><article key={k.title}><k.icon size={20}/><h2>{k.title}</h2><strong>{k.value}</strong></article>)}</div>
       <p className="wa-note">{completo?'Cobertura completa no período.':'Cobertura parcial. Os totais incluem somente os registros disponíveis.'} Valores pós-pagos estimados, em reais.</p>
+      <EnviosPorFinalidade dados={dados} inicio={inicio} fim={fim} marca={marca}/>
       <section className="wa-section"><h2>Consumo por conta</h2><div className="wa-scroll"><table><thead><tr>{['Marca / conta','Envios','Entregas','Custo estimado','Cobertura','Último dia válido'].map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>
         {contas.map(c=>{
           const validos=c.rows.filter(r=>r.entrega_ok||r.preco_ok).map(r=>r.dia).sort()
@@ -111,7 +133,7 @@ export function GastosWhatsapp(){
       const response=await fetch('/api/previa-whatsapp/v1/resumo',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:'{}',signal:ctrl.signal})
       if(!response.ok) throw new Error()
       const snapshot:Dados=await response.json()
-      if(!Array.isArray(snapshot.contas)||!Array.isArray(snapshot.eventos)) throw new Error()
+      if(snapshot.versao!==2 || !Array.isArray(snapshot.contas) || !Array.isArray(snapshot.eventos) || !Array.isArray(snapshot.finalidades)) throw new Error()
       if(!ctrl.signal.aborted) setDados(snapshot)
     }
     void carregar().catch(()=>{if(!ctrl.signal.aborted)setErro(true)})

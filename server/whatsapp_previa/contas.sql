@@ -13,6 +13,10 @@ SELECT to_char(day_local,'YYYY-MM-DD') dia, waba_id conta,
   coalesce(sum(pricing_volume) FILTER (WHERE valido AND metric_family='pricing'
     AND pricing_volume>0 AND custo_rd_pos_pago_estimado IS NULL),0) sem_tarifa,
   bool_or(valido AND metric_family='delivery') entrega_ok,
+  bool_and(valido AND NOT coalesce(data_stale,true)
+    AND coalesce(data_period_start <= (day_local::timestamp AT TIME ZONE timezone)
+      AND data_period_end >= ((day_local+1)::timestamp AT TIME ZONE timezone),false))
+    FILTER (WHERE metric_family='delivery') entrega_completa,
   bool_or(valido AND metric_family='pricing') preco_ok,
   bool_or(data_stale OR NOT valido OR is_partial_day IS TRUE) parcial,
   bool_or(source_status='source_error') erro,

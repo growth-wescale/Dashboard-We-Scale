@@ -45,6 +45,7 @@ import type { BrandDef } from '@/constants/brands'
 import type { Marca } from '@/lib/types'
 import { nf, pct, moneyK, nfCeil } from '@/lib/format'
 import { shortMonth, todayLocal } from '@/lib/dateUtils'
+import { janelaMtd, metaInteira, variacaoPct } from '@/lib/mtd'
 import { downloadCsv } from '@/lib/csv'
 
 /** nome -> valor de uma coluna numérica de SdrRow/CloserRow — base dos Maps
@@ -91,6 +92,8 @@ const CARD_DEF: Record<CardKey, CardDef> = {
 
 /** '2026-09-11' -> '11/09/2026' */
 const dataBr = (iso: string) => iso.split('-').reverse().join('/')
+/** '2026-09-11' -> '11/09' */
+const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
 // ─── Colors ──────────────────────────────────────────────────────────────
 
@@ -238,52 +241,181 @@ function LeadtimeSection({ titulo, itens, accent }: { titulo: string; itens: Lea
 
 // ─── Tabelas ───────────────────────────────────────────────────────────────
 
-function SdrTable({ rows, mqlLbl }: { rows: SdrRow[]; mqlLbl: string }) {
-  const cols = '40px 1fr 70px 70px 70px 70px 90px 70px 90px'
+/** Diferença realizado − meta, colorida pelo lado bom (No Show: menos é melhor). */
+function DeltaNum({ val, meta, polaridade = 'maior' }: { val: number; meta: number; polaridade?: 'maior' | 'menor' }) {
+  if (meta <= 0) return <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>—</span>
+  const d = val - meta
+  const bom = polaridade === 'menor' ? d <= 0 : d >= 0
+  return (
+    <span style={{ textAlign: 'right', fontWeight: 600, color: bom ? 'var(--status-positivo)' : 'var(--status-risco)' }}>
+      {d > 0 ? '+' : d < 0 ? '−' : ''}{nf(Math.abs(d))}
+    </span>
+  )
+}
+
+/** Meta inteira que a tabela mostra: mensal ou "até hoje" (MTD). */
+const metaVisao = (meta: number, fator: number) => metaInteira(meta * fator)
+
+function SdrTable({ rows, mqlLbl, fatorMeta, mtd }: { rows: SdrRow[]; mqlLbl: string; fatorMeta: number; mtd: boolean }) {
+  // # · Nome · MQL · [SQL Real/Meta/Δ] · [DIAG Real/Meta/Δ] · [SAL Real/Meta/Δ] · No Show · % SQL · MQL→SQL
+  const cols = '36px minmax(150px, 1fr) 56px 52px 52px 52px 52px 52px 52px 52px 52px 52px 64px 64px 72px'
+  const grupo = { textAlign: 'center' as const, borderBottom: `2px solid ${SDR_ACCENT}`, paddingBottom: 3, fontWeight: 700, color: 'var(--ws-text-primary)' }
+  const sub = { textAlign: 'right' as const }
+  const metaLbl = mtd ? 'META*' : 'META'
+  const tot = rows.reduce((t, r) => ({
+    mql: t.mql + r.mql, sql: t.sql + r.sql, rr: t.rr + r.rr, sal: t.sal + r.sal, noShow: t.noShow + r.noShow,
+    metaSql: t.metaSql + r.metaSql, metaRr: t.metaRr + r.metaRr, metaSal: t.metaSal + r.metaSal,
+  }), { mql: 0, sql: 0, rr: 0, sal: 0, noShow: 0, metaSql: 0, metaRr: 0, metaSal: 0 })
+  // Meta do total = soma crua arredondada uma vez só — o mesmo número dos cards
+  // ("Meta do mês" / "Até hoje"). Somar as metas já arredondadas de cada pessoa
+  // daria 1 ou 2 a mais.
+  tot.metaSql = metaVisao(tot.metaSql, fatorMeta)
+  tot.metaRr = metaVisao(tot.metaRr, fatorMeta)
+  tot.metaSal = metaVisao(tot.metaSal, fatorMeta)
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
       <div style={{ background: SDR_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         PRÉ-VENDAS · EXECUTIVOS DE EXPANSÃO
       </div>
       <div className="rs-scroll-x">
-      <div style={{ padding: '6px 8px', minWidth: 720 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+      <div style={{ padding: '6px 8px', minWidth: 1020 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 6, padding: '10px 12px 2px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
+          <span /><span /><span />
+          <span style={{ ...grupo, gridColumn: 'span 3' }}>SQL</span>
+          <span style={{ ...grupo, gridColumn: 'span 3' }}>DIAGNÓSTICO</span>
+          <span style={{ ...grupo, gridColumn: 'span 3' }}>SAL</span>
+          <span /><span /><span />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 6, padding: '6px 12px 10px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span>#</span><span>NOME</span>
-          <span style={{ textAlign: 'right' }}>{mqlLbl}</span>
-          <span style={{ textAlign: 'right' }}>SQL</span>
-          <span style={{ textAlign: 'right' }}>DIAG</span>
-          <span style={{ textAlign: 'right' }}>SAL</span>
-          <span style={{ textAlign: 'right' }}>META SQL</span>
-          <span style={{ textAlign: 'right' }}>%</span>
-          <span style={{ textAlign: 'right' }}>{mqlLbl}→SQL</span>
+          <span style={sub}>{mqlLbl}</span>
+          <span style={sub}>REAL</span><span style={sub}>{metaLbl}</span><span style={sub}>Δ</span>
+          <span style={sub}>REAL</span><span style={sub}>{metaLbl}</span><span style={sub}>Δ</span>
+          <span style={sub}>REAL</span><span style={sub}>{metaLbl}</span><span style={sub}>Δ</span>
+          <span style={sub}>NO SHOW</span>
+          <span style={sub}>% SQL</span>
+          <span style={sub}>{mqlLbl}→SQL</span>
         </div>
         {rows.length === 0 && (
           <div style={{ padding: '16px 12px', fontSize: 13, color: 'var(--ws-text-secondary)' }}>Nenhum SDR com atividade no recorte.</div>
         )}
-        {rows.map((r, i) => (
-          <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
-            {r.grupo ? <span /> : <RankNum i={i} accent={SDR_ACCENT} />}
-            {r.grupo ? <NomeGrupo grupo={r.grupo} nome={r.nome} accent={SDR_ACCENT} /> : (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
-                <Avatar nome={r.nome} accent={SDR_ACCENT} />{r.nome}
-              </span>
-            )}
-            <span style={{ textAlign: 'right' }}>{nf(r.mql)}</span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sql)}</span>
-            <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{nf(r.sal)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaSql > 0 ? nfCeil(r.metaSql) : '—'}</span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaSql > 0 ? pct(r.pctAting) : '—'}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.mqlToSql)}</span>
+        {rows.map((r, i) => {
+          const mSql = metaVisao(r.metaSql, fatorMeta)
+          const mRr = metaVisao(r.metaRr, fatorMeta)
+          const mSal = metaVisao(r.metaSal, fatorMeta)
+          const metaCel = (m: number) => <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{m > 0 ? nf(m) : '—'}</span>
+          return (
+            <div key={r.nome} style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 6, padding: '14px 12px', alignItems: 'center', fontSize: 14, borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums' }}>
+              {r.grupo ? <span /> : <RankNum i={i} accent={SDR_ACCENT} />}
+              {r.grupo ? <NomeGrupo grupo={r.grupo} nome={r.nome} accent={SDR_ACCENT} /> : (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--ws-text-primary)' }}>
+                  <Avatar nome={r.nome} accent={SDR_ACCENT} />{r.nome}
+                </span>
+              )}
+              <span style={{ textAlign: 'right' }}>{nf(r.mql)}</span>
+              <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sql)}</span>
+              {metaCel(mSql)}
+              <DeltaNum val={r.sql} meta={mSql} />
+              <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.rr)}</span>
+              {metaCel(mRr)}
+              <DeltaNum val={r.rr} meta={mRr} />
+              <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sal)}</span>
+              {metaCel(mSal)}
+              <DeltaNum val={r.sal} meta={mSal} />
+              <span style={{ textAlign: 'right' }}>{nf(r.noShow)}</span>
+              <span style={{ textAlign: 'right', fontWeight: 700 }}>{mSql > 0 ? pct((r.sql / mSql) * 100) : '—'}</span>
+              <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.mqlToSql)}</span>
+            </div>
+          )
+        })}
+        {rows.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 6, padding: '12px 12px', alignItems: 'center', fontSize: 14, fontWeight: 700, borderTop: '2px solid var(--ws-border)', fontVariantNumeric: 'tabular-nums', background: 'var(--ws-bg)', borderRadius: 6 }}>
+            <span /><span>Total</span>
+            <span style={{ textAlign: 'right' }}>{nf(tot.mql)}</span>
+            <span style={{ textAlign: 'right' }}>{nf(tot.sql)}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{tot.metaSql > 0 ? nf(tot.metaSql) : '—'}</span>
+            <DeltaNum val={tot.sql} meta={tot.metaSql} />
+            <span style={{ textAlign: 'right' }}>{nf(tot.rr)}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{tot.metaRr > 0 ? nf(tot.metaRr) : '—'}</span>
+            <DeltaNum val={tot.rr} meta={tot.metaRr} />
+            <span style={{ textAlign: 'right' }}>{nf(tot.sal)}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{tot.metaSal > 0 ? nf(tot.metaSal) : '—'}</span>
+            <DeltaNum val={tot.sal} meta={tot.metaSal} />
+            <span style={{ textAlign: 'right' }}>{nf(tot.noShow)}</span>
+            <span style={{ textAlign: 'right' }}>{tot.metaSql > 0 ? pct((tot.sql / tot.metaSql) * 100) : '—'}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{tot.mql > 0 ? pct((tot.sql / tot.mql) * 100) : '—'}</span>
           </div>
-        ))}
+        )}
       </div>
+      </div>
+      {mtd && (
+        <div style={{ padding: '0 20px 12px', fontSize: 11, color: 'var(--ws-text-secondary)' }}>
+          * Meta até hoje: a meta do mês proporcional aos dias corridos (a mesma régua do “esperado até hoje” dos cards), arredondada pra cima.
+        </div>
+      )}
+    </SCard>
+  )
+}
+
+/** Mês inteiro × MTD. MTD só existe com 1 mês selecionado. */
+function VisaoToggle({ visao, onChange, habilitado, rotuloMtd, accent }: {
+  visao: 'mes' | 'mtd'; onChange: (v: 'mes' | 'mtd') => void; habilitado: boolean; rotuloMtd: string; accent: string
+}) {
+  const btn = (v: 'mes' | 'mtd', label: string) => {
+    const ativo = visao === v && (v === 'mes' || habilitado)
+    return (
+      <button key={v} onClick={() => onChange(v)} disabled={v === 'mtd' && !habilitado}
+        title={v === 'mtd' && !habilitado ? 'Selecione um mês só no filtro de Período' : undefined}
+        style={{
+          border: 'none', borderRadius: 999, padding: '6px 14px', fontSize: 12.5, fontWeight: 600,
+          cursor: v === 'mtd' && !habilitado ? 'not-allowed' : 'pointer', opacity: v === 'mtd' && !habilitado ? 0.45 : 1,
+          background: ativo ? accent : 'transparent', color: ativo ? '#fff' : 'var(--ws-text-secondary)', whiteSpace: 'nowrap',
+        }}>{label}</button>
+    )
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 12px' }}>
+      <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.04em', fontWeight: 600 }}>Visão</span>
+      <div style={{ display: 'inline-flex', gap: 2, padding: 3, borderRadius: 999, border: '1px solid var(--ws-border)', background: 'var(--ws-surface)' }}>
+        {btn('mes', 'Mês inteiro')}
+        {btn('mtd', `MTD${habilitado ? ` · ${rotuloMtd}` : ''}`)}
+      </div>
+    </div>
+  )
+}
+
+interface ItemMtd { label: string; atual: number; anterior: number; fmt: (n: number) => string; polaridade?: 'maior' | 'menor' }
+
+/** Comparativo MTD: o mês até hoje × o mesmo trecho do mês anterior. */
+function ComparativoMtd({ titulo, itens, accent }: { titulo: string; itens: ItemMtd[]; accent: string }) {
+  return (
+    <SCard style={{ marginBottom: 14 }}>
+      <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 12, paddingLeft: 10, borderLeft: `3px solid ${accent}` }}>{titulo}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', border: '1px solid var(--ws-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+        {itens.map(it => {
+          const v = variacaoPct(it.atual, it.anterior)
+          const bom = v == null ? null : it.polaridade === 'menor' ? v <= 0 : v >= 0
+          return (
+            <div key={it.label} style={{ boxShadow: '1px 0 0 var(--ws-border), 0 1px 0 var(--ws-border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)' }}>{it.label}</span>
+              <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 22, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>{it.fmt(it.atual)}</span>
+              <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                mês anterior {it.fmt(it.anterior)}
+                {v != null && (
+                  <b style={{ marginLeft: 6, color: bom ? 'var(--status-positivo)' : 'var(--status-risco)' }}>
+                    {v > 0 ? '▲' : v < 0 ? '▼' : ''} {Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                  </b>
+                )}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </SCard>
   )
 }
 
-function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean }) {
+function CloserTable({ rows, unidades, fatorMeta, mtd }: { rows: CloserRow[]; unidades: boolean; fatorMeta: number; mtd: boolean }) {
   const cols = '40px 1fr 70px 70px 70px 80px 120px 110px 70px 80px'
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
@@ -299,7 +431,7 @@ function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean 
           <span style={{ textAlign: 'right' }}>COF</span>
           <span style={{ textAlign: 'right' }}>{unidades ? 'UNIDADES' : 'GANHOS'}</span>
           <span style={{ textAlign: 'right' }}>FATURAMENTO</span>
-          <span style={{ textAlign: 'right' }}>META FAT.</span>
+          <span style={{ textAlign: 'right' }}>{mtd ? 'META FAT.*' : 'META FAT.'}</span>
           <span style={{ textAlign: 'right' }}>%</span>
           <span style={{ textAlign: 'right' }}>WIN RATE</span>
         </div>
@@ -319,13 +451,18 @@ function CloserTable({ rows, unidades }: { rows: CloserRow[]; unidades: boolean 
             <span style={{ textAlign: 'right' }}>{nf(r.cof)}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.ganhos)}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{moneyK(r.faturamento)}</span>
-            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaFinanceira > 0 ? moneyK(r.metaFinanceira) : '—'}</span>
-            <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaFinanceira > 0 ? pct(r.pctAting) : '—'}</span>
+            <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{r.metaFinanceira > 0 ? moneyK(r.metaFinanceira * fatorMeta) : '—'}</span>
+            <span style={{ textAlign: 'right', fontWeight: 700 }}>{r.metaFinanceira > 0 && fatorMeta > 0 ? pct((r.faturamento / (r.metaFinanceira * fatorMeta)) * 100) : '—'}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{pct(r.winRate)}</span>
           </div>
         ))}
       </div>
       </div>
+      {mtd && (
+        <div style={{ padding: '0 20px 12px', fontSize: 11, color: 'var(--ws-text-secondary)' }}>
+          * Meta de faturamento até hoje: a meta do mês proporcional aos dias corridos.
+        </div>
+      )}
     </SCard>
   )
 }
@@ -539,6 +676,38 @@ export function PerformanceVendas() {
     () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode, contagem),
     [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode, contagem],
   )
+  // ── Visão MTD ────────────────────────────────────────────────────────────
+  // "Mês inteiro": meta do mês cheia. "MTD": meta proporcional até o último dia
+  // da janela (hoje, no mês em curso) + comparativo com o mesmo trecho do mês
+  // anterior. Só com 1 mês selecionado.
+  const [visaoPedida, setVisao] = useState<'mes' | 'mtd'>('mes')
+  const mtd = useMemo(() => (mesUnico ? janelaMtd(mesUnico, fimJanela) : null), [mesUnico, fimJanela])
+  const visao = mtd ? visaoPedida : 'mes'
+  const fatorMeta = visao === 'mtd' && mtd ? mtd.fator : 1
+  const rotuloMtd = mtd ? `${dataCurta(mtd.atual.from)}–${dataCurta(mtd.atual.to)}` : ''
+  const winAnt = useMemo(
+    () => (mtd ? toWindow(null, null, [{ from: mtd.anterior.from, to: mtd.anterior.to }]) : null),
+    [mtd],
+  )
+  const stripAnt = useMemo(() => {
+    if (!winAnt || visao !== 'mtd') return null
+    const safraAnt = viewModes.funnelView === 'cohort' ? cohortKeys(scoped, winAnt) : null
+    const o = { cohortIds: safraAnt, extra: noEscopo }
+    return {
+      mql: countStage(scoped, 'MQL', winAnt, viewModes),
+      sql: countStageEvents(eventos, 'Reunião Agendada SQL', winAnt, viewModes, o),
+      rr: countStageEvents(eventos, 'Diagnóstico', winAnt, viewModes, o),
+      sal: countStageEvents(eventos, 'SAL', winAnt, viewModes, o),
+      cof: countStageEvents(eventos, 'Oportunidade COF', winAnt, viewModes, o),
+      noShow: countStageEvents(eventos, 'No Show', winAnt, viewModes, o),
+      fechamentos: countSales(scoped, winAnt, viewModes),
+      receita: sumRevenue(scoped, winAnt, viewModes),
+    }
+  }, [winAnt, visao, scoped, eventos, viewModes, noEscopo])
+  const tituloMtd = mtd
+    ? `MTD ${dataCurta(mtd.atual.from)}–${dataCurta(mtd.atual.to)} × mesmo período de ${shortMonth(mtd.anterior.from)} (${dataCurta(mtd.anterior.from)}–${dataCurta(mtd.anterior.to)})`
+    : ''
+
   // Sufixo dos rótulos de venda quando o toggle está em Unidades — mesmo padrão da Visão Macro.
   const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
 
@@ -868,7 +1037,17 @@ export function PerformanceVendas() {
             Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio e a soma das linhas fecha com os cards: quem saiu do time entra somado em “Ex-integrantes” e negócio sem SDR em “Sem SDR”.
           </p>
 
-          <SdrTable rows={sdrRows} mqlLbl={mqlLbl} />
+          <VisaoToggle visao={visao} onChange={setVisao} habilitado={!!mtd} rotuloMtd={rotuloMtd} accent={SDR_ACCENT} />
+          {visao === 'mtd' && stripAnt && (
+            <ComparativoMtd titulo={tituloMtd} accent={SDR_ACCENT} itens={[
+              { label: mqlLbl, atual: strip.mql, anterior: stripAnt.mql, fmt: nf },
+              { label: 'SQL', atual: strip.sql, anterior: stripAnt.sql, fmt: nf },
+              { label: 'Diagnóstico', atual: strip.rr, anterior: stripAnt.rr, fmt: nf },
+              { label: 'SAL', atual: strip.sal, anterior: stripAnt.sal, fmt: nf },
+              { label: 'No Show', atual: strip.noShow, anterior: stripAnt.noShow, fmt: nf, polaridade: 'menor' },
+            ]} />
+          )}
+          <SdrTable rows={sdrRows} mqlLbl={mqlLbl} fatorMeta={fatorMeta} mtd={visao === 'mtd'} />
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} nota={notaConversaoTopo} />
@@ -938,7 +1117,17 @@ export function PerformanceVendas() {
             Mesma observação da seção de SDR: a tabela credita cada etapa e venda ao Closer do negócio e fecha com os cards — quem saiu do time entra em “Ex-integrantes” e negócio sem Closer em “Sem Closer”.
           </p>
 
-          <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} />
+          <VisaoToggle visao={visao} onChange={setVisao} habilitado={!!mtd} rotuloMtd={rotuloMtd} accent={CLOSER_ACCENT} />
+          {visao === 'mtd' && stripAnt && (
+            <ComparativoMtd titulo={tituloMtd} accent={CLOSER_ACCENT} itens={[
+              { label: 'Diagnóstico', atual: strip.rr, anterior: stripAnt.rr, fmt: nf },
+              { label: 'SAL', atual: strip.sal, anterior: stripAnt.sal, fmt: nf },
+              { label: 'Oportunidades (COF)', atual: strip.cof, anterior: stripAnt.cof, fmt: nf },
+              { label: `Fechamentos${unidadeSufixo}`, atual: strip.fechamentos, anterior: stripAnt.fechamentos, fmt: nf },
+              { label: 'Receita gerada', atual: strip.receita, anterior: stripAnt.receita, fmt: moneyK },
+            ]} />
+          )}
+          <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} fatorMeta={fatorMeta} mtd={visao === 'mtd'} />
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} nota={notaConversao} />

@@ -121,12 +121,19 @@ export function StatusBadge({ status }: { status: string | null }) {
  *  informação"), o que desativa o clique. */
 export interface BarRow { label: string; count: number; color: string; values: string[] }
 
-export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow[]; onSelect?: (values: string[]) => void }) {
+/** `selecionados`: valores crus marcados no filtro do mesmo campo — as barras
+ *  deles ficam em destaque e as outras esmaecidas. `total`: soma no título. */
+export function BarList({ title, rows, onSelect, selecionados = [], total }: {
+  title: string; rows: BarRow[]; onSelect?: (values: string[]) => void
+  selecionados?: string[]; total?: number
+}) {
   const max = Math.max(...rows.map(r => r.count), 1)
+  const temSelecao = selecionados.length > 0
   return (
     <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-      <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600, marginBottom: 10 }}>
-        {title}
+      <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600, marginBottom: 10, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <span>{title}</span>
+        {total != null && <span style={{ fontVariantNumeric: 'tabular-nums' }}>Total {nf(total)}</span>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {rows.length === 0 && (
@@ -134,6 +141,7 @@ export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow
         )}
         {rows.map(r => {
           const clickable = !!onSelect && r.values.length > 0
+          const marcada = temSelecao && r.values.some(v => selecionados.includes(v))
           return (
             <div
               key={r.label}
@@ -142,10 +150,10 @@ export function BarList({ title, rows, onSelect }: { title: string; rows: BarRow
               onClick={clickable ? () => onSelect!(r.values) : undefined}
               onKeyDown={clickable ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect!(r.values) } } : undefined}
               title={r.label}
-              style={{ cursor: clickable ? 'pointer' : 'default' }}
+              style={{ cursor: clickable ? 'pointer' : 'default', opacity: temSelecao && !marcada ? 0.4 : 1 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 3, gap: 8 }}>
-                <span style={{ color: 'var(--ws-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ color: 'var(--ws-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: marcada ? 700 : 400 }}>
                   {r.label}
                 </span>
                 <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{nf(r.count)}</span>
@@ -212,5 +220,45 @@ export function LinkLinhaDoTempo({ idDeal, cor }: { idDeal: string; cor: string 
       <History size={13} />
       linha do tempo
     </Link>
+  )
+}
+
+/** Soma de uma lista de deals pra linha "Total" no rodapé das tabelas dos
+ *  pop-ups: quantos deals, unidades, taxa de franquia (valor do produto) e
+ *  valor de contrato. */
+export function totaisDeals(rows: Pick<FunnelRow, 'quantidade_unidades' | 'valor_produto' | 'valor_contrato'>[]) {
+  let unidades = 0, taxa = 0, contrato = 0
+  for (const r of rows) {
+    unidades += r.quantidade_unidades ?? 0
+    taxa += r.valor_produto ?? 0
+    contrato += r.valor_contrato ?? 0
+  }
+  return { deals: rows.length, unidades, taxa, contrato }
+}
+
+/**
+ * Linha "Total" fixa no rodapé da tabela do pop-up. `celulas` segue as colunas
+ * do cabeçalho, uma por coluna: `null` deixa vazia. A 1ª célula recebe o texto
+ * "Total · N deals" (com `colSpan` cobrindo as colunas de texto).
+ */
+export function LinhaTotal({ deals, colSpanRotulo, celulas }: {
+  deals: number
+  colSpanRotulo: number
+  celulas: { valor: React.ReactNode; direita?: boolean }[]
+}) {
+  const td = {
+    padding: '10px 16px', whiteSpace: 'nowrap', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+    color: 'var(--ws-text-primary)', borderTop: '2px solid var(--ws-border-strong, var(--ws-border))',
+    background: 'var(--ws-bg)', position: 'sticky', bottom: 0,
+  } as const
+  return (
+    <tfoot>
+      <tr>
+        <td colSpan={colSpanRotulo} style={td}>Total · {nf(deals)} deal{deals !== 1 ? 's' : ''}</td>
+        {celulas.map((c, i) => (
+          <td key={i} style={{ ...td, textAlign: c.direita ? 'right' : 'left' }}>{c.valor}</td>
+        ))}
+      </tr>
+    </tfoot>
   )
 }

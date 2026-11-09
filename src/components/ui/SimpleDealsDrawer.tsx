@@ -11,7 +11,7 @@ import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
 import { dividirVenda, pctWeScale, type VersaoRepasse } from '@/lib/repasse'
-import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
+import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias, totaisDeals, LinhaTotal } from './dealDrawerShared'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
 interface SimpleDealsDrawerProps {
@@ -31,6 +31,10 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
   if (!open) return null
   const colsRepasse = repasse ? ['We Scale', 'Marca'] : []
   const direita = ['Valor', 'Unidades', 'Taxa de Franquia', 'Leadtime', ...colsRepasse]
+  const totais = totaisDeals(deals)
+  const repasseTotal = repasse
+    ? deals.reduce((acc, r) => { const d = dividirVenda(repasse, r); return { weScale: acc.weScale + d.weScale, marca: acc.marca + d.marca } }, { weScale: 0, marca: 0 })
+    : null
 
   return (
     <>
@@ -139,6 +143,15 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                 </tr>
               ))}
             </tbody>
+            {deals.length > 0 && (
+              <LinhaTotal deals={totais.deals} colSpanRotulo={3} celulas={[
+                { valor: nf(totais.unidades), direita: true },
+                { valor: money(totais.taxa), direita: true },
+                { valor: money(totais.contrato), direita: true },
+                ...(repasseTotal ? [{ valor: money(repasseTotal.weScale), direita: true }, { valor: money(repasseTotal.marca), direita: true }] : []),
+                { valor: null }, { valor: null }, { valor: null }, { valor: null },
+              ]} />
+            )}
           </table>
         </div>
       </div>

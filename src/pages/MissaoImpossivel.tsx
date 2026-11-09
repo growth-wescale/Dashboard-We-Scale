@@ -1,6 +1,5 @@
 import { PeriodoDisponivel } from '@/components/marketing/CoberturaMensalPrevia'
 import { useState } from 'react'
-import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
 import { RefreshCw, Target } from 'lucide-react'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { useMissaoResumo } from '@/hooks/useMissaoResumo'
@@ -178,7 +177,6 @@ function MissaoConteudo() {
       <button type="button" disabled={dados.loading || dados.bloqueado} onClick={dados.atualizar}><RefreshCw size={15} aria-hidden="true" />{dados.loading ? 'Carregando…' : dados.bloqueado ? 'Aguarde para atualizar' : 'Atualizar'}</button>
     </header>
       <PeriodoDisponivel inicio={mes + '-01'}>
-    {dados.data && <BeautyMarketingBlock start={dados.data.hoje.slice(0, 7) + '-01'} end={dados.data.hoje} />}
     {dados.loading && <p role="status">Carregando somente os recortes necessários. Nenhum total parcial será exibido.</p>}
     {dados.error && <p role="alert" className="missao-erro">{dados.error}</p>}
     {!dados.loading && !dados.error && dados.data && <>

@@ -4,7 +4,6 @@ import { oralUnicOuroEnabled, isOralUnicFranchiseLead } from '@/lib/oralUnicOuro
 import { legacyOuroEnabled } from '@/lib/legacyOuroScope'
 import { eletroviasOuroEnabled, inEletroviasWindow } from '@/lib/eletroviasOuroScope'
 import { lisoOuroEnabled } from '@/hooks/useBeautyMarketing'
-import { BeautyMarketingBlock } from '@/components/marketing/BeautyMarketingPanel'
 import { attributeLisoCampaigns } from '@/lib/lisoCampaignAttribution'
 import { attributePartnerCampaigns } from '@/lib/partnerCampaignAttribution'
 import type { Ad, AdSet, Campaign } from '@/lib/campaignTypes'
@@ -2068,7 +2067,6 @@ export function SaudeDaMarca() {
         }
       />
       <PeriodoDisponivel inicio={dataInicio}>
-      {activeBrand === 'liso-laser' && <BeautyMarketingBlock start={dataInicio} end={dataFim} />}
       {isOralUnic && <OuSubTabs value={ouSubView} onChange={setOuSubView} accent={def.accent} />}
       {isInpot && <InpSubTabs value={inpSubView} onChange={setInpSubView} accent={def.accent} />}
       {!isOuSpecialView && <SMTabs value={view} onChange={setView} hide={hiddenTabs} />}

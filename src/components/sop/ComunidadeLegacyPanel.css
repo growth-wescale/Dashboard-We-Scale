@@ -1,0 +1,11 @@
+.sop-lives-legacy { color: var(--ws-text-primary); font-variant-numeric: tabular-nums; }
+.sop-lives-legacy h3 { margin: 0 0 8px; font-size: 12px; font-weight: 650; color: var(--ws-vinho-b); }
+.sop-lives-legacy dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
+.sop-lives-legacy dl > div { display: flex; flex-direction: column; padding: 8px 10px; border: 1px solid var(--ws-border); border-radius: 8px; background: var(--ws-bg); }
+.sop-lives-legacy dt, .sop-lives-legacy p, .sop-lives-legacy small { font-size: 10px; line-height: 1.4; color: var(--ws-text-secondary); }
+.sop-lives-legacy dd { margin: 2px 0; color: var(--ws-vinho-b); font-size: 22px; font-weight: 700; }
+.sop-lives-legacy table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.sop-lives-legacy th, .sop-lives-legacy td { padding: 4px 0; text-align: left; border-bottom: 1px solid var(--ws-border); }
+.sop-lives-legacy th { font-size: 10px; color: var(--ws-text-secondary); }
+.sop-lives-legacy th:last-child, .sop-lives-legacy td:last-child { text-align: right; }
+.sop-lives-legacy p { margin: 8px 0 0; }

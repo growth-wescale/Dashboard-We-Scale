@@ -30,6 +30,10 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
+### S&OP · lives da Comunidade Odonto Legacy
+
+A folha de Legacy usa os totais agregados de inscrições externas do Zoom em `comunidadeLegacy.ts`. A contagem de membros ativos tem fonte própria.
+
 ### Marketing · Gastos de WhatsApp
 
 A rota `/gastos-whatsapp` usa o gateway exclusivo de leitura em produção, com sessão de Marketing de acesso total. A página apresenta custo e mensagens por dia, totais por marca, consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
@@ -957,6 +961,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-09 — Inscrições nas lives de Odonto Legacy
+
+A prévia da S&OP substitui o perfil dentista/clínica a partir de outubro por inscrições externas únicas na série de Zoom Odonto Legacy. Os oito relatórios de outubro e novembro compartilham a mesma lista. Os totais respeitam as datas de cadastro confirmadas e excluem equipe e cancelamento. A lista de inscrição não informa presença por encontro.
 
 ### 2026-11-09 — Leitura de WhatsApp em produção
 

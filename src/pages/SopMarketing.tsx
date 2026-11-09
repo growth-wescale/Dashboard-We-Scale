@@ -1880,7 +1880,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
         {/* Col 3: Taxas de conversão ou comunidade Legacy */}
         {isOdontoLegacy ? (
-          <ComunidadeLegacyPanel data={comunidadeLegacyDoMes(monthKeyCur)} accent={acc} />
+          <ComunidadeLegacyPanel data={comunidadeLegacyDoMes(monthKeyCur)} accent={acc} inicio={dates.mtdCurStart} fim={dates.mtdCurEnd} />
         ) : (
           <div style={cardStyle}>
             <ConversaoFunilTable

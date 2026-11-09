@@ -1,4 +1,6 @@
-import type { ComunidadeLegacy } from '@/constants/comunidadeLegacy'
+import { InscricoesLivesLegacy } from './InscricoesLivesLegacy'
+import './ComunidadeLegacyPanel.css'
+import { SERIE_LIVES_LEGACY, type ComunidadeLegacy } from '@/constants/comunidadeLegacy'
 
 const GOLD = '#CC993E'
 const GOLD_SOFT = '#efbe5b'
@@ -7,10 +9,13 @@ const PURPLE = '#7f0c72'
 interface Props {
   data: ComunidadeLegacy
   accent: string
+  inicio: string
+  fim: string
 }
 
-export function ComunidadeLegacyPanel({ data, accent }: Props) {
+export function ComunidadeLegacyPanel({ data, accent, inicio, fim }: Props) {
   const c = data
+  const exibirLives = fim >= SERIE_LIVES_LEGACY.inicio
   return (
     <div style={{
       background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
@@ -18,7 +23,7 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
       display: 'flex', flexDirection: 'column', gap: 14, overflow: 'auto', minHeight: 0,
     }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: '-0.01em' }}>
-        Comunidade · Qualidade dos membros
+        {exibirLives ? 'Comunidade Odonto Legacy' : 'Comunidade · Qualidade dos membros'}
       </div>
 
       <div style={{
@@ -33,7 +38,7 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {c.origens.length > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {c.origens.map(o => (
           <div key={o.label} style={{
             display: 'grid', gridTemplateColumns: '160px 1fr auto',
@@ -56,8 +61,9 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
             }}>{o.n} · {o.pct}%</span>
           </div>
         ))}
-      </div>
+      </div>}
 
+      {exibirLives ? <InscricoesLivesLegacy inicio={inicio} fim={fim}/> : <>
       <div style={{ fontSize: 12, fontWeight: 600, color: PURPLE, marginTop: 4 }}>
         Qualidade · dentista × clínica
       </div>
@@ -109,6 +115,7 @@ export function ComunidadeLegacyPanel({ data, accent }: Props) {
           <b style={{ color: '#B45309' }}>Fricção · {c.duplicados.leads} leads se cadastraram &gt;1x</b> — {c.duplicados.pico}. Sinaliza incerteza sobre estado do cadastro no fluxo pós-lead.
         </div>
       )}
+      </>}
     </div>
   )
 }

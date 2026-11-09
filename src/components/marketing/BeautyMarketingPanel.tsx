@@ -1,4 +1,4 @@
-import { useBeautyMarketing, type BeautyMarketingResult } from '@/hooks/useBeautyMarketing'
+import type { BeautyMarketingResult } from '@/hooks/useBeautyMarketing'
 export function BeautyMarketingPanel({ result, compact = false, inscricoes }: { result: BeautyMarketingResult; compact?: boolean; inscricoes?: number | null }) {
   if (!result.enabled) return null
   const value = result.data[0]
@@ -14,8 +14,4 @@ export function BeautyMarketingPanel({ result, compact = false, inscricoes }: { 
         <span>Investimento <strong>{value.spend.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></span>
       </div>}
   </section>
-}
-export function BeautyMarketingBlock({ start, end }: { start: string; end: string }) {
-  const result = useBeautyMarketing(start, end)
-  return <BeautyMarketingPanel result={result} />
 }

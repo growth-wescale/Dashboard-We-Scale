@@ -19,6 +19,8 @@ A família live_btg identifica chamadas de outubro. Para a edição 03/11, o mat
 
 O total é sempre a soma de envios observados na ouro por conta/dia BRT. A divisão considera modelos de evento explícitos e modelos da régua com o padrão documentado de passo, marca da própria conta e versão (m1, c1, c2, t04–t10). Atribuição pelo modelo não é confirmação de execução individual pelo catálogo de campanhas do RD. Ativações ambíguas continuam a classificar.
 
+Em outubro de 2026, a conciliação aprovada acrescenta 127 vínculos de conta, modelo e dia UTC. A lista em eventos.sql restringe cada vínculo aos dias revisados. As quantidades são lidas dos mesmos recibos que os demais modelos. Inclui as chamadas da live BTG, os webinars B2Case e Lisô, os convites Beauty, os disparos de Partner e Legacy e a régua E1/E3 na conta We Scale.
+
 Para cada filtro, só atribuímos volumes de modelos cuja janela UTC está inteiramente contida no intervalo BRT e cujos dois dias locais têm cobertura de entrega completa. Cada bloco de janelas consecutivas precisa caber no volume observado da mesma conta e marca, respeitando os dois dias de cada janela. Blocos incompatíveis ficam pendentes. O saldo é total observado menos rotina identificada menos eventos identificados. Reagrupar em intervalos separados pode mudar a parte identificada nas bordas, mantendo o mesmo total de envios. Uma conta sem observações apresenta traço. A origem é agregada e não expõe um ID por mensagem.
 
 ## Proposta de tabela para o Metabase

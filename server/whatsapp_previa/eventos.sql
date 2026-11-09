@@ -11,8 +11,52 @@ WITH catalogo AS MATERIALIZED (
 ), modelos AS MATERIALIZED (
   SELECT c.waba_id,t->>'id' id,t->>'name' nome,t->>'category' categoria, b.marca
   FROM catalogo c JOIN marcas b USING(waba_id) CROSS JOIN LATERAL jsonb_array_elements(c.raw_snapshot->'templates') t
+), outubro_aprovado(conta, modelo_id, finalidade, dias_utc) AS (
+  -- Conciliação de outubro de 2026. Cada modelo aparece uma vez por conta.
+  -- Os volumes vêm das medições, inclusive nas futuras leituras da prévia.
+  VALUES
+  -- B2Case
+  ('1538601307441542','1070296785817382','btg',ARRAY[19]),
+  ('1538601307441542','1594883785658000','btg',ARRAY[17]),
+  ('1538601307441542','1666282948246328','btg',ARRAY[19]),
+  ('1538601307441542','1792787348632712','btg',ARRAY[18]),
+  ('1538601307441542','2057349248291307','webinar_b2case',ARRAY[7]),
+  ('1538601307441542','2202861527335991','btg',ARRAY[19]),
+  -- Eletrovias
+  ('1400193154764501','1130530289511629','btg',ARRAY[17]),
+  ('1400193154764501','1449113713767412','btg',ARRAY[19]),
+  ('1400193154764501','1683579249863366','btg',ARRAY[18]),
+  ('1400193154764501','2065360430823507','btg',ARRAY[19]),
+  ('1400193154764501','2209511469998258','btg',ARRAY[19]),
+  -- Inpot
+  ('2266148447226353','1076651228742448','btg',ARRAY[19]),
+  ('2266148447226353','1107178512236847','btg',ARRAY[19]),
+  ('2266148447226353','1482857416992179','btg',ARRAY[18]),
+  ('2266148447226353','1542738720994740','btg',ARRAY[17]),
+  ('2266148447226353','1856591885526977','btg',ARRAY[19]),
+  -- Lisô Laser
+  ('883956580821871','1645123247401215','btg',ARRAY[17]),
+  ('883956580821871','27794396523569166','webinar_liso',ARRAY[6]),
+  ('883956580821871','962757719812609','beauty',ARRAY[30]),
+  ('883956580821871','993362957144698','beauty',ARRAY[31]),
+  -- Viva
+  ('2622426584884634','1150807400809701','btg',ARRAY[18]),
+  ('2622426584884634','1789748978934555','btg',ARRAY[19]),
+  ('2622426584884634','2393538994516673','btg',ARRAY[19]),
+  ('2622426584884634','3856836424484101','btg',ARRAY[17]),
+  ('2622426584884634','4041574922810922','btg',ARRAY[19]),
+  -- We Scale
+  ('1579891513490824','1034736379410978','rotina',ARRAY[2,7,8,9,13,14,15,16,19,21,22,23,26,27,28,29,30]),
+  ('1579891513490824','1036983078708690','rotina',ARRAY[19,20,21,23]),
+  ('1579891513490824','1094688720036902','scale_partner',ARRAY[20]),
+  ('1579891513490824','1438139705006109','rotina',ARRAY[6,7,8,9,13,14,15,16,19,20,21,22,23,26,27,28,29,30]),
+  ('1579891513490824','1620288322846868','rotina',ARRAY[8,9,10,11,12,13,14,15,16,17,18,19,20,21,23,24,25,26,27,28,29,30,31]),
+  ('1579891513490824','2119861485619672','rotina',ARRAY[2,6,7,8,9,13,14,15,16,19,20,21,22,23,26,27,28,29,30]),
+  ('1579891513490824','2139671796661957','plano_legacy',ARRAY[20]),
+  ('1579891513490824','4424485951125930','rotina',ARRAY[2,6,7,8,9,13,14,15,16,19,20,21,22,23,26,27,28,29,30])
 ), mapeados AS MATERIALIZED (
-  SELECT *,CASE
+  SELECT m.*,a.dias_utc,CASE
+    WHEN a.modelo_id IS NOT NULL THEN a.finalidade
     WHEN nome ~ '^live_btg_' THEN 'btg'
     WHEN nome ~ '^live0311(convite(ev|in|ll|vi)|(ev|in|ll|vi)2)_' THEN 'diretores'
     -- Convenção específica da régua de cadência: passo, marca da conta e versão.
@@ -20,7 +64,8 @@ WITH catalogo AS MATERIALIZED (
       AND split_part(nome,'_',3) = CASE marca WHEN 'B2Case' THEN 'b2case' WHEN 'Eletrovias' THEN 'eletrovias'
         WHEN 'Inpot' THEN 'inpot' WHEN 'Lisô Laser' THEN 'liso' WHEN 'Oral Unic' THEN 'oralunic' WHEN 'Viva' THEN 'viva' END
       THEN 'rotina'
-  END evento FROM modelos
+  END evento FROM modelos m
+  LEFT JOIN outubro_aprovado a ON a.conta=m.waba_id AND a.modelo_id=m.id
 ), grupos AS MATERIALIZED (
   SELECT waba_id,array_agg(id) ids FROM mapeados WHERE evento IS NOT NULL GROUP BY waba_id
 ), falhas AS MATERIALIZED (
@@ -67,6 +112,8 @@ LEFT JOIN prata.whatsapp_tarifa_rd tarifa
   ON tarifa.country='BR' AND tarifa.category=m.categoria
   AND t.day_utc>=tarifa.valid_from AND (tarifa.valid_to IS NULL OR t.day_utc<tarifa.valid_to)
 WHERE m.evento IS NOT NULL AND t.day_utc BETWEEN DATE '{inicio}' AND DATE '{fim}'
+  AND (m.dias_utc IS NULL OR (t.day_utc >= DATE '2026-10-01' AND t.day_utc < DATE '2026-11-01'
+       AND extract(day FROM t.day_utc)::integer = ANY(m.dias_utc)))
   AND (t.sent>0 OR t.delivered>0 OR t.read_latest>0)
  )
 -- Lotes por conta/dia preservam o grão dos modelos e evitam truncar a

@@ -30,6 +30,10 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
+### Prévia de Marketing · Gastos de WhatsApp
+
+A rota local `/gastos-whatsapp` apresenta consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
+
 ### Fotos de Cassiana e Thaina — cobertura compartilhada (04/11/2026)
 
 `fotosVendedores.ts` centraliza os retratos aprovados de `Cassiana Lavall`
@@ -952,6 +956,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-09 — Classificação de outubro na prévia de WhatsApp
+
+A conciliação por conta, modelo e dia transferiu 10.930 envios do saldo pendente para rotina e eventos. O consolidado e os oito filtros de marca foram conferidos na prévia autenticada com o modelo 228 da ouro. Outubro soma 4.400 de rotina, 13.298 de eventos e 9.293 a classificar. Alteração local, sem publicação.
 
 ### 2026-11-04 (3) — Campanha de Metas: fotos sem o nome da escuderia de F1
 

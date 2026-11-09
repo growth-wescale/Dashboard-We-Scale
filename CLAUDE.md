@@ -964,7 +964,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ### 2026-11-09 — Inscrições nas lives de Odonto Legacy
 
-A prévia da S&OP substitui o perfil dentista/clínica a partir de outubro por inscrições externas únicas na série de Zoom Odonto Legacy. Os quatro relatórios compartilham a mesma lista. Os totais respeitam as datas de cadastro confirmadas e excluem equipe e cancelamento. A lista de inscrição não informa presença por encontro.
+A prévia da S&OP substitui o perfil dentista/clínica a partir de outubro por inscrições externas únicas na série de Zoom Odonto Legacy. Os oito relatórios de outubro e novembro compartilham a mesma lista. Os totais respeitam as datas de cadastro confirmadas e excluem equipe e cancelamento. A lista de inscrição não informa presença por encontro.
 
 ### 2026-11-09 — Leitura de WhatsApp em produção
 

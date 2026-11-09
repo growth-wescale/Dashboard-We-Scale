@@ -64,7 +64,8 @@ export function comunidadeLegacyDoMes(monthKey: string): ComunidadeLegacy {
   return COMUNIDADE_LEGACY_ATUAL
 }
 
-// Quatro relatórios de inscrição da mesma reunião recorrente, extraídos em 09/11.
+// Oito relatórios da mesma série do Zoom, extraídos em 09/11: quatro ocorrências
+// de outubro e quatro de novembro. Todos repetem a lista de inscrições.
 // Contagens pela primeira inscrição aprovada na série. Equipe e cancelamentos
 // excluídos antes da agregação; a folha recebe somente totais sem identificadores.
 export const SERIE_LIVES_LEGACY = {

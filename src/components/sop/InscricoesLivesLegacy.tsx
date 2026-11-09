@@ -10,7 +10,7 @@ export function InscricoesLivesLegacy({ inicio, fim }: { inicio: string; fim: st
   const periodoCoberto = inicio <= corte
 
   return <section className="sop-lives-legacy" aria-label="Inscrições nas lives de Odonto Legacy">
-    <h3>Lives no Zoom · {serie.nome}</h3>
+    <h3>Inscrições nas lives · {serie.nome}</h3>
     <dl>
       <div><dt>Novos inscritos no período</dt><dd>{periodoCoberto ? inscritos : '—'}</dd></div>
       <div><dt>Inscritos únicos na série</dt><dd>{acumulado}</dd><small>até {fmtBR(corte)}</small></div>
@@ -20,6 +20,6 @@ export function InscricoesLivesLegacy({ inicio, fim }: { inicio: string; fim: st
       <tbody>{historico.map(r => <tr key={r.dia}><td>{fmtBR(r.dia)}</td><td>{r.pessoas}</td></tr>)}</tbody>
     </table>}
     {fim > serie.atualizadoAte && <p>Último relatório disponível em {fmtBR(serie.atualizadoAte)}.</p>}
-    <p>Contagem de inscrições externas aprovadas. O Zoom forneceu uma lista única para a série. Presença e retorno por encontro não estão disponíveis.</p>
+    <p>Cada pessoa com inscrição aprovada no Zoom conta uma vez na série. Equipe e cancelamentos ficam fora. Os relatórios não informam presença por encontro.</p>
   </section>
 }

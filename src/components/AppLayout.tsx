@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
 import { useAcesso } from '@/contexts/AcessoContext'
+import { previaWhatsapp } from '@/lib/previaWhatsapp'
+import { MessageCircle } from 'lucide-react'
 import { PERM_GERENCIAR_USUARIOS, ROTA_ACESSOS, permissaoDaRota } from '@/lib/permissoes'
 import { OctagonIntro } from '@/components/octogono/OctagonIntro'
 import { OctagonStrip } from '@/components/octogono/OctagonStrip'
@@ -96,6 +98,7 @@ function podeRota(pode: (chave: string) => boolean, rota: string | undefined): b
 }
 
 function getActiveKey(pathname: string): string {
+  if (pathname === '/gastos-whatsapp') return 'gastos-whatsapp'
   if (pathname.startsWith(ROTA_ACESSOS)) return 'acessos'
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
@@ -123,7 +126,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { marcas: marcasPermitidas, pode } = useAcesso()
+  const { marcas: marcasPermitidas, pode, acessoTotal } = useAcesso()
   const [activeBrand, setActiveBrandState] = useState<string>(marcasPermitidas?.[0] ?? 'oral-unic')
 
   // Pessoa limitada a marcas: a marca ativa da Saúde da Marca só pode ser uma
@@ -166,6 +169,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const itens: SidebarItem[] = []
     for (const item of NAV_ITEMS) {
       if (item.key === 'vendas') {
+        if (previaWhatsapp && acessoTotal) itens.push({ key: 'gastos-whatsapp', label: 'Gastos de WhatsApp', icon: <MessageCircle size={16} /> })
         const subs = VENDAS_SUB.filter(s => podeRota(pode, `/${s.key}`))
         if (subs.length > 0) itens.push({ ...item, subItems: subs })
         continue
@@ -181,7 +185,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       itens.push({ key: 'acessos', label: 'Usuários & Acessos', icon: <Users size={16} /> })
     }
     return itens
-  }, [pode, marcasPermitidas])
+  }, [pode, marcasPermitidas, acessoTotal])
 
   const handleSync = useCallback(() => {
     if (syncing) return
@@ -216,6 +220,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'saude') navigate('/marca')
     else if (key === 'okrs') navigate('/okrs')
     else if (key === 'sop') navigate('/sop-marketing')
+    else if (key === 'gastos-whatsapp' && previaWhatsapp) navigate('/gastos-whatsapp')
     else if (key === 'vendas') {
       const primeira = VENDAS_SUB.find(s => podeRota(pode, `/${s.key}`))
       if (primeira) handleSubNav(primeira.key)

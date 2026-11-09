@@ -6,9 +6,9 @@ import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { nomeNaVisao } from '@/lib/equipe'
 import { nf, money } from '@/lib/format'
-import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
+import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria, totaisDeals, LinhaTotal } from './dealDrawerShared'
 import { MultiSelect, labelStyle } from './MultiSelect'
-import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
+import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS, filtrarStageDeals } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
@@ -69,9 +69,15 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   // recorte aparece no gráfico, mesmo com 1 deal só. Agrupa pelo RÓTULO (via
   // labelOf=marcaLabel) pra fundir alias como 'Odonto Scale'/'Odonto Legacy'
   // numa barra só, sem perder o valor cru usado pelo filtro de Marca abaixo.
+  //
+  // Os gráficos SEGUEM os filtros do pop-up, menos o do próprio campo (estilo
+  // Excel): com SDR = Xayane, "Por Marca" mostra quantos deals de cada marca são
+  // dela; marcar uma marca não some com as outras barras do "Por Marca" — elas
+  // ficam esmaecidas, pra dar pra trocar sem limpar.
+  const dealsSemFiltroMarca = useMemo(() => filtrarStageDeals(deals, filters, 'marca'), [deals, filters])
   const porMarca = useMemo(
-    () => breakdownPorCategoria(deals, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)', marcaLabel),
-    [deals],
+    () => breakdownPorCategoria(dealsSemFiltroMarca, d => d.row.marca, m => BRAND_ACCENT[m] ?? 'var(--ws-border-strong)', marcaLabel),
+    [dealsSemFiltroMarca],
   )
   // Diagnóstico em diante é do Closer; antes disso, do SDR — nome_closer já vem
   // preenchido bem antes da etapa dele, e mostrar Closer numa etapa de SDR confunde.
@@ -81,13 +87,22 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   // Mesma regra: sem corte por "Outros" — todo SDR/Closer real aparece. Quem
   // saiu do time vira uma barra "Ex-integrantes" (o nome fica só na tabela).
   const equipe = useEquipeAtiva()
+  const dealsSemFiltroResp = useMemo(
+    () => filtrarStageDeals(deals, filters, responsavelFilterKey),
+    [deals, filters, responsavelFilterKey],
+  )
   const porResponsavel = useMemo(
     () => breakdownPorCategoria(
-      deals, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent,
+      dealsSemFiltroResp, d => (ownerRole === 'closer' ? d.row.nome_closer : d.row.nome_sdr), () => accent,
       nome => nomeNaVisao(nome, equipe),
     ),
-    [deals, accent, ownerRole, equipe],
+    [dealsSemFiltroResp, accent, ownerRole, equipe],
   )
+  const totais = useMemo(() => totaisDeals(filtered.map(d => d.row)), [filtered])
+
+  // Clicar numa barra filtra por ela; clicar de novo na barra já marcada limpa.
+  const alternar = (campo: 'marca' | 'sdr' | 'closer', v: string[]) =>
+    setFilters(s => ({ ...s, [campo]: s[campo].length === v.length && v.every(x => s[campo].includes(x)) ? [] : v }))
 
   return (
     // gráficos + filtros + tabela: no celular rolam juntos (ver .rs-drawer-body)
@@ -97,8 +112,15 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
         padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
         display: 'flex', gap: 32, flexShrink: 0, flexWrap: 'wrap',
       }}>
-        <BarList title="Por Marca" rows={porMarca} onSelect={v => setFilters(s => ({ ...s, marca: v }))} />
-        <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} onSelect={v => setFilters(s => ({ ...s, [responsavelFilterKey]: v }))} />
+        <BarList title="Por Marca" rows={porMarca} total={dealsSemFiltroMarca.length}
+          selecionados={filters.marca} onSelect={v => alternar('marca', v)} />
+        <BarList title={`Por ${ownerLabel}`} rows={porResponsavel} total={dealsSemFiltroResp.length}
+          selecionados={filters[responsavelFilterKey]} onSelect={v => alternar(responsavelFilterKey, v)} />
+        {hasFilters && (
+          <div style={{ flexBasis: '100%', fontSize: 11.5, color: 'var(--ws-text-secondary)', marginTop: -16 }}>
+            Os gráficos seguem os filtros abaixo. Clique numa barra pra filtrar; clique de novo pra tirar.
+          </div>
+        )}
       </div>
 
       {/* filtros — cada um com o nome em cima (mesmo padrão da FilterBar do
@@ -205,6 +227,13 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
               </tr>
             ))}
           </tbody>
+          {ordered.length > 0 && (
+            <LinhaTotal deals={totais.deals} colSpanRotulo={7} celulas={[
+              { valor: nf(totais.unidades), direita: true },
+              { valor: money(totais.taxa), direita: true },
+              ...headers.slice(9).map(() => ({ valor: null })),
+            ]} />
+          )}
         </table>
       </div>
     </div>

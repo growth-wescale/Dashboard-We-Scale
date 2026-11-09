@@ -11,7 +11,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias } from './dealDrawerShared'
+import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias, totaisDeals, LinhaTotal } from './dealDrawerShared'
 import { currentStage, stageOwnerRole, STAGE_LABEL } from '@/lib/metrics'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
@@ -129,6 +129,16 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                 )
               })}
             </tbody>
+            {deals.length > 0 && (() => {
+              const t = totaisDeals(deals)
+              return (
+                <LinhaTotal deals={t.deals} colSpanRotulo={5} celulas={[
+                  { valor: nf(t.unidades), direita: true },
+                  { valor: money(t.taxa), direita: true },
+                  { valor: null }, { valor: null }, { valor: null }, { valor: null },
+                ]} />
+              )
+            })()}
           </table>
         </div>
       </div>

@@ -44,9 +44,11 @@ function passa(r: FunnelRow, filters: StageDealsFilterState, exceto?: StageDeals
   return true
 }
 
-/** Linhas que a tabela mostra: todos os filtros aplicados. */
-export function filtrarStageDeals(deals: StageDeal[], filters: StageDealsFilterState): StageDeal[] {
-  return deals.filter(d => passa(d.row, filters))
+/** Linhas que a tabela mostra: todos os filtros aplicados. Com `exceto`,
+ *  aplica todos menos aquele campo — é o que os mini-gráficos usam: o gráfico
+ *  "Por Marca" segue SDR/Closer/Funil/Fonte mas não colapsa na marca marcada. */
+export function filtrarStageDeals(deals: StageDeal[], filters: StageDealsFilterState, exceto?: StageDealsCampo): StageDeal[] {
+  return deals.filter(d => passa(d.row, filters, exceto))
 }
 
 /**

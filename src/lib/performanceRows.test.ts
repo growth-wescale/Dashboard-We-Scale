@@ -59,6 +59,27 @@ describe('buildSdrRows', () => {
     expect(row.mqlToSql).toBeCloseTo(200, 5) // 2/1
   })
 
+  it('traz metas de Diagnóstico e SAL e conta No Show do SDR', () => {
+    const metas: MetaAgregada[] = [{ ...metasSdr[0], metaSal: 6 }]
+    const rows = [
+      r({ nome_sdr: 'Xayane', data_no_show: '2026-08-14' }),
+      r({ nome_sdr: 'Xayane', data_no_show: '2026-07-14' }), // fora da janela
+    ]
+    const [row] = buildSdrRows(rows, win, metas, roster)
+    expect(row.noShow).toBe(1)
+    expect(row.metaRr).toBe(10)
+    expect(row.metaSal).toBe(6)
+  })
+
+  it('No Show por evento é creditado ao SDR do ciclo', () => {
+    const rows = [r({ id_lead: 'a', nome_sdr: 'Xayane' })]
+    const eventos = [
+      { id_deal: 'a', ciclo: 1, etapa_canonica: 'No Show', nome_etapa: 'No Show', id_etapa: null, nome_funil: 'Closer', dia: '2026-08-10', data_evento: '2026-08-10T12:00:00Z', origem_comercial: 'Inbound', marca_deal: 'Oral Unic' },
+    ] as unknown as FunnelEventRow[]
+    const [row] = buildSdrRows(rows, win, metasSdr, roster, { eventos, modes: DEFAULT_VIEW_MODES })
+    expect(row.noShow).toBe(1)
+  })
+
   it('ignora status Excluído; nome fora do cadastro entra em Ex-integrantes', () => {
     const rows = [
       r({ nome_sdr: 'Fantasma', data_agendamento_reuniao_sql: '2026-08-10' }),

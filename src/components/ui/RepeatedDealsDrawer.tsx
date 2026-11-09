@@ -4,7 +4,7 @@ import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
 import { nf, money } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
 import { marcaLabel } from '@/constants/brands'
-import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, breakdownPorCategoria } from './dealDrawerShared'
+import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, leadtimeDias, breakdownPorCategoria, totaisDeals, LinhaTotal } from './dealDrawerShared'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
 interface RepeatedDealsDrawerProps {
@@ -130,6 +130,18 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
                 </tr>
               ))}
             </tbody>
+            {ordenados.length > 0 && (() => {
+              const t = totaisDeals(ordenados.map(g => g.row))
+              return (
+                <LinhaTotal deals={t.deals} colSpanRotulo={multiStage ? 2 : 1} celulas={[
+                  { valor: nf(totalRepeticoes) },
+                  { valor: null }, { valor: null }, { valor: null }, { valor: null }, { valor: null },
+                  { valor: nf(t.unidades), direita: true },
+                  { valor: money(t.taxa), direita: true },
+                  { valor: null }, { valor: null }, { valor: null }, { valor: null },
+                ]} />
+              )
+            })()}
           </table>
         </div>
       </div>

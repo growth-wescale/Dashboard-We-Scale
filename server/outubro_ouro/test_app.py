@@ -34,3 +34,19 @@ class GatewayTest(unittest.TestCase):
         with self.assertRaises(Error) as ctx:
             self.read()
         self.assertEqual(ctx.exception.code, 'source_refresh_pending')
+
+
+class IdentidadeNegocioTest(unittest.TestCase):
+    def test_identidade_acompanha_negocio_sem_mudar_seu_grao(self):
+        from perfil import linha_negocio
+        row = dict(negocio_id='D1', conta_id='ws', dia='2026-11-09', criado_em='2026-11-09',
+                   marca='Inpot', uf=None, fonte_macro=None, nome_funil=None, capital=None,
+                   utm_campaign=None, utm_source=None, utm_medium=None, utm_term=None, utm_content=None,
+                   contatos_vinculados=1)
+        antes = linha_negocio(row)
+        depois = linha_negocio(dict(row, nome='Pessoa Exemplo', email='pessoa@example.invalid'))
+        self.assertEqual(antes['id'], 'ouro-deal:D1')
+        self.assertEqual(antes['dados_extras']['metric_grain'], 'crm_deal')
+        self.assertEqual(depois, {**antes, 'nome':'Pessoa Exemplo', 'email':'pessoa@example.invalid'})
+        self.assertIsNone(antes['nome'])
+        self.assertIsNone(antes['email'])

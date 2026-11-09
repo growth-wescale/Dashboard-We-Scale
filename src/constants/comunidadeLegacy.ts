@@ -50,12 +50,12 @@ export const COMUNIDADE_LEGACY_ATUAL: ComunidadeLegacy = {
   duplicados: { leads: 12, pico: '1 pessoa se cadastrou 5x' },
 }
 
-// Total ativo confirmado por Gabriel em 06/11/2026. O perfil continua sendo
+// Total ativo confirmado por Gabriel em 09/11/2026. O perfil continua sendo
 // a amostra de outubro; não inferir composição ou evolução diária dos membros.
 export const COMUNIDADE_LEGACY_NOVEMBRO: ComunidadeLegacy = {
   ...COMUNIDADE_LEGACY_OUTUBRO,
-  ate: '06/11',
-  total: 217,
+  ate: '09/11',
+  total: 223,
 }
 
 export function comunidadeLegacyDoMes(monthKey: string): ComunidadeLegacy {

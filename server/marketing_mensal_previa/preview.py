@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / 'outubro_ouro'))
-from perfil import linha_negocio
+from perfil import consulta_perfil, linha_negocio
 
 HOST = 'https://dashboard.srv1816822.hstgr.cloud'
 LOCAL = 'http://127.0.0.1:4173'
@@ -68,8 +68,7 @@ def rows_for(dataset, start, end):
     if dataset != 'leads':
         raise ValueError('invalid_dataset')
     deals = sql('negocios')
-    template = (ROOT.parent/'outubro_ouro'/'perfil.sql').read_text()
-    profiles = query(template[template.index('WITH negocios'):].replace('/* negocios.sql */', deals))
+    profiles = query(consulta_perfil(deals))
     contacts = query(sql('contatos').replace('/* negocios.sql */', deals))
     rows = query(sql('captacoes')) + contacts
     for row in rows:

@@ -45,3 +45,10 @@ Publicação da ouro de06/11 às12h46 BRT: as views instaladas e a prévia retor
 Prévia autenticada com o gateway definitivo: Visão Geral, Saúde Franquia/Legacy, Metas e todas as folhas da S&OP concluídas sem alertas. Recorte01–06/11: Oral6MQLs/R$1.646,40/CP-MQLR$274,40; Legacy26MQLs/R$4.005,42; AvaliadoresR$550,97 fora de Franquia. S&OP confirmou também Inpot12, B2Case8, Viva8, Eletrovias209, Lisô28 e Partner14; Beauty permaneceu separado. Anônimo401, rota Vendas400 e dezembro sem publicação409. Os testes adicionais cobrem intervalo misto, cache por mês, outubro delegado integralmente e preservação de Partner/Vendas/Esteira.
 
 Renovação viva confirmada após310,622s: mesma instância, zero reinícios, resposta200 e1.155 registros válidos, sem reinício ou refresh manual do serviço. Dezembro retornou409 e a UI ocultou os cartões. Cards de outubro comparados entre prévia e produção anterior: textos/valores idênticos. Código instalado e local conferidos por SHA256.
+
+
+### Identificação da negociação na Lista de MQLs
+
+O nome e o e-mail acompanham a negociação pelo vínculo de negócio e contato da mesma conta. Vínculos de versões da API que identificam o mesmo contato são consolidados. Uma negociação com identidades conflitantes continua na lista com os campos de identificação vazios.
+
+A migração aditiva das views já instaladas pode ser gerada com `python3 -B server/outubro_ouro/atualizar_identidade.py`. O SQL preserva as colunas existentes e os grants. Após a migração, os serviços de outubro e mensal precisam carregar o `perfil.py` da mesma revisão. A implementação aceita as views anteriores durante a atualização.

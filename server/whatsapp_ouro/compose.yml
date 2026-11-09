@@ -1,0 +1,36 @@
+# Modelo de instalação. Não executada automaticamente pelo deploy do dashboard.
+services:
+  whatsapp-ouro:
+    image: ${WHATSAPP_IMAGE:?Informe a imagem Python/psycopg homologada}
+    container_name: dashboard-whatsapp-ouro
+    entrypoint: [python]
+    command: [-B, /app/whatsapp_ouro/app.py]
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    pids_limit: 96
+    mem_limit: 512m
+    volumes:
+      - .:/app/whatsapp_ouro:ro
+      - ../whatsapp_previa/prepare.py:/app/whatsapp_previa/prepare.py:ro
+      - ${WHATSAPP_CONFIG_DIR:?Informe o diretorio protegido}:/run/whatsapp:ro
+    networks: [dashboard]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dashboard_default
+      - traefik.http.routers.whatsapp-ouro.priority=110
+      - traefik.http.routers.whatsapp-ouro.rule=Host(`dashboard.srv1816822.hstgr.cloud`) && PathPrefix(`/api/whatsapp-ouro/`)
+      - traefik.http.routers.whatsapp-ouro.entrypoints=websecure
+      - traefik.http.routers.whatsapp-ouro.tls.certresolver=letsencrypt
+      - traefik.http.services.whatsapp-ouro.loadbalancer.server.port=8080
+networks:
+  dashboard:
+    external: true
+    name: dashboard_default

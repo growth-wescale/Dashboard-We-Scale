@@ -27,6 +27,7 @@ jobs:
         env:
           VITE_OUTUBRO_OURO_ENABLED: 'true'
           VITE_MARKETING_MENSAL_OURO_ENABLED: 'true'
+          VITE_WHATSAPP_OURO_ENABLED: 'true'
           VITE_LISO_OURO_ENABLED: 'true'
           VITE_LEGACY_OURO_ENABLED: 'true'
           VITE_ORAL_UNIC_OURO_ENABLED: 'true'
@@ -62,3 +63,9 @@ jobs:
 
       - name: Test Oral Unic readonly gateway
         run: python3 -m unittest discover -s server/oral_unic_ouro -p 'test_*.py'
+
+
+      - name: Test WhatsApp read gateway
+        run: |
+          python3 -B -m unittest discover -s server/whatsapp_ouro
+          python3 -B -m unittest discover -s server/whatsapp_previa

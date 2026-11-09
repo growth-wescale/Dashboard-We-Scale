@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { ThemeToggle } from '@/components/ui/v2/ThemeToggle'
 import { useGpMode } from '@/hooks/useGpMode'
 import { useAcesso } from '@/contexts/AcessoContext'
-import { previaWhatsapp } from '@/lib/previaWhatsapp'
+import { whatsappAtivo } from '@/lib/previaWhatsapp'
 import { MessageCircle } from 'lucide-react'
 import { PERM_GERENCIAR_USUARIOS, ROTA_ACESSOS, permissaoDaRota } from '@/lib/permissoes'
 import { OctagonIntro } from '@/components/octogono/OctagonIntro'
@@ -169,7 +169,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const itens: SidebarItem[] = []
     for (const item of NAV_ITEMS) {
       if (item.key === 'vendas') {
-        if (previaWhatsapp && acessoTotal) itens.push({ key: 'gastos-whatsapp', label: 'Gastos de WhatsApp', icon: <MessageCircle size={16} /> })
+        if (whatsappAtivo && acessoTotal) itens.push({ key: 'gastos-whatsapp', label: 'Gastos de WhatsApp', icon: <MessageCircle size={16} /> })
         const subs = VENDAS_SUB.filter(s => podeRota(pode, `/${s.key}`))
         if (subs.length > 0) itens.push({ ...item, subItems: subs })
         continue
@@ -220,7 +220,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'saude') navigate('/marca')
     else if (key === 'okrs') navigate('/okrs')
     else if (key === 'sop') navigate('/sop-marketing')
-    else if (key === 'gastos-whatsapp' && previaWhatsapp) navigate('/gastos-whatsapp')
+    else if (key === 'gastos-whatsapp' && whatsappAtivo) navigate('/gastos-whatsapp')
     else if (key === 'vendas') {
       const primeira = VENDAS_SUB.find(s => podeRota(pode, `/${s.key}`))
       if (primeira) handleSubNav(primeira.key)

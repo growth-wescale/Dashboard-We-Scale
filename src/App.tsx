@@ -1,5 +1,5 @@
 import { marketingMensalAtivo } from '@/lib/previaMensal'
-import { previaWhatsapp } from '@/lib/previaWhatsapp'
+import { whatsappAtivo } from '@/lib/previaWhatsapp'
 import { CoberturaMensalPrevia } from '@/components/marketing/CoberturaMensalPrevia'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
@@ -87,7 +87,7 @@ function RoutedContent() {
           <Route path="/okrs"          element={<Okrs />} />
           <Route path="/copa-b2b"      element={<Navigate to="/okrs" replace />} />
           <Route path="/sop-marketing" element={<SopMarketing />} />
-          {previaWhatsapp && <Route path="/gastos-whatsapp" element={<GastosWhatsapp />} />}
+          {whatsappAtivo && <Route path="/gastos-whatsapp" element={<GastosWhatsapp />} />}
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
           <Route path="/metas"              element={<HubMetas />} />

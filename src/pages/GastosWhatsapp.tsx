@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { dividirEnvios, type EvidenciaEnvio } from '@/lib/finalidadesWhatsapp'
 import { brl, num, soma, custo, consumoPorMarca, type DiaConta } from '@/lib/consumoWhatsapp'
 import { GraficosWhatsapp } from '@/components/GraficosWhatsapp'
+import { whatsappResumo } from '@/lib/previaWhatsapp'
 import './GastosWhatsapp.css'
 
 type Medicao = {
@@ -135,7 +136,7 @@ export function GastosWhatsapp(){
     async function carregar(){
       const {data:{session}}=await supabase.auth.getSession()
       if(!session) throw new Error()
-      const response=await fetch('/api/previa-whatsapp/v1/resumo',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:'{}',signal:ctrl.signal})
+      const response=await fetch(whatsappResumo,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:'{}',signal:ctrl.signal})
       if(!response.ok) throw new Error()
       const snapshot:Dados=await response.json()
       if(snapshot.versao!==2 || !Array.isArray(snapshot.contas) || !Array.isArray(snapshot.eventos) || !Array.isArray(snapshot.finalidades)) throw new Error()
@@ -145,6 +146,6 @@ export function GastosWhatsapp(){
     return ()=>ctrl.abort()
   },[acessoTotal,tentativa])
   return <main className="wa-page"><header><h1>Gastos de WhatsApp</h1>{dados&&<p><CalendarDays size={15}/> Consulta de {new Date(dados.gerado).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})} · Brasília</p>}</header>
-    {!acessoTotal?<p>Acesso restrito à prévia.</p>:erro?<div role="alert">Não foi possível carregar os dados. <button onClick={()=>repetir(n=>n+1)}>Tentar novamente</button></div>:dados?<Resumo dados={dados}/>:<p role="status">Carregando gastos de WhatsApp…</p>}
+    {!acessoTotal?<p>Acesso restrito.</p>:erro?<div role="alert">Não foi possível carregar os dados. <button onClick={()=>repetir(n=>n+1)}>Tentar novamente</button></div>:dados?<Resumo dados={dados}/>:<p role="status">Carregando gastos de WhatsApp…</p>}
   </main>
 }

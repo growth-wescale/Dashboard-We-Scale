@@ -30,9 +30,9 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ---
 
-### Prévia de Marketing · Gastos de WhatsApp
+### Marketing · Gastos de WhatsApp
 
-A rota local `/gastos-whatsapp` apresenta custo e mensagens por dia, totais por marca, consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
+A rota `/gastos-whatsapp` usa o gateway exclusivo de leitura em produção, com sessão de Marketing de acesso total. A página apresenta custo e mensagens por dia, totais por marca, consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
 
 ### Fotos de Cassiana e Thaina — cobertura compartilhada (04/11/2026)
 
@@ -957,6 +957,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-09 — Leitura de WhatsApp em produção
+
+O serviço `dashboard-whatsapp-ouro` lê duas funções da ouro com uma credencial dedicada. Renova os agregados de forma automática e reconfirma permissões antes de atender a cada solicitação. O aceite de outubro comparou os dados do serviço com a prévia conciliada. A ativação da interface usa `VITE_WHATSAPP_OURO_ENABLED` na pipeline.
 
 ### 2026-11-09 — Gráficos de consumo de WhatsApp na prévia
 

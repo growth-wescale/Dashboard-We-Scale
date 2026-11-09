@@ -143,18 +143,24 @@ class Handler(SimpleHTTPRequestHandler):
             if self.path in OLD:
                 with urlopen(Request(HOST+self.path,data=raw,headers=headers),timeout=65) as response:
                     return self.reply(response.status,json.load(response))
-            if self.path != '/api/previa-mensal/v1/read':
+            whatsapp = self.path == '/api/previa-whatsapp/v1/resumo'
+            if not whatsapp and self.path != '/api/previa-mensal/v1/read':
                 return self.send_error(404)
             b = json.loads(raw)
-            if set(b) != {'route','dataset','periodo'} or b['route'] not in ROUTES or b['dataset'] not in ('media','leads'):
+            if whatsapp and b != {}:
                 return self.send_error(400)
-            start,end = period(b['periodo'])
+            if not whatsapp and (set(b) != {'route','dataset','periodo'} or b['route'] not in ROUTES or b['dataset'] not in ('media','leads')):
+                return self.send_error(400)
             req = Request('https://jmuluoksnlqrvzbcltim.supabase.co/rest/v1/rpc/minhas_permissoes',data=b'{}',
                           headers={**headers,'apikey':self.server.public_key})
             with urlopen(req,timeout=10) as response:
                 access=json.load(response)
             if not all(access.get(k) is True for k in ('ativo','registrado','acesso_total')):
                 return self.send_error(403)
+            if whatsapp:
+                snapshot = Path(os.getenv('WESCALE_WHATSAPP_SNAPSHOT', Path.home()/'.cache/wescale/previa-whatsapp/resumo.json'))
+                return self.reply(200,json.loads(snapshot.read_text()))
+            start,end = period(b['periodo'])
             receipt=coverage(int(time.monotonic()//60))
             through=date.fromisoformat(receipt['dia'])
             if start > through:

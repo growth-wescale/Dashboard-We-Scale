@@ -1,4 +1,5 @@
 import { marketingMensalAtivo } from '@/lib/previaMensal'
+import { previaWhatsapp } from '@/lib/previaWhatsapp'
 import { CoberturaMensalPrevia } from '@/components/marketing/CoberturaMensalPrevia'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react'
@@ -47,6 +48,7 @@ const VisaoGeral        = lazyWithRetry(() => import('@/pages/VisaoGeral').then(
 const SaudeDaMarca      = lazyWithRetry(() => import('@/pages/SaudeDaMarca').then(m => ({ default: m.SaudeDaMarca })))
 const Okrs              = lazyWithRetry(() => import('@/pages/Okrs').then(m => ({ default: m.Okrs })))
 const SopMarketing      = lazyWithRetry(() => import('@/pages/SopMarketing').then(m => ({ default: m.SopMarketing })))
+const GastosWhatsapp    = lazyWithRetry(() => import('@/pages/GastosWhatsapp').then(m => ({ default: m.GastosWhatsapp })))
 const FunilVendas       = lazyWithRetry(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
 const PerformanceVendas = lazyWithRetry(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
 const AnalisePerda      = lazyWithRetry(() => import('@/pages/AnalisePerda').then(m => ({ default: m.AnalisePerda })))
@@ -85,6 +87,7 @@ function RoutedContent() {
           <Route path="/okrs"          element={<Okrs />} />
           <Route path="/copa-b2b"      element={<Navigate to="/okrs" replace />} />
           <Route path="/sop-marketing" element={<SopMarketing />} />
+          {previaWhatsapp && <Route path="/gastos-whatsapp" element={<GastosWhatsapp />} />}
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
           <Route path="/metas"              element={<HubMetas />} />

@@ -959,7 +959,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ### 2026-11-09 — Gráficos de consumo de WhatsApp na prévia
 
-Gráficos de custo diário, custo por marca e mensagens por dia usam a fotografia privada e os filtros da página. Resumo por marca mostra cobertura e horário da última observação válida em Brasília. Outubro conferido com 26.991 enviadas, 26.042 entregues e R$ 9.393,80 estimados.
+Gráficos de custo diário, custo por marca e mensagens por dia usam a fotografia privada e os filtros da página. Os gráficos compartilham o fundo dos cartões e a paleta do dashboard. Resumo por marca mostra cobertura e horário da última observação válida em Brasília. Outubro conferido com 26.991 enviadas, 26.042 entregues e R$ 9.393,80 estimados.
 
 ### 2026-11-09 — Classificação de outubro na prévia de WhatsApp
 

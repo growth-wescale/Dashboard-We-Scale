@@ -1,14 +1,14 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import { BRAND_OVERVIEW, findBrandByMarca } from '@/constants/brands'
 import { fmtBR } from '@/lib/dateUtils'
 import { brl, num, type ConsumoMarcas } from '@/lib/consumoWhatsapp'
 
 type Metrica = 'custo' | 'enviados' | 'entregues'
-const cores: Record<string, string> = {
-  'B2Case': '#e796cb', 'Eletrovias': '#31d2c4', 'Inpot': '#c8b2ff', 'Lisô Laser': '#80cde8',
-  'Oral Unic': '#ecaf75', 'Viva': '#b4da88', 'We Scale': '#e8d5e4',
+function cor(marca: string) {
+  if (marca === 'We Scale') return BRAND_OVERVIEW.dark
+  const brand = findBrandByMarca(marca)
+  return brand ? `color-mix(in srgb, ${brand.accent} 65%, ${brand.dark})` : 'var(--ws-text-secondary)'
 }
-const cor = (marca: string) => cores[marca] ?? '#aab9c2'
-const corBarra = '#31bcb1'
 
 function passoEixo(max: number) {
   const bruto = (max || 4) / 4
@@ -78,7 +78,7 @@ function Linhas({ consumo, metrica, titulo }: { consumo: ConsumoMarcas; metrica:
           return <g key={s.marca} data-marca={s.marca} stroke={cor(s.marca)}>
             <path d={path} fill="none" strokeWidth="2" strokeLinejoin="round"/>
             {s.pontos.map((p,i)=>p[metrica]!==null && <circle key={dias[i]} cx={x(i)} cy={y(p[metrica])} r={i===ativo?4:2}
-              fill={i===ativo?cor(s.marca):'#102735'}><title>{s.marca} · {fmtBR(dias[i])} · {formatar(p[metrica])}</title></circle>)}
+              fill={i===ativo?cor(s.marca):'var(--ws-surface)'}><title>{s.marca} · {fmtBR(dias[i])} · {formatar(p[metrica])}</title></circle>)}
           </g>
         })}
         {max > 0 && pico !== undefined && <text className="wa-peak" x={Math.max(left, Math.min(x(pico), largura - 60))}
@@ -102,7 +102,7 @@ export function GraficosWhatsapp({ consumo }: { consumo: ConsumoMarcas }) {
     <section className="wa-section wa-chart"><header><h2>Custo por marca</h2><span>Total estimado no período · R$</span></header>
       {barras.length ? <div className="wa-bars-scroll"><div className="wa-bars" style={{minWidth:barras.length*106}} aria-label="Custo por marca no período">
         {barras.map(s=><div className="wa-bar-col" key={s.marca}>
-          <div className="wa-bar-area"><div className="wa-bar" style={{'--wa-bar-size': `${maior ? 100*s.custo!/maior : 0}%`, background:corBarra} as CSSProperties}>
+          <div className="wa-bar-area"><div className="wa-bar" style={{'--wa-bar-size': `${maior ? 100*s.custo!/maior : 0}%`} as CSSProperties}>
             <b>{brl(s.custo)}</b></div></div><span>{s.marca}</span>
         </div>)}
       </div></div> : <p className="wa-no-series">Sem medição de custo no período selecionado.</p>}

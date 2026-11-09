@@ -11,7 +11,13 @@ export type GrupoLinha = 'ex-integrantes' | 'sem-responsavel'
 export interface SdrRow {
   nome: string
   mql: number; sql: number; rr: number; sal: number
+  /** Passagens/deals pela etapa "No Show" creditados ao SDR do ciclo — mesma
+   *  contagem do card "SQL → No-show" (`countStageEvents('No Show')`). */
+  noShow: number
   metaSql: number
+  /** Meta de Diagnóstico (`meta_reuniao_realizada`) e de SAL (`meta_volume_sal`). */
+  metaRr: number
+  metaSal: number
   pctAting: number
   mqlToSql: number
   /** Linha de soma, sem posição no ranking: quem saiu do time (`EX_INTEGRANTES`)
@@ -112,25 +118,28 @@ export function buildSdrRows(
     sql: eventosPorCiclo(contagem, 'Reunião Agendada SQL', win),
     rr: eventosPorCiclo(contagem, 'Diagnóstico', win),
     sal: eventosPorCiclo(contagem, 'SAL', win),
+    noShow: eventosPorCiclo(contagem, 'No Show', win),
   }
-  const bucket = new Map<string, { mql: number; sql: number; rr: number; sal: number }>()
+  const bucket = new Map<string, { mql: number; sql: number; rr: number; sal: number; noShow: number }>()
   const nomeOriginal = new Map<string, string>()
 
   for (const r of rows) {
     if (r.status_atual === 'Excluído') continue
     const nome = r.nome_sdr?.trim()
     const normalized = linhaDe.chave(nome)
-    const cur = bucket.get(normalized) ?? { mql: 0, sql: 0, rr: 0, sal: 0 }
+    const cur = bucket.get(normalized) ?? { mql: 0, sql: 0, rr: 0, sal: 0, noShow: 0 }
     if (isInWindow(r.data_novo_mql, win)) cur.mql++
     if (ev) {
       const k = dealKey(r)
       cur.sql += ev.sql.get(k) ?? 0
       cur.rr += ev.rr.get(k) ?? 0
       cur.sal += ev.sal.get(k) ?? 0
+      cur.noShow += ev.noShow.get(k) ?? 0
     } else {
       if (isInWindow(r.data_agendamento_reuniao_sql, win)) cur.sql++
       if (isInWindow(r.data_reuniao_realizada, win)) cur.rr++
       if (isInWindow(r.data_sal, win)) cur.sal++
+      if (isInWindow(r.data_no_show, win)) cur.noShow++
     }
     bucket.set(normalized, cur)
     if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nomeDaLinha(normalized, nome, SEM_RESPONSAVEL.sdr))
@@ -139,18 +148,22 @@ export function buildSdrRows(
   const linhas = Array.from(bucket.entries()).map(([normalized, v]): SdrRow & { _chave: string } => {
     const grupo = grupoDaChave(normalized)
     const nome = nomeOriginal.get(normalized)!
-    const metaSql = grupo === 'ex-integrantes'
-      ? linhaDe.nomesEx.reduce((s, n) => s + (findMeta(metas, n, 'SDR')?.metaSql ?? 0), 0)
-      : grupo ? 0 : findMeta(metas, nome, 'SDR')?.metaSql ?? 0
+    // Ex-integrantes: soma das metas de quem saiu; Sem SDR: sem meta.
+    const metaDe = (campo: 'metaSql' | 'metaReuniao' | 'metaSal') => grupo === 'ex-integrantes'
+      ? linhaDe.nomesEx.reduce((s, n) => s + (findMeta(metas, n, 'SDR')?.[campo] ?? 0), 0)
+      : grupo ? 0 : findMeta(metas, nome, 'SDR')?.[campo] ?? 0
+    const metaSql = metaDe('metaSql')
     return {
       nome, ...v,
       metaSql,
+      metaRr: metaDe('metaReuniao'),
+      metaSal: metaDe('metaSal'),
       pctAting: metaSql > 0 ? (v.sql / metaSql) * 100 : 0,
       mqlToSql: v.mql > 0 ? (v.sql / v.mql) * 100 : 0,
       ...(grupo ? { grupo } : {}),
       _chave: normalized,
     }
-  }).filter(l => linhaDe.sempreVisivel(l._chave) || l.mql + l.sql + l.rr + l.sal + l.metaSql > 0)
+  }).filter(l => linhaDe.sempreVisivel(l._chave) || l.mql + l.sql + l.rr + l.sal + l.noShow + l.metaSql > 0)
     .map(({ _chave, ...l }) => l)
   return ordenarComGrupos(linhas, (a, b) => b.pctAting - a.pctAting || b.sql - a.sql)
 }

@@ -574,6 +574,7 @@ src/hooks/useRepasseTaxas.ts      lê vw_repasse_taxa; publicarRepasse() grava p
 src/components/ui/DivisaoReceita.tsx  linha "We Scale / Marcas" dos cards de receita + bloco com quebra por marca
 src/components/metas/RepasseTaxas.tsx aba "Repasse das taxas" da Configuração das Metas (em vigor, histórico, versão nova)
 src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
+src/lib/mtd.ts                    visão MTD da Performance: fator da meta até hoje + mesmo trecho do mês anterior (puro, testado)
 src/lib/corridaPerformance.ts     Corrida de Performance (Campanha de Metas): 1 lançamento por RR/venda com cada fator; o card de cada pessoa é a soma deles (puro, testado)
 src/lib/corridaDados.ts           linhas de vw_funil_vendas → unidades da Corrida + "não pontuou" (quem não tem meta no mês, campo vazio); limites do mês em Brasília (puro, testado)
 src/lib/corridaExtrato.ts         o porquê de cada fator em português, a conta da linha, motivo de não pontuar e a situação de um negócio + ciclo (puro, testado)
@@ -964,6 +965,37 @@ Gráficos de custo diário, custo por marca e mensagens por dia usam a fotografi
 ### 2026-11-09 — Classificação de outubro na prévia de WhatsApp
 
 A conciliação por conta, modelo e dia transferiu 10.930 envios do saldo pendente para rotina e eventos. O consolidado e os oito filtros de marca foram conferidos na prévia autenticada com o modelo 228 da ouro. Outubro soma 4.400 de rotina, 13.298 de eventos e 9.293 a classificar. Alteração local, sem publicação.
+
+### 2026-11-09 — Pop-ups com totais e gráficos que seguem os filtros; tabela de SDR com metas, delta e No Show; visão MTD
+
+Pedido do Junior (a Xay não conseguia ver rápido quantos deals de Eletrovias eram dela num pop-up).
+
+**Pop-ups de deals.** Os mini-gráficos "Por Marca" e "Por SDR/Closer" do pop-up de etapa
+(`StageDealsPanel`: Visão Macro, funis e cards da Performance) passaram a seguir os filtros do
+próprio pop-up, menos o do campo do gráfico (`filtrarStageDeals(…, exceto)`, estilo Excel): com
+SDR = Xayane, "Por Marca" mostra os deals de cada marca que são dela. A barra marcada fica em
+destaque e as outras esmaecidas; clicar de novo na barra tira o filtro. Título de cada gráfico
+com o total. Os 4 pop-ups (etapa, KPI, perda, repetidos) ganharam a linha **Total** fixa no rodapé
+da tabela (`LinhaTotal`/`totaisDeals`): deals, unidades, taxa de franquia (e valor/We Scale/marca
+no pop-up de KPI; repetições no de repetidos).
+
+**Tabela de SDRs (Performance).** Colunas agrupadas SQL / Diagnóstico / SAL com Real, Meta e Δ
+(realizado − meta, verde/vermelho), **No Show** por SDR (eventos "No Show" creditados ao SDR do
+ciclo, a mesma contagem do card "SQL → No-show") e linha Total. Meta de Diagnóstico =
+`meta_reuniao_realizada`, de SAL = `meta_volume_sal`. A meta do Total é a soma crua arredondada
+uma vez (igual aos cards); a de cada pessoa é arredondada pra cima.
+
+**Visão MTD.** Seletor "Mês inteiro × MTD" acima das tabelas de SDR e Closer (só com 1 mês
+selecionado). No MTD: metas da tabela viram "meta até hoje" (meta do mês × dias corridos ÷ dias
+do mês, a mesma régua do "esperado até hoje" dos cards, `janelaMtd` em `src/lib/mtd.ts`) e entra
+um quadro comparando o mês até o último dia da janela com o mesmo trecho do mês anterior
+(SDR: MQL, SQL, Diag, SAL, No Show; Closer: Diag, SAL, COF, Fechamentos, Receita), com as mesmas
+contagens dos cards. Meta de faturamento da tabela de Closer também vira "até hoje" no MTD.
+
+Verificado: build + 1.105 testes (9 novos) e visto com dado real numa rota de prévia sem login
+(removida): nov/26 Consolidado, tabela de SDR = cards (MQL 540, SQL 63, Diag 33, SAL 10; metas
+261/157/100, até hoje 79/48/30); MTD 01–09/11 × 01–09/10 (SQL 63 × 44); pop-up de Contato
+efetivo com SDR = Xayane: Eletrovias 49, Inpot 13, B2Case 8, Lisô 4 (= 74).
 
 ### 2026-11-04 (3) — Campanha de Metas: fotos sem o nome da escuderia de F1
 

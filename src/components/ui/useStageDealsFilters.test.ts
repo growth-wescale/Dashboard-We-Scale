@@ -64,3 +64,15 @@ describe('filtrarStageDeals', () => {
     expect(r).toHaveLength(3)
   })
 })
+
+describe('filtrarStageDeals com exceto (mini-gráficos)', () => {
+  it('aplica todos os filtros menos o do campo pedido', () => {
+    const mk = (id: string, marca: string, sdr: string) => ({ row: { id_lead: id, ciclo: 1, marca, nome_sdr: sdr, nome_funil: 'SDR', fonte_macro: 'Inbound', nome_closer: null } as unknown as FunnelRow, dataEtapa: null }) as StageDeal
+    const deals = [mk('1', 'Eletrovias', 'Xayane'), mk('2', 'Eletrovias', 'Sarah'), mk('3', 'Inpot', 'Xayane')]
+    const f = { ...EMPTY_STAGE_DEALS_FILTERS, sdr: ['Xayane'], marca: ['Inpot'] }
+    // "Por Marca" ignora o filtro de marca, mas segue o de SDR: Eletrovias 1, Inpot 1
+    expect(filtrarStageDeals(deals, f, 'marca').map(d => d.row.id_lead)).toEqual(['1', '3'])
+    // tabela: os dois filtros
+    expect(filtrarStageDeals(deals, f).map(d => d.row.id_lead)).toEqual(['3'])
+  })
+})

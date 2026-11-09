@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { leadtimeDias, fmtDias, fmtDuracao, breakdownPorCategoria, dataUltimaReativacao } from './dealDrawerShared'
+import { leadtimeDias, fmtDias, fmtDuracao, breakdownPorCategoria, dataUltimaReativacao, totaisDeals } from './dealDrawerShared'
 
 const DIA = 86_400_000
 const AGORA = new Date('2026-09-08T12:00:00Z').getTime()
@@ -118,5 +118,16 @@ describe('dataUltimaReativacao', () => {
   it('ciclo 2+ sem data de início devolve null, sem inventar', () => {
     expect(dataUltimaReativacao({ ciclo: 2, data_criacao_negociacao: null })).toBeNull()
     expect(dataUltimaReativacao({ ciclo: 2 })).toBeNull()
+  })
+})
+
+describe('totaisDeals', () => {
+  it('soma deals, unidades e taxa de franquia, tratando vazio como zero', () => {
+    const t = totaisDeals([
+      { quantidade_unidades: 2, valor_produto: 100_000, valor_contrato: 100_000 },
+      { quantidade_unidades: null, valor_produto: null, valor_contrato: null },
+      { quantidade_unidades: 1, valor_produto: 50_000, valor_contrato: 0 },
+    ])
+    expect(t).toEqual({ deals: 3, unidades: 3, taxa: 150_000, contrato: 100_000 })
   })
 })

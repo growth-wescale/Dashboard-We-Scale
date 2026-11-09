@@ -3,14 +3,10 @@ import { CalendarDays, MessageSquare, CheckCheck, Wallet } from 'lucide-react'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { supabase } from '@/lib/supabase'
 import { dividirEnvios, type EvidenciaEnvio } from '@/lib/finalidadesWhatsapp'
+import { brl, num, soma, custo, consumoPorMarca, type DiaConta } from '@/lib/consumoWhatsapp'
+import { GraficosWhatsapp } from '@/components/GraficosWhatsapp'
 import './GastosWhatsapp.css'
 
-type DiaConta = {
-  conta: string; marca: string; dia: string; enviados: number | null; entregues: number | null
-  precificados: number | null; custo: number | null; sem_tarifa: number
-  entrega_ok: boolean; preco_ok: boolean; parcial: boolean; erro: boolean; vazio: boolean
-  entrega_completa: boolean | null
-}
 type Medicao = {
   evento: string; modelo: string; id: string; conta: string; marca: string; produto: string
   dia: string; enviados: number | null; entregues: number | null; lidos: number | null
@@ -27,16 +23,7 @@ const eventos = [
   { id: 'scale_partner', nome: 'Scale Partner', periodo: 'Disparo de 20/10 · conta We Scale' },
   { id: 'plano_legacy', nome: 'Plano de Ação para 5 Clínicas · Legacy', periodo: 'Ativação de 20/10 · conta We Scale' },
 ]
-const brl = (v: number | null) => v === null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const num = (v: number | null) => v === null ? '—' : v.toLocaleString('pt-BR')
 const dia = (v: string) => v.split('-').reverse().join('/')
-function soma(values: (number | null)[]) {
-  const known = values.filter((v): v is number => v !== null)
-  return known.length ? known.reduce((a, b) => a + b, 0) : null
-}
-function custo(rows: DiaConta[]) {
-  return rows.some(r => r.sem_tarifa > 0) ? null : soma(rows.map(r => r.custo))
-}
 function status(rows: DiaConta[], dias: number) {
   if (!rows.some(r => r.entrega_ok || r.preco_ok)) return 'Sem cobertura'
   if (rows.some(r => r.sem_tarifa > 0)) return 'Tarifa pendente'
@@ -93,7 +80,8 @@ function Resumo({ dados }: { dados: Dados }) {
     }
     return [...map.values()].sort((a,b)=>a.nome.localeCompare(b.nome)||a.id.localeCompare(b.id))
   },[dados,marca,inicio,fim])
-  const rows=contas.flatMap(c=>c.rows)
+  const rows=useMemo(()=>contas.flatMap(c=>c.rows),[contas])
+  const consumo=useMemo(()=>consumoPorMarca(rows,marca?[marca]:marcas,inicio,fim),[rows,marca,marcas,inicio,fim])
   const ev=dados.eventos.filter(r=>(!marca||r.marca===marca)&&r.dia>=inicio&&r.dia<=fim)
   const dias=(Date.parse(fim)-Date.parse(inicio))/86400000+1
   const completo=contas.every(c=>status(c.rows,dias)==='Completa')
@@ -113,6 +101,18 @@ function Resumo({ dados }: { dados: Dados }) {
         {title:'Custo RD estimado',value:brl(custo(rows)),icon:Wallet},
       ].map(k=><article key={k.title}><k.icon size={20}/><h2>{k.title}</h2><strong>{k.value}</strong></article>)}</div>
       <p className="wa-note">{completo?'Cobertura completa no período.':'Cobertura parcial. Os totais incluem somente os registros disponíveis.'} Valores pós-pagos estimados, em reais.</p>
+      <GraficosWhatsapp consumo={consumo}/>
+      <section className="wa-section"><h2>Resumo por marca</h2>
+        <div className="wa-scroll"><table aria-label="Resumo por marca"><thead><tr>
+          {['Marca','Enviadas','Entregues','Custo estimado','Cobertura','Última observação (Brasília)'].map(c=><th scope="col" key={c}>{c}</th>)}
+        </tr></thead><tbody>{consumo.series.map(s=>{
+          const situacoes=contas.filter(c=>c.nome===s.marca).map(c=>status(c.rows,dias))
+          const cobertura=situacoes.every(v=>v==='Sem cobertura')?'Sem cobertura'
+            :situacoes.includes('Tarifa pendente')?'Tarifa pendente':situacoes.every(v=>v==='Completa')?'Completa':'Parcial'
+          return <tr key={s.marca}><th scope="row">{s.marca}</th><td>{num(s.enviados)}</td><td>{num(s.entregues)}</td><td>{brl(s.custo)}</td>
+            <td>{cobertura}</td><td>{s.ultima?new Date(s.ultima).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}):'—'}</td></tr>
+        })}</tbody></table></div>
+      </section>
       <EnviosPorFinalidade dados={dados} inicio={inicio} fim={fim} marca={marca}/>
       <section className="wa-section"><h2>Consumo por conta</h2><div className="wa-scroll"><table><thead><tr>{['Marca / conta','Envios','Entregas','Custo estimado','Cobertura','Último dia válido'].map(c=><th key={c}>{c}</th>)}</tr></thead><tbody>
         {contas.map(c=>{

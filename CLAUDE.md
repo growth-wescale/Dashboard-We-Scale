@@ -32,7 +32,7 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ### Prévia de Marketing · Gastos de WhatsApp
 
-A rota local `/gastos-whatsapp` apresenta consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
+A rota local `/gastos-whatsapp` apresenta custo e mensagens por dia, totais por marca, consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
 
 ### Fotos de Cassiana e Thaina — cobertura compartilhada (04/11/2026)
 
@@ -956,6 +956,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-09 — Gráficos de consumo de WhatsApp na prévia
+
+Gráficos de custo diário, custo por marca e mensagens por dia usam a fotografia privada e os filtros da página. Resumo por marca mostra cobertura e horário da última observação válida em Brasília. Outubro conferido com 26.991 enviadas, 26.042 entregues e R$ 9.393,80 estimados.
 
 ### 2026-11-09 — Classificação de outubro na prévia de WhatsApp
 

@@ -11,7 +11,7 @@
 
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
-import { rowsInLoss, countStage, currentStage, resolveStage, STAGE_ORDER, stageOwnerRole } from '@/lib/metrics'
+import { rowsInLoss, countStage, resolveStage, STAGE_ORDER, stageOwnerRole, IDS_ETAPA_SQL } from '@/lib/metrics'
 import { EX_INTEGRANTES, nomeNaVisao } from '@/lib/equipe'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo } from '@/constants/motivosPerda'
@@ -21,18 +21,42 @@ import type { CategoriaMotivo } from '@/constants/motivosPerda'
  * Camada da perda: Pré-vendas (SDR) ou Vendas (Closer), pela etapa em que o
  * negócio foi perdido — `stageOwnerRole`: até "Reunião Agendada SQL" e No Show
  * é SDR, do Diagnóstico em diante é Closer. Mesma regra da "Perda por
- * responsável". Deal sem etapa reconhecível não tem camada (só entra em Todos).
+ * responsável". Todo negócio cai em SDR ou Closer: Todos = SDR + Closer.
  */
 export type CamadaPerda = 'todos' | 'SDR' | 'Closer'
 export const CAMADAS_PERDA: readonly CamadaPerda[] = ['todos', 'SDR', 'Closer']
 
-export function camadaDaPerda(r: FunnelRow): 'SDR' | 'Closer' | null {
-  // Pelo NOME da etapa (resolveStage), não por currentStage: a camada não
-  // depende do funil. "Reunião Agendada SQL" do funil do SDR não conta como
-  // SQL (trava do Closer), mas a perda ali é do SDR do mesmo jeito.
+/**
+ * Etapa em que o negócio está (ou foi perdido) nas listas da aba, pelo NOME
+ * (`resolveStage`). Não usa `currentStage`: a trava "Reunião Agendada SQL só
+ * no Closer" serve pra CONTAR agendamento; pra dizer onde o negócio caiu, a
+ * Reunião Agendada do funil do SDR também vale — sem isso a lista de etapas
+ * somava menos que o total de perdas. Se o RD renomeou a etapa de agendamento
+ * (nome fora do catálogo, ex. Scale Partner "Negociação"), reconhece pelo id.
+ */
+export function etapaDaPerda(r: Pick<FunnelRow, 'etapa_funil' | 'id_etapa_atual'>): StageKey | null {
   const stage = resolveStage(r.etapa_funil)
-  if (!stage) return null
-  return stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer'
+  if (stage) return stage
+  if (r.id_etapa_atual && IDS_ETAPA_SQL.includes(r.id_etapa_atual)) return 'Reunião Agendada SQL'
+  return null
+}
+
+/** Datas que só existem depois que o Closer fez a reunião. */
+const DATAS_DO_CLOSER = ['data_reuniao_realizada', 'data_sal', 'data_oportunidade', 'data_comite', 'data_pre_contrato'] as const
+
+/**
+ * Nunca devolve vazio: Todos = SDR + Closer, sempre.
+ * 1. Pelo NOME da etapa (resolveStage), não por currentStage: a camada não
+ *    depende do funil. "Reunião Agendada SQL" do funil do SDR não conta como
+ *    SQL (trava do Closer), mas a perda ali é do SDR do mesmo jeito.
+ * 2. Nome fora do catálogo: pelo id da etapa de agendamento (etapaDaPerda).
+ * 3. Etapa desconhecida de vez: Closer se o negócio já teve reunião realizada
+ *    (ou etapa posterior), senão SDR.
+ */
+export function camadaDaPerda(r: FunnelRow): 'SDR' | 'Closer' {
+  const stage = etapaDaPerda(r)
+  if (stage) return stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer'
+  return DATAS_DO_CLOSER.some(c => !!r[c]) ? 'Closer' : 'SDR'
 }
 
 export function filtrarPorCamada(rows: FunnelRow[], camada: CamadaPerda): FunnelRow[] {
@@ -99,7 +123,7 @@ export function computeKpis(
       const d = businessDaysBetween(p.data_novo_mql, p.data_perdido)
       if (d > 0) leadtimes.push(d)
     }
-    const stage = currentStage(p)
+    const stage = etapaDaPerda(p)
     if (stage) etapaCount.set(stage, (etapaCount.get(stage) ?? 0) + 1)
   }
   const leadtimeDias = leadtimes.length > 0 ? leadtimes.reduce((s, v) => s + v, 0) / leadtimes.length : 0
@@ -169,7 +193,7 @@ export interface EtapaRow { etapa: StageKey; ordem: number; qtd: number; leadtim
 export function computeEtapas(perdas: FunnelRow[]): EtapaRow[] {
   const bucket = new Map<StageKey, FunnelRow[]>()
   for (const p of perdas) {
-    const stage = currentStage(p)
+    const stage = etapaDaPerda(p)
     if (!stage) continue
     const cur = bucket.get(stage) ?? []
     cur.push(p)
@@ -199,7 +223,7 @@ export function computeCruzamentos(
 
   const etapasMap = new Map<StageKey, number>()
   for (const p of perdas) {
-    const stage = currentStage(p)
+    const stage = etapaDaPerda(p)
     if (stage) etapasMap.set(stage, ordemEtapa(stage))
   }
   const etapas = [...etapasMap.entries()]
@@ -211,7 +235,7 @@ export function computeCruzamentos(
     if (!p.motivo_perda) continue
     const m = limparMotivo(p.motivo_perda)
     if (!motivosSet.has(m)) continue
-    const stage = currentStage(p)
+    const stage = etapaDaPerda(p)
     if (!stage) continue
     const key = `${m}|||${stage}`
     const cur = cel.get(key) ?? []
@@ -244,7 +268,7 @@ export interface RespRow {
 export function computeResponsaveis(perdas: FunnelRow[], equipe?: ReadonlySet<string>): RespRow[] {
   const bucket = new Map<string, { nome: string; camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
   for (const p of perdas) {
-    const camada: 'SDR' | 'Closer' | '—' = camadaDaPerda(p) ?? '—'
+    const camada: 'SDR' | 'Closer' | '—' = camadaDaPerda(p)
     const nomeDeal = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
     if (!nomeDeal) continue
     const nome = nomeNaVisao(nomeDeal, equipe)

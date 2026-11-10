@@ -159,20 +159,6 @@ export function computeMotivos(perdas: FunnelRow[]): MotivoRow[] {
     .sort((a, b) => b.qtd - a.qtd)
 }
 
-export interface EvitavelStats { pctEvitavel: number; qtdProcesso: number; qtdMercado: number }
-
-export function computeEvitavel(perdas: FunnelRow[]): EvitavelStats {
-  let qtdProcesso = 0, qtdMercado = 0
-  for (const p of perdas) {
-    const c = classificarMotivo(p.motivo_perda)
-    if (c === 'processo') qtdProcesso += 1
-    else if (c === 'mercado') qtdMercado += 1
-  }
-  const total = qtdProcesso + qtdMercado
-  const pctEvitavel = total > 0 ? (qtdProcesso / total) * 100 : 0
-  return { pctEvitavel, qtdProcesso, qtdMercado }
-}
-
 /**
  * Posição de ordenação de uma etapa nas listas/heatmap de perda. `STAGE_ORDER`
  * não inclui "No Show" DE PROPÓSITO (metrics.ts: "fora da sequência do

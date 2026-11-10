@@ -964,6 +964,14 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-11-10 (2) — Análise de Perda sem o quadrante "Perda Evitável"
+
+Pedido do Junior. Saiu o card escuro "Perda Evitável" (% de perdas por motivo
+de processo × fit/momento); o card escuro ficou com Negociações Perdidas e
+Receita Perdida, em 2 colunas. `computeEvitavel` foi removida (sem outro
+consumidor). A classificação Processo × Mercado continua nas abas do card
+"Motivos de perda". PR #335.
+
 ### 2026-11-10 (2) — Performance ganha o "Comparativo Month-to-Date"
 
 Pedido do Junior: o gráfico de linha da Visão Geral também nas abas SDR e

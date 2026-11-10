@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  perdidos, dealsReceitaPerdida, computeKpis, computeMotivos, computeEvitavel,
+  perdidos, dealsReceitaPerdida, computeKpis, computeMotivos,
   computeEtapas, computeCruzamentos, computeResponsaveis, computeMarcas,
   camadaDaPerda, filtrarPorCamada, etapaDaPerda,
 } from '@/lib/perdaRows'
@@ -100,21 +100,6 @@ describe('computeMotivos', () => {
     expect(motivos[0].deals.map(d => d.id_lead).sort()).toEqual(['a', 'b'])
     expect(motivos[0].pct).toBeCloseTo((2 / 3) * 100, 5) // total = 3 (só quem tem motivo)
     expect(motivos[1]).toMatchObject({ motivo: 'Parou de responder', qtd: 1, categoria: 'processo' })
-  })
-})
-
-describe('computeEvitavel', () => {
-  it('soma processo/mercado e calcula % evitável, ignorando categoria ignorar/não-classificado', () => {
-    const perdas = [
-      r({ id_lead: 'a', motivo_perda: 'Parou de responder' }),      // processo
-      r({ id_lead: 'b', motivo_perda: 'Sem perfil (fora do ICP)' }), // mercado
-      r({ id_lead: 'c', motivo_perda: '[NOVO] Teste' }),             // ignorar
-      r({ id_lead: 'd', motivo_perda: 'Registro de teste - apagar' }), // não classificado
-    ]
-    const ev = computeEvitavel(perdas)
-    expect(ev.qtdProcesso).toBe(1)
-    expect(ev.qtdMercado).toBe(1)
-    expect(ev.pctEvitavel).toBeCloseTo(50, 5) // 1 / (1+1), sem contar os 2 de fora
   })
 })
 

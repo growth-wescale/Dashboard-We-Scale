@@ -17,7 +17,7 @@ import { buildScopeFilter, toWindow, mqlWord, stageLabel } from '@/lib/metrics'
 import type { OrigemComercial, StageKey } from '@/lib/metrics'
 import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
-  perdidos, computeKpis, computeMotivos, computeEvitavel, computeEtapas,
+  perdidos, computeKpis, computeMotivos, computeEtapas,
   computeCruzamentos, computeResponsaveis, computeMarcas, dealsReceitaPerdida,
   filtrarPorCamada, rotuloCamada,
 } from '@/lib/perdaRows'
@@ -46,8 +46,8 @@ const PERIOD_LABEL_PLURAL: Record<'mes' | 'trimestre' | 'ano', string> = {
 
 // ─── UI blocks ────────────────────────────────────────────────────────────
 
-function DarkKpi({ label, value, sub, tone, onClick }: {
-  label: string; value: string; sub?: string; tone?: 'amber' | 'muted'; onClick?: () => void
+function DarkKpi({ label, value, sub, onClick }: {
+  label: string; value: string; sub?: string; onClick?: () => void
 }) {
   return (
     <div
@@ -60,7 +60,7 @@ function DarkKpi({ label, value, sub, tone, onClick }: {
       <div style={{ fontSize: 11.5, letterSpacing: '.08em', textTransform: 'uppercase', color: '#E9C5E3' }}>{label}</div>
       <div style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 500, fontSize: 'clamp(30px, 8vw, 40px)', color: '#fff', marginTop: 6, fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
       {sub && (
-        <div style={{ marginTop: 8, fontSize: 12.5, color: tone === 'amber' ? '#F3C979' : '#D0AEC9' }}>{sub}</div>
+        <div style={{ marginTop: 8, fontSize: 12.5, color: '#D0AEC9' }}>{sub}</div>
       )}
     </div>
   )
@@ -229,7 +229,6 @@ export function AnalisePerda() {
   const kpis = useMemo(() => computeKpis(scoped, win, viewModes, camada), [scoped, win, viewModes, camada])
   const receitaPerdidaDeals = useMemo(() => dealsReceitaPerdida(perdas), [perdas])
   const motivos = useMemo(() => computeMotivos(perdas), [perdas])
-  const evitavel = useMemo(() => computeEvitavel(perdas), [perdas])
   const etapas = useMemo(() => computeEtapas(perdas), [perdas])
   const cruz = useMemo(() => computeCruzamentos(perdas), [perdas])
   const resps = useMemo(() => computeResponsaveis(perdas, equipe), [perdas, equipe])
@@ -309,9 +308,9 @@ export function AnalisePerda() {
 
       <QueryErrorBanner errors={[rowsError]} scope="Análise de Perda" />
 
-      {/* Card dark 3 KPIs ── */}
+      {/* Card dark 2 KPIs ── */}
       {/* Os separadores são o gap de 1px mostrando o fundo — valem lado a lado e empilhado. */}
-      <div className="rs-grid rs-cols-3" style={{
+      <div className="rs-grid rs-cols-2" style={{
         '--rs-gap': '1px', background: `color-mix(in srgb, #fff 16%, ${DARK_ACCENT})`, borderRadius: 18,
         boxShadow: 'var(--shadow-md)', color: '#fff', overflow: 'hidden',
       } as React.CSSProperties}>
@@ -320,13 +319,6 @@ export function AnalisePerda() {
           value={nf(kpis.perdidasDeals)}
           sub={`Taxa de perda de ${pct(kpis.taxaPerda)} sobre os ${baseTaxa} do período`}
           onClick={() => setDrawer({ title: 'Negociações Perdidas', subtitle: drawerSubtitle, deals: perdas })}
-        />
-        <DarkKpi
-          label="Perda Evitável"
-          value={evitavel.qtdProcesso + evitavel.qtdMercado > 0 ? pct(evitavel.pctEvitavel, 0) : '—'}
-          sub={`${nf(evitavel.qtdProcesso)} por falha de processo · ${nf(evitavel.qtdMercado)} por fit ou momento`}
-          tone="amber"
-          onClick={() => setDrawer({ title: 'Perda Evitável', subtitle: drawerSubtitle, deals: perdas })}
         />
         <DarkKpi
           label="Receita Perdida"

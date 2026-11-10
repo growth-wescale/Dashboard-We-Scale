@@ -6,6 +6,10 @@
  * ela sozinho (só o Administrador, que tem acesso total).
  */
 
+import { whatsappAtivo } from './previaWhatsapp'
+
+export const PERM_GASTOS_WHATSAPP = 'aba.gastos-whatsapp'
+
 export type AreaAba = 'Marketing' | 'Vendas'
 
 export interface DefAba {
@@ -26,6 +30,7 @@ export const ABAS: readonly DefAba[] = [
   { chave: 'aba.saude-marca',      label: 'Saúde da Marca',       rota: '/marca',              area: 'Marketing' },
   { chave: 'aba.okrs',             label: 'Meta & OKRs',          rota: '/okrs',               area: 'Marketing' },
   { chave: 'aba.sop-marketing',    label: 'S&OP Marketing',       rota: '/sop-marketing',      area: 'Marketing' },
+  ...(whatsappAtivo ? [{ chave: PERM_GASTOS_WHATSAPP, label: 'Gastos de WhatsApp', rota: '/gastos-whatsapp', area: 'Marketing' as const }] : []),
   { chave: 'aba.visao-macro',      label: 'Visão Macro',          rota: '/funil-vendas',       area: 'Vendas' },
   { chave: 'aba.performance',      label: 'Performance',          rota: '/performance-vendas', area: 'Vendas' },
   { chave: 'aba.analise-perda',    label: 'Análise de Perda',     rota: '/analise-perda',      area: 'Vendas' },

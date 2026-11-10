@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'whatsapp_previa'))
 from prepare import abrir_lotes, consolidar_modelos
 from schema import FUNCTIONS, ROLE
+from acesso import pode_ler_gastos
 
 BASE = '/api/whatsapp-ouro'
 FIRST = date(2026, 9, 1)
@@ -50,7 +51,7 @@ def autorizar(settings, token):
     if not isinstance(user, dict) or not user.get('id') or user.get('is_anonymous') is True:
         raise Error(401, 'invalid_session')
     access = auth('/rest/v1/rpc/minhas_permissoes', b'{}')
-    if not isinstance(access, dict) or not all(access.get(k) is True for k in ('registrado', 'ativo', 'acesso_total')):
+    if not pode_ler_gastos(access):
         raise Error(403, 'access_denied')
 
 

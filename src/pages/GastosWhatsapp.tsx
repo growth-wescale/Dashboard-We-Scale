@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { dividirEnvios, type EvidenciaEnvio } from '@/lib/finalidadesWhatsapp'
 import { brl, num, soma, custo, consumoPorMarca, type DiaConta } from '@/lib/consumoWhatsapp'
 import { GraficosWhatsapp } from '@/components/GraficosWhatsapp'
+import { PERM_GASTOS_WHATSAPP } from '@/lib/permissoes'
 import { whatsappResumo } from '@/lib/previaWhatsapp'
 import './GastosWhatsapp.css'
 
@@ -144,10 +145,11 @@ function Resumo({ dados }: { dados: Dados }) {
   </>
 }
 export function GastosWhatsapp(){
-  const { acessoTotal }=useAcesso()
+  const { pode }=useAcesso()
+  const autorizado=pode(PERM_GASTOS_WHATSAPP)
   const [dados,setDados]=useState<Dados|null>(null),[erro,setErro]=useState(false),[tentativa,repetir]=useState(0)
   useEffect(()=>{
-    if(!acessoTotal) return
+    if(!autorizado) return
     const ctrl=new AbortController()
     setErro(false)
     async function carregar(){
@@ -161,8 +163,8 @@ export function GastosWhatsapp(){
     }
     void carregar().catch(()=>{if(!ctrl.signal.aborted)setErro(true)})
     return ()=>ctrl.abort()
-  },[acessoTotal,tentativa])
+  },[autorizado,tentativa])
   return <main className="wa-page"><header><h1>Gastos de WhatsApp</h1>{dados&&<p><CalendarDays size={15}/> Consulta de {new Date(dados.gerado).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})} · Brasília</p>}</header>
-    {!acessoTotal?<p>Acesso restrito.</p>:erro?<div role="alert">Não foi possível carregar os dados. <button onClick={()=>repetir(n=>n+1)}>Tentar novamente</button></div>:dados?<Resumo dados={dados}/>:<p role="status">Carregando gastos de WhatsApp…</p>}
+    {!autorizado?<p>Acesso restrito.</p>:erro?<div role="alert">Não foi possível carregar os dados. <button onClick={()=>repetir(n=>n+1)}>Tentar novamente</button></div>:dados?<Resumo dados={dados}/>:<p role="status">Carregando gastos de WhatsApp…</p>}
   </main>
 }

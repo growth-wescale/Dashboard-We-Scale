@@ -1,6 +1,6 @@
 # Leitura de Gastos de WhatsApp
 
-`POST /api/whatsapp-ouro/v1/resumo` recebe um objeto vazio e a sessão de Marketing. O gateway revalida usuário, registro ativo e acesso total em cada leitura. O contrato versão 2 é o mesmo da prévia. As linhas de cobertura sem medição mantêm os campos nulos.
+`POST /api/whatsapp-ouro/v1/resumo` recebe um objeto vazio e a sessão de Marketing. O gateway revalida sessão, registro ativo e permissão de leitura. Administradores têm acesso automático. Os demais precisam de `aba.gastos-whatsapp` e acesso a todas as marcas. A regra é reavaliada em cada leitura. O contrato versão 2 é o mesmo da prévia. As linhas de cobertura sem medição mantêm os campos nulos.
 
 A cada hora o serviço lê, por mês desde setembro de 2026, as funções `ouro.dashboard_whatsapp_contas` e `ouro.dashboard_whatsapp_eventos` numa única transação somente leitura. A fotografia é substituída após a leitura completa. Uma falha provoca nova tentativa após um minuto. O serviço recusa fotografias com mais de duas horas. A data da consulta e a última observação válida de cada marca têm significados distintos.
 

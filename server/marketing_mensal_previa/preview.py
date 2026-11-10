@@ -14,6 +14,8 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent / 'outubro_ouro'))
 from perfil import consulta_perfil, linha_negocio
+sys.path.insert(0, str(ROOT.parent / 'whatsapp_ouro'))
+from acesso import pode_ler_gastos
 
 HOST = 'https://dashboard.srv1816822.hstgr.cloud'
 LOCAL = 'http://127.0.0.1:4173'
@@ -154,11 +156,13 @@ class Handler(SimpleHTTPRequestHandler):
                           headers={**headers,'apikey':self.server.public_key})
             with urlopen(req,timeout=10) as response:
                 access=json.load(response)
-            if not all(access.get(k) is True for k in ('ativo','registrado','acesso_total')):
-                return self.send_error(403)
             if whatsapp:
+                if not pode_ler_gastos(access):
+                    return self.send_error(403)
                 snapshot = Path(os.getenv('WESCALE_WHATSAPP_SNAPSHOT', Path.home()/'.cache/wescale/previa-whatsapp/resumo.json'))
                 return self.reply(200,json.loads(snapshot.read_text()))
+            if not all(access.get(k) is True for k in ('ativo','registrado','acesso_total')):
+                return self.send_error(403)
             start,end = period(b['periodo'])
             receipt=coverage(int(time.monotonic()//60))
             through=date.fromisoformat(receipt['dia'])

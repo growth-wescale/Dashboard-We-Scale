@@ -126,7 +126,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { marcas: marcasPermitidas, pode, acessoTotal } = useAcesso()
+  const { marcas: marcasPermitidas, pode } = useAcesso()
   const [activeBrand, setActiveBrandState] = useState<string>(marcasPermitidas?.[0] ?? 'oral-unic')
 
   // Pessoa limitada a marcas: a marca ativa da Saúde da Marca só pode ser uma
@@ -169,7 +169,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const itens: SidebarItem[] = []
     for (const item of NAV_ITEMS) {
       if (item.key === 'vendas') {
-        if (whatsappAtivo && acessoTotal) itens.push({ key: 'gastos-whatsapp', label: 'Gastos de WhatsApp', icon: <MessageCircle size={16} /> })
+        if (podeRota(pode, '/gastos-whatsapp')) itens.push({ key: 'gastos-whatsapp', label: 'Gastos de WhatsApp', icon: <MessageCircle size={16} /> })
         const subs = VENDAS_SUB.filter(s => podeRota(pode, `/${s.key}`))
         if (subs.length > 0) itens.push({ ...item, subItems: subs })
         continue
@@ -185,7 +185,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       itens.push({ key: 'acessos', label: 'Usuários & Acessos', icon: <Users size={16} /> })
     }
     return itens
-  }, [pode, marcasPermitidas, acessoTotal])
+  }, [pode, marcasPermitidas])
 
   const handleSync = useCallback(() => {
     if (syncing) return

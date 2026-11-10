@@ -91,6 +91,7 @@ WITH catalogo AS MATERIALIZED (
     s.waba_id,s.produto product_type,p->>'template_id' template_id,
     (to_timestamp((p->>'start')::bigint) AT TIME ZONE 'UTC')::date day_utc,
     (p->>'sent')::bigint sent,(p->>'delivered')::bigint delivered,(p->>'read')::bigint read_latest,
+    p->'clicked_by_type' clicked_by_type,
     EXISTS (SELECT 1 FROM falhas f WHERE f.waba_id=s.waba_id AND f.produto=s.produto AND f.ids ? (p->>'template_id')
       AND f.period_start<=to_timestamp((p->>'start')::bigint) AND f.period_end>=to_timestamp((p->>'end')::bigint)
       AND f.observed_at>s.observed_at) data_stale
@@ -101,7 +102,7 @@ WITH catalogo AS MATERIALIZED (
   ORDER BY s.waba_id,s.produto,p->>'template_id',p->>'start',p->>'end',s.observed_at DESC,s.snapshot_id DESC
 ), por_produto AS (
 SELECT m.evento,m.nome modelo,m.id,m.waba_id conta,CASE WHEN b.marca='WeScale' THEN 'We Scale' ELSE b.marca END marca,t.product_type produto,
-  to_char(t.day_utc,'YYYY-MM-DD') dia,t.sent enviados,t.delivered entregues,t.read_latest lidos,
+  to_char(t.day_utc,'YYYY-MM-DD') dia,t.sent enviados,t.delivered entregues,t.read_latest lidos,t.clicked_by_type cliques_por_tipo,
   t.data_stale desatualizado,
   CASE WHEN m.categoria='MARKETING' AND NOT t.data_stale
     THEN t.delivered * tarifa.unit_pos_pago_brl END projecao
@@ -114,7 +115,9 @@ LEFT JOIN prata.whatsapp_tarifa_rd tarifa
 WHERE m.evento IS NOT NULL AND t.day_utc BETWEEN DATE '{inicio}' AND DATE '{fim}'
   AND (m.dias_utc IS NULL OR (t.day_utc >= DATE '2026-10-01' AND t.day_utc < DATE '2026-11-01'
        AND extract(day FROM t.day_utc)::integer = ANY(m.dias_utc)))
-  AND (t.sent>0 OR t.delivered>0 OR t.read_latest>0)
+  AND (t.sent>0 OR t.delivered>0 OR t.read_latest>0
+       OR EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(t.clicked_by_type)='object'
+          THEN t.clicked_by_type END) click WHERE click.value ~ '^0*[1-9][0-9]*$'))
  )
 -- Lotes por conta/dia preservam o grão dos modelos e evitam truncar a
 -- resposta do Metabase. A contagem de séries é conferida no leitor.

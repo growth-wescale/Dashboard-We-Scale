@@ -28,6 +28,24 @@ def consultar(sql):
     return [dict(zip([c['name'] for c in data['cols']], row)) for row in data['rows']]
 
 
+def cliques_modelo(series):
+    # Mesmo botão e janela podem aparecer em dois produtos da Meta.
+    # unique_url_button é um subconjunto de url_button, nunca uma parcela adicional.
+    tipos = ('url_button', 'quick_reply_button')
+    medidas = []
+    for row in series:
+        clicks = row.get('cliques_por_tipo')
+        if row['desatualizado'] or not isinstance(clicks, dict):
+            return None
+        if clicks.keys() - {*tipos, 'unique_url_button'} or not any(k in clicks for k in tipos):
+            return None
+        valores = tuple(clicks.get(k, 0) for k in tipos)
+        if any(type(v) is not int or v < 0 for v in valores):
+            return None
+        medidas.append(valores)
+    return sum(medidas[0]) if len(set(medidas)) == 1 else None
+
+
 def consolidar_modelos(rows):
     """Produtos sobrepostos só fornecem uma medição por conta/modelo/dia UTC."""
     groups = defaultdict(list)
@@ -44,9 +62,12 @@ def consolidar_modelos(rows):
         row = dict(series[0])
         row['produto'] = ' / '.join(sorted(produtos))
         row['desatualizado'] = any(r['desatualizado'] for r in series)
+        # Uma série que reportou apenas cliques não mede entrega nem custo.
+        mensagens = [r for r in series if any((r[k] or 0) > 0 for k in ('enviados', 'entregues', 'lidos'))]
+        mensagens_vencidas = any(r['desatualizado'] for r in mensagens)
         for campo in ('enviados','entregues','lidos','projecao'):
-            valores = {r[campo] for r in series}
-            row[campo] = valores.pop() if len(valores) == 1 and not row['desatualizado'] else None
+            valores = {r[campo] for r in mensagens}
+            row[campo] = valores.pop() if len(valores) == 1 and not mensagens_vencidas else None
         if row['entregues'] is None:
             row['projecao'] = None
         if row['enviados'] is not None:
@@ -55,6 +76,9 @@ def consolidar_modelos(rows):
             tipo = 'rotina' if row['evento'] == 'rotina' else 'evento'
             classificados[conta, row['marca'], dia, tipo] += row['enviados']
         if row['evento'] != 'rotina':
+            row.pop('cliques_por_tipo', None)
+            row['cliques'] = cliques_modelo(series)
+            row['somente_cliques'] = not mensagens
             eventos.append(row)
     finalidades = [dict(conta=c,marca=m,dia=d,tipo=t,enviados=v)
                    for (c,m,d,t), v in sorted(classificados.items()) if v > 0]

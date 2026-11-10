@@ -962,6 +962,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-11-10 — Resumo de engajamento dos disparos de WhatsApp
+
+A aba Gastos de WhatsApp usa a permissão `aba.gastos-whatsapp` no catálogo de Marketing, no menu e no gateway. O papel Acesso total (legado) recebe somente a leitura da tela para usuários sem restrição de marca.
+
+O quadro de eventos mostra mensagens lidas e cliques em botões antes de expandir cada linha. A tabela detalha os valores por modelo/dia. Medições incompletas aparecem com cobertura, sem duplicar cliques únicos de URL ou séries espelhadas.
+
 ### 2026-11-09 — Identificação na Lista de MQLs de Marketing
 
 As leituras de negociações de novembro em diante e de outubro para Inpot, B2Case e Viva passam a projetar nome e e-mail do contato vinculado por ID e conta. A lista mantém uma linha por negociação. A migração das views e a atualização dos serviços são separadas da publicação do frontend.

@@ -31,6 +31,25 @@ class GatewayWhatsapp(unittest.TestCase):
                         autorizar(self.settings, 'token')
                     self.assertEqual(denied.exception.status, 403)
 
+    def test_permissao_da_tela_exige_cadastro_ativo_e_todas_as_marcas(self):
+        role = dict(registrado=True, ativo=True, acesso_total=False, marcas=None,
+                    permissoes=['aba.gastos-whatsapp'])
+        for changes, allowed in [
+            ({}, True), ({'registrado': False}, False), ({'ativo': False}, False),
+            ({'marcas': ['inpot']}, False), ({'marca': 'inpot'}, False),
+            ({'permissoes': []}, False), ({'permissoes': 'aba.gastos-whatsapp'}, False),
+        ]:
+            access = {**role, **changes}
+            with self.subTest(changes=changes), patch('app.urlopen', side_effect=[
+                BytesIO(b'{"id":"user"}'), BytesIO(json.dumps(access).encode())
+            ]):
+                if allowed:
+                    autorizar(self.settings, 'token')
+                else:
+                    with self.assertRaises(Error) as denied:
+                        autorizar(self.settings, 'token')
+                    self.assertEqual(denied.exception.status, 403)
+
     def test_snapshot_vencido(self):
         cache = Cache(self.settings)
         for snapshot in [None, (time.monotonic()-7201, b'{}', 'old')]:

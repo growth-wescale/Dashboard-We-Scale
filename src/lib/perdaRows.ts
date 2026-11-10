@@ -11,11 +11,47 @@
 
 import type { FunnelRow } from '@/lib/funnelTypes'
 import type { PeriodWindow, ViewModes, StageKey } from '@/lib/metrics'
-import { rowsInLoss, countStage, currentStage, STAGE_ORDER, stageOwnerRole } from '@/lib/metrics'
+import { rowsInLoss, countStage, currentStage, resolveStage, STAGE_ORDER, stageOwnerRole } from '@/lib/metrics'
 import { EX_INTEGRANTES, nomeNaVisao } from '@/lib/equipe'
 import { businessDaysBetween } from '@/lib/businessHours'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import type { CategoriaMotivo } from '@/constants/motivosPerda'
+
+/**
+ * Camada da perda: Pré-vendas (SDR) ou Vendas (Closer), pela etapa em que o
+ * negócio foi perdido — `stageOwnerRole`: até "Reunião Agendada SQL" e No Show
+ * é SDR, do Diagnóstico em diante é Closer. Mesma regra da "Perda por
+ * responsável". Deal sem etapa reconhecível não tem camada (só entra em Todos).
+ */
+export type CamadaPerda = 'todos' | 'SDR' | 'Closer'
+export const CAMADAS_PERDA: readonly CamadaPerda[] = ['todos', 'SDR', 'Closer']
+
+export function camadaDaPerda(r: FunnelRow): 'SDR' | 'Closer' | null {
+  // Pelo NOME da etapa (resolveStage), não por currentStage: a camada não
+  // depende do funil. "Reunião Agendada SQL" do funil do SDR não conta como
+  // SQL (trava do Closer), mas a perda ali é do SDR do mesmo jeito.
+  const stage = resolveStage(r.etapa_funil)
+  if (!stage) return null
+  return stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer'
+}
+
+export function filtrarPorCamada(rows: FunnelRow[], camada: CamadaPerda): FunnelRow[] {
+  return camada === 'todos' ? rows : rows.filter(r => camadaDaPerda(r) === camada)
+}
+
+export function rotuloCamada(c: CamadaPerda): string {
+  return c === 'SDR' ? 'Pré-vendas (SDR)' : c === 'Closer' ? 'Vendas (Closer)' : 'Todos'
+}
+
+/**
+ * Base da taxa de perda: o que entrou na camada no período. Todos e SDR = MQL
+ * (todo lead passa pelo SDR); Closer = Diagnóstico (reunião realizada), a 1ª
+ * etapa da camada do Closer — perda do Closer sobre MQL dava um número sem
+ * leitura nenhuma.
+ */
+export function etapaBaseDaCamada(camada: CamadaPerda): StageKey {
+  return camada === 'Closer' ? 'Diagnóstico' : 'MQL'
+}
 
 /** Deals perdidos na janela — ponto único de entrada da aba sobre rowsInLoss (metrics.ts). */
 export function perdidos(rows: FunnelRow[], win: PeriodWindow, modes: ViewModes): FunnelRow[] {
@@ -34,7 +70,8 @@ export function dealsReceitaPerdida(perdas: FunnelRow[]): FunnelRow[] {
 
 export interface KpisPerda {
   perdidasDeals: number
-  mqlsPeriodo: number
+  /** Entradas da camada no período (MQL, ou Diagnóstico no Closer) — base da taxa. */
+  basePeriodo: number
   taxaPerda: number
   emAberto: number
   leadtimeDias: number
@@ -42,13 +79,18 @@ export interface KpisPerda {
   receitaPerdida: number
 }
 
-export function computeKpis(scoped: FunnelRow[], win: PeriodWindow, modes: ViewModes): KpisPerda {
-  const perdas = perdidos(scoped, win, modes)
-  const mqlsPeriodo = countStage(scoped, 'MQL', win, modes)
+export function computeKpis(
+  scoped: FunnelRow[], win: PeriodWindow, modes: ViewModes, camada: CamadaPerda = 'todos',
+): KpisPerda {
+  const perdas = filtrarPorCamada(perdidos(scoped, win, modes), camada)
+  const basePeriodo = countStage(scoped, etapaBaseDaCamada(camada), win, modes)
   const perdidasDeals = perdas.length
-  const taxaPerda = mqlsPeriodo > 0 ? (perdidasDeals / mqlsPeriodo) * 100 : 0
+  const taxaPerda = basePeriodo > 0 ? (perdidasDeals / basePeriodo) * 100 : 0
 
-  const emAberto = scoped.filter(r => r.status_atual === 'Em andamento' && r.eh_ciclo_atual).length
+  // Em aberto: negócio vivo parado numa etapa da camada (Todos = todos os vivos).
+  const emAberto = filtrarPorCamada(
+    scoped.filter(r => r.status_atual === 'Em andamento' && r.eh_ciclo_atual), camada,
+  ).length
 
   const leadtimes: number[] = []
   const etapaCount = new Map<StageKey, number>()
@@ -65,7 +107,7 @@ export function computeKpis(scoped: FunnelRow[], win: PeriodWindow, modes: ViewM
 
   const receitaPerdida = dealsReceitaPerdida(perdas).reduce((s, r) => s + (r.valor_contrato ?? 0), 0)
 
-  return { perdidasDeals, mqlsPeriodo, taxaPerda, emAberto, leadtimeDias, etapaTop, receitaPerdida }
+  return { perdidasDeals, basePeriodo, taxaPerda, emAberto, leadtimeDias, etapaTop, receitaPerdida }
 }
 
 /** Limpa o prefixo "[NOVO]" que o RD antepõe a alguns motivos, pra exibição/agrupamento. */
@@ -202,8 +244,7 @@ export interface RespRow {
 export function computeResponsaveis(perdas: FunnelRow[], equipe?: ReadonlySet<string>): RespRow[] {
   const bucket = new Map<string, { nome: string; camada: 'SDR' | 'Closer' | '—'; deals: FunnelRow[] }>()
   for (const p of perdas) {
-    const stage = currentStage(p)
-    const camada: 'SDR' | 'Closer' | '—' = stage ? (stageOwnerRole(stage) === 'sdr' ? 'SDR' : 'Closer') : '—'
+    const camada: 'SDR' | 'Closer' | '—' = camadaDaPerda(p) ?? '—'
     const nomeDeal = (camada === 'SDR' ? p.nome_sdr : camada === 'Closer' ? p.nome_closer : null)?.trim()
     if (!nomeDeal) continue
     const nome = nomeNaVisao(nomeDeal, equipe)
@@ -222,9 +263,12 @@ export function computeResponsaveis(perdas: FunnelRow[], equipe?: ReadonlySet<st
 
 export interface MarcaRow { marca: string; qtd: number; pctSobreMql: number; deals: FunnelRow[] }
 
+/** % sobre a base da camada na própria marca (MQL; Diagnóstico no Closer). */
 export function computeMarcas(
   perdas: FunnelRow[], scoped: FunnelRow[], win: PeriodWindow, modes: ViewModes,
+  camada: CamadaPerda = 'todos',
 ): MarcaRow[] {
+  const etapaBase = etapaBaseDaCamada(camada)
   const porMarca = new Map<string, FunnelRow[]>()
   for (const p of perdas) {
     if (!p.marca) continue
@@ -234,7 +278,7 @@ export function computeMarcas(
   }
   return [...porMarca.entries()]
     .map(([marca, deals]) => {
-      const mqlMarca = countStage(scoped, 'MQL', win, modes, r => r.marca === marca)
+      const mqlMarca = countStage(scoped, etapaBase, win, modes, r => r.marca === marca)
       return {
         marca, qtd: deals.length,
         pctSobreMql: mqlMarca > 0 ? (deals.length / mqlMarca) * 100 : 0,

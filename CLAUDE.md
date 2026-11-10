@@ -1005,16 +1005,23 @@ perdido, pela mesma `stageOwnerRole` da "Perda por responsável": até a Reuniã
 Agendada SQL e No Show é SDR; do Diagnóstico em diante é Closer. Lê o NOME da
 etapa (`resolveStage`), não `currentStage`: a perda na Reunião Agendada SQL do
 funil do SDR entra como SDR (antes ficava fora da lista por responsável).
-Negócio perdido em etapa que o catálogo não conhece só aparece em Todos.
+Ajuste no mesmo dia (PR #334), porque Todos (239) não fechava com SDR (220) +
+Closer (18): a etapa de agendamento do Scale Partner foi renomeada no RD para
+"Negociação" e saía do catálogo. Agora a etapa da perda (`etapaDaPerda`) é
+reconhecida pelo id (`IDS_ETAPA_SQL`, metrics.ts) quando o nome é desconhecido, e
+etapa desconhecida de vez cai em Closer se o negócio já teve reunião realizada
+ou etapa posterior, senão SDR: **Todos = SDR + Closer, sempre**. A lista "Onde e
+quando se perde" também passou a usar a etapa pelo nome (a trava "Reunião
+Agendada SQL só no Closer" é pra contar agendamento, não pra dizer onde caiu) e
+soma o total de perdas. Conferido: 240 = 222 + 18; em aberto 1.224 = 1.158 + 66.
 
 **Base da taxa:** Todos e SDR sobre MQL; Closer sobre **Diagnóstico** do período
 (`etapaBaseDaCamada`), também na "Perda por marca". "Em aberto" vira "Em aberto
 no SDR/Closer" (negócio vivo parado numa etapa da camada). Com SDR ou Closer no
 topo, o seletor interno da "Perda por responsável" some.
 
-Conferido com dado real (nov/26 até 10/11, Inbound, Consolidado): Todos 239 =
-SDR 220 + Closer 18 + 1 sem etapa reconhecida; Closer 41,9% sobre Diagnóstico;
-em aberto 1.223 = 1.149 + 66 + 8. Build + 1.115 testes. PR #332.
+Closer 41,9% sobre Diagnóstico em nov/26 (até 10/11, Inbound, Consolidado).
+Build + 1.122 testes. PRs #332 e #334.
 
 ### 2026-11-10 — Resumo de engajamento dos disparos de WhatsApp
 

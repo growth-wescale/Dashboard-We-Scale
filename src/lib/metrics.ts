@@ -474,6 +474,12 @@ const ETAPA_SQL_CLOSER = '69b1badfe1def700137f1b89'
 const ETAPA_SQL_SCALE_PARTNER = '6a99b99218a2bb002df8ec61'
 const ETAPA_SQL_ODONTO_LEGACY = '68b84341646c55001ed64e53'
 /**
+ * Ids das etapas de agendamento (Closer, Scale Partner, Odonto Legacy). Servem
+ * pra reconhecer a etapa quando o RD a renomeia e o nome sai do catálogo — ex.:
+ * a do Scale Partner virou "Negociação" (rd_funis_etapas desatualizada).
+ */
+export const IDS_ETAPA_SQL: readonly string[] = [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER, ETAPA_SQL_ODONTO_LEGACY]
+/**
  * Migração dos funis de marca (24/10/2026): a partir deste dia o Odonto Legacy
  * agenda no SDR e o deal segue pro Closer, como as outras marcas. Evento
  * anterior ao corte segue a regra de 21/09 (só a etapa do funil Legacy);

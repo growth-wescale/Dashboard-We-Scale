@@ -10,7 +10,7 @@ import './GastosWhatsapp.css'
 
 type Medicao = {
   evento: string; modelo: string; id: string; conta: string; marca: string; produto: string
-  dia: string; enviados: number | null; entregues: number | null; lidos: number | null
+  dia: string; enviados: number | null; entregues: number | null; lidos: number | null; cliques?: number | null; somente_cliques?: boolean
   desatualizado: boolean; projecao: number | null
 }
 type Dados = { versao: number; inicio: string; fim: string; gerado: string; contas: DiaConta[]; eventos: Medicao[]; finalidades: EvidenciaEnvio[] }
@@ -50,20 +50,37 @@ function EnviosPorFinalidade({ dados, inicio, fim, marca }: { dados: Dados; inic
     <small>As medições dos modelos são diárias em UTC. Só classificamos envios com a janela inteira dentro do período selecionado em Brasília e compatíveis com o volume da conta. O traço indica ausência de cobertura.</small>
   </section>
 }
+function IndicadorEvento({ itens, campo, titulo }: {
+  itens: Medicao[]; campo: 'entregues' | 'lidos' | 'cliques'; titulo: string
+}) {
+  const medidas = itens.map(r => r[campo]).filter((v): v is number => v != null)
+  return <span className="wa-event-metrica">
+    <small>{titulo}</small><b>{medidas.length ? num(soma(medidas)) : '—'}</b>
+    {medidas.length > 0 && medidas.length < itens.length &&
+      <small>Parcial · {medidas.length}/{itens.length}</small>}
+  </span>
+}
+
 function Eventos({ rows }: { rows: Medicao[] }) {
   return <section className="wa-section"><h2>Gastos por evento de disparo</h2>
-    <p>Projeção por modelo: entregas observadas × tarifa pós-paga brasileira da categoria. Datas dos modelos em UTC. A projeção é apresentada separadamente do custo por conta.</p>
+    <p>Aberturas são mensagens marcadas como lidas. Cliques incluem links e respostas rápidas. Quando a cobertura é parcial, o valor soma as medições disponíveis por conta, modelo e dia (UTC). O custo projeta as entregas pela tarifa brasileira da categoria.</p>
     {eventos.map(evento => {
       const itens = rows.filter(r => r.evento === evento.id)
       if (!itens.length && !evento.fonte) return null
-      const valor = itens.some(r => r.projecao === null) ? null : soma(itens.map(r => r.projecao))
+      const comMensagens = itens.filter(r => !r.somente_cliques)
+      const valor = comMensagens.some(r => r.projecao === null) ? null : soma(comMensagens.map(r => r.projecao))
       return <details key={evento.id} className="wa-event"><summary>
         <span><strong>{evento.nome}</strong><small>{evento.periodo}</small></span>
-        <span>{itens.length ? num(soma(itens.map(r => r.entregues))) + ' entregues' : 'Sem medição no recorte'}</span>
-        <b>{brl(valor)}</b></summary>
+        {itens.length ? <>
+          <IndicadorEvento itens={itens} campo="entregues" titulo="Entregues"/>
+          <IndicadorEvento itens={itens} campo="lidos" titulo="Aberturas"/>
+          <IndicadorEvento itens={itens} campo="cliques" titulo="Cliques"/>
+          <span className="wa-event-metrica"><small>Custo projetado</small><b>{brl(valor)}</b></span>
+        </> : <span className="wa-event-vazio">Sem medição no recorte</span>}
+      </summary>
         {evento.fonte && <p>{evento.fonte}</p>}
-        {itens.length > 0 && <div className="wa-scroll"><table><thead><tr>{['Dia (UTC)','Conta / modelo','Enviadas','Entregues','Lidas','Projeção'].map(c=><th key={c}>{c}</th>)}</tr></thead>
-          <tbody>{itens.map(r=><tr key={[r.dia,r.conta,r.id,r.produto].join(':')}><td>{dia(r.dia)}</td><td><strong>{r.marca}</strong><small>{r.modelo} · {r.produto}{r.desatualizado?' · medição anterior':''}</small></td><td>{num(r.enviados)}</td><td>{num(r.entregues)}</td><td>{num(r.lidos)}</td><td>{brl(r.projecao)}</td></tr>)}</tbody></table></div>}
+        {itens.length > 0 && <div className="wa-scroll"><table><thead><tr>{['Dia (UTC)','Conta / modelo','Enviadas','Entregues','Aberturas','Cliques','Projeção'].map(c=><th key={c}>{c}</th>)}</tr></thead>
+          <tbody>{itens.map(r=><tr key={[r.dia,r.conta,r.id,r.produto].join(':')}><td>{dia(r.dia)}</td><td><strong>{r.marca}</strong><small>{r.modelo} · {r.produto}{r.desatualizado?' · medição anterior':''}</small></td><td>{num(r.enviados)}</td><td>{num(r.entregues)}</td><td>{num(r.lidos)}</td><td>{num(r.cliques ?? null)}</td><td>{brl(r.projecao)}</td></tr>)}</tbody></table></div>}
       </details>
     })}
   </section>

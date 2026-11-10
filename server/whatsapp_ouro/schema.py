@@ -7,6 +7,15 @@ OWNER = 'dashboard_whatsapp_leitura'
 FUNCTIONS = {name: 'ouro.dashboard_whatsapp_' + name for name in ('contas', 'eventos')}
 
 
+def funcao_sql(name, substituir=False):
+    source = (SOURCE / (name + '.sql')).read_text().strip()
+    select = source.replace("DATE '{inicio}'", 'inicio').replace("DATE '{fim}'", 'fim')
+    create = 'CREATE OR REPLACE' if substituir else 'CREATE'
+    return (f'{create} FUNCTION {FUNCTIONS[name]}(inicio date, fim date) RETURNS SETOF jsonb '
+            'LANGUAGE sql STABLE STRICT SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $wa$\n'
+            'SELECT to_jsonb(q) FROM (\n' + select + '\n) q\n$wa$;')
+
+
 def schema_sql():
     statements = [
         'BEGIN;', "SET LOCAL lock_timeout = '3s';",
@@ -20,12 +29,8 @@ def schema_sql():
         f'GRANT USAGE ON SCHEMA ouro TO {ROLE};',
     ]
     for name, function in FUNCTIONS.items():
-        source = (SOURCE / (name + '.sql')).read_text().strip()
-        select = source.replace("DATE '{inicio}'", 'inicio').replace("DATE '{fim}'", 'fim')
         statements += [
-            f'CREATE FUNCTION {function}(inicio date, fim date) RETURNS SETOF jsonb '
-            'LANGUAGE sql STABLE STRICT SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $wa$\n'
-            'SELECT to_jsonb(q) FROM (\n' + select + '\n) q\n$wa$;',
+            funcao_sql(name),
             f'ALTER FUNCTION {function}(date,date) OWNER TO {OWNER};',
             f'REVOKE ALL ON FUNCTION {function}(date,date) FROM PUBLIC;',
             f'GRANT EXECUTE ON FUNCTION {function}(date,date) TO {ROLE};',
@@ -34,4 +39,10 @@ def schema_sql():
 
 
 if __name__ == '__main__':
-    print(schema_sql())
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--atualizar-eventos', action='store_true')
+    if parser.parse_args().atualizar_eventos:
+        print("BEGIN;\nSET LOCAL lock_timeout = '3s';\n" + funcao_sql('eventos', substituir=True) + "\nCOMMIT;")
+    else:
+        print(schema_sql())

@@ -3,6 +3,8 @@ import { Download } from 'lucide-react'
 import { PageTop } from '@/components/ui/PageTop'
 import { FilterBar } from '@/components/ui/FilterBar'
 import { OrigemToggle } from '@/components/ui/OrigemToggle'
+import { CamadaPerdaToggle } from '@/components/ui/CamadaPerdaToggle'
+import { useCamadaPerda } from '@/hooks/useCamadaPerda'
 import { AoVivoIndicador } from '@/components/ui/AoVivoIndicador'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
@@ -17,6 +19,7 @@ import { funilFilterOptions } from '@/lib/funilFilterOptions'
 import {
   perdidos, computeKpis, computeMotivos, computeEvitavel, computeEtapas,
   computeCruzamentos, computeResponsaveis, computeMarcas, dealsReceitaPerdida,
+  filtrarPorCamada, rotuloCamada,
 } from '@/lib/perdaRows'
 import type { EtapaMeta, CruzCel } from '@/lib/perdaRows'
 import { BRAND_LIST, BRAND_ACCENT, marcaLabel } from '@/constants/brands'
@@ -205,28 +208,45 @@ export function AnalisePerda() {
     [opcoes.marcas],
   )
 
+  // Todos · SDR · Closer: recorta a página inteira pela etapa da perda.
+  const [camada, setCamada] = useCamadaPerda()
+  const toggles = <><OrigemToggle /><CamadaPerdaToggle value={camada} onChange={setCamada} /></>
+  // Base da taxa: MQL (Todos/SDR) ou Diagnóstico (Closer) — etapaBaseDaCamada.
+  const baseTaxa = camada === 'Closer' ? 'Diagnósticos' : mqlWord(origem, true)
+
   const multiPeriodo = periodMode !== 'dia' && periodValues.length > 1
   const subtitlePeriodo = multiPeriodo
     ? `${periodValues.length} ${PERIOD_LABEL_PLURAL[periodMode as Exclude<PeriodMode, 'dia'>]} selecionados`
     : `${shortMonth(range.start)} ${new Date(range.start + 'T12:00:00').getFullYear()}`
-  const drawerSubtitle = `${scopeLabel} · ${subtitlePeriodo}`
+  const drawerSubtitle = camada === 'todos'
+    ? `${scopeLabel} · ${subtitlePeriodo}`
+    : `${scopeLabel} · ${rotuloCamada(camada)} · ${subtitlePeriodo}`
 
-  const perdas = useMemo(() => perdidos(scoped, win, viewModes), [scoped, win, viewModes])
-  const kpis = useMemo(() => computeKpis(scoped, win, viewModes), [scoped, win, viewModes])
+  const perdas = useMemo(
+    () => filtrarPorCamada(perdidos(scoped, win, viewModes), camada),
+    [scoped, win, viewModes, camada],
+  )
+  const kpis = useMemo(() => computeKpis(scoped, win, viewModes, camada), [scoped, win, viewModes, camada])
   const receitaPerdidaDeals = useMemo(() => dealsReceitaPerdida(perdas), [perdas])
   const motivos = useMemo(() => computeMotivos(perdas), [perdas])
   const evitavel = useMemo(() => computeEvitavel(perdas), [perdas])
   const etapas = useMemo(() => computeEtapas(perdas), [perdas])
   const cruz = useMemo(() => computeCruzamentos(perdas), [perdas])
   const resps = useMemo(() => computeResponsaveis(perdas, equipe), [perdas, equipe])
-  const marcas = useMemo(() => computeMarcas(perdas, scoped, win, viewModes), [perdas, scoped, win, viewModes])
+  const marcas = useMemo(
+    () => computeMarcas(perdas, scoped, win, viewModes, camada),
+    [perdas, scoped, win, viewModes, camada],
+  )
 
   const [motivoTab, setMotivoTab] = useState<'todos' | 'processo' | 'mercado'>('todos')
   const [respTab, setRespTab] = useState<'todos' | 'SDR' | 'Closer'>('todos')
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
 
   const motivosFiltrados = motivoTab === 'todos' ? motivos : motivos.filter(m => m.categoria === motivoTab)
-  const respFiltrados = respTab === 'todos' ? resps : resps.filter(r => r.camada === respTab)
+  // Com SDR ou Closer no topo as perdas já vêm só daquela camada: o seletor
+  // interno some e a lista é a da camada.
+  const respTabEfetiva = camada === 'todos' ? respTab : camada
+  const respFiltrados = respTabEfetiva === 'todos' ? resps : resps.filter(r => r.camada === respTabEfetiva)
 
   // Filtro obrigatório sem nada marcado → esconde os dados e pede a seleção.
   const faltandoObrigatorio = [
@@ -237,7 +257,7 @@ export function AnalisePerda() {
   if (faltandoObrigatorio.length > 0) {
     return (
       <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 60px', maxWidth: 1400, margin: '0 auto' }}>
-        <PageTop title="Análise de Perda" titleAside={<OrigemToggle />} subtitle="Selecione os filtros obrigatórios" />
+        <PageTop title="Análise de Perda" titleAside={toggles} subtitle="Selecione os filtros obrigatórios" />
         <FilterBar
           marcasDisponiveis={marcasDisponiveis}
           fontesDisponiveis={opcoes.fontes}
@@ -257,12 +277,12 @@ export function AnalisePerda() {
     <div style={{ padding: 'var(--page-pad-top) var(--page-pad-x) 60px', maxWidth: 1400, margin: '0 auto' }}>
       <PageTop
         title="Análise de Perda"
-        titleAside={<OrigemToggle />}
+        titleAside={toggles}
         subtitle={drawerSubtitle}
         actions={<>
           <AoVivoIndicador />
           <button
-            onClick={() => downloadCsv(perdas, `analise-perda-${scopeLabel}-${range.start}-${range.end}`)}
+            onClick={() => downloadCsv(perdas, `analise-perda-${scopeLabel}${camada === 'todos' ? '' : `-${camada}`}-${range.start}-${range.end}`)}
             disabled={!perdas.length}
             title={!perdas.length ? 'Sem dados no período' : 'Exportar perdas em CSV'}
             style={{
@@ -298,7 +318,7 @@ export function AnalisePerda() {
         <DarkKpi
           label="Negociações Perdidas"
           value={nf(kpis.perdidasDeals)}
-          sub={`Taxa de perda de ${pct(kpis.taxaPerda)} sobre os ${mqlWord(origem, true)} do período`}
+          sub={`Taxa de perda de ${pct(kpis.taxaPerda)} sobre os ${baseTaxa} do período`}
           onClick={() => setDrawer({ title: 'Negociações Perdidas', subtitle: drawerSubtitle, deals: perdas })}
         />
         <DarkKpi
@@ -319,7 +339,7 @@ export function AnalisePerda() {
       {/* 4 KPI cards ── */}
       <div className="rs-grid rs-cols-4" style={{ '--rs-gap': '14px', marginTop: 18 } as React.CSSProperties}>
         <KTile label="Taxa de perda"            value={pct(kpis.taxaPerda)} />
-        <KTile label="Em aberto (pipeline)"     value={nf(kpis.emAberto)} />
+        <KTile label={camada === 'todos' ? 'Em aberto (pipeline)' : `Em aberto no ${camada}`} value={nf(kpis.emAberto)} />
         <KTile label="Leadtime médio até perda" value={`${kpis.leadtimeDias.toFixed(1)}d`} />
         <KTile label="Etapa que mais perde"     value={kpis.etapaTop ? stageLabel(kpis.etapaTop, origem) : '—'} />
       </div>
@@ -409,7 +429,7 @@ export function AnalisePerda() {
         <SCard>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
             <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)' }}>Perda por responsável</div>
-            <div style={{ display: 'inline-flex', borderRadius: 999, background: 'var(--ws-border)', padding: 2 }}>
+            {camada === 'todos' && <div style={{ display: 'inline-flex', borderRadius: 999, background: 'var(--ws-border)', padding: 2 }}>
               {(['todos', 'SDR', 'Closer'] as const).map(t => (
                 <button key={t}
                   onClick={() => setRespTab(t)}
@@ -420,7 +440,7 @@ export function AnalisePerda() {
                     color: respTab === t ? '#fff' : 'var(--ws-text-secondary)', fontWeight: 500,
                   }}>{t === 'todos' ? 'Todos' : t}</button>
               ))}
-            </div>
+            </div>}
           </div>
           {respFiltrados.slice(0, 10).map(r => (
             <BarRow key={`${r.camada}|${r.nome}`}
@@ -439,7 +459,7 @@ export function AnalisePerda() {
 
         <SCard>
           <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 4 }}>Perda por marca</div>
-          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume absoluto e taxa sobre os {mqlWord(origem, true)} da própria marca</div>
+          <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)', marginBottom: 8 }}>Volume absoluto e taxa sobre os {baseTaxa} da própria marca</div>
           {marcas.map(m => (
             <BarRow key={m.marca}
               label={marcaLabel(m.marca)}

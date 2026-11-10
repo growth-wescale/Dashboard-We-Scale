@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   perdidos, dealsReceitaPerdida, computeKpis, computeMotivos, computeEvitavel,
   computeEtapas, computeCruzamentos, computeResponsaveis, computeMarcas,
+  camadaDaPerda, filtrarPorCamada,
 } from '@/lib/perdaRows'
 import { toWindow, DEFAULT_VIEW_MODES } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
@@ -55,7 +56,7 @@ describe('computeKpis', () => {
     ]
     const kpis = computeKpis(scoped, win, modes)
     expect(kpis.perdidasDeals).toBe(1)
-    expect(kpis.mqlsPeriodo).toBe(3)
+    expect(kpis.basePeriodo).toBe(3)
     expect(kpis.taxaPerda).toBeCloseTo(100 / 3, 5)
     expect(kpis.emAberto).toBe(2)
   })
@@ -217,6 +218,11 @@ describe('computeResponsaveis', () => {
     expect(resps[0].exIntegrantes).toBe(true)
   })
 
+  it('perda na Reunião Agendada SQL do funil do SDR entra como SDR', () => {
+    const perdas = [r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: 'id-sdr', nome_sdr: 'Xayane' })]
+    expect(computeResponsaveis(perdas).map(x => [x.nome, x.camada])).toEqual([['Xayane', 'SDR']])
+  })
+
   it('ignora deal sem etapa corrente resolvível', () => {
     const perdas = [r({ id_lead: 'a', status_atual: 'Perdido', etapa_funil: 'Etapa Desconhecida', nome_sdr: 'Xayane' })]
     expect(computeResponsaveis(perdas)).toEqual([])
@@ -239,5 +245,43 @@ describe('computeMarcas', () => {
     expect(oralUnic.qtd).toBe(1)
     expect(oralUnic.pctSobreMql).toBeCloseTo(100 / 3, 5) // 1 perdido / 3 MQL da Oral Unic
     expect(inpot.pctSobreMql).toBeCloseTo(50, 5) // 1 perdido / 2 MQL da Inpot
+  })
+})
+
+describe('camada da perda (toggle Todos · SDR · Closer)', () => {
+  const sdr = r({ id_lead: 'a', status_atual: 'Perdido', data_perdido: '2026-08-05', etapa_funil: 'Contato Efetivo', data_novo_mql: '2026-08-01' })
+  const noShow = r({ id_lead: 'b', status_atual: 'Perdido', data_perdido: '2026-08-06', etapa_funil: 'No Show', data_novo_mql: '2026-08-01' })
+  const closer = r({ id_lead: 'c', status_atual: 'Perdido', data_perdido: '2026-08-07', etapa_funil: 'SAL', data_novo_mql: '2026-08-01', data_reuniao_realizada: '2026-08-03' })
+  const semEtapa = r({ id_lead: 'd', status_atual: 'Perdido', data_perdido: '2026-08-08', etapa_funil: 'Etapa Desconhecida', data_novo_mql: '2026-08-01' })
+  const vivoSdr = r({ id_lead: 'e', status_atual: 'Em andamento', etapa_funil: 'Tentando Contato', data_novo_mql: '2026-08-02' })
+  const vivoCloser = r({ id_lead: 'f', status_atual: 'Em andamento', etapa_funil: 'Diagnóstico', data_novo_mql: '2026-08-02', data_reuniao_realizada: '2026-08-04' })
+  const scoped = [sdr, noShow, closer, semEtapa, vivoSdr, vivoCloser]
+
+  it('SDR até a Reunião Agendada e No Show; Closer do Diagnóstico em diante', () => {
+    expect(camadaDaPerda(sdr)).toBe('SDR')
+    expect(camadaDaPerda(noShow)).toBe('SDR')
+    expect(camadaDaPerda(closer)).toBe('Closer')
+    expect(camadaDaPerda(semEtapa)).toBeNull()
+  })
+
+  it('Todos não filtra nada; deal sem etapa só aparece em Todos', () => {
+    expect(filtrarPorCamada(scoped, 'todos')).toHaveLength(6)
+    expect(filtrarPorCamada(scoped, 'SDR').map(x => x.id_lead)).toEqual(['a', 'b', 'e'])
+    expect(filtrarPorCamada(scoped, 'Closer').map(x => x.id_lead)).toEqual(['c', 'f'])
+  })
+
+  it('SDR: taxa sobre MQL; Closer: taxa sobre Diagnóstico; em aberto segue a camada', () => {
+    const todos = computeKpis(scoped, win, modes, 'todos')
+    expect([todos.perdidasDeals, todos.basePeriodo, todos.emAberto]).toEqual([4, 6, 2])
+    const s = computeKpis(scoped, win, modes, 'SDR')
+    expect([s.perdidasDeals, s.basePeriodo, s.emAberto]).toEqual([2, 6, 1])
+    const c = computeKpis(scoped, win, modes, 'Closer')
+    expect([c.perdidasDeals, c.basePeriodo, c.emAberto]).toEqual([1, 2, 1])
+    expect(c.taxaPerda).toBeCloseTo(50, 5)
+  })
+
+  it('perda por marca do Closer usa o Diagnóstico da marca como base', () => {
+    const perdas = filtrarPorCamada(perdidos(scoped, win, modes), 'Closer')
+    expect(computeMarcas(perdas, scoped, win, modes, 'Closer')[0].pctSobreMql).toBeCloseTo(50, 5)
   })
 })

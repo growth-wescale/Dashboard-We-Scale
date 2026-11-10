@@ -962,6 +962,30 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-11-10 — Análise de Perda separa SDR, Closer e Todos
+
+Pedido do Junior: dividir a análise de perdidos entre Pré-vendas (SDR) e Vendas
+(Closer). Toggle **Todos · SDR · Closer** ao lado do Inbound × Prospecção Ativa
+(`CamadaPerdaToggle` + `useCamadaPerda`, escolha guardada no navegador),
+recortando a página inteira: KPIs, motivos, etapas, heatmap, responsável,
+marca, popups e CSV.
+
+**Regra** (`camadaDaPerda`, `perdaRows.ts`): camada = etapa em que o negócio foi
+perdido, pela mesma `stageOwnerRole` da "Perda por responsável": até a Reunião
+Agendada SQL e No Show é SDR; do Diagnóstico em diante é Closer. Lê o NOME da
+etapa (`resolveStage`), não `currentStage`: a perda na Reunião Agendada SQL do
+funil do SDR entra como SDR (antes ficava fora da lista por responsável).
+Negócio perdido em etapa que o catálogo não conhece só aparece em Todos.
+
+**Base da taxa:** Todos e SDR sobre MQL; Closer sobre **Diagnóstico** do período
+(`etapaBaseDaCamada`), também na "Perda por marca". "Em aberto" vira "Em aberto
+no SDR/Closer" (negócio vivo parado numa etapa da camada). Com SDR ou Closer no
+topo, o seletor interno da "Perda por responsável" some.
+
+Conferido com dado real (nov/26 até 10/11, Inbound, Consolidado): Todos 239 =
+SDR 220 + Closer 18 + 1 sem etapa reconhecida; Closer 41,9% sobre Diagnóstico;
+em aberto 1.223 = 1.149 + 66 + 8. Build + 1.115 testes. PR #332.
+
 ### 2026-11-10 — Resumo de engajamento dos disparos de WhatsApp
 
 A aba Gastos de WhatsApp usa a permissão `aba.gastos-whatsapp` no catálogo de Marketing, no menu e no gateway. O papel Acesso total (legado) recebe somente a leitura da tela para usuários sem restrição de marca.

@@ -8,6 +8,8 @@ import { AoVivoIndicador } from '@/components/ui/AoVivoIndicador'
 import { QueryErrorBanner } from '@/components/ui/QueryErrorBanner'
 import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAviso'
 import { MetaRitmoCard } from '@/components/ui/MetaRitmoCard'
+import { ComparativoMtdChart, type MetricaOpcao } from '@/components/ui/ComparativoMtdChart'
+import { referenciaMtd, type ContextoMtd } from '@/lib/mtdSeries'
 import { DivisaoReceitaLinha } from '@/components/ui/DivisaoReceita'
 import { useRepasseTaxas } from '@/hooks/useRepasseTaxas'
 import { dividirReceita } from '@/lib/repasse'
@@ -101,6 +103,10 @@ const SDR_ACCENT         = '#EFA94A' // laranja
 const SDR_ACCENT_DARK    = '#8A5A1E' // laranja escuro — sombreado do funil (TrapFunnel)
 const CLOSER_ACCENT      = '#2ABCB5' // teal
 const CLOSER_ACCENT_DARK = '#166F69' // teal escuro — sombreado do funil (TrapFunnel)
+// Linha do mês atual no Comparativo MTD: o accent um tom mais escuro, pra
+// passar no validador de paleta (faixa de luminosidade e contraste).
+const SDR_LINHA_MTD    = '#D9822B'
+const CLOSER_LINHA_MTD = '#1A9E97'
 
 /** Funil da aba SDR: só as etapas que o SDR trabalha, de MQL até SAL —
  *  Oportunidade·COF em diante é território do Closer. */
@@ -711,6 +717,40 @@ export function PerformanceVendas() {
   // Sufixo dos rótulos de venda quando o toggle está em Unidades — mesmo padrão da Visão Macro.
   const unidadeSufixo = viewModes.salesMode === 'units' ? ' (unidades)' : ''
 
+  // ── Comparativo Month-to-Date (gráfico) ─────────────────────────────────────
+  // Mês de referência = o mês selecionado (até hoje se em curso, inteiro se
+  // fechado) ou, em outro recorte, o mês do último dia do período. Comparado
+  // com os 3 meses anteriores, nos mesmos dias, com as regras de contagem dos cards.
+  const fimPeriodo = ranges.reduce((m, r) => (r.end > m ? r.end : m), ranges[0]?.end ?? range.end)
+  const refMtd = useMemo(() => referenciaMtd(mesUnico, fimPeriodo), [mesUnico, fimPeriodo])
+  const ctxMtd: ContextoMtd = useMemo(
+    () => ({ scoped, eventos, modes: viewModes, extra: noEscopo }),
+    [scoped, eventos, viewModes, noEscopo],
+  )
+  const escopoMtd = [
+    scopeLabel,
+    origem,
+    sdrs.length ? `SDR: ${sdrs.join(', ')}` : null,
+    closers.length ? `Closer: ${closers.join(', ')}` : null,
+  ].filter(Boolean).join(' · ')
+  const notaMtd = viewModes.funnelView === 'cohort'
+    ? 'O comparativo usa a data de cada etapa — o filtro “Deals criados no período” não se aplica a ele.'
+    : undefined
+  const metricasMtdSdr: MetricaOpcao[] = useMemo(() => [
+    { key: 'mql', label: mqlWord(origem, true) },
+    { key: 'sql', label: 'SQLs' },
+    { key: 'diag', label: 'Diagnósticos' },
+    { key: 'sal', label: 'SAL' },
+    { key: 'noShow', label: 'No Show', polaridade: 'menor' },
+  ], [origem])
+  const metricasMtdCloser: MetricaOpcao[] = useMemo(() => [
+    { key: 'fech', label: `Fechamentos${unidadeSufixo}` },
+    { key: 'receita', label: 'Receita gerada', dinheiro: true },
+    { key: 'cof', label: 'Oportunidades (COF)' },
+    { key: 'sal', label: 'SAL' },
+    { key: 'diag', label: 'Diagnósticos' },
+  ], [unidadeSufixo])
+
   const [tab, setTab] = useState<PerfTab>('sdr')
 
   // ── Popup dos cards: por pessoa (meta × realizado) ou deals ────────────────
@@ -1037,6 +1077,12 @@ export function PerformanceVendas() {
             Cards e tabela usam a mesma contagem da Visão Macro (a etapa SQL só conta no funil do Closer). A tabela credita cada etapa ao SDR do negócio e a soma das linhas fecha com os cards: quem saiu do time entra somado em “Ex-integrantes” e negócio sem SDR em “Sem SDR”.
           </p>
 
+          <div style={{ marginBottom: 20 }}>
+            <ComparativoMtdChart papel="sdr" metricas={metricasMtdSdr} padrao="mql" ctx={ctxMtd}
+              mesRef={refMtd.mesKey} diaRef={refMtd.dia} corAtual={SDR_LINHA_MTD} escopo={escopoMtd}
+              fmtNum={nf} fmtDinheiro={moneyK} loading={loading} nota={notaMtd} />
+          </div>
+
           <VisaoToggle visao={visao} onChange={setVisao} habilitado={!!mtd} rotuloMtd={rotuloMtd} accent={SDR_ACCENT} />
           {visao === 'mtd' && stripAnt && (
             <ComparativoMtd titulo={tituloMtd} accent={SDR_ACCENT} itens={[
@@ -1116,6 +1162,12 @@ export function PerformanceVendas() {
           <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '0 0 16px' }}>
             Mesma observação da seção de SDR: a tabela credita cada etapa e venda ao Closer do negócio e fecha com os cards — quem saiu do time entra em “Ex-integrantes” e negócio sem Closer em “Sem Closer”.
           </p>
+
+          <div style={{ marginBottom: 20 }}>
+            <ComparativoMtdChart papel="closer" metricas={metricasMtdCloser} padrao="fech" ctx={ctxMtd}
+              mesRef={refMtd.mesKey} diaRef={refMtd.dia} corAtual={CLOSER_LINHA_MTD} escopo={escopoMtd}
+              fmtNum={nf} fmtDinheiro={moneyK} loading={loading} nota={notaMtd} />
+          </div>
 
           <VisaoToggle visao={visao} onChange={setVisao} habilitado={!!mtd} rotuloMtd={rotuloMtd} accent={CLOSER_ACCENT} />
           {visao === 'mtd' && stripAnt && (

@@ -578,6 +578,8 @@ src/hooks/useRepasseTaxas.ts      lê vw_repasse_taxa; publicarRepasse() grava p
 src/components/ui/DivisaoReceita.tsx  linha "We Scale / Marcas" dos cards de receita + bloco com quebra por marca
 src/components/metas/RepasseTaxas.tsx aba "Repasse das taxas" da Configuração das Metas (em vigor, histórico, versão nova)
 src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
+src/lib/mtdSeries.ts              séries acumuladas dia a dia do Comparativo MTD da Performance (mesmas regras dos cards, testado)
+src/components/ui/ComparativoMtdChart.tsx  gráfico "Comparativo Month-to-Date" (Performance › SDR e Closer)
 src/lib/mtd.ts                    visão MTD da Performance: fator da meta até hoje + mesmo trecho do mês anterior (puro, testado)
 src/lib/corridaPerformance.ts     Corrida de Performance (Campanha de Metas): 1 lançamento por RR/venda com cada fator; o card de cada pessoa é a soma deles (puro, testado)
 src/lib/corridaDados.ts           linhas de vw_funil_vendas → unidades da Corrida + "não pontuou" (quem não tem meta no mês, campo vazio); limites do mês em Brasília (puro, testado)
@@ -961,6 +963,34 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-10 (2) — Performance ganha o "Comparativo Month-to-Date"
+
+Pedido do Junior: o gráfico de linha da Visão Geral também nas abas SDR e
+Closer da Performance. Card novo logo abaixo dos cards de números, antes da
+tabela por pessoa: mês de referência (linha cheia, cor da aba) contra os 3
+meses anteriores (tracejados), acumulado dia a dia nos mesmos dias, seletor de
+métrica, Linha × Barras (por dia) e tooltip por dia.
+
+- **Métricas:** SDR = MQL (Lead em Prospecção Ativa), SQL, Diagnóstico, SAL,
+  No Show (cair é bom: a variação fica verde ao cair); Closer = Fechamentos
+  (segue Negócios × Unidades), Receita, COF, SAL, Diagnóstico. A escolha fica
+  guardada no navegador por aba.
+- **Regra** (`mtdSeries.ts`): cada ponto é o número que o card daria com o
+  período "dia 1 até o dia N" (teste compara ponto a ponto com
+  `countStage`/`countStageEvents`/`countSales`/`sumRevenue`). Deals únicos =
+  1ª passagem do (deal, ciclo) no mês. Segue todos os filtros da barra, menos
+  "Deals criados no período" (é sempre pela data da etapa; o card avisa).
+- **Mês de referência:** o mês selecionado (até hoje se em curso, inteiro se
+  fechado) ou, em trimestre/ano/dia, o mês do fim do período. O Visão Geral não
+  foi tocado (é do Gabriel); o componente é próprio da Performance.
+- Cores dos meses anteriores (violeta, magenta, azul) validadas no validador
+  de paleta junto com a cor de cada aba (`#D9822B` SDR, `#1A9E97` Closer).
+
+Conferido com dado real (cópia de prévia sem login): set/26 Inbound
+Consolidado = cards (MQL 1.343, SQL 145, Diagnóstico 91, SAL 52, No Show 41);
+nov/26 Closer = cards (2 fechamentos, R$ 59,9 mil); celular sem rolagem lateral.
+Build + 1.121 testes (6 novos).
 
 ### 2026-11-10 — Análise de Perda separa SDR, Closer e Todos
 

@@ -964,35 +964,28 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
-### 2026-11-10 (3) — Alerta pós-LIVE no Teams
+### 2026-11-10 (3) — Alerta pós-LIVE no Teams (criado e retirado no mesmo dia)
 
-Pedido do Junior, depois da análise "Cassiana com mais agendamentos e menos pontos" (o
-dashboard estava certo: a Corrida pontua o SDR por Diagnóstico, e os convidados da LIVE ficam
-parados em Reunião Agendada SQL até o Closer mover à mão). Na R1 em grupo da Eletrovias
-("LIVE: Eletrovias"), o MeetRox liga a call a um negócio só, e a automação R1 → Diagnóstico
-não roda para os outros convidados.
+Depois da análise "Cassiana com mais agendamentos e menos pontos", foi criado um alerta diário
+no Teams com os convidados de LIVE ainda em Reunião Agendada SQL do Closer (PR #336). No
+mesmo dia o Junior pediu para tirar: não quer alerta, prefere pedir a lista quando precisar.
+O pg_cron `alerta_pos_live` foi removido. A view `vw_alerta_pos_live`, as funções
+`alertar_pos_live()`, `alerta_pos_live_mensagens()` e `sem_acento()` e a tabela
+`alerta_pos_live_envio` continuam no banco, sem uso e fechadas para anon e authenticated
+(o `drop` foi recusado na sessão). O SQL que criou tudo saiu do repositório. Se for apagar:
+`drop function alertar_pos_live(), alerta_pos_live_mensagens(); drop view vw_alerta_pos_live;
+drop table alerta_pos_live_envio; drop function sem_acento(text);`.
 
-**O que faz:** pg_cron `alerta_pos_live` (`0 12 * * 1-6` = 09h de Brasília, segunda a
-sábado) chama `alertar_pos_live()`, que manda no Teams (`teams_alertas_url`, o mesmo canal
-dos alertas de distribuição e No Show) uma mensagem por LIVE com os convidados que seguem em
-Reunião Agendada SQL do funil do Closer: nome, SDR, dono no RD quando não é quem fez a LIVE,
-link do negócio e, no botão, a gravação no MeetRox. Sem pendência, não manda nada. Repete
-todo dia até o negócio ser movido, por até 14 dias depois da LIVE.
+**Achado no teste:** o fluxo do Power Automate de `teams_alertas_url` está **suspenso**
+("WorkflowTriggerIsNotEnabled"). Nenhum alerta do banco chega ao Teams, inclusive os da
+distribuição de leads (erro, responsável padrão, silêncio); o de silêncio falhou toda hora
+em 10/11. Religar em Workflows/Power Automate pelo dono do fluxo.
 
-**Quem entra** (`vw_alerta_pos_live`): call do MeetRox com "live" ou "coletiva" no título,
-terminada há mais de 2 h; convidado ligado ao negócio pelo e-mail (`attendees` ×
-`deal_contatos`); negócio aberto em `69b1badfe1def700137f1b89`; **marca do negócio no título
-da LIVE** (corta live de marketing, como a de 19/10); e entrada na etapa antes do início da LIVE
-(quem foi reagendado conta só na LIVE seguinte). LIVE sem a marca no título não gera alerta.
-
-Conferido no banco, sem envio: 3 mensagens com os 10 convidados de LIVE parados em 10/11 (Sarah
-6, Cassiana 3, Xayane 1), os mesmos da análise; o Lenilton aparece só na LIVE de 09/11. A live de
-marketing de 19/10 não passa na regra. Consulta em ~15 ms. View, tabela de log
-(`alerta_pos_live_envio`, com os `request_ids` do pg_net) e funções fechadas para anon e
-authenticated. Mensagens montadas por `alerta_pos_live_mensagens()` (dá para ver sem mandar).
-Ficam de fora reuniões individuais não gravadas no MeetRox (Bruno Prates e Renato Bragança, de
-06/11). SQL: `docs/sql/2026-11-10-alerta-pos-live.sql`. Desligar:
-`select cron.unschedule('alerta_pos_live');`.
+**Como achar à mão os negócios que já deviam ter saído de Reunião Agendada SQL:** RD
+`GET /deals?deal_pipeline_id=69380937219fc3001702b9b5&deal_stage_id=69b1badfe1def700137f1b89&closed_at=false`
+(`next_task` = data da reunião) e `GET /tasks?deal_id=` para quem não tem tarefa aberta;
+convidados de LIVE por `DB_Reunioes_MeetRox.attendees` × `deal_contatos.email`; presença
+pela transcrição (cada fala vem como `mm:ss - Nome (Cliente):`; quem não falou não aparece).
 
 ### 2026-11-10 (2) — Análise de Perda sem o quadrante "Perda Evitável"
 

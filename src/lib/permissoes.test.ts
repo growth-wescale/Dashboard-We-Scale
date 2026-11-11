@@ -114,6 +114,10 @@ describe('catálogo', () => {
 })
 
 describe('Distribuição de Leads no catálogo', () => {
+  it('a rota /relatorios exige aba.relatorios', () => {
+    expect(permissaoDaRota('/relatorios')).toBe('aba.relatorios')
+  })
+
   it('a rota /distribuicao-leads exige aba.distribuicao', () => {
     expect(permissaoDaRota('/distribuicao-leads')).toBe('aba.distribuicao')
     expect(ABAS.find(a => a.chave === 'aba.distribuicao')).toMatchObject({ label: 'Distribuição de Leads', area: 'Vendas' })

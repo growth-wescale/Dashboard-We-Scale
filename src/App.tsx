@@ -70,6 +70,7 @@ function PageLoader() {
 }
 
 const Acessos = lazyWithRetry(() => import('@/pages/Acessos').then(m => ({ default: m.Acessos })))
+const Relatorios = lazyWithRetry(() => import('@/pages/Relatorios').then(m => ({ default: m.Relatorios })))
 const DistribuicaoLeads = lazyWithRetry(() => import('@/pages/DistribuicaoLeads').then(m => ({ default: m.DistribuicaoLeads })))
 
 function RoutedContent() {
@@ -93,6 +94,7 @@ function RoutedContent() {
           <Route path="/metas"              element={<HubMetas />} />
           <Route path="/distribuicao-leads" element={<DistribuicaoLeads />} />
           <Route path="/analise-objecoes"   element={<AnaliseObjecoes />} />
+          <Route path="/relatorios"         element={<Relatorios />} />
           <Route path="/gp-setembro"        element={<GpSetembro />} />
           <Route path="/analise-perda"      element={<AnalisePerda />} />
           <Route path="/linha-do-tempo"         element={<LinhaDoTempo />} />

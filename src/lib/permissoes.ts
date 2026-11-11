@@ -36,6 +36,7 @@ export const ABAS: readonly DefAba[] = [
   { chave: 'aba.analise-perda',    label: 'Análise de Perda',     rota: '/analise-perda',      area: 'Vendas' },
   { chave: 'aba.linha-do-tempo',   label: 'Linha do Tempo',       rota: '/linha-do-tempo',     area: 'Vendas' },
   { chave: 'aba.analise-objecoes', label: 'Análise de Objeções',  rota: '/analise-objecoes',   area: 'Vendas' },
+  { chave: 'aba.relatorios',       label: 'Relatórios',           rota: '/relatorios',         area: 'Vendas' },
   { chave: 'aba.campanha-metas',   label: 'Campanha de Metas',    rota: '/gp-setembro',        area: 'Vendas' },
   { chave: 'aba.metas',            label: 'Configuração das Metas', rota: '/metas',              area: 'Vendas' },
   { chave: 'aba.distribuicao',     label: 'Distribuição de Leads',  rota: '/distribuicao-leads', area: 'Vendas' },

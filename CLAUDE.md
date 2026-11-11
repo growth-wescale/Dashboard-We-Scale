@@ -18,7 +18,7 @@ donos diferentes convivendo no mesmo app:
 | Área | Abas | Dono |
 |---|---|---|
 | Marketing | Visão Geral, Saúde da Marca, Acompanhamento Meta, S&OP Marketing | Gabriel |
-| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, GP Setembro, Linha do Tempo, Configuração das Metas** | **Junior** |
+| **Expansão / Vendas** | **Visão Macro, Performance, Análise de Perda, Análise de Objeções, Relatórios, GP Setembro, Linha do Tempo, Configuração das Metas** | **Junior** |
 
 **Junior mexe só nas abas de Vendas** — e, dentro delas, não em Análise de Objeções.
 
@@ -952,6 +952,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 - [ ] **~50 deals sem marca** no CRM, invisíveis no dashboard
 - [ ] **`fonte_macro` em branco** em parte da base — melhorou de 100% (abr) para 35% (ago), mas é preenchimento na origem
 - [x] ~~Linha do Tempo em branco até rodar o script das views~~ — RESOLVIDO em 16/09: views `vw_deal_timeline_eventos/_tarefas/_reunioes` aplicadas no Supabase de Expansão (migration `linha_do_tempo_views_bloco_a_e_b`). Junior optou por rodar os blocos A **e** B, então anotação de tarefa e resumo de reunião ficam legíveis por quem tiver a anon key — decisão consciente dele, registrada aqui porque amplia a pendência da anon key exposta
+- [ ] **Aba Relatórios (11/11) só aparece pro Administrador** até alguém marcar `aba.relatorios` nos tipos de acesso (Usuários & Acessos › Tipos de acesso). Painel novo do Metabase não aparece sozinho: entra em `src/constants/relatoriosMetabase.ts`
 - [ ] **Aba Linha do Tempo só aparece pro Administrador até rodar `docs/sql/2026-09-16-acesso-linha-do-tempo.sql`** no Supabase de Marketing — os demais papéis não têm a permissão `aba.linha-do-tempo`
 - [ ] Dados de Expansão no Supabase ainda não usados: `DB_Metas_Conversao`, `DB_Valor_Franquia`, motor de cadências (`db_tarefas_sdr` e `DB_Reunioes_MeetRox` passaram a ser usados pela Linha do Tempo, 16/09; `DB_Reunioes_MeetRox` também pela Performance › Closer, 01/10)
 - [ ] **Closers gravam reunião de venda sem tipo de call no MeetRox** — em set/26 foram 52 sem tipo contra 86 tipadas (Jéssica 35, Douglas 15), muitas com título de venda ("Devolutiva Comitê", "Alinhamento Contrato", "Finalização"). Ficam fora da contagem R1–R5 do bloco "Reuniões no MeetRox"; o próprio bloco lista elas. Correção é de processo (classificar a call no MeetRox), não de código
@@ -963,6 +964,32 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-11 — Aba Relatórios (Vendas) com os painéis do Metabase
+
+Pedido do Junior: centralizar no dashboard os relatórios avulsos que o Maicon
+monta no Metabase (`metabase.wescale.com.br`, banco oralunic_dw do TI). Aba nova
+**Vendas › Relatórios** (`/relatorios`, permissão `aba.relatorios`): um cartão
+por painel, com descrição, filtros, data da última alteração, botão "Abrir" e
+atalho direto para cada aba do painel (`/dashboard/<id>?tab=<id>-<slug>`), tudo
+abrindo o Metabase numa aba nova (precisa de login lá). Painéis listados (lidos
+em `GET /api/dashboard` em 11/11): 8 Marketing, Pré-vendas e Vendas (8 abas),
+7 Marketing e Vendas V2 (15 abas), 5 Cockpit antes e depois (4 abas) e 6
+WhatsApp: consumo e custo. Ficaram de fora o exemplo "E-commerce Insights" e o
+"Teste CRM" (vazio). Link extra para a coleção 34 "Bases para explorar".
+
+A lista é fixa em `src/constants/relatoriosMetabase.ts`: o navegador não tem
+chave do Metabase, então não consegue buscar a lista sozinho. Nenhuma chave nem
+link público vai pro código (o repo é público).
+
+**Ver o painel dentro do dashboard (próximo passo, não feito):** o Metabase está
+com `enable-embedding` desligado e `enable-public-sharing` ligado. Link público
+(`/public/dashboard/<uuid>`) mostraria os dados a qualquer um com a URL, sem
+login, e a URL ficaria no repo público: descartado. O caminho seguro é o
+embedding estático: ligar o embedding no Metabase (config do Maicon), guardar a
+chave de embedding num segredo e assinar a URL do iframe numa Edge Function que
+confere a permissão `aba.relatorios`.
+
 
 ### 2026-11-10 (3) — Alerta pós-LIVE no Teams (criado e retirado no mesmo dia)
 

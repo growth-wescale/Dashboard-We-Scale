@@ -8,6 +8,7 @@ const TITULOS: Record<string, string> = {
   '/analise-perda': 'Análise de Perda',
   '/linha-do-tempo': 'Linha do Tempo',
   '/analise-objecoes': 'Análise de Objeções',
+  '/relatorios': 'Relatórios',
   '/metas': 'Configuração das Metas',
   '/acessos': 'Usuários & Acessos',
 }

@@ -81,7 +81,7 @@ def serialize(v):
  if isinstance(v,(dt.date,dt.datetime,dt.time)): return v.isoformat()
  raise TypeError('unsupported_response_type')
 
-def mapped(dataset, rows):
+def mapped(dataset, rows, route=None):
  out=[]
  for source in rows:
   r=dict(source)
@@ -94,7 +94,10 @@ def mapped(dataset, rows):
   elif dataset=='passages':
    r={k:r.get(k) for k in ('id_deal','dia','etapa_canonica','id_etapa','nome_funil','ciclo','marca_deal','origem_comercial')}
    r.update(marca_deal='We Scale',rn_deal_etapa_mes=1)
-  elif dataset=='leads': r={k:r.get(k) for k in LEAD_FIELDS}
+  elif dataset=='leads':
+   r={k:r.get(k) for k in LEAD_FIELDS}
+   if route=='/':
+    r['dados_extras']={**(r['dados_extras'] or {}),'id_deal':source['id_deal'],'ciclo_mql':source['ciclo']}
   elif dataset=='media': r={k:r.get(k) for k in MEDIA_FIELDS}
   elif dataset=='tasks':
    r={k:r.get(k) for k in TASK_FIELDS}
@@ -167,7 +170,7 @@ class Service:
      if brand is not None and brand not in ('We Scale','Scale Partner'):raise GatewayError(503,'scope_violation')
     warnings=['Histórico ouro observado; snapshots manuais identificados permanecem históricos.']
     if dataset=='timeline':warnings.append('Mudanças de campo sem contrato histórico não são inferidas.')
-    return {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':mapped(dataset,rows),'partner_ids':ids,'observed_at':observed,'warnings':warnings}
+    return {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':mapped(dataset,rows,body['route']),'partner_ids':ids,'observed_at':observed,'warnings':warnings}
   finally:self.slots.release()
 
 class Handler(BaseHTTPRequestHandler):

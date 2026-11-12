@@ -4,6 +4,7 @@ import { marketingCrmClient, partnerMarketingCacheScope } from '@/lib/partnerMar
 
 export interface VwMarketingFunil {
   id_lead: string
+  ciclo?: number
   marca: string | null
   data_criacao_negociacao: string | null
   data_mql: string | null

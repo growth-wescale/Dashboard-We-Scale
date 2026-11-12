@@ -18,6 +18,7 @@ import type { MediaDailyRaw, Lead, Meta, Marca } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
 import { nf, money, moneyK } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
+import { sqlDosMqlsDoPeriodo } from '@/lib/sqlDosMqlsDoPeriodo'
 import { marketingMqlRows, deduplicateLeads } from '@/lib/leadUtils'
 import { isOutsideMqlMedia, filterMediaByMarcas, filterMediaByMarca } from '@/lib/visaoGeralMedia'
 import { getMetaVendas } from '@/constants/metasVendas'
@@ -53,6 +54,7 @@ type Scope = {
   leads: number; mql: number; sql: number; sal: number; fech: number
   invest: number; cpmql: number; cpsql: number; conv: number
   vis: number; lpv: number
+  sqlDosMqls: ReturnType<typeof sqlDosMqlsDoPeriodo>
   sqlPerdido: number; salPerdido: number; valorTotal: number
 }
 
@@ -87,8 +89,11 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
   const leads  = uniqueLeads.length
   const vis    = mRows.reduce((s, r) => s + r.impressoes, 0)
   const lpv    = mRows.reduce((s, r) => s + r.lpv, 0)
-  const mql    = marketingMqlRows(lRows).length
-  const sql    = active.filter(r => inPeriod(r.data_sql, di, df, r.marca)).length
+  const mqlRows = marketingMqlRows(lRows)
+  const mql = mqlRows.length
+  const sqlRows = active.filter(r => inPeriod(r.data_sql, di, df, r.marca))
+  const sql = sqlRows.length
+  const sqlDosMqls = sqlDosMqlsDoPeriodo(mqlRows, lRows, sqlRows, di, df)
   const sal    = active.filter(r => inPeriod(r.data_sal, di, df, r.marca)).length
   const fech   = active.filter(r => r.status_atual === 'Ganho' && inPeriod(r.data_venda, di, df, r.marca)).length
   // Regra: deal contado como "SQL perdido no período" se virou SQL DENTRO da janela
@@ -102,7 +107,7 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
     cpmql: mql > 0 ? Math.round(invest / mql) : 0,
     cpsql: sql > 0 ? Math.round(invest / sql) : 0,
     conv:  mql > 0 ? (sql / mql) * 100 : 0,
-    sqlPerdido, salPerdido, valorTotal,
+    sqlDosMqls, sqlPerdido, salPerdido, valorTotal,
   }
 }
 
@@ -283,7 +288,13 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, compareRe
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginBottom: 24 }}>
       <MetricCard style={invest} label="Investimento no período" value={money(scope.invest)} delta={showAll ? d.invest : null} deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small}  label="MQLs"                   value={nf(scope.mql)}       delta={compareReady ? d.mql : null} deltaLabel={compareLabel} onClick={onMqlClick} />
-      <MetricCard style={small}  label="SQLs"                   value={nf(scope.sql)}       delta={showAll ? d.sql : null}      deltaLabel={showAll ? compareLabel : undefined} description={scope.sqlPerdido > 0 ? <span style={{ color:'var(--status-risco)', opacity:0.85 }}>{nf(scope.sqlPerdido)} perdidos</span> : undefined} />
+      <MetricCard style={small} label="SQLs" value={nf(scope.sql)} delta={showAll ? d.sql : null} deltaLabel={showAll ? compareLabel : undefined}
+        description={<div style={{ display: 'grid', gap: 4 }}>
+          {scope.sqlPerdido > 0 && <span style={{ color: 'var(--status-risco)' }}>{nf(scope.sqlPerdido)} {scope.sqlPerdido === 1 ? 'perdido' : 'perdidos'}</span>}
+          <span>{scope.sqlDosMqls.semVinculo > 0 && 'Ao menos '}<strong>{nf(scope.sqlDosMqls.convertidos)} de {nf(scope.mql)}</strong> MQLs do período viraram SQL</span>
+          {scope.sqlDosMqls.semVinculo > 0 && <span>{nf(scope.sqlDosMqls.semVinculo)} sem vínculo confirmado com a negociação</span>}
+        </div>}
+      />
       <MetricCard style={small}  label="CP-MQL médio"           value={money(scope.cpmql)}  delta={showAll ? d.cpmql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small}  label="CP-SQL médio"           value={money(scope.cpsql)}  delta={showAll ? d.cpsql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small}  label="Conversão MQL→SQL"      value={scope.conv.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} unit="%" delta={showAll ? d.conv : null} accent={false} deltaLabel={showAll ? compareLabel : undefined} />

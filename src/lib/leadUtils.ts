@@ -18,18 +18,18 @@ export function isLeadMql(r: { dados_extras: Record<string, unknown> | null }): 
   return typeof lt === 'string' && lt.toUpperCase() === 'MQL'
 }
 
+// Eventos e registros sem identidade permanecem interações individuais.
+export function chaveContato(row: Lead): string | null {
+  const evento = row.dados_extras?.evento
+  if (typeof evento === 'string' && evento.trim()) return null
+  return row.email || row.telefone || null
+}
+
 export function deduplicateLeads(leads: Lead[]): Lead[] {
   const seen = new Set<string>()
   return leads.filter(r => {
     if (isMarketingDeal(r)) return false
-    // Leads marcados como participantes de evento (dados_extras.evento preenchido)
-    // burlam o dedupe — mesmo email/telefone deve contar de novo como interação nova.
-    const evento = r.dados_extras?.['evento']
-    if (typeof evento === 'string' && evento.trim() !== '') return true
-
-    const key = (r.email && r.email !== '') ? r.email
-      : (r.telefone && r.telefone !== '') ? r.telefone
-      : null
+    const key = chaveContato(r)
     if (key === null) return true
     if (seen.has(key)) return false
     seen.add(key)

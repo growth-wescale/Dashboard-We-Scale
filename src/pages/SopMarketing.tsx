@@ -36,14 +36,16 @@ import { getUnidadesVendidasOverride } from '@/constants/metasVendas'
 import { useMediaOdontoLegacy } from '@/hooks/useMediaOdontoLegacy'
 import { useMediaComunidadeLegacy } from '@/hooks/useMediaComunidadeLegacy'
 import { PartnerComparativo } from '@/components/sop/PartnerComparativo'
+import { FunilLegacy, useFunilLegacy } from '@/components/sop/FunilLegacy'
 import { ComunidadeLegacyPanel } from '@/components/sop/ComunidadeLegacyPanel'
-import { COMUNIDADE_LEGACY_ATUAL, comunidadeLegacyDoMes, FUNIL_ODONTO_LEGACY_ATUAL } from '@/constants/comunidadeLegacy'
+import { COMUNIDADE_LEGACY_ATUAL, comunidadeLegacyDoMes } from '@/constants/comunidadeLegacy'
 import { getWeScaleSop } from '@/constants/weScaleSop'
 import { getPartnerFechamento, PARTNER_FECHAMENTO_ATUAL } from '@/constants/partnerFechamento'
 import { getMetaReceitaLegacy } from '@/constants/metasReceitaLegacy'
 import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { closedMonthWeekRanges, fullCalendarMonthKey, safeUnitCost, sopComparisonEnd } from '@/lib/sopPeriods'
+import { acumuladoMqlLegacy, mesesMtdLegacy } from '@/lib/sopLegacyMtd'
 import { countSopSqlDeals } from '@/lib/sopFunnel'
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -502,9 +504,9 @@ function SopMtdChart({
   const [hoverDay, setHoverDay] = useState<number | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
 
-  const visible = series.filter(s => (s.values[s.values.length - 1] ?? 0) > 0)
-  const curSeries  = visible.find(s => !s.dashed) ?? visible[0]
-  const prevSeries = visible.find(s => s.dashed)
+  const visible = series.filter(s => !s.dashed || (s.values.at(-1) ?? 0) > 0)
+  const curSeries  = series.find(s => !s.dashed)
+  const prevSeries = series.find(s => s.dashed)
   const curTot  = curSeries?.values[curSeries.values.length - 1] ?? 0
   const prevTot = prevSeries?.values[days - 1] ?? prevSeries?.values[prevSeries.values.length - 1] ?? 0
   const delta   = deltaLabel(curTot, prevTot)
@@ -565,6 +567,7 @@ function SopMtdChart({
         <span style={{ fontSize: 24, fontWeight: 700, color: accent, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
           {formatValue(curTot)}
         </span>
+        <span style={{ fontSize: 11 }}>{curSeries?.label}</span>
         {prevTot > 0 && (
           <span style={{ fontSize: 11, fontWeight: 700, color: delta.col }}>
             {delta.txt}{' '}
@@ -837,6 +840,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   // Odonto Scale (=Odonto Legacy/Consultoria) mora dentro da conta Oral Unic desde ~ago/26,
   // com histórico próprio até 27/jul/26. Usa hook que combina as duas fontes.
   const isOdontoLegacy = slide.marca === 'Odonto Scale'
+  const funilLegacy = useFunilLegacy(isOdontoLegacy && legacyOuroEnabled && dates.mtdCurEnd >= '2026-11-01')
   const usarReceita = isOdontoLegacy && legacyOuroEnabled && dates.mtdCurEnd >= '2026-01-01'
   const receitaOuro = useReceitaLegacy(usarReceita)
   const partnerFechamento = isWeScale ? getPartnerFechamento(dates.mtdCurStart, dates.mtdCurEnd, filterFonte) : null
@@ -900,34 +904,22 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
     enabled: !isOdontoLegacy && !isWeScale,
   })
 
-  // MTD Jul (prev2) e Jun (prev3) — só pro chart Odonto Legacy (Comparativo MTD 4 meses)
-  const mtdN = useMemo(() => {
-    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
-    const todayDay = new Date().getDate()
-    const build = (offset: number) => {
-      let ny = y, nm = m - offset
-      while (nm <= 0) { nm += 12; ny-- }
-      const lastDay = new Date(ny, nm, 0).getDate()
-      const d = Math.min(todayDay, lastDay)
-      return {
-        start: `${ny}-${String(nm).padStart(2, '0')}-01`,
-        end:   `${ny}-${String(nm).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-      }
-    }
-    return { prev2: build(2), prev3: build(3), days: todayDay }
-  }, [dates.monthStart])
-
-  // Sempre passa datas válidas — janelas são pequenas (~4 dias) e só usadas quando isOdontoLegacy.
-  const leadsPrev2Odl  = useLeads({ marca: 'Odonto Scale', dataInicio: mtdN.prev2.start, dataFim: mtdN.prev2.end })
-  const leadsPrev3Odl  = useLeads({ marca: 'Odonto Scale', dataInicio: mtdN.prev3.start, dataFim: mtdN.prev3.end })
-  const mediaPrev2Odl  = useMediaOdontoLegacy({ dataInicio: mtdN.prev2.start, dataFim: mtdN.prev2.end })
-  const mediaPrev3Odl  = useMediaOdontoLegacy({ dataInicio: mtdN.prev3.start, dataFim: mtdN.prev3.end })
+  const [mesCur, mesPrev, mesPrev2, mesPrev3] = useMemo(() => mesesMtdLegacy(mtdCurEnd), [mtdCurEnd])
+  // Reaproveita as consultas da folha quando cobrem o mês desde o dia 1.
+  const extraCur = partnerReadStart > mesCur.start
+  const extraPrev = prevRangeStart > mesPrev.start || prevRangeEnd < mesPrev.end
+  const leadsCurChart = useLeads({ marca: 'Odonto Scale', dataInicio: mesCur.start, dataFim: mesCur.end, enabled: isOdontoLegacy && extraCur })
+  const leadsPrevChart = useLeads({ marca: 'Odonto Scale', dataInicio: mesPrev.start, dataFim: mesPrev.end, enabled: isOdontoLegacy && extraPrev })
+  const leadsPrev2Odl = useLeads({ marca: 'Odonto Scale', dataInicio: mesPrev2.start, dataFim: mesPrev2.end, enabled: isOdontoLegacy })
+  const leadsPrev3Odl = useLeads({ marca: 'Odonto Scale', dataInicio: mesPrev3.start, dataFim: mesPrev3.end, enabled: isOdontoLegacy })
+  const curChartRows = extraCur ? leadsCurChart.data : leadsAll.data
+  const prevChartRows = extraPrev ? leadsPrevChart.data : leadsPrev.data
   // Invest da COMUNIDADE (campanhas [LEGACY]/[CMD]) — base do Custo/membro do
   // chart Odonto Legacy. Antes o chart dividia invest ODL (Consultoria) por
   // membros da Comunidade, misturando dois funis diferentes. Junior 11/09.
   const mediaAllComunidade   = useMediaComunidadeLegacy({ dataInicio: dates.fiveWeeksStart, dataFim: mtdCurEnd })
-  const mediaPrev2Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev2.start,     dataFim: mtdN.prev2.end })
-  const mediaPrev3Comunidade = useMediaComunidadeLegacy({ dataInicio: mtdN.prev3.start,     dataFim: mtdN.prev3.end })
+  const mediaPrev2Comunidade = useMediaComunidadeLegacy({ dataInicio: mesPrev2.start,     dataFim: mesPrev2.end })
+  const mediaPrev3Comunidade = useMediaComunidadeLegacy({ dataInicio: mesPrev3.start,     dataFim: mesPrev3.end })
   const { data: allLeads } = leadsAll
   const { data: prevLeads } = leadsPrev
   const { data: rawCrmCur } = crmCurRes
@@ -940,7 +932,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
   const eletroviasReadRequired = slide.marca === 'Eletrovias' && eletroviasOuroEnabled
   const ouroReadRequired = eletroviasReadRequired || (slide.filterFranquia && oralUnicOuroEnabled) || (isOdontoLegacy && legacyOuroEnabled) || isWeScale || (slide.id === 'liso' && lisoOuroEnabled)
-  const partnerReadError = ouroReadRequired ? [...(isOdontoLegacy ? [mediaAllOdl.error, mediaPrevOdl.error] : []), mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
+  const partnerReadError = ouroReadRequired ? [...(isOdontoLegacy ? [mediaAllOdl.error, mediaPrevOdl.error, leadsCurChart.error, leadsPrevChart.error, leadsPrev2Odl.error, leadsPrev3Odl.error] : []), mediaAllStd.error, mediaPrevStd.error, leadsAll.error, leadsPrev.error, crmCurRes.error, crmPrevRes.error, crmAllRes.error, partnerSalesRes.error].find(Boolean) : null
   const partnerKpiPending = ouroReadRequired && (mediaAllStd.loading || leadsAll.loading || !!partnerReadError)
 
   // Sinal pro downloadPDF: dispara onReady quando TODOS os fetches async terminaram
@@ -948,15 +940,15 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   const allLoaded =
     !mediaAllStd.loading && !mediaPrevStd.loading &&
     !mediaAllOdl.loading && !mediaPrevOdl.loading &&
-    !mediaPrev2Odl.loading && !mediaPrev3Odl.loading &&
+    !leadsCurChart.loading && !leadsPrevChart.loading &&
     !leadsAll.loading && !leadsPrev.loading &&
     !leadsPrev2Odl.loading && !leadsPrev3Odl.loading &&
     !crmCurRes.loading && !crmPrevRes.loading &&
     !crmWeekRes.loading && !crmPriorRes.loading &&
-    !receitaOuro.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
+    !funilLegacy.loading && !receitaOuro.loading && !crmAllRes.loading && !metasRes.loading && !sqlEventsRes.loading && !partnerSalesRes.loading && !beautyRes.loading && !beautyMarketing.loading
   useEffect(() => {
-    if (allLoaded) onReady?.(erroJanelaCrm || receitaOuro.error || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
-  }, [allLoaded, onReady, erroJanelaCrm, receitaOuro.error, partnerReadError, beautyRes.error, beautyMarketing.error])
+    if (allLoaded) onReady?.(funilLegacy.error || erroJanelaCrm || receitaOuro.error || partnerReadError || beautyRes.error || beautyMarketing.error || undefined)
+  }, [allLoaded, onReady, funilLegacy.error, erroJanelaCrm, receitaOuro.error, partnerReadError, beautyRes.error, beautyMarketing.error])
 
   const applyF = useCallback((rows: LinhaFunilSop[]) =>
     filterFonte === '__all__' ? rows : rows.filter(r => mapFonte(r.fonte) === filterFonte),
@@ -1032,7 +1024,6 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
   // Jul/Jun ficam com membros = 0 (comunidade nasceu em 04/08); custo N/A ali.
   const legacyMtdSeries = useMemo(() => {
     if (!isOdontoLegacy) return null
-    const days = mtdN.days
 
     // Data em que a comunidade começou a existir — nada de membros antes disso.
     const COMMUNITY_START = '2026-08-04'
@@ -1095,28 +1086,16 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
     // MQL segue reset mensal (Consultoria captation por mês, faz sentido comparar
     // Set MTD vs Ago MTD como corrida separada).
-    const buildMonth = (leadsRows: Lead[], monthStart: string) => {
-      const [y, mm] = monthStart.slice(0, 7).split('-').map(Number)
-      const monthPref = `${y}-${String(mm).padStart(2, '0')}`
-      const daysInMonth = new Date(y, mm, 0).getDate()
-
-      const mqlByDay = Array.from({ length: days }, () => 0)
-      const dedupF = filterLeads(deduplicateLeads(leadsRows.filter(l =>
-        l.dia && l.dia.slice(0, 7) === monthPref
-      )))
-      for (const l of dedupF) {
-        const d = parseInt(l.dia.slice(-2), 10) - 1
-        if (d < 0 || d >= days) continue
-        if (isLeadMql(l)) mqlByDay[d]++
-      }
-      const cum = (arr: number[]) => { let s = 0; return arr.map(v => (s += v)) }
-      const mqlCum = cum(mqlByDay)
+    const buildMonth = (leadsRows: Lead[], periodo: typeof mesCur) => {
+      const monthPref = periodo.start.slice(0, 7)
+      const days = periodo.dias
+      const mqlCum = acumuladoMqlLegacy(leadsRows, periodo)
 
       // Membros e Custo/membro: absolutos por data — não resetam no dia 1.
       const memCum: number[] = []
       const custoCum: number[] = []
       for (let i = 0; i < days; i++) {
-        const dayNum = Math.min(i + 1, daysInMonth)
+        const dayNum = i + 1
         const dateStr = `${monthPref}-${String(dayNum).padStart(2, '0')}`
         const antesDaComunidade = dateStr < COMMUNITY_START
         const members = antesDaComunidade ? 0 : baseline + cumulativoSiteAte(dateStr)
@@ -1127,33 +1106,17 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
 
       return { days, mqlCum, memCum, custoCum }
     }
-    const [y, m] = dates.monthStart.slice(0, 7).split('-').map(Number)
-    const shortM = (offset: number) => {
-      let ny = y, nm = m - offset
-      while (nm <= 0) { nm += 12; ny-- }
-      return { label: `${shortMonth(ny, nm - 1)} ${ny}`, start: `${ny}-${String(nm).padStart(2, '0')}-01` }
-    }
-    const cur   = shortM(0)
-    const prev  = shortM(1)
-    const prev2 = shortM(2)
-    const prev3 = shortM(3)
-    // Cur e Prev vêm de allLeads (5 semanas cobertas). Prev2 e Prev3 vêm dos
-    // fetches dedicados. Invest da Comunidade fica no lookup lifetime acima —
-    // buildMonth não precisa mais receber mediaRows.
+    const meses = [mesCur, mesPrev, mesPrev2, mesPrev3]
+    const rows = [curChartRows, prevChartRows, leadsPrev2Odl.data, leadsPrev3Odl.data]
     return {
-      series: [
-        { label: cur.label,   dashed: false, data: buildMonth(allLeads,           cur.start) },
-        { label: prev.label,  dashed: true,  data: buildMonth(allLeads,           prev.start) },
-        { label: prev2.label, dashed: true,  data: buildMonth(leadsPrev2Odl.data, prev2.start) },
-        { label: prev3.label, dashed: true,  data: buildMonth(leadsPrev3Odl.data, prev3.start) },
-      ],
-      days,
+      series: meses.map((mes, i) => {
+        const [ano, numero] = mes.start.split('-').map(Number)
+        return { label: `${shortMonth(ano, numero - 1)} ${ano}`, dashed: i > 0, data: buildMonth(rows[i], mes) }
+      }),
+      days: mesCur.dias,
     }
-  }, [
-    isOdontoLegacy, mtdN.days, allLeads, leadsPrev2Odl.data, leadsPrev3Odl.data,
-    mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data,
-    filterLeads, dates.monthStart,
-  ])
+  }, [isOdontoLegacy, mesCur, mesPrev, mesPrev2, mesPrev3, curChartRows, prevChartRows,
+    allLeads, leadsPrev2Odl.data, leadsPrev3Odl.data, mediaAllComunidade.data, mediaPrev2Comunidade.data, mediaPrev3Comunidade.data])
 
   const [legacyMtdMetric, setLegacyMtdMetric] = useState<'mql' | 'membros' | 'custo'>('mql')
   const [legacyMtdChart,  setLegacyMtdChart]  = useState<'linha' | 'barras'>('linha')
@@ -1727,44 +1690,7 @@ function SopSlide({ slide, dates: selectedDates, slideIndex, total, onPrev, onNe
               </div>
             </div>
           )}
-          {isOdontoLegacy && (
-            // Snapshot manual do funil (número de deals em cada etapa direto do RD).
-            // Complementa o chart de MQL/Membros acima — junta captação com o que
-            // já está trabalhado no CRM, incluindo a coorte "em cadência" da safra
-            // anterior que o Junior acompanha à parte.
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--ws-text-secondary)', textTransform: 'uppercase', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span>Funil de negociações</span>
-                <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ws-text-secondary)' }}>
-                  histórico · snapshot {FUNIL_ODONTO_LEGACY_ATUAL.ate}/2026
-                </span>
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                <tbody>
-                  {FUNIL_ODONTO_LEGACY_ATUAL.etapas.map(e => (
-                    <tr key={e.label} style={{ borderTop: '1px solid var(--ws-border)' }}>
-                      <td style={{ padding: '5px 0', color: 'var(--ws-text-primary)' }}>
-                        {e.label}
-                        {e.nota && (
-                          <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--ws-text-secondary)' }}>
-                            · {e.nota}
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: acc }}>
-                        {e.deals}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {FUNIL_ODONTO_LEGACY_ATUAL.rodape && (
-                <div style={{ marginTop: 6, fontSize: 10, color: 'var(--ws-text-secondary)', lineHeight: 1.4 }}>
-                  {FUNIL_ODONTO_LEGACY_ATUAL.rodape}
-                </div>
-              )}
-            </div>
-          )}
+          {isOdontoLegacy && <FunilLegacy leitura={funilLegacy} inicio={mtdCurStart} fim={mtdCurEnd} fonte={filterFonte} />}
         </div>
 
         {/* Col 2: MTD comparativo */}

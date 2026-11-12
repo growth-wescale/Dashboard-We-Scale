@@ -46,6 +46,15 @@ class Tests(unittest.TestCase):
   with self.assertRaises(GatewayError):enabled.read(dict(request,route='/marca'),'token')
   enabled.request_json=lambda path,*args: {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'marcas':['oral-unic'],'permissoes':['aba.sop-marketing']}
   with self.assertRaises(GatewayError):enabled.read(request,'token')
+ def test_funnel_only_for_legacy_sop_with_a_dated_snapshot(self):
+  row={'tipo':'referencia','total':0,'carregado_em':'2026-11-12T12:00:00Z'}
+  c=Connection([row])
+  service=Service({'mode':'ouro','funil_enabled':True},connect=lambda:c,request_json=auth)
+  request={'dataset':'funil','route':'/sop-marketing'}
+  self.assertEqual(service.read(request,'token')['rows'],[row])
+  with self.assertRaises(GatewayError):service.read(dict(request,route='/marca'),'token')
+  service.request_json=lambda path,*args: {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'marcas':['oral-unic'],'permissoes':['aba.sop-marketing']}
+  with self.assertRaises(GatewayError):service.read(request,'token')
  def test_legacy_never_connects(self):
   s,c=self.service([],mode='legacy')
   self.assertEqual(s.read({'dataset':'leads','route':'/'},'token'),{'mode':'legacy'})

@@ -11,16 +11,22 @@
  *      realizado por pessoa, com meta proporcional quando dá pra calcular.
  *  - **Deals** — a lista de negócios por trás do número do card
  *    (`StageDealsPanel`, a mesma tabela do clique no funil).
+ *
+ * Clicar no cartão de uma pessoa abre a lista de deals já filtrada por ela.
+ * O cartão "Ex-integrantes" diz quem ele soma e abre os deals dessas pessoas.
+ * "Sem SDR"/"Sem Closer" não abre: o filtro não tem valor para responsável vazio.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { SCard } from '@/components/ui/v2'
 import { pct, nfCeil } from '@/lib/format'
 import type { StageDeal, StageKey } from '@/lib/metrics'
 import type { PersonMetaRow, PersonSimplesRow, PersonPeriodoRow } from '@/lib/metaBreakdown'
 import { StageDealsPanel } from './StageDealsDrawer'
-import { useStageDealsFilters } from './useStageDealsFilters'
+import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS } from './useStageDealsFilters'
+import { useEquipeAtiva } from '@/hooks/useRosterVendas'
+import { EX_INTEGRANTES, SEM_RESPONSAVEL, nomesForaDoTime } from '@/lib/equipe'
 
 const OK = '#2ABCB5'
 const RUIM = '#E4585B'
@@ -48,10 +54,25 @@ function RingHoje({ realizado, meta, accent }: { realizado: number; meta: number
   )
 }
 
-function LinhaDiaria({ row, accent, formatter }: { row: PersonMetaRow; accent: string; formatter: (n: number) => string }) {
+/** Rodapé do cartão: quem a linha Ex-integrantes soma e o convite pra abrir os deals. */
+function RodapeCartao({ quem, clicavel }: { quem?: string[]; clicavel: boolean }) {
+  if (!clicavel && !quem?.length) return null
+  return (
+    <div style={{ marginTop: 12, fontSize: 12, color: 'var(--ws-text-secondary)', lineHeight: 1.45 }}>
+      {quem && quem.length > 0 && (
+        <div>Quem: <span style={{ color: 'var(--ws-text-primary)' }}>{quem.join(', ')}</span></div>
+      )}
+      {clicavel && <div style={{ marginTop: quem?.length ? 4 : 0, color: 'var(--brand-accent)', fontWeight: 500 }}>Ver negócios →</div>}
+    </div>
+  )
+}
+
+interface CartaoExtra { onClick?: () => void; quem?: string[] }
+
+function LinhaDiaria({ row, accent, formatter, onClick, quem }: { row: PersonMetaRow; accent: string; formatter: (n: number) => string } & CartaoExtra) {
   const { ritmo } = row
   return (
-    <SCard style={{ padding: 18 }}>
+    <SCard style={{ padding: 18 }} onClick={onClick}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
         <span style={{
           padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 500,
@@ -83,28 +104,30 @@ function LinhaDiaria({ row, accent, formatter }: { row: PersonMetaRow; accent: s
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--ws-border)' }}>
         <RingHoje realizado={row.hoje.realizado} meta={row.hoje.meta} accent={accent} />
       </div>
+      <RodapeCartao quem={quem} clicavel={!!onClick} />
     </SCard>
   )
 }
 
-function LinhaSimples({ row, accent, formatter }: { row: PersonSimplesRow; accent: string; formatter: (n: number) => string }) {
+function LinhaSimples({ row, accent, formatter, onClick, quem }: { row: PersonSimplesRow; accent: string; formatter: (n: number) => string } & CartaoExtra) {
   return (
-    <SCard style={{ padding: 18 }}>
+    <SCard style={{ padding: 18 }} onClick={onClick}>
       <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 10 }}>{row.nome}</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, fontSize: 12, color: 'var(--ws-text-secondary)' }}>
         <span>Realizado<br /><b style={{ color: 'var(--ws-text-primary)', fontSize: 15 }}>{formatter(row.realizado)}</b></span>
         <span style={{ textAlign: 'center' }}>Meta do mês<br /><b style={{ color: 'var(--ws-text-primary)', fontSize: 15 }}>{formatter(row.metaMensal)}</b></span>
         <span style={{ textAlign: 'right' }}>%<br /><b style={{ color: accent, fontSize: 15 }}>{row.pct.toFixed(1)}%</b></span>
       </div>
+      <RodapeCartao quem={quem} clicavel={!!onClick} />
     </SCard>
   )
 }
 
-function LinhaPeriodo({ row, accent, formatter }: { row: PersonPeriodoRow; accent: string; formatter: (n: number) => string }) {
+function LinhaPeriodo({ row, accent, formatter, onClick, quem }: { row: PersonPeriodoRow; accent: string; formatter: (n: number) => string } & CartaoExtra) {
   const temMeta = row.pct != null
   const bateu = temMeta && row.pct! >= 100
   return (
-    <SCard style={{ padding: 18 }}>
+    <SCard style={{ padding: 18 }} onClick={onClick}>
       <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ws-text-primary)', marginBottom: 10 }}>{row.nome}</div>
       {temMeta && (
         <div style={{ position: 'relative', height: 10, marginBottom: 12, background: 'var(--ws-border)', borderRadius: 999, overflow: 'hidden' }}>
@@ -116,6 +139,7 @@ function LinhaPeriodo({ row, accent, formatter }: { row: PersonPeriodoRow; accen
         <span style={{ textAlign: 'center' }}>Meta do período<br /><b style={{ color: 'var(--ws-text-primary)', fontSize: 15 }}>{temMeta ? formatter(row.meta) : '—'}</b></span>
         <span style={{ textAlign: 'right' }}>%<br /><b style={{ color: temMeta ? accent : 'var(--ws-text-secondary)', fontSize: 15 }}>{temMeta ? `${row.pct!.toFixed(1)}%` : '—'}</b></span>
       </div>
+      <RodapeCartao quem={quem} clicavel={!!onClick} />
     </SCard>
   )
 }
@@ -148,6 +172,28 @@ export function MetaBreakdownDrawer({
 }: MetaBreakdownDrawerProps) {
   const [visao, setVisao] = useState<Visao>('pessoas')
   const f = useStageDealsFilters(deals)
+  const equipe = useEquipeAtiva()
+  const campoResp = papel === 'Closer' ? 'closer' : 'sdr'
+  // Quem soma na linha Ex-integrantes: os responsáveis dos deals do card que não são do time.
+  const nomesEx = useMemo(
+    () => nomesForaDoTime(deals.map(d => (campoResp === 'closer' ? d.row.nome_closer : d.row.nome_sdr)), equipe),
+    [deals, campoResp, equipe],
+  )
+
+  /** Clique no cartão: abre os deals filtrados pela pessoa (ou por quem saiu do time). */
+  const extraDoCartao = (nome: string): CartaoExtra => {
+    if (nome === SEM_RESPONSAVEL.sdr || nome === SEM_RESPONSAVEL.closer) return {}
+    const ex = nome === EX_INTEGRANTES
+    const selecao = ex ? nomesEx : [nome]
+    if (selecao.length === 0) return ex ? { quem: [] } : {}
+    return {
+      quem: ex ? nomesEx : undefined,
+      onClick: () => {
+        f.setFilters({ ...EMPTY_STAGE_DEALS_FILTERS, [campoResp]: selecao })
+        setVisao('deals')
+      },
+    }
+  }
 
   if (!open) return null
 
@@ -225,9 +271,9 @@ export function MetaBreakdownDrawer({
                 {vazio}
               </div>
             )}
-            {pessoas.variant === 'daily' && pessoas.rows.map(r => <LinhaDiaria key={r.nome} row={r} accent={accent} formatter={formatter} />)}
-            {pessoas.variant === 'monthly' && pessoas.rows.map(r => <LinhaSimples key={r.nome} row={r} accent={accent} formatter={formatter} />)}
-            {pessoas.variant === 'periodo' && pessoas.rows.map(r => <LinhaPeriodo key={r.nome} row={r} accent={accent} formatter={formatter} />)}
+            {pessoas.variant === 'daily' && pessoas.rows.map(r => <LinhaDiaria key={r.nome} row={r} accent={accent} formatter={formatter} {...extraDoCartao(r.nome)} />)}
+            {pessoas.variant === 'monthly' && pessoas.rows.map(r => <LinhaSimples key={r.nome} row={r} accent={accent} formatter={formatter} {...extraDoCartao(r.nome)} />)}
+            {pessoas.variant === 'periodo' && pessoas.rows.map(r => <LinhaPeriodo key={r.nome} row={r} accent={accent} formatter={formatter} {...extraDoCartao(r.nome)} />)}
             {nota && (
               <p style={{ margin: '4px 0 0', fontSize: 11.5, color: 'var(--ws-text-secondary)', lineHeight: 1.45 }}>{nota}</p>
             )}

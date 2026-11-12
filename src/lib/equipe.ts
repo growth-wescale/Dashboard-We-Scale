@@ -34,3 +34,12 @@ export function nomeNaVisao(nome: string, equipe?: ReadonlySet<string>): string 
 
 /** Linha de soma dos negócios sem responsável nas tabelas por pessoa. */
 export const SEM_RESPONSAVEL = { sdr: 'Sem SDR', closer: 'Sem Closer' } as const
+
+/** Nomes que somam na linha `EX_INTEGRANTES`, sem repetir e em ordem alfabética. */
+export function nomesForaDoTime(
+  nomes: Iterable<string | null | undefined>, equipe?: ReadonlySet<string>,
+): string[] {
+  const out = new Set<string>()
+  for (const n of nomes) if (n && saiuDoTime(n, equipe)) out.add(n.trim())
+  return [...out].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+}

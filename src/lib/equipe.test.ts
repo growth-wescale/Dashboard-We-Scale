@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { EX_INTEGRANTES, chavePessoa, equipeAtiva, nomeNaVisao, saiuDoTime } from '@/lib/equipe'
+import { EX_INTEGRANTES, chavePessoa, equipeAtiva, nomeNaVisao, nomesForaDoTime, saiuDoTime } from '@/lib/equipe'
 import type { MembroRoster } from '@/hooks/useRosterVendas'
 
 const roster: MembroRoster[] = [
@@ -33,5 +33,12 @@ describe('equipe', () => {
   it('sem cadastro carregado ninguém some', () => {
     expect(saiuDoTime('Rômulo', undefined)).toBe(false)
     expect(saiuDoTime('Rômulo', new Set())).toBe(false)
+  })
+
+  it('nomesForaDoTime lista quem soma em Ex-integrantes, sem repetir', () => {
+    const equipe = equipeAtiva(roster)
+    expect(nomesForaDoTime(['Rômulo', 'Douglas', null, '', 'Aurélio Briano', 'Rômulo', 'Fulano'], equipe))
+      .toEqual(['Aurélio Briano', 'Fulano', 'Rômulo'])
+    expect(nomesForaDoTime(['Rômulo'], new Set())).toEqual([])
   })
 })

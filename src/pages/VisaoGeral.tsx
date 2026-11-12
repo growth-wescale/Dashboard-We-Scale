@@ -16,7 +16,7 @@ import { useMarketingLeads as useLeads } from '@/hooks/useLeads'
 import { useMetas } from '@/hooks/useMetas'
 import type { MediaDailyRaw, Lead, Meta, Marca } from '@/lib/types'
 import { SLUG_TO_MARCA, getMtdDates, monthLabel, todayLocal } from '@/lib/dateUtils'
-import { nf, money, moneyK } from '@/lib/format'
+import { nf, money, moneyK, pct } from '@/lib/format'
 import { BRAND_LIST } from '@/constants/brands'
 import { sqlDosMqlsDoPeriodo } from '@/lib/sqlDosMqlsDoPeriodo'
 import { marketingMqlRows, deduplicateLeads } from '@/lib/leadUtils'
@@ -52,7 +52,8 @@ type BrandRow = {
 
 type Scope = {
   leads: number; mql: number; sql: number; sal: number; fech: number
-  invest: number; cpmql: number; cpsql: number; conv: number | null
+  invest: number; cpmql: number; cpsql: number
+  convAcumulada: number | null; convPeriodo: number | null
   vis: number; lpv: number
   sqlDosMqls: ReturnType<typeof sqlDosMqlsDoPeriodo>
   sqlPerdido: number; salPerdido: number; valorTotal: number
@@ -106,7 +107,8 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
     invest, leads, vis, lpv, mql, sql, sal, fech,
     cpmql: mql > 0 ? Math.round(invest / mql) : 0,
     cpsql: sql > 0 ? Math.round(invest / sql) : 0,
-    conv:  mql > 0 ? (sqlDosMqls.convertidos / mql) * 100 : null,
+    convAcumulada: mql > 0 ? (sql / mql) * 100 : null,
+    convPeriodo: mql > 0 ? (sqlDosMqls.convertidos / mql) * 100 : null,
     sqlDosMqls, sqlPerdido, salPerdido, valorTotal,
   }
 }
@@ -275,8 +277,8 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, compareRe
     sql:    computeDeltaPct(scope.sql,    compareScope.sql),
     cpmql:  computeDeltaPct(scope.cpmql,  compareScope.cpmql),
     cpsql:  computeDeltaPct(scope.cpsql,  compareScope.cpsql),
-    conv:   scope.conv !== null && compareScope.conv !== null && !scope.sqlDosMqls.semVinculo && !compareScope.sqlDosMqls.semVinculo
-      ? computeDeltaPct(scope.conv, compareScope.conv) : null,
+    conv:   scope.convAcumulada !== null && compareScope.convAcumulada !== null
+      ? computeDeltaPct(scope.convAcumulada, compareScope.convAcumulada) : null,
   }
   const showAll = compareEnabled && compareReady
   const small = { '--fs-metric': '28px' } as CSSProperties
@@ -299,9 +301,14 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, compareRe
       <MetricCard style={small}  label="CP-MQL médio"           value={money(scope.cpmql)}  delta={showAll ? d.cpmql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small}  label="CP-SQL médio"           value={money(scope.cpsql)}  delta={showAll ? d.cpsql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small} label="Conversão MQL→SQL"
-        value={scope.conv === null ? '—' : (scope.sqlDosMqls.semVinculo ? '≥ ' : '') + scope.conv.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
-        unit={scope.conv === null ? undefined : '%'} delta={showAll ? d.conv : null}
-        accent={false} deltaLabel={showAll ? compareLabel : undefined} />
+        value={scope.convAcumulada?.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) ?? '—'}
+        unit={scope.convAcumulada === null ? undefined : '%'} delta={showAll ? d.conv : null}
+        accent={false} deltaLabel={showAll ? compareLabel : undefined}
+        description={scope.convPeriodo === null ? 'Sem MQLs no período' : <div style={{ display: 'grid', gap: 4 }}>
+          <span>Acumulada · {nf(scope.sql)} SQLs / {nf(scope.mql)} MQLs</span>
+          <span>{scope.sqlDosMqls.semVinculo > 0 && 'Ao menos '}<strong>{pct(scope.convPeriodo)}</strong> dos MQLs do período ({nf(scope.sqlDosMqls.convertidos)} de {nf(scope.mql)})</span>
+        </div>}
+      />
     </div>
   )
 }

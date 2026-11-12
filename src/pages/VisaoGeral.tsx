@@ -52,7 +52,7 @@ type BrandRow = {
 
 type Scope = {
   leads: number; mql: number; sql: number; sal: number; fech: number
-  invest: number; cpmql: number; cpsql: number; conv: number
+  invest: number; cpmql: number; cpsql: number; conv: number | null
   vis: number; lpv: number
   sqlDosMqls: ReturnType<typeof sqlDosMqlsDoPeriodo>
   sqlPerdido: number; salPerdido: number; valorTotal: number
@@ -106,7 +106,7 @@ function computeScope(media: MediaDailyRaw[], leadRows: Lead[], crm: VwMarketing
     invest, leads, vis, lpv, mql, sql, sal, fech,
     cpmql: mql > 0 ? Math.round(invest / mql) : 0,
     cpsql: sql > 0 ? Math.round(invest / sql) : 0,
-    conv:  mql > 0 ? (sql / mql) * 100 : 0,
+    conv:  mql > 0 ? (sqlDosMqls.convertidos / mql) * 100 : null,
     sqlDosMqls, sqlPerdido, salPerdido, valorTotal,
   }
 }
@@ -275,7 +275,8 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, compareRe
     sql:    computeDeltaPct(scope.sql,    compareScope.sql),
     cpmql:  computeDeltaPct(scope.cpmql,  compareScope.cpmql),
     cpsql:  computeDeltaPct(scope.cpsql,  compareScope.cpsql),
-    conv:   computeDeltaPct(scope.conv,   compareScope.conv),
+    conv:   scope.conv !== null && compareScope.conv !== null && !scope.sqlDosMqls.semVinculo && !compareScope.sqlDosMqls.semVinculo
+      ? computeDeltaPct(scope.conv, compareScope.conv) : null,
   }
   const showAll = compareEnabled && compareReady
   const small = { '--fs-metric': '28px' } as CSSProperties
@@ -297,7 +298,10 @@ function KpiStrip({ scope, compareScope, compareLabel, compareEnabled, compareRe
       />
       <MetricCard style={small}  label="CP-MQL médio"           value={money(scope.cpmql)}  delta={showAll ? d.cpmql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
       <MetricCard style={small}  label="CP-SQL médio"           value={money(scope.cpsql)}  delta={showAll ? d.cpsql : null}    invertDelta deltaLabel={showAll ? compareLabel : undefined} />
-      <MetricCard style={small}  label="Conversão MQL→SQL"      value={scope.conv.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} unit="%" delta={showAll ? d.conv : null} accent={false} deltaLabel={showAll ? compareLabel : undefined} />
+      <MetricCard style={small} label="Conversão MQL→SQL"
+        value={scope.conv === null ? '—' : (scope.sqlDosMqls.semVinculo ? '≥ ' : '') + scope.conv.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+        unit={scope.conv === null ? undefined : '%'} delta={showAll ? d.conv : null}
+        accent={false} deltaLabel={showAll ? compareLabel : undefined} />
     </div>
   )
 }

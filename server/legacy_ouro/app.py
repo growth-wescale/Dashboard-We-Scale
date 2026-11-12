@@ -37,7 +37,7 @@ def authorize(token, request_json, route, dataset=None):
  brands = access.get('marcas') or ([access['marca']] if access.get('marca') else [])
  if not isinstance(permissions, list) or ROUTES[route] not in permissions:
   raise GatewayError(403, 'tab_not_allowed')
- allowed_brands = {'odonto-scale'} if dataset=='receita' else {'oral-unic','odonto-scale'}
+ allowed_brands = {'odonto-scale'} if dataset in ('receita','funil') else {'oral-unic','odonto-scale'}
  if not isinstance(brands, list) or any(not isinstance(x, str) for x in brands) or brands and not allowed_brands.intersection(brands):
   raise GatewayError(403, 'brand_not_allowed')
 
@@ -66,6 +66,13 @@ def prepare_rows(dataset, rows):
 
 def validate_rows(dataset, rows):
  if len(rows) > 50000: raise GatewayError(503, 'result_too_large')
+ if dataset=='funil':
+  if sum(r.get('tipo')=='referencia' for r in rows)!=1 or any(
+   not r.get('carregado_em') or r.get('tipo') not in ('referencia','aberto','perdido') or
+   not isinstance(r.get('total'),int) or r['total']<0 or
+   (r['tipo']=='aberto' and not r.get('etapa')) or (r['tipo']=='perdido' and not r.get('dia'))
+   for r in rows): raise GatewayError(503,'invalid_funnel')
+  return
  if dataset=='receita':
   if any(r.get('marca')!='Odonto Scale' or not isinstance(r.get('dia'),str) or r['dia']<'2026-01-01' or r.get('valor') is None or not isinstance(r.get('produtos'),list) for r in rows): raise GatewayError(503,'invalid_revenue')
   if len({r.get('id') for r in rows})!=len(rows): raise GatewayError(503,'duplicate_id')
@@ -83,6 +90,8 @@ def validate_rows(dataset, rows):
 class Service:
  def __init__(self, settings, connect=None, request_json=None):
   self.queries = dict(QUERIES)
+  if settings.get('funil_enabled') is True:
+   self.queries['funil'] = 'SELECT * FROM ouro.vw_legacy_dashboard_funil ORDER BY tipo, etapa, fonte, dia LIMIT 50001'
   if settings.get("receita_enabled") is True:
    self.queries["receita"] = "SELECT * FROM ouro.vw_legacy_dashboard_receita ORDER BY dia DESC,id LIMIT 50001"
   self.settings = settings
@@ -117,7 +126,7 @@ class Service:
  def read(self, body, token):
   if not isinstance(body, dict) or set(body) != {'dataset','route'} or body.get('dataset') not in self.queries or body.get('route') not in ROUTES:
    raise GatewayError(400, 'invalid_request')
-  if body['dataset']=='receita' and body['route']!='/sop-marketing': raise GatewayError(403,'tab_not_allowed')
+  if body['dataset'] in ('receita','funil') and body['route']!='/sop-marketing': raise GatewayError(403,'tab_not_allowed')
   authorize(token, self.request_json, body['route'], body['dataset'])
   if self.settings.get('mode') == 'legacy': return {'mode': 'legacy'}
   if self.settings.get('mode') != 'ouro': raise GatewayError(503, 'invalid_mode')

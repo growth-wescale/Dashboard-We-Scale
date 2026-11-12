@@ -43,6 +43,10 @@ class SecurityTests(unittest.TestCase):
     self.assertEqual("SET LOCAL jit = off" in queries,adjust)
     self.assertEqual(queries[0],'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
     self.assertEqual(reply['rows'],[])
+ def test_overview_exposes_the_gold_deal_and_cycle_only_on_its_leads(self):
+  row={'id_deal':'d','ciclo':2,'dados_extras':{'lead_type':'MQL'}}
+  self.assertEqual(mapped('leads',[row],'/')[0]['dados_extras'],{'lead_type':'MQL','id_deal':'d','ciclo_mql':2})
+  self.assertEqual(mapped('leads',[row],'/marca')[0]['dados_extras'],{'lead_type':'MQL'})
  def test_payload_allowlist_and_sell_lock_preserved(self):
   r=mapped('cycles',[{'id_lead':'d','marca':'Scale Partner','status_atual':'Perdido','data_venda':'2026-10-20','payload':{'secret':1}}])[0]
   self.assertEqual(r['marca'],'We Scale');self.assertEqual(r['status_atual'],'Perdido');self.assertNotIn('payload',r)

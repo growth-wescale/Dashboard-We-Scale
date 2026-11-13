@@ -58,11 +58,30 @@ def missing_commercial_identity(row):
  return row.get('dados_extras',{}).get('classification_source')=='deal_criado_crm' and (
   not row.get('contato_id') or not (row.get('email') or row.get('telefone')))
 
-def prepare_rows(dataset, rows):
+def prepare_rows(dataset, rows, receita_confirmada=None):
+ if dataset == 'receita' and receita_confirmada:
+  rows = reconciliar_receita_confirmada(rows, receita_confirmada)
  validate_rows(dataset, rows)
  pending = [r for r in rows if dataset=='leads' and missing_commercial_identity(r)]
  return ([r for r in rows if not (dataset=='leads' and missing_commercial_identity(r))],
   [{'code':'accepted_missing_contact','count':len(pending)}] if pending else [])
+
+
+def reconciliar_receita_confirmada(rows, fechamento):
+ # O fechamento confirmado fica na configuração privada do gateway.
+ confirmado = {key: fechamento[key] for key in ('id', 'dia', 'fonte', 'valor')}
+ if (not isinstance(confirmado['id'], str) or not confirmado['id'] or
+     not isinstance(confirmado['fonte'], str) or not confirmado['fonte'] or
+     type(confirmado['valor']) not in (int, float) or not 0 < confirmado['valor'] < float('inf')):
+  raise ValueError('invalid_confirmed_revenue')
+ dt.date.fromisoformat(confirmado['dia'])
+ confirmado.update(marca='Odonto Scale', produtos=[])
+ for row in rows:
+  if row.get('id') == confirmado['id']:
+   if row.get('valor') is not None and row['valor'] != 0:
+    return rows
+   return [dict(r, valor=confirmado['valor'], produtos=[]) if r is row else r for r in rows]
+ return [*rows, confirmado]
 
 def validate_rows(dataset, rows):
  if len(rows) > 50000: raise GatewayError(503, 'result_too_large')
@@ -145,7 +164,7 @@ class Service:
     role = connection.execute("SELECT current_user u,(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) unsafe").fetchone()
     if role['u'] != 'dashboard_legacy_ro' or role['unsafe']: raise GatewayError(503, 'unsafe_role')
     rows = connection.execute(self.queries[dataset]).fetchall()
-    contact_rows, warnings = prepare_rows(dataset, rows)
+    contact_rows, warnings = prepare_rows(dataset, rows, self.settings.get('receita_confirmada'))
     result = {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':contact_rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
     with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)

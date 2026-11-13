@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch
-from app import Service, GatewayError, maintain_cache
+from app import Service, GatewayError, maintain_cache, prepare_rows
 
 def auth(path, token, body):
  return {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'acesso_total':True}
@@ -46,6 +46,20 @@ class Tests(unittest.TestCase):
   with self.assertRaises(GatewayError):enabled.read(dict(request,route='/marca'),'token')
   enabled.request_json=lambda path,*args: {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':True,'marcas':['oral-unic'],'permissoes':['aba.sop-marketing']}
   with self.assertRaises(GatewayError):enabled.read(request,'token')
+ def test_confirmed_revenue_until_the_same_contract_has_its_own_amount(self):
+  closing = {'id':'test:1','dia':'2026-01-15','fonte':'Outbound','valor':100}
+  def reconcile(rows): return prepare_rows('receita', rows, closing)[0]
+  confirmed = dict(closing, marca='Odonto Scale', produtos=[])
+  self.assertEqual(reconcile([]), [confirmed])
+  other = dict(confirmed, id='other')
+  self.assertEqual(reconcile([other]), [other, confirmed])
+  for missing in (None, 0):
+   arriving = dict(confirmed, valor=missing)
+   self.assertEqual(reconcile([arriving]), [confirmed])
+   self.assertEqual(arriving['valor'], missing)
+  official = dict(confirmed, valor=120, dia='2026-01-16', produtos=[{'nome':'Produto','valor':120}])
+  self.assertEqual(reconcile([other, official]), [other, official])
+  with self.assertRaises(GatewayError): reconcile([official, official])
  def test_funnel_only_for_legacy_sop_with_a_dated_snapshot(self):
   row={'tipo':'referencia','total':0,'carregado_em':'2026-11-12T12:00:00Z'}
   c=Connection([row])

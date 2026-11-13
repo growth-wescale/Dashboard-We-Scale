@@ -1,5 +1,7 @@
 # Legacy — integração ouro de Marketing (27/10/2026)
 
+Para exibir um fechamento confirmado pela operação enquanto a receita ainda chega à ouro, o gateway aceita o objeto opcional `receita_confirmada` na configuração privada. Seus campos são `id` (conta e ID do negócio no mesmo formato da view), `dia` (data local do fechamento), `fonte` e `valor` em reais. O card soma o valor no período e na fonte correspondentes. Quando a ouro traz o mesmo ID com valor preenchido e diferente de zero, prevalece o registro da ouro por inteiro. Após essa conciliação, a configuração pode ser removida.
+
 ## Receita por produto na S&OP · revisão de 03/11/2026
 
 A consulta proposta usa o último estado da negociação, vendas ganhas, data da venda em Brasília e uma linha por conta/ID. Soma os contratos Legacy independentemente do funil, incluindo OdontoClub. Itens Legacy identificados em contrato de outra marca entram pelo valor dos itens Legacy. Em contrato com vários produtos, a soma das linhas e eventual ajuste de contrato reconcilia com o total. A receita tem consulta própria e não muda o conjunto de leads, a comunidade ou as outras métricas do funil.

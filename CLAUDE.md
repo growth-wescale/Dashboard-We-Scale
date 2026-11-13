@@ -578,6 +578,8 @@ src/hooks/useRepasseTaxas.ts      lê vw_repasse_taxa; publicarRepasse() grava p
 src/components/ui/DivisaoReceita.tsx  linha "We Scale / Marcas" dos cards de receita + bloco com quebra por marca
 src/components/metas/RepasseTaxas.tsx aba "Repasse das taxas" da Configuração das Metas (em vigor, histórico, versão nova)
 src/lib/metaRecorte.ts            meta dos cards da Performance: marcas × filtro de SDR/Closer
+src/lib/relatorioMarca.ts         relatório da marca (Vendas › Relatórios): período, comparação, contagens e destaques (puro, testado)
+src/pages/RelatorioMarca.tsx      /relatorios/:slug — o relatório numa guia própria, período no link
 src/lib/mtdSeries.ts              séries acumuladas dia a dia do Comparativo MTD da Performance (mesmas regras dos cards, testado)
 src/components/ui/ComparativoMtdChart.tsx  gráfico "Comparativo Month-to-Date" (Performance › SDR e Closer)
 src/lib/mtd.ts                    visão MTD da Performance: fator da meta até hoje + mesmo trecho do mês anterior (puro, testado)
@@ -964,6 +966,39 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-13 — Relatório do Odonto Legacy dentro do dashboard, para qualquer período
+
+Pedido do Junior: o Brunno pede o relatório semanal do Odonto Legacy em dias diferentes, e
+ele era montado à mão (HTML) a cada pedido. Agora fica em **Vendas › Relatórios** (seção
+"Relatórios do dashboard", acima dos painéis do Metabase): "Abrir" leva a
+`/relatorios/odonto-legacy` numa guia nova, fora do menu (mesmo padrão do Modo TV) e com a
+mesma permissão da aba Relatórios. Atalhos no cartão: "Este mês" e "Mês passado".
+
+**Período no link** (`?de=AAAA-MM-DD&ate=AAAA-MM-DD`): dá para abrir o fechamento do mês
+passado numa guia e o começo do mês em outra. Barra no topo com as datas, atalhos (Este mês,
+Mês passado, Últimos 7/30 dias), Copiar link e Imprimir/PDF (a barra some na impressão). Sem
+período = do dia 1 até hoje; "até" depois de hoje encosta em hoje. **Comparação**: mês inteiro
+contra o mês inteiro anterior; até 31 dias, as mesmas datas um mês antes (01–12/11 × 01–12/10);
+mais que isso, o mesmo número de dias logo antes.
+
+**Mesmo layout do HTML** (CSS do relatório preso em `.rm`, fontes Bricolage/IBM Plex): KPIs,
+4 destaques em texto, funil atual (foto de hoje), funil de performance, safra do período,
+MQL por canal, perdas por motivo e etapa da perda. Os destaques são montados só com os
+números (`leiturasRelatorio`); não há análise escrita à mão.
+
+**Números** (`src/lib/relatorioMarca.ts`, puro e testado) sobre as bases ao vivo da Visão
+Macro (`useFunilVendas`/`useFunilEventos`, Inbound, marca `'Odonto Scale'`), com as funções de
+`metrics.ts`/`aging.ts`/`perdaRows.ts`. Única regra própria: MQL e funil de performance **sem
+os negócios perdidos como Duplicado** (o mesmo lead entrando de novo; ver o lote de 09/11 em
+`memory/odonto-legacy-multistep-em-lotes`), e o relatório mostra quanto o dashboard conta com
+eles. Conferido com dado real contra os relatórios feitos à mão: 01–12/11 MQL 50 × 64, SQL 2,
+safra 41 abertos/9 perdidos; outubro 9 SQL, 3 vendas, R$ 58.958, 222 perdas (128 por fim da
+cadência, 132 em Tentando contato). Marca nova = 1 item em `RELATORIOS_MARCA`.
+
+Verificado: build + 1.148 testes (17 novos em `relatorioMarca.test.ts`) + oxlint e visto renderizado com
+dado real numa rota de prévia sem login (removida antes do commit), em 1280×900 e 375×812, nos
+temas claro e escuro.
 
 ### 2026-11-11 — Aba Relatórios (Vendas) com os painéis do Metabase
 

@@ -58,6 +58,7 @@ const AnaliseObjecoes   = lazyWithRetry(() => import('@/pages/AnaliseObjecoes').
 const GpSetembro        = lazyWithRetry(() => import('@/pages/GpSetembro').then(m => ({ default: m.GpSetembro })))
 const HubMetas          = lazyWithRetry(() => import('@/pages/HubMetas').then(m => ({ default: m.HubMetas })))
 const CampanhaMetasTv   = lazyWithRetry(() => import('@/pages/CampanhaMetasTv').then(m => ({ default: m.CampanhaMetasTv })))
+const RelatorioMarca    = lazyWithRetry(() => import('@/pages/RelatorioMarca').then(m => ({ default: m.RelatorioMarca })))
 
 // Fallback discreto durante carga do chunk (~100-300ms)
 function PageLoader() {
@@ -148,6 +149,26 @@ export default function App() {
                     <ErrorBoundary scope="/gp-setembro/tv">
                       <Suspense fallback={<PageLoader />}>
                         <CampanhaMetasTv />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </GuardaRota>
+                </PortaoDeAcesso>
+              </AcessoProvider>
+            </PrivateRoute>
+          }
+        />
+        {/* Relatório da marca (Vendas › Relatórios › Abrir): guia própria, sem menu.
+            Mesma permissão da aba Relatórios (permissaoDaRota casa pelo prefixo /relatorios). */}
+        <Route
+          path="/relatorios/:slug"
+          element={
+            <PrivateRoute>
+              <AcessoProvider>
+                <PortaoDeAcesso>
+                  <GuardaRota pathname="/relatorios">
+                    <ErrorBoundary scope="/relatorios/marca">
+                      <Suspense fallback={<PageLoader />}>
+                        <RelatorioMarca />
                       </Suspense>
                     </ErrorBoundary>
                   </GuardaRota>

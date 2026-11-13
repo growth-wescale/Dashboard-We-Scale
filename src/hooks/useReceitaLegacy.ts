@@ -12,6 +12,8 @@ export function resumirReceitaLegacy(rows: Venda[], inicio: string, fim: string,
     if (row.dia < inicio || row.dia > fim || (fonte !== '__all__' && mapFonte(row.fonte) !== fonte)) continue
     const contrato = Math.round(row.valor * 100)
     centavos += contrato
+    // Fechamentos confirmados apenas pelo valor não têm rateio por produto.
+    if (row.produtos.length === 0) continue
     let alocado = 0
     for (const item of row.produtos) {
       const valor = row.produtos.length === 1 ? contrato : Math.round((item.valor ?? 0) * 100)

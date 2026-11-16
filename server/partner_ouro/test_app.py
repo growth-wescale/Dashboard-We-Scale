@@ -30,17 +30,17 @@ class SecurityTests(unittest.TestCase):
    access=self.base();access.update(acesso_total=True)
    s=Service({'mode':'ouro'},connect=lambda:self.fail('sales must not connect to gold'),request_json=self.request(access))
    self.assertEqual(s.read({'dataset':'cycles','route':route},'session'),{'mode':'legacy'})
- def test_sop_lead_limits_only_apply_to_the_selected_read(self):
+ def test_reads_preserve_the_published_transaction_settings(self):
   access=self.base();access['acesso_total']=True
-  for dataset,route,adjust in [('leads','/sop-marketing',True),('media','/sop-marketing',False),('leads','/okrs',False)]:
+  for dataset,route in [('leads','/sop-marketing'),('media','/sop-marketing'),('leads','/okrs')]:
    with self.subTest(dataset=dataset,route=route):
     connection=MagicMock();connection.__enter__.return_value=connection
     connection.execute.return_value.fetchone.return_value={'u':'dashboard_scale_partner_ro','unsafe':False,'t':None}
     service=Service({'mode':'ouro'},connect=lambda:connection,request_json=self.request(access))
     reply=service.read({'dataset':dataset,'route':route},'session')
     queries=[call.args[0] for call in connection.execute.call_args_list]
-    self.assertEqual("SET LOCAL statement_timeout = '45s'" in queries,adjust)
-    self.assertEqual("SET LOCAL jit = off" in queries,adjust)
+    self.assertEqual("SET LOCAL statement_timeout = '45s'" in queries,False)
+    self.assertEqual("SET LOCAL jit = off" in queries,False)
     self.assertEqual(queries[0],'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
     self.assertEqual(reply['rows'],[])
  def test_overview_exposes_the_gold_deal_and_cycle_only_on_its_leads(self):

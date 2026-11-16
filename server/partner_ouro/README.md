@@ -13,3 +13,30 @@ Atualizar o serviço existente: transferir `app.py` ao diretório próprio, conf
 Retorno imediato à fonte original: editar somente `mode` para `legacy` no config protegido sem imprimir o arquivo, preservar proprietário/permissões, reiniciar apenas esse contêiner e recarregar o dashboard. Testes unitários comprovam que legacy não conecta ao DW e devolve a consulta original. Vendas independe desse modo.
 
 Testes locais sem banco: `python3 -m unittest discover -s server/partner_ouro -p 'test_*.py'`. Testes frontend cobrem sessão, marca, rotas comerciais intactas, rollback, filtros, projeção e paginação. Não há endpoint para receber SQL nem para gravar.
+
+## Cache e consultas simultâneas
+
+O cache fica somente na memória deste processo, separado por dataset e rota: a
+projeção de leads da Visão Geral difere da projeção usada pelas outras páginas.
+Sessão, permissão da página e acesso a Partner são conferidos em **cada** pedido,
+antes de consultar o cache. Tokens e respostas de autorização não são armazenados.
+
+Pedidos simultâneos da mesma chave compartilham uma única leitura do banco.
+A primeira leitura continua síncrona; somente respostas bem-sucedidas entram no
+cache. Uma rotina verifica as chaves já consultadas a cada 15 segundos e tenta
+renová-las a partir de 180 segundos. A cópia anterior pode ser usada por até 300
+segundos desde a conclusão da leitura; falhas não estendem esse prazo. Após uma
+falha, há intervalo de 15 segundos antes de nova tentativa. Dados vencidos não são
+devolvidos: o pedido aguarda a consulta compartilhada (até 55 segundos para quem
+está aguardando outra leitura) ou recebe indisponibilidade. `observed_at` continua
+sendo a data da carga na ouro, nunca a data de atualização do cache.
+
+As três vagas de banco, os contratos SQL e as regras de Marketing são preservados.
+O candidato parte dos parâmetros observados no serviço instalado em 16/11/2026:
+20 segundos por comando, sem ajuste local de JIT. O trecho de 45 segundos/JIT off
+para leads da S&OP que existia no repositório não estava instalado; foi removido
+para que esta correção mantenha os parâmetros efetivamente publicados.
+
+O merge não instala este serviço. A instalação e a conferência após uma renovação
+em produção são etapas separadas. O cache não elimina a dependência da origem na
+primeira consulta nem em caso de indisponibilidade prolongada.

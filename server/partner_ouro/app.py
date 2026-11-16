@@ -7,6 +7,8 @@ import decimal
 import json
 import os
 import threading
+import time
+from concurrent.futures import Future, TimeoutError as FutureTimeout
 import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
@@ -112,6 +114,10 @@ def mapped(dataset, rows, route=None):
 class Service:
  def __init__(self,settings,connect=None,request_json=None):
   self.settings=settings;self.slots=threading.BoundedSemaphore(3)
+  self.cache={}
+  self.inflight={}
+  self.failed_at={}
+  self.cache_lock=threading.Lock()
   if connect is None:
    import psycopg
    from psycopg.rows import dict_row
@@ -142,7 +148,52 @@ class Service:
   # A migração autorizada é somente Marketing. Clientes de Vendas permanecem nativos.
   if body['route'] not in ('/','/marca','/sop-marketing','/okrs','/copa-b2b'):return {'mode':'legacy'}
   if not related or self.settings.get('mode')=='legacy':return {'mode':'legacy'}
-  dataset=body['dataset']
+  key=(body['dataset'],body['route'])
+  with self.cache_lock:cached=self.cache.get(key)
+  if cached and time.monotonic()-cached[0]<=300:return cached[1]
+  return self.refresh(key,only_if_stale=True)
+
+ def refresh(self,key,only_if_stale=False):
+  # Somente o dono da consulta usa uma vaga de banco. Demais pedidos aguardam
+  # a mesma resposta, depois de validar sua própria sessão em read().
+  with self.cache_lock:
+   cached=self.cache.get(key)
+   if only_if_stale and cached and time.monotonic()-cached[0]<=300:return cached[1]
+   if key in self.failed_at and time.monotonic()-self.failed_at[key]<15:
+    raise GatewayError(503,'source_refresh_pending')
+   pending=self.inflight.get(key)
+   owner=pending is None
+   if owner:
+    pending=Future()
+    self.inflight[key]=pending
+  if not owner:
+   try:return pending.result(timeout=55)
+   except FutureTimeout:raise GatewayError(503,'source_refresh_pending') from None
+  try:
+   result=self.load(*key)
+   with self.cache_lock:
+    self.cache[key]=(time.monotonic(),result)
+    self.failed_at.pop(key,None)
+   pending.set_result(result)
+   return result
+  except BaseException as error:
+   with self.cache_lock:self.failed_at[key]=time.monotonic()
+   pending.set_exception(error)
+   raise
+  finally:
+   with self.cache_lock:self.inflight.pop(key,None)
+
+ def maintain(self):
+  while True:
+   time.sleep(15)
+   with self.cache_lock:
+    due=[key for key,(stamp,_) in self.cache.items() if time.monotonic()-stamp>=180]
+   for key in due:
+    try:self.refresh(key)
+    except Exception:pass  # A última cópia mantém seu prazo original de 300s.
+
+ def load(self,dataset,route):
+  detail=route.startswith('/linha-do-tempo/')
   query=DATASETS[dataset]
   if query is None:raise GatewayError(409,'ouro_contract_missing')
   if not self.slots.acquire(timeout=10):raise GatewayError(429,'busy')
@@ -152,14 +203,10 @@ class Service:
     role=c.execute("SELECT current_user u,(SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user) unsafe").fetchone()
     if role['u']!='dashboard_scale_partner_ro' or role['unsafe']:raise GatewayError(503,'unsafe_role')
     ids=[r['id_lead'] for r in c.execute('SELECT id_lead FROM ouro.vw_scale_partner_dashboard_identidades ORDER BY id_lead')]
-    if detail and body['route'].rsplit('/',1)[-1] not in ids:return {'mode':'legacy'}
-    if dataset=='leads' and body['route']=='/sop-marketing':
-     # A consulta de contatos da S&OP leva mais de 20s. Ajustes só desta transação.
-     c.execute("SET LOCAL statement_timeout = '45s'")
-     c.execute("SET LOCAL jit = off")
+    if detail and route.rsplit('/',1)[-1] not in ids:return {'mode':'legacy'}
     rows=c.execute(query+' LIMIT 50001').fetchall()
     if detail:
-     target=body['route'].rsplit('/',1)[-1]
+     target=route.rsplit('/',1)[-1]
      rows=[r for r in rows if r.get('id_lead',r.get('id_deal',r.get('deal_id')))==target];ids=[target]
     if len(rows)>50000:raise GatewayError(503,'result_too_large')
     observed=c.execute('SELECT max(carregado_em) t FROM ouro.vw_scale_partner_dashboard_ciclos').fetchone()['t']
@@ -170,7 +217,7 @@ class Service:
      if brand is not None and brand not in ('We Scale','Scale Partner'):raise GatewayError(503,'scope_violation')
     warnings=['Histórico ouro observado; snapshots manuais identificados permanecem históricos.']
     if dataset=='timeline':warnings.append('Mudanças de campo sem contrato histórico não são inferidas.')
-    return {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':mapped(dataset,rows,body['route']),'partner_ids':ids,'observed_at':observed,'warnings':warnings}
+    return {'mode':'ouro','contract':CONTRACT,'dataset':dataset,'rows':mapped(dataset,rows,route),'partner_ids':ids,'observed_at':observed,'warnings':warnings}
   finally:self.slots.release()
 
 class Handler(BaseHTTPRequestHandler):
@@ -197,5 +244,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
  settings=json.loads(Path(os.environ.get('PARTNER_OURO_CONFIG','/run/partner/config.json')).read_text())
- Handler.service=Service(settings);ThreadingHTTPServer(('0.0.0.0',8080),Handler).serve_forever()
+ Handler.service=Service(settings)
+ threading.Thread(target=Handler.service.maintain,daemon=True).start()
+ ThreadingHTTPServer(('0.0.0.0',8080),Handler).serve_forever()
 if __name__=='__main__':main()

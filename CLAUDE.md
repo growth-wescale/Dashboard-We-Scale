@@ -103,7 +103,8 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | Objeto | O que é |
 |---|---|
 | `deal_snapshot` | estado atual de cada deal (espelho do RD). `payload` jsonb tem os campos personalizados |
-| `deal_eventos` | log append-only de eventos (mudança de etapa, ganho, perda, troca de responsável, mudança de funil, mudança de fonte macro) |
+| `deal_eventos` | log append-only de eventos (mudança de etapa, ganho, perda, troca de responsável, mudança de funil, mudança de fonte macro). Desde 16/11/2026 tem `ativo`: evento que não aconteceu de verdade é **inativado** (`inativar_eventos`), nunca apagado |
+| `eventos_ativos.deal_eventos` | a mesma tabela só com `ativo = true`. **Toda leitura de eventos do banco passa por ela** (13 views, a matview e 3 funções). View nova que precise de eventos lê daqui, não de `public.deal_eventos`. Ver "Inativar evento em vez de apagar" |
 | `vw_deal_ciclo_enriquecido` | 1 linha por **ciclo de vida** do deal. Chave composta `id_lead + ciclo` |
 | **`vw_funil_vendas`** | **base das abas de Vendas.** Projeção da anterior com allowlist de funis, sem deals de teste e sem Excluído |
 | `vw_funil_etapas_v2` | eventos de passagem por etapa — base dos modos de contagem |
@@ -788,6 +789,31 @@ sobrepõem e linhas se repetem/somem — de forma **determinística**, então nu
 parece flutuação. Em 15/09 isso escondia 81 eventos/mês. Desempate até a chave
 (ou todas as colunas selecionadas). Use `buscarTodasPaginas` (`paginacao.ts`).
 
+**Evento que não aconteceu: inativar, nunca apagar** (desde 16/11/2026).
+`select * from inativar_eventos(array[<id_evento>...], '<motivo>', '<quem>')`;
+desfaz com `reativar_eventos(array[...], '<quem>')`. O evento continua na tabela
+com `ativo = false`, `inativado_em/_por/_motivo`, e some de todas as contas na
+rodada seguinte do `dash_sincronizar` (~1 min). A sincronização nunca altera nem
+recria um evento inativo: a perda por dia (`ux_deal_eventos_perda_por_dia`) só vale
+entre perdas ativas, `processar_deal_evento` só substitui perda ativa,
+`registrar_fechamento`/`registrar_anotacao_perda` não mexem em nada se o
+fechamento mais recente estiver inativo, e `registrar_stage_history` já não recria
+etapa que exista (ativa ou não) a ±2 s. As views leem `eventos_ativos.deal_eventos`
+porque foram recriadas com `search_path = eventos_ativos, public` (mesma definição,
+sem editar texto): **ao recriar uma delas pelo `pg_get_viewdef`, a referência sai
+qualificada (`eventos_ativos.deal_eventos`) e continua certa**; escrever
+`from deal_eventos` à mão numa view nova lê a tabela inteira, com inativos. Leitor
+de fora que lê a tabela crua pela API (`jornada-resultados`, do TI) precisa filtrar
+`ativo=eq.true`. `deal_eventos_excluidos_manualmente` continua existindo para os
+apagados antes de 16/11. SQL e conferências: `docs/sql/2026-11-16-inativar-eventos.sql`.
+
+**Script com `DROP`/`DELETE` não passa pelo conector do Supabase.** A confirmação
+do próprio conector recusa (aconteceu de novo em 16/11, mesmo com o ok do Junior no
+chat). Caminho: script num bloco `DO` com as conferências dentro (falhou = nada
+aplicado), o Junior roda no SQL Editor e o Claude confere depois. Matview não aceita
+`LOCK TABLE`: para tirar o `dash_sincronizar` do caminho, segurar
+`pg_advisory_xact_lock(hashtext('public.dash_sincronizar'))`, a mesma trava que ele tenta.
+
 **Origem nova de sync = entrar na lista de `processar_deal_evento`.** Todo
 caminho que chama `registrar_stage_history` antes de `processar_deal_evento`
 precisa ter o seu `p_origem` em `v_etapa_vem_do_historico`. Senão a segunda
@@ -921,6 +947,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   o mês ativo, o mesmo defeito corrigido em `useMetaResumo` em 15/10. Trocar de
   mês rápido no seletor pode deixar números de outro mês na tela até recarregar.
   `useSemanasCampanha` já tem a guarda
+- [ ] **`jornada-resultados` (Edge Function do TI) lê `deal_eventos` cru** pela API
+  com `service_role` (~154 leituras/dia, perdas e ganhos) e ainda vê eventos
+  inativados. Pedir ao TI para filtrar `ativo=eq.true` (desde 16/11/2026). Hoje só
+  afeta o negócio do Omar (perda de 16/11 inativada)
 - [ ] **Escrita aberta pra chave anon** — `atributos_legado` e `atribuicao_manual`
   (overrides de SDR/Closer/origem) estão sem RLS e com INSERT/UPDATE/DELETE pra
   anon; `invocar_marca_put`, `invocar_aplicar_plano` e `invocar_auditoria_marca`
@@ -966,6 +996,62 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-16 (2) — Inativar evento em vez de apagar; Omar volta a 1 perda só
+
+O negócio do Omar Darwiche Moussa (`6a82529e436a55000173f296`, Eletrovias, do
+Thiago) foi retomado por engano em 27/10 e movido do SDR para o funil Scale
+Partner. A pedido do Junior, foi perdido de novo no RD com o motivo de antes
+("Fim da cadência sem resposta") e voltou para SDR / Contato Efetivo pela Edge
+Function nova `corrigir-deal-rd` (plano em `_corrige_deal_20261116`). O RD não
+aceita `closed_at` no PUT, então a perda nova ficou com data de 16/11 10:50 e o
+dashboard ganhou um ciclo 2 (1 perda a mais em 16/11). O Junior não quis apagar
+eventos ("apagar evento é muito ruim"): pediu um jeito de inativar.
+
+**Banco** (`docs/sql/2026-11-16-inativar-eventos.sql`, spec em
+`docs/superpowers/specs/2026-11-16-inativar-eventos-design.md`): coluna `ativo` em
+`deal_eventos` (+ `inativado_em/_por/_motivo` e um CHECK), view
+`eventos_ativos.deal_eventos` (`security_invoker`), as 13 views leitoras e a matview
+(com as 8 views que dependem dela) recriadas com a mesma definição apontando para os
+ativos, 4 funções de gravação e 3 de leitura ajustadas, e `inativar_eventos` /
+`reativar_eventos` (só `service_role`). Regras na seção 7. O conector do Supabase
+recusou o script (tem `DROP`), então o Junior rodou no SQL Editor. A 1ª tentativa
+parou no 1º comando (`LOCK TABLE` em matview não é aceito) sem aplicar nada.
+
+**Conferido:** com todos os eventos ativos, as 19 views recriadas dão o mesmo md5
+linha a linha que as definições antigas, na mesma leitura (funil de vendas 10.135
+linhas, matview 12.411, `vw_deal_eventos_ciclo` 57.108); nenhuma view lê mais a
+tabela direto; permissões, comentários e os 6 índices da matview iguais aos de
+antes. Definições antigas em `_backup_viewdefs` (`*_pre_inativar_20261116`, 26).
+
+**Omar:** inativados os 6 eventos da ida e volta (155483 a 155486 de 27/10; 161559,
+a perda, e 161560 de 16/11). Ele volta a ter só o ciclo 1, perdido em 23/09. As
+exclusões 3219 a 3221 em `deal_eventos_excluidos_manualmente`, gravadas antes para
+a versão que apagava, ficaram (só impedem a etapa de ser recriada).
+
+### 2026-11-16 — Vanessa reativada; carteira do Scale Partner volta para ela
+
+Gabriel (Marketing) via leads do Scale Partner entrando e a Vanessa dizia que não chegavam no RD.
+**Causa:** desde 04/11 a Vanessa estava inativa em `nome_cargo_foto`, e as regras do Scale Partner
+(`We Scale`, id 55) e da Beauty Connection (id 61) têm `time_proprio` = Vanessa 100%. Sem SDR
+elegível, os 20 leads de 04 a 12/11 nasceram com o responsável padrão (Brunno, resultado
+`fallback`). Alguém repassou 18 à mão para ela (15 em 09/11, 3 em 16/11), mas as tarefas da cadência
+ficaram no nome do Brunno.
+
+**Feito (pedido do Junior):** Vanessa `ativo = true` (id 13). Lead novo de Scale Partner/Beauty
+volta a nascer com ela, sem mudar a regra. No RD, 6 negócios abertos do funil Scale Partner passaram
+para ela (5 da Sarah, que eram dela até 16/10 e foram junto com a carteira do Odonto Legacy por
+estarem marcados como Odonto Legacy na época; e o André, do Brunno), com 160 tarefas abertas
+(Brunno 101, Sarah 39, Gabriel Limas 20 num negócio de 17/10). Tudo conferido por GET pela
+`transferir-responsavel` v6; plano e dono anterior em `_transf_responsavel_20261116` (RLS ligado).
+**Ficou de fora** o negócio do Thiago no funil Scale Partner com marca Eletrovias
+(`6a82529e436a55000173f296`, Omar Darwiche Moussa): a Vanessa reabriu um perdido do SDR e moveu
+para lá, e o Junior vai entender com ela. Efeito no dashboard: ela volta a aparecer pelo nome nas
+visões por pessoa e nos filtros (não é mais "Ex-integrantes"). Nenhum negócio aberto fora do
+Scale Partner tem ela como SDR, então a automação de No Show não muda nada hoje.
+
+Também visto: o último `partner_multistep` chegou em 12/11 14h38; se o Marketing vê lead depois
+disso, ele entra por outro formulário que não chega na distribuição.
 
 ### 2026-11-13 — Relatório do Odonto Legacy dentro do dashboard, para qualquer período
 

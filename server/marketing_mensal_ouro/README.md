@@ -10,6 +10,12 @@ Leitura definitiva da ouro por período mensal, autorizada em 06/11/2026. Não a
 - Cada intervalo lê todas as projeções e o recibo na mesma transação `REPEATABLE READ READ ONLY`. Cache de oito intervalos em memória; renovação após 180 segundos, falha tenta novamente no ciclo de 15 segundos; após 300 segundos, retorna 503 em vez de servir uma cópia vencida. Limites de linhas recusam resultados incompletos.
 - `GET /api/marketing-mensal-ouro/status` expõe apenas data/horário da última publicação validada. `/health` exige recibo recente. Período inteiramente posterior retorna 409 `periodo_sem_publicacao`; parcial devolve `through` e aviso. Publicação não certifica completude histórica de todas as fontes.
 
+## Compactação HTTP — prévia de 16/11/2026
+
+O candidato adiciona gzip nível 4 apenas às respostas bem-sucedidas de leitura com pelo menos 1 KB, quando o cliente aceita gzip e a resposta fica menor. Recusa explícita (`gzip;q=0`) é respeitada; clientes sem suporte, erros e respostas pequenas continuam sem compactação. `Content-Length` descreve os bytes enviados; `Vary: Accept-Encoding`, autorização por chamada e `Cache-Control: no-store` são preservados.
+
+A mudança é somente no transporte. Consultas, registros, recortes, permissões, cache e renovação não mudam. O teste A/B usa a mesma instância isolada, alternando `identity` e `gzip`, com o frontend publicado servido na prévia local. Isso permite comparar conteúdo e transferência sem publicar. Tempos dessa prévia passam por um túnel privado e não representam uma previsão de latência em produção. A instalação continua dependendo de revisão e autorização próprias.
+
 ## Views de leitura
 
 `python3 server/marketing_mensal_ouro/views.py` imprime DDL transacional para `ouro.vw_marketing_mensal_{captacoes,negocios,contatos,midia,cobertura}`. Não executa nada. Os SELECTs reutilizam os critérios da prévia. Perfil/vínculos da prata ficam encapsulados nas views da ouro; o serviço não recebe acesso direto à prata. Fonte SQL é a existente em `marketing_mensal_previa` e `outubro_ouro/perfil.sql`, evitando duas regras de qualificação.

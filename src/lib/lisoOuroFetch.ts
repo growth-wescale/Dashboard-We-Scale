@@ -12,6 +12,7 @@ interface Options {
   fetch?: typeof fetch
   referenceFetch?: typeof fetch
   enabled?: boolean
+  parallelReference?: boolean
 }
 // Não guarda sessão nem dados pessoais em armazenamento persistente.
 export function createLisoOuroFetch(options: Options): typeof fetch {
@@ -51,10 +52,6 @@ export function createLisoOuroFetch(options: Options): typeof fetch {
       value.then(() => { const e = goldCache.get(goldKey); if (e?.value === value) e.at = Date.now() }, () => {})
       value.catch(() => { if (goldCache.get(goldKey)?.value === value) goldCache.delete(goldKey) })
     }
-    const reply = await goldEntry.value
-    if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
-    if (reply.mode === 'legacy') return referenceFetch(input, init)
-    if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || reply.contract !== 'liso_beauty_marketing_v1') throw new Error('Contrato de Lisô e Beauty inválido.')
     const requested = url.searchParams
     const extra = ['marca', 'dia']
     const select = requested.get('select') ?? '*'
@@ -65,31 +62,41 @@ export function createLisoOuroFetch(options: Options): typeof fetch {
     // páginas das demais marcas. Limite explícito: resposta parcial não é dado.
     const base = new URL(url); base.searchParams.delete('offset'); base.searchParams.delete('limit')
     const legacyKey = `${route}:${base.href}`
-    let legacyEntry = legacyCache.get(legacyKey)
-    if (!legacyEntry || Date.now() - legacyEntry.at > 60_000) {
-      const value = (async () => {
-        const rows: RecordRow[] = []
-        const started = Date.now()
-    for (let page = 0; ; page++) {
-      if (page >= 100 || Date.now() - started > 55_000) throw new Error('A consulta excedeu o limite de linhas; refine o período.')
-      const current = new URL(url)
-      current.searchParams.set('select', extended)
-      current.searchParams.set('offset', String(page * 1000)); current.searchParams.set('limit', '1000')
-      const legacy = await referenceFetch(current, { ...init, method: 'GET', headers, signal: AbortSignal.timeout(Math.max(1, 55_000 - (Date.now() - started))) })
-      if (!legacy.ok) throw new Error('Não foi possível consultar a fonte de referência.')
-      const chunk: unknown = await legacy.json()
-      if (!Array.isArray(chunk)) throw new Error('Resposta incompleta da fonte de referência.')
-      rows.push(...chunk as RecordRow[])
-      if (chunk.length < 1000) break
+    const getReferenceRows = () => {
+      let legacyEntry = legacyCache.get(legacyKey)
+      if (!legacyEntry || Date.now() - legacyEntry.at > 60_000) {
+        const value = (async () => {
+          const rows: RecordRow[] = []
+          const started = Date.now()
+          for (let page = 0; ; page++) {
+            if (page >= 100 || Date.now() - started > 55_000) throw new Error('A consulta excedeu o limite de linhas; refine o período.')
+            const current = new URL(url)
+            current.searchParams.set('select', extended)
+            current.searchParams.set('offset', String(page * 1000)); current.searchParams.set('limit', '1000')
+            const legacy = await referenceFetch(current, { ...init, method: 'GET', headers, signal: AbortSignal.timeout(Math.max(1, 55_000 - (Date.now() - started))) })
+            if (!legacy.ok) throw new Error('Não foi possível consultar a fonte de referência.')
+            const chunk: unknown = await legacy.json()
+            if (!Array.isArray(chunk)) throw new Error('Resposta incompleta da fonte de referência.')
+            rows.push(...chunk as RecordRow[])
+            if (chunk.length < 1000) break
+          }
+          return rows
+        })()
+        legacyEntry = { at: Infinity, value }; legacyCache.set(legacyKey, legacyEntry)
+        value.then(() => { const e = legacyCache.get(legacyKey); if (e?.value === value) e.at = Date.now() }, () => {})
+        value.catch(() => { if (legacyCache.get(legacyKey)?.value === value) legacyCache.delete(legacyKey) })
+        for (const [key, entry] of legacyCache) if (Date.now() - entry.at > 60_000) legacyCache.delete(key)
+      }
+      return legacyEntry.value
     }
-        return rows
-      })()
-      legacyEntry = { at: Infinity, value }; legacyCache.set(legacyKey, legacyEntry)
-      value.then(() => { const e = legacyCache.get(legacyKey); if (e?.value === value) e.at = Date.now() }, () => {})
-      value.catch(() => { if (legacyCache.get(legacyKey)?.value === value) legacyCache.delete(legacyKey) })
-      for (const [key, entry] of legacyCache) if (Date.now() - entry.at > 60_000) legacyCache.delete(key)
-    }
-    const rows = await legacyEntry.value
+    const referencePromise = options.parallelReference && route === '/' && method === 'GET' ? getReferenceRows() : undefined
+    // Observar falhas da referência mesmo se a ouro falhar primeiro; nunca entregar dados parciais.
+    referencePromise?.catch(() => {})
+    const reply = await goldEntry.value
+    if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
+    if (reply.mode === 'legacy') return referenceFetch(input, init)
+    if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || reply.contract !== 'liso_beauty_marketing_v1') throw new Error('Contrato de Lisô e Beauty inválido.')
+    const rows = await (referencePromise ?? getReferenceRows())
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     const scoped = (r: RecordRow) => ['Lisô Laser', 'Beauty Connection'].includes(String(r.marca)) && typeof r.dia === 'string' && r.dia >= '2026-10-01' && r.dia < '2026-11-01'
     if (reply.rows.some(r => !scoped(r))) throw new Error('Escopo Lisô/Beauty inválido.')

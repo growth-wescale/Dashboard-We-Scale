@@ -27,6 +27,7 @@ export function partnerMarketingCacheScope(optIn = true) {
 function client(source: 'marketing' | 'vendas') {
   const vendas = source === 'vendas'
   const options = {
+    parallelReference: !vendas,
     source, origin: vendas ? import.meta.env.VITE_SUPABASE_VENDAS_URL : import.meta.env.VITE_SUPABASE_URL,
     token: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
     route: () => window.location.pathname.replace(import.meta.env.VITE_APP_BASENAME || '', '') || '/',

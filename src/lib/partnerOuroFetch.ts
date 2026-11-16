@@ -21,6 +21,7 @@ interface Options {
   route: () => string
   fetch?: typeof fetch
   enabled?: boolean
+  parallelReference?: boolean
 }
 // Os dois clientes da S&OP usam o mesmo gateway. Compartilham a fila, sem compartilhar respostas.
 let ultimaLeituraSop: Promise<void> = Promise.resolve()
@@ -68,10 +69,6 @@ export function createPartnerOuroFetch(options: Options): typeof fetch {
       value.then(() => { const e = goldCache.get(goldKey); if (e?.value === value) e.at = Date.now() }, () => {})
       value.catch(() => { if (goldCache.get(goldKey)?.value === value) goldCache.delete(goldKey) })
     }
-    const reply = await goldEntry.value
-    if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
-    if (reply.mode === 'legacy') return nativeFetch(input, init)
-    if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || !Array.isArray(reply.partner_ids) || reply.contract !== 'scale_partner_dashboard_v1') throw new Error('Contrato de Scale Partner inválido.')
     const requested = url.searchParams
     const extra = [config.id, config.brand].filter((x): x is string => !!x)
     const select = requested.get('select') ?? '*'
@@ -82,31 +79,41 @@ export function createPartnerOuroFetch(options: Options): typeof fetch {
     // páginas das demais marcas. Limite explícito: resposta parcial não é dado.
     const base = new URL(url); base.searchParams.delete('offset'); base.searchParams.delete('limit')
     const legacyKey = `${route}:${base.href}`
-    let legacyEntry = legacyCache.get(legacyKey)
-    if (!legacyEntry || Date.now() - legacyEntry.at > 60_000) {
-      const value = (async () => {
-        const rows: RecordRow[] = []
-        const started = Date.now()
-    for (let page = 0; ; page++) {
-      if (page >= 100 || Date.now() - started > 55_000) throw new Error('A consulta excedeu o limite de linhas; refine o período.')
-      const current = new URL(url)
-      current.searchParams.set('select', extended)
-      current.searchParams.set('offset', String(page * 1000)); current.searchParams.set('limit', '1000')
-      const legacy = await nativeFetch(current, { ...init, method: 'GET', headers, signal: AbortSignal.timeout(Math.max(1, 55_000 - (Date.now() - started))) })
-      if (!legacy.ok) throw new Error('Não foi possível consultar a fonte de referência.')
-      const chunk: unknown = await legacy.json()
-      if (!Array.isArray(chunk)) throw new Error('Resposta incompleta da fonte de referência.')
-      rows.push(...chunk as RecordRow[])
-      if (chunk.length < 1000) break
+    const getReferenceRows = () => {
+      let legacyEntry = legacyCache.get(legacyKey)
+      if (!legacyEntry || Date.now() - legacyEntry.at > 60_000) {
+        const value = (async () => {
+          const rows: RecordRow[] = []
+          const started = Date.now()
+          for (let page = 0; ; page++) {
+            if (page >= 100 || Date.now() - started > 55_000) throw new Error('A consulta excedeu o limite de linhas; refine o período.')
+            const current = new URL(url)
+            current.searchParams.set('select', extended)
+            current.searchParams.set('offset', String(page * 1000)); current.searchParams.set('limit', '1000')
+            const legacy = await nativeFetch(current, { ...init, method: 'GET', headers, signal: AbortSignal.timeout(Math.max(1, 55_000 - (Date.now() - started))) })
+            if (!legacy.ok) throw new Error('Não foi possível consultar a fonte de referência.')
+            const chunk: unknown = await legacy.json()
+            if (!Array.isArray(chunk)) throw new Error('Resposta incompleta da fonte de referência.')
+            rows.push(...chunk as RecordRow[])
+            if (chunk.length < 1000) break
+          }
+          return rows
+        })()
+        legacyEntry = { at: Infinity, value }; legacyCache.set(legacyKey, legacyEntry)
+        value.then(() => { const e = legacyCache.get(legacyKey); if (e?.value === value) e.at = Date.now() }, () => {})
+        value.catch(() => { if (legacyCache.get(legacyKey)?.value === value) legacyCache.delete(legacyKey) })
+        for (const [key, entry] of legacyCache) if (Date.now() - entry.at > 60_000) legacyCache.delete(key)
+      }
+      return legacyEntry.value
     }
-        return rows
-      })()
-      legacyEntry = { at: Infinity, value }; legacyCache.set(legacyKey, legacyEntry)
-      value.then(() => { const e = legacyCache.get(legacyKey); if (e?.value === value) e.at = Date.now() }, () => {})
-      value.catch(() => { if (legacyCache.get(legacyKey)?.value === value) legacyCache.delete(legacyKey) })
-      for (const [key, entry] of legacyCache) if (Date.now() - entry.at > 60_000) legacyCache.delete(key)
-    }
-    const rows = await legacyEntry.value
+    const referencePromise = options.parallelReference && options.source === 'marketing' && route === '/' && method === 'GET' ? getReferenceRows() : undefined
+    // Observar falhas da referência mesmo se a ouro falhar primeiro; nunca entregar dados parciais.
+    referencePromise?.catch(() => {})
+    const reply = await goldEntry.value
+    if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
+    if (reply.mode === 'legacy') return nativeFetch(input, init)
+    if (reply.mode !== 'ouro' || !Array.isArray(reply.rows) || !Array.isArray(reply.partner_ids) || reply.contract !== 'scale_partner_dashboard_v1') throw new Error('Contrato de Scale Partner inválido.')
+    const rows = await (referencePromise ?? getReferenceRows())
     if (init?.signal?.aborted) throw new Error('Consulta cancelada.')
     const merged = mergePartnerRows(rows, reply.rows, reply.partner_ids, config.id ?? null, requested, table === 'vw_marketing_funil' || table === 'vw_funil_compat')
     const offset = Number(requested.get('offset') ?? 0), limit = Number(requested.get('limit') ?? merged.length)

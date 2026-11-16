@@ -1,5 +1,6 @@
 """Gateway mensal preparado para instalação separada. SQL fixo, somente ouro."""
 from collections import OrderedDict
+from concurrent.futures import Future
 from datetime import date, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -117,6 +118,7 @@ class Gateway:
         self.lock = threading.RLock()
         self.refresh_lock = threading.Lock()
         self.cache = OrderedDict()
+        self.inflight = {}
         self.receipt = None
 
     def auth(self, path, token, body=None):
@@ -160,18 +162,36 @@ class Gateway:
                    for name, order in [('captacoes', 'id'), ('contatos', 'id'), ('negocios', 'negocio_id'), ('midia', 'id')]}
             return receipt, datasets(raw, start, end)
 
-    def refresh(self, key=None):
+    def refresh(self, key=None, only_missing=False):
         # Um único snapshot/transação alimenta leads+mídia de cada período.
-        with self.refresh_lock:
-            receipt, data = self.load(key)
-            stamp = time.monotonic()
+        with self.lock:
+            if only_missing and key in self.cache:
+                return
+            pending = self.inflight.get(key)
+            owner = pending is None
+            if owner:
+                pending = Future()
+                self.inflight[key] = pending
+        if not owner:
+            return pending.result()
+        try:
+            with self.refresh_lock:
+                receipt, data = self.load(key)
+                stamp = time.monotonic()
+                with self.lock:
+                    self.receipt = (stamp, receipt)
+                    if key is not None:
+                        self.cache[key] = (stamp, receipt, data)
+                        self.cache.move_to_end(key)
+                        while len(self.cache) > 8:
+                            self.cache.popitem(last=False)
+            pending.set_result(None)
+        except BaseException as error:
+            pending.set_exception(error)
+            raise
+        finally:
             with self.lock:
-                self.receipt = (stamp, receipt)
-                if key is not None:
-                    self.cache[key] = (stamp, receipt, data)
-                    self.cache.move_to_end(key)
-                    while len(self.cache) > 8:
-                        self.cache.popitem(last=False)
+                del self.inflight[key]
 
     def maintain(self):
         while True:
@@ -208,7 +228,7 @@ class Gateway:
         with self.lock:
             entry = self.cache.get(key)
         if entry is None:
-            self.refresh(key)
+            self.refresh(key, only_missing=True)
             with self.lock:
                 entry = self.cache.get(key)
         if not entry or time.monotonic() - entry[0] > 300:

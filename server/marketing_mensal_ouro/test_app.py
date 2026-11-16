@@ -1,6 +1,8 @@
 from copy import deepcopy
 import time
+import threading
 import unittest
+from concurrent.futures import Future, ThreadPoolExecutor
 from unittest.mock import patch
 
 from app import Error, Gateway, ROLE, datasets, period
@@ -93,6 +95,72 @@ class GatewayTest(unittest.TestCase):
         for day in range(1, 12):
             self.g.refresh(('2026-11-01', f'2026-11-{day:02}'))
         self.assertEqual(len(self.g.cache), 8)
+
+    def test_concurrent_leads_and_media_share_one_snapshot_and_keep_permissions(self):
+        entered, release, joined = threading.Event(), threading.Event(), threading.Event()
+        class WaitingFuture(Future):
+            def result(self, timeout=None):
+                joined.set()
+                return super().result(timeout=5)
+        calls = []
+        def load(key):
+            calls.append(key)
+            entered.set()
+            if not release.wait(5): raise TimeoutError()
+            return self.receipt, self.data
+        self.g.cache.clear()
+        self.g.load = load
+        with patch('app.Future', WaitingFuture), ThreadPoolExecutor(2) as pool:
+            first = pool.submit(self.read, dataset='leads')
+            self.assertTrue(entered.wait(5))
+            second = pool.submit(self.read, dataset='media')
+            try:
+                self.assertTrue(joined.wait(5))
+            finally:
+                release.set()
+            self.assertEqual(first.result()['rows'], self.data['leads'])
+            self.assertEqual(second.result()['rows'], [media()])
+        self.assertEqual(calls, [self.key])
+        self.access['marcas'] = ['viva']
+        self.assertEqual([r['id'] for r in self.read()['rows']], ['two'])
+
+    def test_concurrent_failure_is_shared_and_next_attempt_can_recover(self):
+        entered, release, joined = threading.Event(), threading.Event(), threading.Event()
+        class WaitingFuture(Future):
+            def result(self, timeout=None):
+                joined.set()
+                return super().result(timeout=5)
+        calls = []
+        def fail(key):
+            calls.append(key)
+            entered.set()
+            if not release.wait(5): raise TimeoutError()
+            raise RuntimeError('source failure')
+        self.g.cache.clear()
+        self.g.load = fail
+        with patch('app.Future', WaitingFuture), ThreadPoolExecutor(2) as pool:
+            first = pool.submit(self.read)
+            self.assertTrue(entered.wait(5))
+            second = pool.submit(self.read)
+            try:
+                self.assertTrue(joined.wait(5))
+            finally:
+                release.set()
+            for result in (first, second):
+                with self.assertRaisesRegex(RuntimeError, 'source failure'):
+                    result.result()
+        self.assertEqual(calls, [self.key])
+        self.assertEqual(self.g.inflight, {})
+        self.assertEqual(len(self.g.cache), 0)
+        self.g.load = lambda key: (self.receipt, self.data)
+        self.assertEqual(self.read()['rows'], [media()])
+
+    def test_late_cache_miss_reuses_completed_load_without_extending_validity(self):
+        before = self.g.cache[self.key]
+        with patch.object(self.g, 'load') as load:
+            self.g.refresh(self.key, only_missing=True)
+            load.assert_not_called()
+        self.assertIs(self.g.cache[self.key], before)
 
     def test_period_validation_preserves_october(self):
         for raw in (None, {}, {'inicio':'2026-10-31','fim':'2026-11-06'},

@@ -77,10 +77,11 @@ class Tests(unittest.TestCase):
   s.request_json=lambda path,token,body: {'id':'user'} if path.endswith('/user') else {'registrado':True,'ativo':False}
   with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
   self.assertEqual(e.exception.status,403)
- def test_expired_cache_fails_closed_without_database_retry(self):
+ def test_expired_cache_never_returns_stale_data_after_failed_refresh(self):
   s,c=self.service([])
   with patch('app.time.monotonic',return_value=100):s.refresh_dataset('leads')
   queries=len(c.queries)
+  s.refresh_failed_at['leads']=400
   with patch('app.time.monotonic',return_value=401):
    with self.assertRaises(GatewayError) as e:s.read({'dataset':'leads','route':'/'},'token')
   self.assertEqual(e.exception.code,'source_refresh_pending')

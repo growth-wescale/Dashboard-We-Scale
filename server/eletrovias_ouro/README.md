@@ -1,3 +1,31 @@
+## Prévia de renovação e compartilhamento — 16/11/2026
+
+Somente teste isolado, sem instalação. O serviço encontrado em produção ainda
+renova sob demanda após 300s; a manutenção antecipada existente no repositório
+não estava instalada. Esta candidata combina manutenção aos 180s com uma única
+consulta em andamento por dataset, compartilhada entre pedidos simultâneos.
+
+- Autorização continua por pedido, antes de usar cache ou compartilhar a carga.
+- Uma única conexão de leitura à ouro; SQL, contrato, filtros e transformações
+  de leads/mídia preservados em relação ao instalado. Nenhuma flag ativada.
+- Cópia válida responde durante a renovação; depois de 300s, o pedido aguarda
+  uma carga atual em vez de receber dados vencidos. Espera limitada a 60s para
+  quem compartilha a carga. Falhas não alteram a idade da cópia; nova tentativa
+  limitada por intervalo de 15s.
+- A primeira carga ainda depende da origem. O objetivo é evitar a espera e a
+  disputa de consultas no vencimento normal, sem prometer um tempo fixo de tela.
+- Verificação local: `python3 -m unittest discover -s server/eletrovias_ouro`.
+  Cobertura de concorrência real, renovação, falhas, expiração e permissões.
+
+Validação isolada concluída em 16/11: 26 testes aprovados; respostas completas
+idênticas à produção (1.888 linhas de leads e 609 de mídia). Renovação natural
+antes de 300s e nova leitura aos 351s, na mesma instância; uma carga inicial e
+uma renovação por dataset, sem consultas duplicadas. Cartões e tabelas das oito
+marcas iguais em outubro e 01–16/11. Evidência agregada privada:
+`outputs/audits/eletrovias-cache-20261116.local/resultado.json`.
+
+Histórico anterior e regras de dados abaixo permanecem como referência datada.
+
 # Eletrovias — correção do MQL por negociação, 02/11/2026
 
 **QA da prévia concluído em 02/11; nova contagem ainda não ativada.** PR297 integrado pelo usuário em `2ae79ba` (22:49 BRT), deploy automático `41562191894` concluído. Worktree alinhada à main; `VITE_ELETROVIAS_NEGOCIOS_ENABLED` ausente no deploy, `negocios_enabled=false` no gateway vivo e nova view não instalada. A implantação anterior (PR288) permanece como estava; os totais históricos de pessoas não comprovam paridade com negócios do CRM.

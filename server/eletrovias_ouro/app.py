@@ -9,6 +9,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import Future, TimeoutError as FutureTimeout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -122,6 +123,8 @@ class Service:
    self.queries['negocios'] = DEALS_QUERY
   self.slots = threading.BoundedSemaphore(1)
   self.cache = {}
+  self.inflight = {}
+  self.refresh_failed_at = {}
   self.cache_lock = threading.Lock()
   if connect is None:
    import psycopg
@@ -156,12 +159,42 @@ class Service:
   if self.settings.get('mode') != 'ouro': raise GatewayError(503, 'invalid_mode')
   dataset = body['dataset']
   with self.cache_lock: cached = self.cache.get(dataset)
-  if cached:
-   if time.monotonic() - cached[0] > 300: raise GatewayError(503, 'source_refresh_pending')
+  if cached and time.monotonic() - cached[0] <= 300:
    return cached[1]
-  return self.refresh_dataset(dataset)
+  return self.refresh_dataset(dataset, only_if_stale=True)
 
- def refresh_dataset(self, dataset):
+ def refresh_dataset(self, dataset, only_if_stale=False):
+  # Share only the data load; read() authorizes every caller before reaching here.
+  with self.cache_lock:
+   cached = self.cache.get(dataset)
+   if only_if_stale and cached and time.monotonic() - cached[0] <= 300:
+    return cached[1]
+   pending = self.inflight.get(dataset)
+   owner = pending is None
+   if owner:
+    failed_at = self.refresh_failed_at.get(dataset)
+    if failed_at is not None and time.monotonic() - failed_at < 15:
+     raise GatewayError(503, 'source_refresh_pending')
+    pending = Future()
+    self.inflight[dataset] = pending
+  if not owner:
+   try: return pending.result(timeout=60)
+   except FutureTimeout: raise GatewayError(503, 'source_refresh_pending') from None
+  try:
+   result = self.load_dataset(dataset)
+   with self.cache_lock:
+    self.cache[dataset] = (time.monotonic(), result)
+    self.refresh_failed_at.pop(dataset, None)
+   pending.set_result(result)
+   return result
+  except BaseException as error:
+   with self.cache_lock: self.refresh_failed_at[dataset] = time.monotonic()
+   pending.set_exception(error)
+   raise
+  finally:
+   with self.cache_lock: self.inflight.pop(dataset, None)
+
+ def load_dataset(self, dataset):
   if not self.slots.acquire(timeout=10): raise GatewayError(429, 'busy')
   try:
    with self.connect() as connection:
@@ -172,7 +205,6 @@ class Service:
     contact_rows, warnings = prepare_deals(rows) if dataset=='negocios' else prepare_rows(dataset, rows)
     result = {'mode':'ouro','contract':'eletrovias_negocios_v1' if dataset=='negocios' else CONTRACT,'dataset':dataset,'rows':contact_rows,
      'observed_at':max((r.get('carregado_em') for r in rows if r.get('carregado_em')),default=None),'warnings':warnings}
-    with self.cache_lock: self.cache[dataset] = (time.monotonic(), result)
     return result
 
   finally: self.slots.release()

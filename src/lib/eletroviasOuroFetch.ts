@@ -1,3 +1,4 @@
+import { monthlyReferenceUrl } from './monthlyReference'
 import { periodoMensal, type PeriodoMensal } from './previaMensal'
 import { leituraOuroSop } from './leituraOuroSop'
 import { inEletroviasWindow, isEletroviasMigrationMedia, isEletroviasMigrationLead } from './eletroviasOuroScope'
@@ -8,7 +9,7 @@ export const ELETROVIAS_MARKETING_ROUTES = new Set(['/', '/marca', '/sop-marketi
 const TABLES: Record<string, { dataset: string }> = { leads: { dataset: 'leads' }, media_daily_raw: { dataset: 'media' } }
 interface GoldReply { mode: 'legacy' | 'ouro'; rows: RecordRow[];  contract: string; observed_at: string | null; warnings: string[] }
 interface Options {
-  marketingScope?: { mensal?: boolean; brands: readonly string[]; endpoint: string; contract: string; includes: (row: RecordRow, table: string) => boolean }
+  marketingScope?: { referenceCoveredBrands?: readonly string[]; mensal?: boolean; brands: readonly string[]; endpoint: string; contract: string; includes: (row: RecordRow, table: string) => boolean }
   origin: string
   token: () => Promise<string | null>
   route: () => string
@@ -82,7 +83,9 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
     headers.delete('Range'); headers.delete('range-unit'); headers.set('Accept', 'application/json')
     // Buscar a união antes da paginação evita duplicar Eletrovias ou deslocar as
     // páginas das demais marcas. Limite explícito: resposta parcial não é dado.
-    const base = new URL(url); base.searchParams.delete('offset'); base.searchParams.delete('limit')
+    const referenceUrl = periodo && scope?.referenceCoveredBrands && route === '/' && method === 'GET'
+      ? monthlyReferenceUrl(url, periodo, scope.referenceCoveredBrands) : url
+    const base = new URL(referenceUrl); base.searchParams.delete('offset'); base.searchParams.delete('limit')
     const legacyKey = `${route}:${base.href}`
     const getReferenceRows = () => {
       let legacyEntry = legacyCache.get(legacyKey)
@@ -92,7 +95,7 @@ export function createEletroviasOuroFetch(options: Options): typeof fetch {
           const started = Date.now()
           for (let page = 0; ; page++) {
             if (page >= 100 || Date.now() - started > 55_000) throw new Error('A consulta excedeu o limite de linhas; refine o período.')
-            const current = new URL(url)
+            const current = new URL(referenceUrl)
             current.searchParams.set('select', extended)
             current.searchParams.set('offset', String(page * 1000)); current.searchParams.set('limit', '1000')
             const legacy = await referenceFetch(current, { ...init, method: 'GET', headers, signal: AbortSignal.timeout(Math.max(1, 55_000 - (Date.now() - started))) })

@@ -1,3 +1,4 @@
+import { monthlyReferenceCoveredBrands } from './monthlyReference'
 import { marketingMensalAtivo, mensalEndpoint, mensalContract, marcasMensais, linhaMensal } from './previaMensal'
 import { linhaOuroOutubro, marcasOuroOutubro } from './outubroOuro'
 import { createEletroviasOuroFetch } from './eletroviasOuroFetch'
@@ -46,7 +47,7 @@ function client(source: 'marketing' | 'vendas') {
       includes: linhaOuroOutubro },
   }) : eletroviasFetch
   const fetch = !vendas && marketingMensalAtivo ? createEletroviasOuroFetch({ ...options, referenceFetch: outubroFetch,
-    marketingScope: { mensal: true, brands: marcasMensais, endpoint: mensalEndpoint,
+    marketingScope: { mensal: true, referenceCoveredBrands: monthlyReferenceCoveredBrands, brands: marcasMensais, endpoint: mensalEndpoint,
       contract: mensalContract, includes: linhaMensal },
   }) : outubroFetch
   return createClient(

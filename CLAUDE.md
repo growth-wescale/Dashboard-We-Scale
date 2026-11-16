@@ -6831,3 +6831,8 @@ agendadas por pg_cron no projeto `jmuluoksnlqrvzbcltim`:
 
 Secrets no Vault do projeto de Marketing, acessados via `public.get_secret(name)`.
 Workflows n8n antigos desativados, não deletados.
+
+
+### 16/11/2026 — Compactação mensal somente na prévia
+
+Branch `codex/mensal-compactacao-previa`: gzip negociado apenas para respostas de leitura mensal bem-sucedidas e maiores que 1 KB, preservando autorização, no-store e payload descompactado. 23 testes aprovados; ensaio A/B autenticado e renovação natural além de 300s na mesma instância isolada, respostas e indicadores idênticos. Evidência agregada privada em `outputs/audits/mensal-compactacao-20261116.local/resultado.json`. Rede oscilante: redução de bytes comprovada, ganho de tempo total não garantido. Serviço publicado com arquivo/processo preservados; sem PR, instalação, RD, fatos ou Vendas nesta etapa.

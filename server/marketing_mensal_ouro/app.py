@@ -4,6 +4,7 @@ from concurrent.futures import Future
 from datetime import date, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import gzip
 import json
 from pathlib import Path
 import sys
@@ -27,6 +28,27 @@ BRANDS = {'inpot': {'Inpot'}, 'b2case': {'B2Case'}, 'viva': {'Viva'},
 ALL_BRANDS = set().union(*BRANDS.values())
 LEGACY_IDS = {'120248355011530752', '24054007136', '24054143009'}
 MAX_ROWS = 50000
+GZIP_MIN_BYTES = 1024
+
+
+def accepts_gzip(header):
+    # Uma recusa explícita de gzip prevalece sobre o curinga.
+    qualities = {}
+    for item in header.split(','):
+        parts = [part.strip().lower() for part in item.split(';')]
+        if parts[0] not in ('gzip', '*'):
+            continue
+        quality = 1.0
+        for parameter in parts[1:]:
+            if parameter.startswith('q='):
+                try:
+                    quality = float(parameter[2:])
+                except ValueError:
+                    quality = 0.0
+        if not 0 <= quality <= 1:
+            quality = 0.0
+        qualities[parts[0]] = min(quality, qualities.get(parts[0], 1.0))
+    return qualities.get('gzip', qualities.get('*', 0.0)) > 0
 
 
 class Error(Exception):
@@ -248,9 +270,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def reply(self, status, body):
         payload = json.dumps(body, default=json_value, allow_nan=False).encode()
+        compressed = False
+        if status == 200 and self.path == BASE + '/v1/read' and len(payload) >= GZIP_MIN_BYTES:
+            if accepts_gzip(','.join(self.headers.get_all('Accept-Encoding', []))):
+                candidate = gzip.compress(payload, compresslevel=4, mtime=0)
+                if len(candidate) < len(payload):
+                    payload, compressed = candidate, True
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Vary', 'Accept-Encoding')
+        if compressed:
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.end_headers()

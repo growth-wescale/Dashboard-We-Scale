@@ -510,6 +510,16 @@ describe('conversion', () => {
 // ── Filtro de escopo ───────────────────────────────────────────────────────
 
 describe('buildScopeFilter', () => {
+  it('Tipo de R1: LIVE só passa LIVE; Individual inclui linha sem valor; todos passa tudo', () => {
+    const live = row({ tipo_r1: 'LIVE' })
+    const indiv = row({ tipo_r1: 'Individual' })
+    const semValor = row({ tipo_r1: null })
+    expect([live, indiv, semValor].map(buildScopeFilter({ tipoR1: 'LIVE' }))).toEqual([true, false, false])
+    expect([live, indiv, semValor].map(buildScopeFilter({ tipoR1: 'Individual' }))).toEqual([false, true, true])
+    expect([live, indiv, semValor].map(buildScopeFilter({ tipoR1: 'todos' }))).toEqual([true, true, true])
+    expect([live, indiv, semValor].map(buildScopeFilter({}))).toEqual([true, true, true])
+  })
+
   const r = row({ marca: 'Inpot', fonte_macro: 'Inbound', utm_source: 'ig', nome_sdr: 'Xayane' })
 
   it('sem critérios, aceita tudo', () => {

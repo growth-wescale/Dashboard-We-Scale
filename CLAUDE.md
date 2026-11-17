@@ -124,6 +124,7 @@ novo.
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD, e o dashboard não a usa: ela diverge do cliente (ex.: põe `audience_network` em "Outros"). O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
+- `tipo_r1` — tipo da R1 do negócio: `LIVE` (R1 em grupo, começou na Eletrovias em nov/2026) ou `Individual`. Vem do campo "Tipo de R1" do RD CRM (`6af3226d307c22002371c944`, obrigatório na Reunião Agendada SQL do Closer e nas etapas seguintes desde ~10/11/2026), lido em `payload->>'Tipo de R1'`. **Campo vazio, outras marcas e meses anteriores = `Individual`** (regra na view, decisão do Junior em 17/11). Grão é o deal (snapshot): vale para todos os ciclos dele
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
 
 ### Inbound × Prospecção Ativa
@@ -604,6 +605,7 @@ src/components/corrida/PontosDoNegocio.tsx  link "pontos" nos 4 pop-ups de negó
 | Vendas | Negócios × Unidades |
 | Deals criados no período | Off = data da etapa · On = safra de MQL |
 | Contagem | Deals únicos × Passagens |
+| Tipo de R1 | Todos × Individual × Live (`tipo_r1`). Recorta o negócio inteiro: com Live o funil só mostra negócios de R1 em LIVE, desde o MQL. Também restringe as opções dos outros filtros. Não se aplica ao bloco do MeetRox |
 
 Modos do card do funil: **Performance** (volume que passou no período,
 `TrapFunnel`), **Aging** (negócios **criados no período** que seguem em aberto,
@@ -966,6 +968,34 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-17 — Toggle "Tipo de R1" (Todos · Individual · Live) nas abas de Vendas
+
+Pedido do Junior: a Eletrovias passou a fazer a R1 em LIVE (reunião em grupo) em
+nov/2026, e o SDR preenche o campo "Tipo de R1" do RD ao agendar. Regra em
+`tipo_r1` (seção 3): campo = LIVE → LIVE; qualquer outra coisa → Individual.
+
+**Preenchimento retroativo no RD:** 103 negócios da Eletrovias foram agendados
+na Reunião Agendada SQL do Closer em novembro (até 17/11); 24 estavam sem o campo
+(agendados antes de ele virar obrigatório, até 09/11). 19 classificados pela
+reunião do MeetRox (convidado de "LIVE: Eletrovias" = LIVE, R1 própria =
+Individual; decisão do Junior seguir a pista) e gravados pela Edge Function nova
+`preencher-tipo-r1` (plano em `_tipo_r1_20261117`, RLS ligado; 19/19 conferidos
+por GET, motivo de perda dos 3 perdidos intacto). Os 5 sem pista o Junior
+confirmou com os SDRs e preencheu na mão (conferidos no RD).
+
+**Banco** (`docs/sql/2026-11-17-tipo-r1.sql`): coluna `tipo_r1` no fim de
+`vw_funil_vendas` e em `dash_colunas('vendas')`, na mesma transação do
+`dash_sincronizar(true)`. Checksum da view idêntico antes/depois (10.180 linhas,
+77 ganhos, R$ 3.687.228,98, mesmo md5 de chaves/responsáveis/etapa/marca/origem).
+Backup em `_backup_viewdefs` (`vw_funil_vendas_pre_tipo_r1_20261117`).
+
+**Front:** `tipoR1` no `SharedFiltersContext` (persistido, padrão Todos, entra no
+Limpar), controle "Tipo de R1" na `FilterBar` depois do Closer, filtro em
+`buildScopeFilter` e em `funilFilterOptions` (Visão Macro, Performance, Análise de
+Perda e Linha do Tempo). Os eventos herdam o recorte pelo escopo do ciclo, como
+os outros filtros. O teste que compara `dash_colunas` com `COLUNAS_VENDAS` só
+aceitava `[a-z_]` e passou a aceitar dígito.
 
 ### 2026-11-13 — Relatório do Odonto Legacy dentro do dashboard, para qualquer período
 

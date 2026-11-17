@@ -1,4 +1,4 @@
-import type { FunnelRow } from '@/lib/funnelTypes'
+import type { FunnelRow, TipoR1Filtro } from '@/lib/funnelTypes'
 import type { PeriodWindow } from '@/lib/metrics'
 import { STAGE_DATE_FIELD, STAGE_ORDER, isInWindow } from '@/lib/metrics'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
@@ -12,6 +12,8 @@ export interface FunilFilterOptionsInput {
   subFontes: string[]
   sdrs: string[]
   closers: string[]
+  /** Tipo de R1 da barra. Omitido = 'todos'. Não tem lista de opções: só restringe as dos outros filtros. */
+  tipoR1?: TipoR1Filtro
   /** true no modo "Deals criados no período" (safra) — só o MQL conta como "na janela". */
   cohort: boolean
   /** Quem é do time (`equipeAtiva`): os outros nomes não aparecem nas opções de SDR e Closer. */
@@ -44,11 +46,12 @@ export function dealNaJanela(row: FunnelRow, win: PeriodWindow, cohort: boolean)
  * Compartilhado entre Visão Macro e Performance.
  */
 export function funilFilterOptions(input: FunilFilterOptionsInput): FunilFilterOptions {
-  const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, equipe } = input
+  const { rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, equipe, tipoR1 = 'todos' } = input
 
   const subFonteDe = (r: FunnelRow) => normalizeSubFonte(r.utm_source, r.sub_fonte_crm)
   const fonteDe = (r: FunnelRow) => normalizeFonteMacro(r.fonte_macro)
-  const naJanela = rows.filter(r => dealNaJanela(r, win, cohort))
+  const naJanela = rows.filter(r =>
+    (tipoR1 === 'todos' || (r.tipo_r1 ?? 'Individual') === tipoR1) && dealNaJanela(r, win, cohort))
   const okMarca = (r: FunnelRow) => !marcasParaEscopo.length || marcasParaEscopo.includes(r.marca ?? '')
   const okFonte = (r: FunnelRow) => !fontes.length || fontes.includes(fonteDe(r))
   const okSub = (r: FunnelRow) => !subFontes.length || subFontes.includes(subFonteDe(r))

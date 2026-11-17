@@ -20,7 +20,7 @@ export const COLUNAS_VENDAS = [
   'data_interesse_reuniao', 'data_conexao',
   'data_agendamento_reuniao_sql', 'data_reuniao_realizada', 'data_no_show',
   'data_sal', 'data_oportunidade', 'data_comite', 'data_pre_contrato',
-  'data_venda', 'data_perdido', 'origem_comercial',
+  'data_venda', 'data_perdido', 'origem_comercial', 'tipo_r1',
 ] as const
 
 /**

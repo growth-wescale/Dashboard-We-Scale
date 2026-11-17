@@ -146,7 +146,7 @@ describe('colunas do navegador = colunas do banco', () => {
   const sql = readFileSync(path.resolve(__dirname, '../../../docs/sql/2026-11-03-dashboard-vendas-tempo-real.sql'), 'utf8')
   const lista = (base: string) => {
     const m = sql.match(new RegExp(`when '${base}' then array\\[([^\\]]+)\\]`))
-    return m ? [...m[1].matchAll(/'([a-z_]+)'/g)].map(x => x[1]) : []
+    return m ? [...m[1].matchAll(/'([a-z0-9_]+)'/g)].map(x => x[1]) : []
   }
   it('vendas', () => expect(lista('vendas')).toEqual([...COLUNAS_VENDAS]))
   it('etapas', () => expect(lista('etapas')).toEqual([...COLUNAS_ETAPAS]))

@@ -332,7 +332,7 @@ function DeltaSecundario({ delta, label }: { delta: number | null; label: string
 // ─── FunilVendas ──────────────────────────────────────────────────────────────
 
 export function FunilVendas() {
-  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
+  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, tipoR1, viewModes } = useSharedFilters()
   const [modo, setModo] = useState<FunnelMode>('performance')
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
@@ -417,14 +417,14 @@ export function FunilVendas() {
     [marcasSelecionadas],
   )
   const scope = useMemo(
-    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
-    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1 }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1],
   )
   // Mesmo escopo, mas sem restrição de marca — base pra quebrar KPIs por marca
   // no dropdown do card de Meta.
   const scopeSemMarca = useMemo(
-    () => buildScopeFilter({ origem, fontes, subFontes, sdrs, closers }),
-    [origem, fontes, subFontes, sdrs, closers],
+    () => buildScopeFilter({ origem, fontes, subFontes, sdrs, closers, tipoR1 }),
+    [origem, fontes, subFontes, sdrs, closers, tipoR1],
   )
 
   // `ranges` é a união exata dos períodos selecionados (1 ou vários) — nunca
@@ -475,10 +475,10 @@ export function FunilVendas() {
     () => funilFilterOptions({
       rows, win,
       marcasParaEscopo,
-      fontes, subFontes, sdrs, closers,
+      fontes, subFontes, sdrs, closers, tipoR1,
       cohort: viewModes.funnelView === 'cohort', equipe,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, equipe],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1, viewModes.funnelView, equipe],
   )
 
   const fontesDisponiveis = opcoesFiltro.fontes

@@ -107,6 +107,7 @@ export function FilterBar({
     subFontes, setSubFontes,
     sdrs, setSdrs,
     closers, setClosers,
+    tipoR1, setTipoR1,
     viewModes, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   } = useSharedFilters()
@@ -181,7 +182,7 @@ export function FilterBar({
 
   // Resumo da linha compacta: o recorte que está valendo, sem abrir o painel.
   const faltaObrigatorio = brandKeys.length === 0 || (periodMode !== 'dia' && periodValues.length === 0)
-  const qtdOutrosFiltros = [fontes, subFontes, sdrs, closers].filter(f => f.length > 0).length
+  const qtdOutrosFiltros = [fontes, subFontes, sdrs, closers].filter(f => f.length > 0).length + (tipoR1 !== 'todos' ? 1 : 0)
   const resumoMarca = brandKeys.length >= universoMarcas
     ? rotuloTodasMarcas
     : brandKeys.length === 1
@@ -254,6 +255,14 @@ export function FilterBar({
 
       <Field label="Closer">
         <MultiSelect label="Closer" options={opcoesCloser} selected={closers} onChange={setClosers} />
+      </Field>
+
+      <Field label="Tipo de R1">
+        <Segmented
+          value={tipoR1}
+          onChange={setTipoR1}
+          options={[{ value: 'todos', label: 'Todos' }, { value: 'Individual', label: 'Individual' }, { value: 'LIVE', label: 'Live' }]}
+        />
       </Field>
 
       {!compacto && <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--ws-border)', margin: '0 2px' }} />}

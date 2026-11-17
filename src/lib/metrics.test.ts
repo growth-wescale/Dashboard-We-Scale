@@ -202,6 +202,12 @@ describe('currentStage', () => {
     expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '6a99b99218a2bb002df8ec61' })).toBe('Reunião Agendada SQL')
   })
 
+  it('"Reunião Agendada SQL" também resolve no Funil de teste (marca em teste, ex. Kebabs)', () => {
+    expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '6abf237651c2d6002056f0b2', marca: 'Kebabs' })).toBe('Reunião Agendada SQL')
+    // a do SDR continua fora
+    expect(currentStage({ etapa_funil: 'Reunião Agendada SQL', id_etapa_atual: '69380917e00ed10014daaa68', marca: 'Kebabs' })).toBeNull()
+  })
+
   it('devolve null para etapa desconhecida', () => {
     expect(currentStage({ etapa_funil: 'Etapa Que Não Existe', id_etapa_atual: 'x' })).toBeNull()
     expect(currentStage({ etapa_funil: null, id_etapa_atual: 'x' })).toBeNull()

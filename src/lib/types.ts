@@ -8,6 +8,7 @@ export type Marca =
   | 'Viva'
   | 'We Scale'
   | 'Instituto do Autismo'
+  | 'Kebabs'
 
 export type Canal = 'meta' | 'google'
 

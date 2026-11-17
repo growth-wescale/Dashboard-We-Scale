@@ -365,6 +365,14 @@ comparando `vw_funil_vendas.id_etapa_atual` (= `deal_snapshot.id_etapa`) —
 `resolveStage(etapa_funil)` sozinho não distingue SDR de Closer, só olha o
 nome. Deal parado na "Reunião Agendada SQL" do SDR some do balde no Atual.
 
+**Funil de teste: marca em teste agenda no próprio funil** (desde 17/11). O
+"Funil de teste" (`6abf2318dca0200020ff065d`) só entra no dashboard para as
+marcas liberadas em `dashboard_funil_teste_marca` (funil + marca + `ativo`;
+hoje Kebabs). Trocar a marca do teste = 1 linha nessa tabela, sem mexer na
+view. A "Reunião Agendada SQL" desse funil (`6abf237651c2d6002056f0b2`) conta
+como SQL (`ETAPA_SQL_FUNIL_TESTE` em `metrics.ts`), porque lá não há handoff
+pro Closer.
+
 **Exceção: Odonto Legacy agenda no próprio funil** (desde 21/09). Para deal
 de marca Odonto Legacy, o SQL é a "Reunião Agendada" do funil Odonto Legacy
 (`68b84341646c55001ed64e53`, funil `68b84341646c55001ed64e4f`, que já se
@@ -847,6 +855,12 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
+- [ ] **Teste Kebabs: falta a regra de distribuição.** Esperando o identificador da
+  conversão (Gabriel). Ao receber: publicar a regra (marca Kebabs, funil de teste, etapa Novo
+  MQL `6abf2318dca0200020ff065f`, sem barreira, `time_proprio` Cassiana 100%, responsável padrão
+  Junior `68d591d5d55b640018765f4d`, Fonte Macro Inbound, `reconversao_mesmo_sdr = false`) em
+  sombra, conferir, passar pra ativo e ligar a cadência 50. Se os SDRs derem Ganho no
+  agendamento, o deal conta como venda (trava de venda) — decidir antes
 - [ ] **Aposentar o paliativo do resgate da Corrida** (`ehRetomada`/`pesoDaUnidade` em
   `corridaPerformance.ts`, negociação reaberta = 2 pts) quando o projeto que muda o RD para Contato ×
   Negociação entrar em vigor: o resgate passa a nascer como negociação nova no mesmo contato, com Fonte
@@ -969,6 +983,31 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-17 (4) — Teste da marca Kebabs no Funil de teste (preparação)
+
+Pedido do Junior: a Kebabs (kebabs.wescale.com.br) vai testar até 100 MQLs com o nosso
+time, no "Funil de teste" do RD, só até o agendamento (depois o lead vai pro comercial
+da Kebabs). Sem barreira de MQL, SDR Cassiana, responsável padrão Junior, sem WhatsApp
+automático. SQL em `docs/sql/2026-11-17-kebabs-teste.sql`.
+
+- **RD:** a opção "Kebabs" já existia no campo Marca. `ajustar-marca-rd` v3 aceita
+  `?acao=campo&opcao=X&depois=Y` (antes a opção nova era fixa no código).
+- **Distribuição:** coluna `distribuicao_regra.reconversao_mesmo_sdr` (padrão true). Com
+  false, lead que tem deal aberto com outro SDR vai mesmo assim pro time da regra; a
+  anotação "este MQL já tem deal aberto" continua. `distribuicao_publicar_regra` mantém o
+  valor da versão anterior quando o payload não traz o campo (tela atual não traz).
+- **Cadência 50** "Kebabs (teste)", **desligada**: Funil de teste, Novo MQL e Tentando
+  Contato, só Marca = Kebabs; dias 1, 2, 4 e 5 da SDR (dia 3 vazio), cada um com 4
+  ligações + 1 Whats manual, Pesquisa no D1 (21 tarefas). Perde por conclusão.
+- **Banco do dashboard:** 12 etapas do Funil de teste em `rd_funis_etapas` (conferidas na
+  API do RD); tabela `dashboard_funil_teste_marca` + `vw_funil_vendas` passa a incluir
+  deal desse funil com marca liberada. Hash das linhas da view idêntico antes/depois
+  (10.198, 77 ganhos, R$ 3.687.228,98). Backup em `_backup_viewdefs`
+  (`vw_funil_vendas_pre_funil_teste_20261117`, `fn_distribuicao_*_pre_kebabs_20261117`).
+- **Front:** marca `Kebabs` com rótulo "Kebabs (EM TESTE)", `vendasOnly` (fora da Visão
+  Geral/Saúde da Marca), entra no Consolidado de Vendas como as outras (decisão do Junior);
+  SQL na etapa do Funil de teste.
 
 ### 2026-11-17 (3) — Linha do Tempo vazia desde 16/11; tela refeita em lista com tudo o que aconteceu
 

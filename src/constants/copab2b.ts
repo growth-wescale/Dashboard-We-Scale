@@ -31,6 +31,7 @@ const SQL_BASELINE_MAIO: Record<Marca, number> = {
   'Viva':         10.3,
   'We Scale':      0.0, // marca nova · sem baseline histórico
   'Instituto do Autismo': 0.0, // marca só de Vendas · sem histórico de Marketing
+  'Kebabs': 0.0, // marca em teste só de Vendas
 }
 
 // Leads por mês Jan–Jun/26 (proxy de tendência)
@@ -54,6 +55,7 @@ const CUSTO_BASELINE_MAIO: Record<Marca, { baseline: number; meta: number }> = {
   'Viva':         { baseline: 223.81, meta: 190.24 },
   'We Scale':     { baseline: 0,      meta: 0      }, // marca nova · sem baseline histórico
   'Instituto do Autismo': { baseline: 0, meta: 0 }, // marca só de Vendas · sem histórico de Marketing
+  'Kebabs': { baseline: 0, meta: 0 }, // marca em teste só de Vendas
 }
 
 // Budget mensal por marca (Google + Meta Ads)
@@ -68,6 +70,7 @@ const BUDGET_MENSAL: Record<Marca, { google: number; meta: number }> = {
   'Viva':         { google: 6000,  meta: 4000  },
   'We Scale':     { google: 0,     meta: 0     }, // marca nova · sem budget definido
   'Instituto do Autismo': { google: 0, meta: 0 }, // marca só de Vendas · sem budget de mídia
+  'Kebabs': { google: 0, meta: 0 }, // marca em teste só de Vendas
 }
 
 // Meta volume MQL (Meta Copa doc — pisos com leve crescimento sobre maio/26)

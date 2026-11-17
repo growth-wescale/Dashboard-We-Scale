@@ -1,17 +1,15 @@
-import { useEffect } from 'react'
-import { ExternalLink, X } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { classificarMotivo } from '@/constants/motivosPerda'
 import { fmtDuracao } from '@/components/ui/dealDrawerShared'
-import { rdDealUrl } from '@/lib/rd'
 import type { Momento, Timeline } from '@/lib/timeline/tipos'
-import type { MarcadorLayout, NoLayout, ToqueLayout } from '@/lib/timeline/layout'
+import type { ItemTarefas } from '@/lib/timeline/historico'
+import { horaBR } from '@/lib/timeline/layout'
 
-export type AlvoPopover =
-  | { tipo: 'no'; no: NoLayout }
-  | { tipo: 'toque'; toque: ToqueLayout }
-  | { tipo: 'marcador'; marcador: MarcadorLayout }
-
-interface Props { alvo: AlvoPopover; timeline: Timeline; idDeal: string; onFechar: () => void }
+/**
+ * Detalhe de um item do histórico da Linha do Tempo — abre no lugar, embaixo da
+ * linha: notas da tarefa, motivo e anotação da perda, reunião (scorecard,
+ * resumo, gravação), quem mudou o quê.
+ */
 
 const hora = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
 const L = ({ k, v }: { k: string; v: React.ReactNode }) => v == null || v === '' ? null : (
@@ -25,7 +23,7 @@ const linkExt = (href: string, texto: string) => (
   <a href={href} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--ws-vinho-b)' }}>{texto}<ExternalLink size={11} /></a>
 )
 
-function Corpo({ m, timeline }: { m: Momento; timeline: Timeline }) {
+export function DetalheMomento({ m, timeline }: { m: Momento; timeline: Timeline }) {
   const meta = m.meta
   if (meta?.kind === 'tarefa') {
     return (
@@ -56,8 +54,16 @@ function Corpo({ m, timeline }: { m: Momento; timeline: Timeline }) {
         {meta.respostas.length > 0 ? (
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ws-text-secondary)', margin: '6px 0 4px' }}>Scorecard · {ok}/{meta.respostas.length}</div>
-            {meta.respostas.map((r, i) => (
-              <div key={i} style={{ fontSize: 12, display: 'flex', gap: 6 }}><span style={{ color: r.resposta === 'yes' ? '#1D8F89' : '#B4324B', fontWeight: 700 }}>{r.resposta === 'yes' ? '✓' : '✗'}</span><span style={{ color: 'var(--ws-text-secondary)' }}>{r.categoria} ·</span><span>{r.pergunta}</span></div>
+            {porCategoria(meta.respostas).map(([categoria, rs]) => (
+              <div key={categoria} style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ws-text-secondary)', marginBottom: 2 }}>{categoria}</div>
+                {rs.map((r, i) => (
+                  <div key={i} style={{ fontSize: 12, display: 'grid', gridTemplateColumns: '14px 1fr', gap: 6 }}>
+                    <span style={{ color: r.resposta === 'yes' ? '#1D8F89' : '#B4324B', fontWeight: 700 }} aria-label={r.resposta === 'yes' ? 'sim' : 'não'}>{r.resposta === 'yes' ? '✓' : '✗'}</span>
+                    <span>{r.pergunta}</span>
+                  </div>
+                ))}
+              </div>
             ))}
           </div>
         ) : meta.scorecardDisponivel ? (
@@ -85,6 +91,17 @@ function Corpo({ m, timeline }: { m: Momento; timeline: Timeline }) {
       </>
     )
   }
+  if (meta?.kind === 'cadencia') {
+    return (
+      <>
+        <L k="Cadência" v={meta.cadencia ?? '—'} />
+        {meta.evento === 'entrada' && <L k="Como entrou" v={meta.detalhe === 'reconciliacao' ? 'pela conferência diária' : 'ao entrar na etapa'} />}
+        {meta.evento === 'saida' && <L k="Motivo" v={meta.detalhe ?? '—'} />}
+        {meta.evento === 'disparo' && <L k="Mensagem" v={meta.detalhe ?? '—'} />}
+        {meta.evento === 'disparo' && meta.status === 'erro' && <Pill tom="risco">não foi entregue</Pill>}
+      </>
+    )
+  }
   if (meta?.kind === 'campo') return <><L k={meta.campo} v={`${meta.de ?? '—'} → ${meta.para ?? '—'}`} /><L k="Quem" v={m.ator} /></>
   // etapa / no_show / retomada / ganho
   const trecho = timeline.trechos.find(t => t.deId === m.id)
@@ -100,36 +117,38 @@ function Corpo({ m, timeline }: { m: Momento; timeline: Timeline }) {
   )
 }
 
-export function MomentoPopover({ alvo, timeline, idDeal, onFechar }: Props) {
-  // Esc fecha — popover não-modal, sem foco automático nem trap de foco (não é diálogo bloqueante).
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onFechar() }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onFechar])
+function porCategoria(rs: { categoria: string; pergunta: string; resposta: string }[]): [string, typeof rs][] {
+  const m = new Map<string, typeof rs>()
+  for (const r of rs) m.set(r.categoria, [...(m.get(r.categoria) ?? []), r])
+  return [...m.entries()]
+}
 
-  const m: Momento | null = alvo.tipo === 'no' ? alvo.no.momento : alvo.tipo === 'toque' ? alvo.toque.momento : alvo.marcador.momento
-  const titulo = alvo.tipo === 'no' ? alvo.no.titulo : m?.titulo ?? ''
-  const subtitulo = m ? hora(m.instante) : alvo.tipo === 'no' ? alvo.no.detalhe : ''
-  const cluster = alvo.tipo === 'toque' && alvo.toque.cluster.length > 1 ? alvo.toque.cluster : null
+const TIPO_TAREFA: Record<string, string> = { call: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', task: 'Tarefa', lunch: 'Almoço', meeting: 'Reunião', outro: 'Tarefa' }
+
+/** Lista das tarefas de um dia, uma por linha, com status e notas. */
+export function DetalheTarefas({ item }: { item: ItemTarefas }) {
   return (
-    <div role="dialog" aria-label={titulo} style={{ position: 'absolute', right: 16, top: 16, width: 'min(380px, calc(100% - 32px))', maxHeight: 'calc(100% - 32px)', overflowY: 'auto', background: '#fff', border: '1px solid var(--ws-border)', borderRadius: 14, boxShadow: '0 12px 32px rgba(51,3,45,.16)', padding: 14, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 5 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div><div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ws-text-primary)' }}>{titulo}</div><div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)' }}>{subtitulo}</div></div>
-        <button type="button" onClick={onFechar} aria-label="Fechar" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--ws-text-secondary)' }}><X size={16} /></button>
-      </div>
-      {cluster ? cluster.map(c => (
-        <div key={c.id} style={{ borderTop: '1px solid var(--ws-border)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{c.titulo} <span style={{ fontWeight: 400, color: 'var(--ws-text-secondary)' }}>· {hora(c.instante)}</span></div>
-          <Corpo m={c} timeline={timeline} />
-        </div>
-      )) : m ? <Corpo m={m} timeline={timeline} /> : alvo.tipo === 'no' && alvo.no.fase ? (
-        <>
-          <L k="Duração" v={fmtDuracao(alvo.no.fase.duracaoDias)} />
-          <L k="Etapas" v={alvo.no.fase.etapas} /><L k="Toques" v={alvo.no.fase.toques} /><L k="Atrasados" v={alvo.no.fase.atrasados} /><L k="No-shows" v={alvo.no.fase.noShows} /><L k="Reuniões" v={alvo.no.fase.reunioes} />
-        </>
-      ) : null}
-      <div style={{ borderTop: '1px solid var(--ws-border)', paddingTop: 8 }}>{linkExt(rdDealUrl(idDeal), 'Abrir no RD')}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {item.tarefas.map(t => {
+        const meta = t.meta?.kind === 'tarefa' ? t.meta : null
+        return (
+          <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '44px 1fr', gap: 8, fontSize: 12.5 }}>
+            <span style={{ color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{horaBR(t.instante)}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ color: 'var(--ws-text-primary)' }}>{t.titulo}</span>
+                {meta && <span style={{ color: 'var(--ws-text-secondary)' }}>{TIPO_TAREFA[meta.tipoTarefa] ?? 'Tarefa'}</span>}
+                {meta?.atrasada ? <Pill tom="atencao">{meta.atrasoDias != null ? `${meta.atrasoDias} dia${meta.atrasoDias === 1 ? '' : 's'} atrasada` : 'atrasada'}</Pill>
+                  : meta && !meta.concluida ? <Pill tom="neutro">em aberto</Pill> : null}
+                {t.ator && <span style={{ color: 'var(--ws-text-secondary)' }}>{t.ator}</span>}
+              </div>
+              {meta?.notas && <div style={{ whiteSpace: 'pre-wrap', background: '#F9FAFB', borderRadius: 8, padding: 8 }}>{meta.notas}</div>}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
+
+

@@ -9,7 +9,7 @@ import {
 /** Empate de instante: nós de etapa antes de tarefas/reuniões. */
 const PESO: Record<Momento['tipo'], number> = {
   retomada: 0, etapa: 1, no_show: 1, mudanca_funil: 2, troca_responsavel: 3, mudanca_campo: 3,
-  tarefa: 4, reuniao: 4, perda: 5, ganho: 5,
+  tarefa: 4, reuniao: 4, cadencia: 4, disparo: 4, perda: 5, ganho: 5,
 }
 
 /** Handoff SDR→Closer emite a MESMA etapa 2x em segundos; medido em deal_eventos:

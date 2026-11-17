@@ -473,12 +473,16 @@ const ETAPA_SQL_CLOSER = '69b1badfe1def700137f1b89'
 // handoff pro Closer — então não há evento duplicado a descartar.
 const ETAPA_SQL_SCALE_PARTNER = '6a99b99218a2bb002df8ec61'
 const ETAPA_SQL_ODONTO_LEGACY = '68b84341646c55001ed64e53'
+// Funil de teste (testes de marca nova, ex. Kebabs desde 17/11/2026): o SDR agenda no próprio
+// funil e o deal não vai pro Closer. Só entra no dashboard deal de marca liberada em
+// `dashboard_funil_teste_marca`, então aceitar a etapa aqui não puxa deal de teste.
+const ETAPA_SQL_FUNIL_TESTE = '6abf237651c2d6002056f0b2'
 /**
  * Ids das etapas de agendamento (Closer, Scale Partner, Odonto Legacy). Servem
  * pra reconhecer a etapa quando o RD a renomeia e o nome sai do catálogo — ex.:
  * a do Scale Partner virou "Negociação" (rd_funis_etapas desatualizada).
  */
-export const IDS_ETAPA_SQL: readonly string[] = [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER, ETAPA_SQL_ODONTO_LEGACY]
+export const IDS_ETAPA_SQL: readonly string[] = [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER, ETAPA_SQL_ODONTO_LEGACY, ETAPA_SQL_FUNIL_TESTE]
 /**
  * Migração dos funis de marca (24/10/2026): a partir deste dia o Odonto Legacy
  * agenda no SDR e o deal segue pro Closer, como as outras marcas. Evento
@@ -494,9 +498,9 @@ function isOdontoLegacy(marca: string | null | undefined): boolean {
 /** Ids de etapa aceitos para contar `stage`, dada a marca do deal e o dia do evento. `undefined` = sem trava. */
 function idsEtapaObrigatoria(stage: StageKey | null, marca: string | null | undefined, dia?: string | null): readonly string[] | undefined {
   if (stage !== 'Reunião Agendada SQL') return undefined
-  if (!isOdontoLegacy(marca)) return [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER]
+  if (!isOdontoLegacy(marca)) return [ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER, ETAPA_SQL_FUNIL_TESTE]
   const antesDoCorte = !!dia && (toLocalDate(dia) ?? dia) < CORTE_ODONTO_LEGACY
-  return antesDoCorte ? [ETAPA_SQL_ODONTO_LEGACY] : [ETAPA_SQL_ODONTO_LEGACY, ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER]
+  return antesDoCorte ? [ETAPA_SQL_ODONTO_LEGACY] : [ETAPA_SQL_ODONTO_LEGACY, ETAPA_SQL_CLOSER, ETAPA_SQL_SCALE_PARTNER, ETAPA_SQL_FUNIL_TESTE]
 }
 
 /** A etapa não tem trava de funil, ou o id é um dos permitidos para a marca (e o dia, se houver). */

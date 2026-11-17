@@ -98,8 +98,16 @@ describe('Instituto do Autismo (marca só de Vendas)', () => {
     expect(ida!.vendasOnly).toBe(true)
   })
 
-  it('é a única vendasOnly hoje — as demais marcas seguem visíveis no Marketing', () => {
-    const outras = BRAND_LIST.filter(b => b.key !== 'instituto-autismo')
+  it('só ela e a Kebabs (em teste) são vendasOnly — as demais marcas seguem visíveis no Marketing', () => {
+    const outras = BRAND_LIST.filter(b => b.key !== 'instituto-autismo' && b.key !== 'kebabs')
     expect(outras.every(b => !b.vendasOnly)).toBe(true)
+  })
+})
+
+describe('Kebabs (marca em teste)', () => {
+  it('aparece nas abas de Vendas como "Kebabs (EM TESTE)" e fica fora do Marketing', () => {
+    const k = BRAND_LIST.find(b => b.marca === 'Kebabs')
+    expect(k?.label).toBe('Kebabs (EM TESTE)')
+    expect(k?.vendasOnly).toBe(true)
   })
 })

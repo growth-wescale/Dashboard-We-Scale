@@ -47,6 +47,9 @@ export const BRAND_LIST: BrandDef[] = [
   // Marca nova (1os deals em 09/09/2026, funil SDR). Só Vendas: em 15/09/2026 o
   // Supabase de Marketing não tinha nenhum lead nem mídia dela — ver `vendasOnly`.
   { key: 'instituto-autismo', label: 'Instituto do Autismo', marca: 'Instituto do Autismo', accent: '#E0A82E', dark: '#8A5E00', vendasOnly: true },
+  // Kebabs (17/11/2026): teste de até 100 MQLs no "Funil de teste" do RD, só até o agendamento.
+  // Os deals entram em vw_funil_vendas por `dashboard_funil_teste_marca` (funil + marca).
+  { key: 'kebabs', label: 'Kebabs (EM TESTE)', marca: 'Kebabs', accent: '#C2410C', dark: '#7C2D12', vendasOnly: true },
 ]
 
 /** Lista completa com consolidado no topo (usada nos dropdowns das páginas de Vendas). */

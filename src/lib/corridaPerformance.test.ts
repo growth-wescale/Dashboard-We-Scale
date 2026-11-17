@@ -517,12 +517,12 @@ describe('somarLancamentos — o card é a soma do extrato', () => {
 
 /* ── Paliativo do resgate: negociação retomada vale 2 pts ───────────────── */
 
-describe('negociação retomada (ciclo > 1) vale 2 pts como Resgate', () => {
+describe('negociação resgatada (eh_resgate) vale 2 pts como Resgate', () => {
   it('SDR: RR de negócio retomado pesa 2 pts, qualquer que seja a Fonte Macro', () => {
     const [nova, retomada, retomadaResgate] = lancamentosSdr([
       { ...rr('A', 1, 0.4, 'Inbound'), idLead: 'n1', ciclo: 1 },
-      { ...rr('A', 2, 0.4, 'Inbound'), idLead: 'r1', ciclo: 2 },
-      { ...rr('A', 3, 0.4, 'Resgate'), idLead: 'r2', ciclo: 3 },
+      { ...rr('A', 2, 0.4, 'Inbound'), idLead: 'r1', ciclo: 2, resgate: true },
+      { ...rr('A', 3, 0.4, 'Resgate'), idLead: 'r2', ciclo: 3, resgate: true },
     ], ['A'])
     expect([nova.peso, nova.retomada]).toEqual([1, false])
     expect([retomada.peso, retomada.retomada]).toEqual([2, true])
@@ -533,7 +533,7 @@ describe('negociação retomada (ciclo > 1) vale 2 pts como Resgate', () => {
   it('SDR: card conta a retomada em "2 pts" e nos pontos', () => {
     const [linha] = pontosSdr([
       { ...rr('A', 1, 0.4, 'Inbound'), ciclo: 1 },
-      { ...rr('A', 2, 0.4, 'Indicação'), ciclo: 2 },
+      { ...rr('A', 2, 0.4, 'Indicação'), ciclo: 2, resgate: true },
     ], ['A'])
     expect(linha.volume2pts).toBe(1)
     // 1 × 1,0 × 1,5 + 2 × 1,0 × 1,5 = 4,5
@@ -542,7 +542,7 @@ describe('negociação retomada (ciclo > 1) vale 2 pts como Resgate', () => {
 
   it('Closer: venda de negócio retomado também pesa 2 pts', () => {
     const [l] = lancamentosCloser([{
-      nome: 'D', idLead: 'x', ciclo: 2, fonte: 'Inbound', marca: 'Inpot',
+      nome: 'D', idLead: 'x', ciclo: 2, resgate: true, fonte: 'Inbound', marca: 'Inpot',
       dataRr: '2026-09-30T18:55:36Z', dataVenda: '2026-10-30T21:10:42Z', unidades: 1,
     }], ['D'])
     expect([l.peso, l.retomada]).toEqual([2, true])
@@ -550,8 +550,13 @@ describe('negociação retomada (ciclo > 1) vale 2 pts como Resgate', () => {
     expect(l.pontos).toBeCloseTo(2.4, 10)
   })
 
-  it('sem ciclo informado conta como negociação original', () => {
+  it('sem resgate informado conta como negociação original', () => {
     const [l] = lancamentosSdr([rr('A', 2, 0.4, 'Inbound')], ['A'])
+    expect([l.peso, l.retomada]).toEqual([1, false])
+  })
+
+  it('reaberta no mesmo dia da perda (ciclo 2, resgate false) pesa pela Fonte Macro', () => {
+    const [l] = lancamentosSdr([{ ...rr('A', 2, 0.4, 'Inbound'), ciclo: 2, resgate: false }], ['A'])
     expect([l.peso, l.retomada]).toEqual([1, false])
   })
 })

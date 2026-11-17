@@ -3,6 +3,7 @@ import { History } from 'lucide-react'
 import { toLocalDate, fmtBR } from '@/lib/dateUtils'
 import { nf } from '@/lib/format'
 import type { FunnelRow } from '@/lib/funnelTypes'
+import { diasParado, ehResgate, inicioLeadtimeGeral, inicioPosReativacao } from '@/lib/resgate'
 
 export function fmtData(value: string | null): string {
   const iso = toLocalDate(value)
@@ -87,6 +88,46 @@ export function CelulasDatasDeal({ row }: { row: Pick<FunnelRow, 'ciclo' | 'data
     <>
       <td style={td}>{fmtData(row.data_criacao_original ?? null)}</td>
       <td style={td}>{fmtData(dataUltimaReativacao(row))}</td>
+    </>
+  )
+}
+
+type LinhaResgate = Pick<FunnelRow, 'ciclo' | 'eh_resgate' | 'data_perda_anterior' | 'data_criacao_negociacao' | 'data_novo_mql' | 'data_criacao_original'>
+
+/** Texto do selo de resgate: "Perdido em 12/09/2026, reaberto em 20/09/2026 · 8 dias parado". */
+export function textoResgate(row: LinhaResgate): string {
+  const dias = diasParado(row)
+  const perdido = row.data_perda_anterior ? `Perdido em ${fmtData(row.data_perda_anterior)}, reaberto` : 'Reaberto'
+  const parado = dias === null ? '' : ` · ${nf(dias)} dia${dias === 1 ? '' : 's'} parado`
+  return `${perdido} em ${fmtData(row.data_criacao_negociacao ?? null)}${parado}`
+}
+
+/** Selo "Resgate" ao lado do nome do negócio — só em negócio resgatado (`ehResgate`). */
+export function SeloResgate({ row }: { row: LinhaResgate }) {
+  if (!ehResgate(row)) return null
+  return (
+    <span title={textoResgate(row)} aria-label={`Resgate: ${textoResgate(row)}`} style={{
+      display: 'inline-block', marginLeft: 6, padding: '1px 7px', borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+      letterSpacing: '.02em', verticalAlign: 'middle', cursor: 'help',
+      background: 'var(--status-atencao-bg)', color: 'var(--status-atencao)',
+    }}>Resgate</span>
+  )
+}
+
+/** Colunas de leadtime, iguais em todos os pop-ups. */
+export const COLS_LEADTIME = ['Leadtime geral', 'Leadtime pós-reativação'] as const
+
+/**
+ * Leadtime geral (desde o MQL do ciclo 1 / criação original) e pós-reativação
+ * (desde a reabertura, só em resgate) até `ate` — a data que marca o negócio
+ * no pop-up; sem `ate`, até agora.
+ */
+export function CelulasLeadtime({ row, ate, agora }: { row: LinhaResgate; ate: string | null | undefined; agora: number }) {
+  const td = { padding: '10px 16px', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' } as const
+  return (
+    <>
+      <td style={{ ...td, color: 'var(--ws-text-primary)', fontWeight: 600 }}>{fmtDuracao(leadtimeDias(inicioLeadtimeGeral(row), ate, agora))}</td>
+      <td style={{ ...td, color: 'var(--ws-text-secondary)' }}>{fmtDuracao(leadtimeDias(inicioPosReativacao(row), ate, agora))}</td>
     </>
   )
 }

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Flag, X } from 'lucide-react'
 import { marcaLabel } from '@/constants/brands'
+import { ehResgate } from '@/lib/resgate'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { usePontosDoNegocio } from '@/hooks/usePontosDoNegocio'
 import {
@@ -96,7 +97,7 @@ function PontosDoNegocioModal({ row, onClose }: { row: NegocioDoPopup; onClose: 
               {row.nome_negociacao?.trim() || 'Negócio sem nome'}
             </h2>
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 2 }}>
-              {marcaLabel(row.marca) || 'sem marca'}{row.ciclo > 1 ? ` · ciclo ${row.ciclo} (negócio retomado)` : ''}
+              {marcaLabel(row.marca) || 'sem marca'}{row.ciclo > 1 ? ` · ciclo ${row.ciclo}${ehResgate(row) ? ' (resgate)' : ''}` : ''}
             </div>
           </div>
           <button onClick={onClose} aria-label="Fechar" style={{

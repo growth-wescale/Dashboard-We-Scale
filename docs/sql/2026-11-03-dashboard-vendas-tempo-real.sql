@@ -104,7 +104,8 @@ as $$
       'data_interesse_reuniao', 'data_conexao',
       'data_agendamento_reuniao_sql', 'data_reuniao_realizada', 'data_no_show',
       'data_sal', 'data_oportunidade', 'data_comite', 'data_pre_contrato',
-      'data_venda', 'data_perdido', 'origem_comercial', 'tipo_r1']
+      'data_venda', 'data_perdido', 'origem_comercial', 'tipo_r1',
+      'data_perda_anterior', 'eh_resgate']
     when 'etapas' then array[
       'id_evento', 'id_deal', 'dia', 'etapa_canonica', 'id_etapa', 'nome_funil',
       'ciclo', 'rn_deal_etapa_mes', 'marca_deal', 'origem_comercial']

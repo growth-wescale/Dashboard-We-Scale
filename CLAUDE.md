@@ -126,6 +126,7 @@ novo.
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
 - `tipo_r1` — tipo da R1 do negócio: `LIVE` (R1 em grupo, começou na Eletrovias em nov/2026) ou `Individual`. Vem do campo "Tipo de R1" do RD CRM (`6af3226d307c22002371c944`, obrigatório na Reunião Agendada SQL do Closer e nas etapas seguintes desde ~10/11/2026), lido em `payload->>'Tipo de R1'`. **Campo vazio, outras marcas e meses anteriores = `Individual`** (regra na view, decisão do Junior em 17/11). Grão é o deal (snapshot): vale para todos os ciclos dele
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
+- `eh_resgate` / `data_perda_anterior` — **resgate = negócio perdido e reaberto num dia (Brasília) diferente do dia da perda** (decisão do Junior em 17/11/2026): `ciclo > 1` e dia do início do ciclo (`data_criacao_negociacao`) posterior ao dia da perda que fechou o ciclo anterior (`data_perda_anterior`, lida de `vw_deal_ciclo_enriquecido`). Reabertura no mesmo dia da perda **não** é resgate, mesmo quando o banco abre ciclo novo (negócio perdido de novo em outro dia). Ciclo > 1 sem perda anterior conta como resgate. Fonte Macro "Resgate" de ciclo 1 não é resgate. No código, ler sempre por `ehResgate()` (`src/lib/resgate.ts`): pop-ups de deal (selo, leadtimes, filtro) e os 2 pts da Corrida usam a mesma função
 
 ### Inbound × Prospecção Ativa
 
@@ -968,6 +969,41 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-17 (2) — Resgate visível nos pop-ups de deal; Corrida segue a mesma regra
+
+Pedido do chefe do Junior: ver nos pop-ups de deal quais negócios foram resgate,
+com o leadtime geral e o pós-reativação. Antes só existia "Data da última
+reativação"; o "Leadtime" de negócio reaberto media às vezes desde a criação
+(127 de 134 ciclos 2+ não têm MQL no ciclo) e às vezes desde um MQL novo do
+ciclo 2 (7 casos).
+
+**Regra** (seção 3, `eh_resgate`): reabertura em dia diferente do da perda.
+Medido: 134 ciclos 2+, 28 reabertos no mesmo dia da perda, **106 resgates**.
+Metade dos reabertos volta em menos de 7 dias (mediana 5 dias parado).
+
+**Banco** (`docs/sql/2026-11-17-resgate.sql`, migration `funil_vendas_eh_resgate`):
+`vw_funil_vendas` ganhou `data_perda_anterior` e `eh_resgate` no fim (join por
+`id_lead` + `ciclo - 1` em `vw_deal_ciclo_enriquecido`, índice único);
+`dash_colunas('vendas')` e `COLUNAS_VENDAS` também. Simulado antes em temp view:
+10.180 linhas, colunas antigas idênticas (md5). Backup em `_backup_viewdefs`
+(`vw_funil_vendas_pre_resgate_20261117`).
+
+**Pop-ups** (etapa, Receita/Fechamentos/Vendas por fonte, Análise de Perda,
+Repetidos): selo "Resgate" ao lado do nome (passar o mouse: "Perdido em …,
+reaberto em … · N dias parado"); "Leadtime" virou **Leadtime geral** (ciclo 1:
+desde o MQL; ciclo 2+: desde a criação original) e **Leadtime pós-reativação**
+(desde a reabertura, só em resgate). Pop-up de etapa ganhou o filtro **Novo ×
+Resgate**. Componentes em `dealDrawerShared.tsx` (`SeloResgate`, `CelulasLeadtime`).
+
+**Corrida**: os 2 pts de resgate passaram de `ciclo > 1` para `eh_resgate`
+(`pesoDaUnidade(fonte, resgate)`, saiu `ehRetomada`). Saem do bônus as
+reaberturas no mesmo dia da perda: 2 SQL e 1 RR em set/26, 1 SQL e 1 RR em
+out/26, nada em nov/26 — a Corrida recalcula, então set/out podem mudar
+alguns décimos.
+
+Verificado: build + 1.233 testes, e os pop-ups vistos com dado real numa rota de
+prévia sem login (removida antes do commit).
 
 ### 2026-11-17 — Toggle "Tipo de R1" (Todos · Individual · Live) nas abas de Vendas
 

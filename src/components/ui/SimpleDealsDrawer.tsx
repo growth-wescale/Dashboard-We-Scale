@@ -11,7 +11,7 @@ import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
 import { dividirVenda, pctWeScale, type VersaoRepasse } from '@/lib/repasse'
-import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias, totaisDeals, LinhaTotal } from './dealDrawerShared'
+import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
 interface SimpleDealsDrawerProps {
@@ -30,7 +30,7 @@ interface SimpleDealsDrawerProps {
 export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accent, destacarFonte, repasse }: SimpleDealsDrawerProps) {
   if (!open) return null
   const colsRepasse = repasse ? ['We Scale', 'Marca'] : []
-  const direita = ['Valor', 'Unidades', 'Taxa de Franquia', 'Leadtime', ...colsRepasse]
+  const direita = ['Valor', 'Unidades', 'Taxa de Franquia', ...COLS_LEADTIME, ...colsRepasse]
   const totais = totaisDeals(deals)
   const repasseTotal = repasse
     ? deals.reduce((acc, r) => { const d = dividirVenda(repasse, r); return { weScale: acc.weScale + d.weScale, marca: acc.marca + d.marca } }, { weScale: 0, marca: 0 })
@@ -74,7 +74,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Marca', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Valor', ...colsRepasse, ...COLS_DATAS_DEAL, 'Leadtime', 'Data'].map(h => (
+                {['Negociação', 'Marca', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Valor', ...colsRepasse, ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data'].map(h => (
                   <th key={h} style={{
                     padding: '10px 16px', textAlign: direita.includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -102,6 +102,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                       {cell(r.nome_negociacao)}
                       <ExternalLink size={11} />
                     </a>
+                    <SeloResgate row={r} />
                     <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                     <LinkPontosCorrida row={r} cor={accent} />
                   </td>
@@ -134,9 +135,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                     </>
                   })()}
                   <CelulasDatasDeal row={r} />
-                  <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                    {fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, r.data_venda, Date.now()))}
-                  </td>
+                  <CelulasLeadtime row={r} ate={r.data_venda} agora={Date.now()} />
                   <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                     {fmtData(r.data_venda)}
                   </td>
@@ -149,7 +148,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
                 { valor: money(totais.taxa), direita: true },
                 { valor: money(totais.contrato), direita: true },
                 ...(repasseTotal ? [{ valor: money(repasseTotal.weScale), direita: true }, { valor: money(repasseTotal.marca), direita: true }] : []),
-                { valor: null }, { valor: null }, { valor: null }, { valor: null },
+                { valor: null }, { valor: null }, { valor: null }, { valor: null }, { valor: null },
               ]} />
             )}
           </table>

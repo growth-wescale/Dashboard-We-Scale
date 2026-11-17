@@ -1,5 +1,6 @@
 import { emJanelas, type Janela } from '@/constants/metasCampanhaF1'
 import { saleUnits } from '@/lib/metrics'
+import { ehResgate } from '@/lib/resgate'
 import type { RrUnidade, Trilha, VendaUnidade } from '@/lib/corridaPerformance'
 
 /**
@@ -23,6 +24,7 @@ export interface RawRr {
   data_novo_mql: string | null
   data_agendamento_reuniao_sql: string | null
   data_reuniao_realizada: string | null
+  eh_resgate?: boolean | null
 }
 
 /** Venda ganha, como vem de `vw_funil_vendas`. */
@@ -36,6 +38,7 @@ export interface RawVenda {
   quantidade_unidades: number | null
   data_reuniao_realizada: string | null
   data_venda: string | null
+  eh_resgate?: boolean | null
 }
 
 /** RR ou venda da janela que não pontuou pra ninguém (responsável vazio ou sem meta no mês). */
@@ -85,6 +88,7 @@ export function separarRrs(
       idLead: r.id_lead,
       ciclo: r.ciclo,
       negociacao: r.nome_negociacao,
+      resgate: ehResgate(r),
       fonte: r.fonte_macro,
       marca: r.marca,
       dataMql: r.data_novo_mql,
@@ -119,6 +123,7 @@ export function separarVendas(
       idLead: v.id_lead,
       ciclo: v.ciclo,
       negociacao: v.nome_negociacao,
+      resgate: ehResgate(v),
       fonte: v.fonte_macro,
       marca: v.marca,
       dataRr: v.data_reuniao_realizada,

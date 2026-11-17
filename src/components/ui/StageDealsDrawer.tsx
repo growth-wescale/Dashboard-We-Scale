@@ -6,7 +6,7 @@ import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { nomeNaVisao } from '@/lib/equipe'
 import { nf, money } from '@/lib/format'
-import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, leadtimeDias, breakdownPorCategoria, totaisDeals, LinhaTotal } from './dealDrawerShared'
+import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, fmtDuracao, diasDesde, breakdownPorCategoria, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS, filtrarStageDeals } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
@@ -56,14 +56,15 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   }, [filtered, leadtimeCols, agora])
 
   // Unidades e Taxa de Franquia (valor do produto no RD) vêm do deal e existem
-  // em qualquer etapa — não só em Fechamento. "Leadtime" mede do MQL até a data
-  // que marca o deal nesta lista: no modo Performance é a entrada na etapa; nos
-  // modos Aging/Atual é o tempo em andamento no funil inteiro (antiga coluna
-  // "Em andamento"), ao lado do tempo parado só nesta etapa.
+  // em qualquer etapa — não só em Fechamento. "Leadtime geral" (desde o MQL do
+  // 1º ciclo) e "Leadtime pós-reativação" (desde a reabertura, só em resgate)
+  // medem até a data que marca o deal nesta lista: no modo Performance é a
+  // entrada na etapa; nos modos Aging/Atual é hoje, ao lado do tempo parado só
+  // nesta etapa.
   const headers = leadtimeCols
-    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Parado na etapa', 'Leadtime']
-    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Leadtime', 'Data na etapa']
-  const alignRight = new Set(['Unidades', 'Taxa de Franquia', 'Leadtime', 'Parado na etapa'])
+    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Parado na etapa', ...COLS_LEADTIME]
+    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data na etapa']
+  const alignRight = new Set<string>(['Unidades', 'Taxa de Franquia', ...COLS_LEADTIME, 'Parado na etapa'])
 
   // Sem corte por "Outros" (decisão do Junior, 22/09) — toda marca real do
   // recorte aparece no gráfico, mesmo com 1 deal só. Agrupa pelo RÓTULO (via
@@ -150,6 +151,10 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
           <MultiSelect label="Closer" options={options.closer.map(v => ({ value: v, label: v }))}
             selected={filters.closer} onChange={v => setFilters(s => ({ ...s, closer: v }))} />
         </CampoFiltro>
+        <CampoFiltro label="Novo × Resgate">
+          <MultiSelect label="Novo × Resgate" options={options.tipo.map(v => ({ value: v, label: v }))}
+            selected={filters.tipo} onChange={v => setFilters(s => ({ ...s, tipo: v }))} />
+        </CampoFiltro>
         {hasFilters && (
           <button
             onClick={() => setFilters(EMPTY_STAGE_DEALS_FILTERS)}
@@ -197,6 +202,7 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
                     {cell(r.nome_negociacao)}
                     <ExternalLink size={11} />
                   </a>
+                  <SeloResgate row={r} />
                   <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                   <LinkPontosCorrida row={r} cor={accent} />
                 </td>
@@ -216,11 +222,11 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
                 {leadtimeCols ? (
                   <>
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(diasDesde(dataEtapa, agora))}</td>
-                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDuracao(diasDesde(r.data_novo_mql, agora))}</td>
+                    <CelulasLeadtime row={r} ate={null} agora={agora} />
                   </>
                 ) : (
                   <>
-                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, dataEtapa, agora))}</td>
+                    <CelulasLeadtime row={r} ate={dataEtapa} agora={agora} />
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtData(dataEtapa)}</td>
                   </>
                 )}

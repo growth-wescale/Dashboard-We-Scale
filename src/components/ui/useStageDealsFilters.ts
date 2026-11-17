@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { StageDeal } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 import { ordenarOpcoes } from './MultiSelect'
+import { ehResgate } from '@/lib/resgate'
 
 // Filtros da lista de deals dos popups. Mesma lógica da barra de filtros da
 // Visão Macro (MultiSelect): opções vêm sempre dos deals do próprio recorte
@@ -15,13 +16,15 @@ export interface StageDealsFilterState {
   fonte: string[]
   sdr: string[]
   closer: string[]
+  /** 'Novo' ou 'Resgate' (`ehResgate`). */
+  tipo: string[]
 }
 
 export type StageDealsCampo = keyof StageDealsFilterState
 
-export const STAGE_DEALS_CAMPOS: StageDealsCampo[] = ['marca', 'funil', 'fonte', 'sdr', 'closer']
+export const STAGE_DEALS_CAMPOS: StageDealsCampo[] = ['marca', 'funil', 'fonte', 'sdr', 'closer', 'tipo']
 
-export const EMPTY_STAGE_DEALS_FILTERS: StageDealsFilterState = { marca: [], funil: [], fonte: [], sdr: [], closer: [] }
+export const EMPTY_STAGE_DEALS_FILTERS: StageDealsFilterState = { marca: [], funil: [], fonte: [], sdr: [], closer: [], tipo: [] }
 
 /** De onde sai o valor de cada campo na linha do deal. */
 const VALOR_DO_CAMPO: Record<StageDealsCampo, (r: FunnelRow) => string | null | undefined> = {
@@ -30,6 +33,7 @@ const VALOR_DO_CAMPO: Record<StageDealsCampo, (r: FunnelRow) => string | null | 
   fonte: r => r.fonte_macro,
   sdr: r => r.nome_sdr,
   closer: r => r.nome_closer,
+  tipo: r => (ehResgate(r) ? 'Resgate' : 'Novo'),
 }
 
 const valor = (r: FunnelRow, campo: StageDealsCampo) => VALOR_DO_CAMPO[campo](r)?.trim() ?? ''

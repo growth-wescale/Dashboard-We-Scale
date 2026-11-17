@@ -197,6 +197,8 @@ export interface NegocioCorrida {
   status_atual: string | null
   data_reuniao_realizada: string | null
   data_venda: string | null
+  /** Resgate (`ehResgate`); só muda o texto do pop-up. */
+  eh_resgate?: boolean | null
 }
 
 /** Lançamentos e pilotos de UM mês inteiro da Corrida. */

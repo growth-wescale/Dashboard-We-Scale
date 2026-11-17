@@ -11,7 +11,7 @@ import type { FunnelRow } from '@/lib/funnelTypes'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
-import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, fmtDuracao, leadtimeDias, totaisDeals, LinhaTotal } from './dealDrawerShared'
+import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { currentStage, stageOwnerRole, STAGE_LABEL } from '@/lib/metrics'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 
@@ -75,9 +75,9 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Marca', 'Motivo', 'Etapa perdida', 'Responsável', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Leadtime', 'Data'].map(h => (
+                {['Negociação', 'Marca', 'Motivo', 'Etapa perdida', 'Responsável', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data'].map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: ['Unidades', 'Taxa de Franquia', 'Leadtime'].includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
+                    padding: '10px 16px', textAlign: ['Unidades', 'Taxa de Franquia', ...COLS_LEADTIME].includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
                   }}>{h}</th>
@@ -105,6 +105,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                         {cell(r.nome_negociacao)}
                         <ExternalLink size={11} />
                       </a>
+                      <SeloResgate row={r} />
                       <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                       <LinkPontosCorrida row={r} cor={accent} />
                     </td>
@@ -119,9 +120,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                       {r.valor_produto != null ? money(r.valor_produto) : '—'}
                     </td>
                     <CelulasDatasDeal row={r} />
-                    <td style={{ padding: '10px 16px', color: 'var(--ws-text-primary)', whiteSpace: 'nowrap', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                      {fmtDuracao(leadtimeDias(r.data_novo_mql ?? r.data_criacao_original, r.data_perdido, Date.now()))}
-                    </td>
+                    <CelulasLeadtime row={r} ate={r.data_perdido} agora={Date.now()} />
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       {fmtData(r.data_perdido)}
                     </td>
@@ -135,7 +134,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
                 <LinhaTotal deals={t.deals} colSpanRotulo={5} celulas={[
                   { valor: nf(t.unidades), direita: true },
                   { valor: money(t.taxa), direita: true },
-                  { valor: null }, { valor: null }, { valor: null }, { valor: null },
+                  { valor: null }, { valor: null }, { valor: null }, { valor: null }, { valor: null },
                 ]} />
               )
             })()}

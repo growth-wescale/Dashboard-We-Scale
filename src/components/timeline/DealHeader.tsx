@@ -3,6 +3,7 @@ import { BRAND_ACCENT, marcaLabel } from '@/constants/brands'
 import { rdDealUrl } from '@/lib/rd'
 import { money, nf } from '@/lib/format'
 import { StatusBadge } from '@/components/ui/dealDrawerShared'
+import { ehResgate } from '@/lib/resgate'
 import type { DealCabecalho, Timeline } from '@/lib/timeline/tipos'
 
 const Chip = ({ children, cor }: { children: React.ReactNode; cor?: string }) => (
@@ -26,8 +27,9 @@ export function DealHeader({ cabecalho, timeline }: { cabecalho: DealCabecalho; 
           <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 26, color: 'var(--ws-text-primary)', lineHeight: 1.1 }}>{r.nome_negociacao ?? r.id_lead}</h1>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8, alignItems: 'center' }}>
             <Chip cor={accent}>{marcaLabel(r.marca)}</Chip>
-            <Chip>{r.origem_comercial ?? 'Inbound'}</Chip>
-            {r.fonte_macro && <Chip>{r.fonte_macro}</Chip>}
+            <Chip>Origem: {r.origem_comercial ?? 'Inbound'}</Chip>
+            {r.fonte_macro && <Chip>Fonte: {r.fonte_macro}</Chip>}
+            {ehResgate(r) && <Chip cor="var(--status-atencao)">Resgate</Chip>}
             <StatusBadge status={r.status_atual} />
             {r.nome_sdr && <Chip>SDR · {r.nome_sdr}</Chip>}
             {r.nome_closer && <Chip>Closer · {r.nome_closer}</Chip>}

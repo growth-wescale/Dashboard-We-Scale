@@ -5,6 +5,7 @@ export type TipoMomento =
   | 'etapa' | 'no_show' | 'perda' | 'ganho' | 'retomada'
   | 'troca_responsavel' | 'mudanca_funil' | 'mudanca_campo'
   | 'tarefa' | 'reuniao'
+  | 'cadencia' | 'disparo'
 
 /** Fase do nível Macro. 'Reaberto' = intervalo entre perda e retomada (reciclagem). */
 export type Camada = 'MQL' | 'SDR' | 'Closer' | 'Desfecho'
@@ -64,7 +65,17 @@ export interface MetaEtapa {
 export interface MetaCampo { kind: 'campo'; campo: string; de: string | null; para: string | null }
 export interface MetaPerda { kind: 'perda'; motivo: string | null; anotacao: string | null }
 
-export type MetaMomento = MetaTarefa | MetaReuniao | MetaEtapa | MetaCampo | MetaPerda
+/** Entrada/saída de cadência ou WhatsApp automático (`vw_deal_timeline_cadencias`). */
+export interface MetaCadencia {
+  kind: 'cadencia'
+  evento: 'entrada' | 'saida' | 'disparo'
+  cadencia: string | null
+  /** entrada: origem (entrada/reconciliação); saída: motivo; disparo: código do template. */
+  detalhe: string | null
+  status: string | null
+}
+
+export type MetaMomento = MetaTarefa | MetaReuniao | MetaEtapa | MetaCampo | MetaPerda | MetaCadencia
 
 /** O que os normalizadores produzem — sem camada/ciclo/desvio, que só existem depois de montar. */
 export interface MomentoBruto {
@@ -143,7 +154,7 @@ export interface Timeline {
 }
 
 export const NOS_DE_ETAPA: ReadonlySet<TipoMomento> = new Set(['etapa', 'no_show', 'perda', 'ganho', 'retomada'])
-export const MICRO: ReadonlySet<TipoMomento> = new Set(['tarefa', 'reuniao', 'troca_responsavel', 'mudanca_funil', 'mudanca_campo'])
+export const MICRO: ReadonlySet<TipoMomento> = new Set(['tarefa', 'reuniao', 'troca_responsavel', 'mudanca_funil', 'mudanca_campo', 'cadencia', 'disparo'])
 
 export const MS_DIA = 86_400_000
 export const diasEntre = (a: Date, b: Date): number => Math.max(0, (b.getTime() - a.getTime()) / MS_DIA)

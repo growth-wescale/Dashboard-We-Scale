@@ -640,29 +640,29 @@ src/lib/timeline/tipos.ts       tipos da timeline (Momento, Fase, Timeline, etc.
 src/lib/timeline/eventos.ts     deal_eventos → momentos brutos (etapa/no_show/perda/ganho/troca/mudança)
 src/lib/timeline/tarefas.ts     db_tarefas_sdr → momentos (instante = conclusão ou prazo)
 src/lib/timeline/reunioes.ts    DB_Reunioes_MeetRox → momentos (liga ao deal por id_deal ?? crm_deal_id)
-src/lib/timeline/montar.ts      momentos brutos das 3 fontes → Timeline pronta pra desenhar (ciclo, fusão de handoff, camada, desvio, desfecho)
-src/lib/timeline/layout.ts      posições/escala na pista (px por dia) a partir do Timeline + Viewport
-src/lib/timeline/zoom.ts        níveis de zoom (macro/etapas/micro) e histerese de transição
-src/lib/timeline/fasesDaLinha.ts  fases do deal (STAGE_ORDER + STAGE_DATE_FIELD) pro modo macro
+src/lib/timeline/cadencias.ts   vw_deal_timeline_cadencias → entrada/saída de cadência e WhatsApp automático (só enviado/erro)
+src/lib/timeline/montar.ts      momentos brutos das 4 fontes → Timeline (ciclo, fusão de handoff, camada, desvio, desfecho, fases)
+src/lib/timeline/historico.ts   Timeline → lista ciclo → dia → itens (tarefas do dia juntas, eco da retomada fora, filtros) + donosDaFase
+src/lib/timeline/layout.ts      cores e formatos de data/duração (rotuloDia, fmtDias, horaBR…)
+src/lib/timeline/kanban.ts      card do quadro da lista /linha-do-tempo
 
-src/hooks/useDealTimeline.ts    busca as 4 fontes em paralelo (eventos/tarefas/reuniões/ciclos), tolera falha parcial
-src/hooks/useZoomPan.ts         estado de zoom/pan da pista (gesto do usuário, não de negócio)
+src/hooks/useDealTimeline.ts    busca as 5 fontes em paralelo (eventos/tarefas/reuniões/cadência/ciclos), tolera falha parcial
 
-src/components/timeline/PistaCanvas.tsx    SVG da pista, desenha Fases/Momentos conforme o zoom
-src/components/timeline/DealCardMacro.tsx  card do deal no zoom macro
-src/components/timeline/DealHeader.tsx     cabeçalho (marca, funil, responsável, status)
-src/components/timeline/MomentoPopover.tsx popup de detalhe ao clicar num nó
-src/components/timeline/TimelineLegend.tsx legenda de cores/ícones
-src/components/timeline/ZoomControls.tsx   +/− e níveis de zoom
-src/components/timeline/iconesEtapa.tsx    ícone por StageKey
+src/components/timeline/DealHeader.tsx     cabeçalho (marca, origem, fonte, resgate, responsáveis, KPIs)
+src/components/timeline/ResumoCiclos.tsx   faixa do negócio: fases proporcionais ao tempo, intervalo perdido entre ciclos, quem estava com ele
+src/components/timeline/HistoricoDeal.tsx  lista de tudo o que aconteceu, com filtros por tipo e detalhe que abre no lugar
+src/components/timeline/DetalheMomento.tsx detalhe de um item (tarefa, perda, reunião com scorecard, cadência, troca)
 
-Rotas: /linha-do-tempo (lista de deals) e /linha-do-tempo/:idDeal (pista de UM deal).
+Rotas: /linha-do-tempo (lista de deals) e /linha-do-tempo/:idDeal (história de UM deal).
 ```
 
 Quatro regras que já custaram tempo pra achar:
 
-- **Lê VIEW (`vw_deal_timeline_eventos`/`_tarefas`/`_reunioes`), nunca tabela
-  crua.** `supabaseVendas` nunca autentica (login vive no Marketing) — toda
+- **Lê VIEW (`vw_deal_timeline_eventos`/`_tarefas`/`_reunioes`/`_cadencias`), nunca tabela
+  crua.** E a view tem que rodar com os direitos do dono do começo ao fim: se
+  alguma view no meio for `security_invoker` sobre tabela com RLS, o anon recebe
+  0 linhas sem erro (foi o que apagou a linha do tempo de 16 a 17/11, ver
+  histórico). `supabaseVendas` nunca autentica (login vive no Marketing) — toda
   consulta ao Supabase de Expansão roda como role `anon`. `deal_eventos` tem
   RLS ligado e zero políticas; `db_tarefas_sdr`/`DB_Reunioes_MeetRox` têm 1
   política cada, só pra `authenticated`. Ler a tabela direto volta vazio sem
@@ -969,6 +969,50 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-17 (3) — Linha do Tempo vazia desde 16/11; tela refeita em lista com tudo o que aconteceu
+
+Junior abriu a linha do tempo do Alberto Cardoso (`6ad353df18e4e30001c9677d`,
+Eletrovias, resgatado em 05/11) e a pista mostrava só uma faixa "MQL" de 31 dias.
+
+**Causa:** a mudança de 16/11 (inativar evento em vez de apagar) criou
+`eventos_ativos.deal_eventos` com `security_invoker = true`. As views públicas
+que o navegador lê como `anon` passaram a checar a RLS de `deal_eventos` (ligada,
+sem política) como anon: **0 linhas, sem erro**. Medido como anon:
+`vw_deal_timeline_eventos` 0 (12 com o dono), `vw_funil_etapas_v2` 0, e
+`vw_funil_vendas.origem_comercial` com os **1.572 de Prospecção Ativa como
+Inbound**. As abas de Vendas não sofreram (leem `dash_vendas`/`dash_etapas`,
+montadas pelo banco); sofreu toda leitura direta do navegador (Linha do Tempo,
+`vw_closer_reunioes` → origem, `useCorridaPerformance` etc.).
+
+**Fix no banco** (`docs/sql/2026-11-17-eventos-ativos-direitos-do-dono.sql`):
+`eventos_ativos.deal_eventos` com `security_invoker = false`, que é o
+comportamento de antes de 16/11. O schema não é exposto na API
+(`pgrst.db_schemas = public, graphql_public, cadencia`), então anon continua sem
+ler eventos direto; inativados seguem fora. Conferido como anon: Alberto 12
+eventos, Prospecção Ativa 1.572.
+
+**Cadência na linha do tempo:** view nova `vw_deal_timeline_cadencias`
+(`docs/sql/2026-11-17-linha-do-tempo-cadencia.sql`): entrada e saída de
+cadência (`cadencia_execucoes`) e WhatsApp automático (`cadencia.disparos`),
+só metadado, só deal visível no dashboard. 11 ms por deal como anon.
+
+**Tela nova** (pedido do Junior: mostrar tudo, sem poluição): saiu a pista em
+SVG com zoom de 3 níveis (nós alternando acima/abaixo, tarefas só no zoom
+máximo). Entraram (1) faixa do negócio, com as fases proporcionais ao tempo, o
+intervalo em que ficou perdido antes do resgate e quem estava com ele em cada
+fase (`donosDaFase`, pelas trocas de responsável), e (2) lista em ordem
+cronológica, um bloco por ciclo (o 2º em diante com selo Resgate), um dia por
+linha: etapas, perda com motivo, reabertura, trocas de responsável/funil/marca,
+cadência, WhatsApp automático, reuniões e tarefas (as do mesmo dia numa linha,
+que abre a lista). Filtros por tipo e detalhe que abre no lugar. O que o RD
+grava até 2 min antes da reabertura vai para o ciclo novo, e o eco da etapa da
+retomada não aparece. Cabeçalho: "Origem:"/"Fonte:" (antes dois chips
+"Inbound") e chip Resgate.
+
+Verificado: build + testes (historico.test.ts monta o Alberto com os eventos
+reais) e a tela vista com dado real em desktop e 375 px (Alberto e um negócio
+ganho com 3 reuniões) numa rota de prévia sem login, removida antes do commit.
 
 ### 2026-11-17 (2) — Resgate visível nos pop-ups de deal; Corrida segue a mesma regra
 

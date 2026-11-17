@@ -15,6 +15,8 @@ import {
   etapasDaMarca,
   groupRepeatedDeals,
   isInWindow,
+  isLoss,
+  isSale,
   mqlWord,
   noEscopoDoCiclo,
   repeatedDealsInStage,
@@ -895,5 +897,13 @@ describe('noEscopoDoCiclo', () => {
     const popup = dealsInStage(scoped, eventos, 'Diagnóstico', AGOSTO, modes(), 'performance')
     expect(card).toBe(0)
     expect(popup).toHaveLength(0)
+  })
+})
+
+describe('Ganho no Funil de teste (Kebabs, 17/11/2026)', () => {
+  it('"Encerrado (teste)" não é venda nem perda', () => {
+    expect(isSale({ status_atual: 'Encerrado (teste)' })).toBe(false)
+    expect(isLoss({ status_atual: 'Encerrado (teste)' })).toBe(false)
+    expect(isSale({ status_atual: 'Ganho' })).toBe(true)
   })
 })

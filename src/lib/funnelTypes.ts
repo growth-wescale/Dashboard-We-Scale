@@ -59,7 +59,9 @@ export interface FunnelRow {
    * id para aplicar a mesma regra de funil obrigatório que os modos de evento.
    */
   id_etapa_atual?: string | null
-  status_atual: 'Em andamento' | 'Ganho' | 'Perdido' | 'Excluído' | null
+  /** 'Encerrado (teste)' = Ganho no Funil de teste (marca em teste, 17/11/2026): a view tira o
+   *  status de Ganho pra não contar como venda, perda nem em andamento. */
+  status_atual: 'Em andamento' | 'Ganho' | 'Perdido' | 'Excluído' | 'Encerrado (teste)' | null
   /** Nome da negociação no RD — usado no popup de deals por etapa. */
   nome_negociacao: string | null
 

@@ -371,7 +371,10 @@ marcas liberadas em `dashboard_funil_teste_marca` (funil + marca + `ativo`;
 hoje Kebabs). Trocar a marca do teste = 1 linha nessa tabela, sem mexer na
 view. A "Reunião Agendada SQL" desse funil (`6abf237651c2d6002056f0b2`) conta
 como SQL (`ETAPA_SQL_FUNIL_TESTE` em `metrics.ts`), porque lá não há handoff
-pro Closer.
+pro Closer. **Ganho no funil de teste não conta como nada** (decisão do Junior):
+`vw_funil_vendas` troca o status por `'Encerrado (teste)'` e zera `data_venda` e
+`valor_contrato` — não é venda, nem perda, nem em andamento. As etapas que o
+deal passou (MQL, SQL) continuam contando.
 
 **Exceção: Odonto Legacy agenda no próprio funil** (desde 21/09). Para deal
 de marca Odonto Legacy, o SQL é a "Reunião Agendada" do funil Odonto Legacy
@@ -859,8 +862,7 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
   conversão (Gabriel). Ao receber: publicar a regra (marca Kebabs, funil de teste, etapa Novo
   MQL `6abf2318dca0200020ff065f`, sem barreira, `time_proprio` Cassiana 100%, responsável padrão
   Junior `68d591d5d55b640018765f4d`, Fonte Macro Inbound, `reconversao_mesmo_sdr = false`) em
-  sombra, conferir, passar pra ativo e ligar a cadência 50. Se os SDRs derem Ganho no
-  agendamento, o deal conta como venda (trava de venda) — decidir antes
+  sombra, conferir, passar pra ativo e ligar a cadência 50
 - [ ] **Aposentar o paliativo do resgate da Corrida** (`ehRetomada`/`pesoDaUnidade` em
   `corridaPerformance.ts`, negociação reaberta = 2 pts) quando o projeto que muda o RD para Contato ×
   Negociação entrar em vigor: o resgate passa a nascer como negociação nova no mesmo contato, com Fonte
@@ -1008,6 +1010,10 @@ automático. SQL em `docs/sql/2026-11-17-kebabs-teste.sql`.
 - **Front:** marca `Kebabs` com rótulo "Kebabs (EM TESTE)", `vendasOnly` (fora da Visão
   Geral/Saúde da Marca), entra no Consolidado de Vendas como as outras (decisão do Junior);
   SQL na etapa do Funil de teste.
+- **Ganho no Funil de teste vira "Encerrado (teste)"** em `vw_funil_vendas` (sem data de
+  venda nem valor): os SDRs podem dar ganho no agendamento sem criar venda no dashboard.
+  Migration `funil_teste_ganho_nao_conta`; backup `vw_funil_vendas_pre_ganho_teste_20261117`.
+  Hash das linhas, 77 ganhos e R$ 3.687.228,98 iguais depois.
 
 ### 2026-11-17 (3) — Linha do Tempo vazia desde 16/11; tela refeita em lista com tudo o que aconteceu
 

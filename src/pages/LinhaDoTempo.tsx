@@ -52,7 +52,7 @@ const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, 
 
 export function LinhaDoTempo() {
   const navigate = useNavigate()
-  const { origem, brandKeys, periodMode, periodValues, ranges, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
+  const { origem, brandKeys, periodMode, periodValues, ranges, fontes, subFontes, sdrs, closers, tipoR1, viewModes } = useSharedFilters()
   const [busca, setBusca] = useState('')
   const termo = useDebounce(busca, 300)
   const [status, setStatus] = useState<string[]>(STATUS_PADRAO)
@@ -75,14 +75,14 @@ export function LinhaDoTempo() {
   const equipe = useEquipeAtiva()
 
   const scope = useMemo(
-    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
-    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1 }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1],
   )
   const win = useMemo(() => toWindow(null, null, ranges.map(r => ({ from: r.start, to: r.end }))), [ranges])
   const cohort = viewModes.funnelView === 'cohort'
   const opcoes = useMemo(
-    () => funilFilterOptions({ rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, equipe }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, cohort, equipe],
+    () => funilFilterOptions({ rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1, cohort, equipe }),
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1, cohort, equipe],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),

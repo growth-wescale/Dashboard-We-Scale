@@ -10,6 +10,17 @@ export type OrigemComercial = 'Inbound' | 'Prospecção Ativa'
 
 export const ORIGENS: readonly OrigemComercial[] = ['Inbound', 'Prospecção Ativa']
 
+/**
+ * Tipo da R1 do negócio, do campo "Tipo de R1" do RD CRM (obrigatório na
+ * Reunião Agendada SQL do Closer desde nov/2026). 'LIVE' = R1 em grupo
+ * (começou na Eletrovias em nov/2026); todo o resto — campo vazio, outras
+ * marcas, meses anteriores — é 'Individual'. A regra mora em `vw_funil_vendas`.
+ */
+export type TipoR1 = 'Individual' | 'LIVE'
+/** Filtro da barra: 'todos' = sem restrição. */
+export type TipoR1Filtro = 'todos' | TipoR1
+export const TIPOS_R1_FILTRO: readonly TipoR1Filtro[] = ['todos', 'Individual', 'LIVE']
+
 export interface FunnelRow {
   id_lead: string
   /** 1 = original, 2+ = reciclagens. */
@@ -29,6 +40,8 @@ export interface FunnelRow {
    * (há deals Inbound com fonte 'Prospecção Ativa' e vice-versa).
    */
   origem_comercial: OrigemComercial | null
+  /** 'LIVE' ou 'Individual' — ver `TipoR1`. A view nunca devolve nulo. */
+  tipo_r1?: TipoR1 | null
   /** Etapa crua do RD; precisa passar por resolveStage() antes de contar. */
   etapa_funil: string | null
   /**

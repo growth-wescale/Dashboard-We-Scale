@@ -161,7 +161,7 @@ interface DrawerState { title: string; subtitle: string; deals: FunnelRow[] }
 export function AnalisePerda() {
   const {
     origem, brandKeys, periodMode, periodValues, ranges, range,
-    fontes, subFontes, sdrs, closers, viewModes,
+    fontes, subFontes, sdrs, closers, tipoR1, viewModes,
   } = useSharedFilters()
 
   const marcasSelecionadas = useMemo(
@@ -187,8 +187,8 @@ export function AnalisePerda() {
   const equipe = useEquipeAtiva()
 
   const scope = useMemo(
-    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
-    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1 }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1],
   )
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
   const win = useMemo(
@@ -198,10 +198,10 @@ export function AnalisePerda() {
 
   const opcoes = useMemo(
     () => funilFilterOptions({
-      rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers,
+      rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1,
       cohort: viewModes.funnelView === 'cohort', equipe,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, equipe],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1, viewModes.funnelView, equipe],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),

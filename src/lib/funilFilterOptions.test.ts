@@ -24,6 +24,17 @@ const win = toWindow(null, null, [{ from: '2026-08-01', to: '2026-08-31' }])
 const base = { marcasParaEscopo: [] as string[], fontes: [] as string[], subFontes: [] as string[], sdrs: [] as string[], closers: [] as string[] }
 
 describe('funilFilterOptions', () => {
+  it('Tipo de R1 restringe as opções dos outros filtros', () => {
+    const rows = [
+      row({ marca: 'Eletrovias', nome_sdr: 'Cassiana Lavall', tipo_r1: 'LIVE' }),
+      row({ marca: 'Inpot', nome_sdr: 'Xayane', tipo_r1: 'Individual' }),
+      row({ marca: 'Viva', nome_sdr: 'Sarah Padilha', tipo_r1: null }),
+    ]
+    expect(funilFilterOptions({ rows, win, ...base, cohort: false, tipoR1: 'LIVE' }).marcas).toEqual(['Eletrovias'])
+    expect(funilFilterOptions({ rows, win, ...base, cohort: false, tipoR1: 'Individual' }).marcas.sort()).toEqual(['Inpot', 'Viva'])
+    expect(funilFilterOptions({ rows, win, ...base, cohort: false }).marcas).toHaveLength(3)
+  })
+
   it('só lista valores com deal na janela', () => {
     const rows = [
       row({ marca: 'Oral Unic', data_novo_mql: '2026-08-10' }),

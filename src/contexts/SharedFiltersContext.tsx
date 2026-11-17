@@ -35,11 +35,11 @@ import type { DateRange, PeriodMode } from '@/lib/periodo'
 import { BRAND_LIST } from '@/constants/brands'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { restringirMarcas } from '@/lib/permissoes'
-import { ORIGENS } from '@/lib/funnelTypes'
-import type { OrigemComercial } from '@/lib/funnelTypes'
+import { ORIGENS, TIPOS_R1_FILTRO } from '@/lib/funnelTypes'
+import type { OrigemComercial, TipoR1Filtro } from '@/lib/funnelTypes'
 
 export type { DateRange, PeriodMode } from '@/lib/periodo'
-export type { OrigemComercial } from '@/lib/funnelTypes'
+export type { OrigemComercial, TipoR1Filtro } from '@/lib/funnelTypes'
 
 const PREFIX = 'wescale.vendas.'
 
@@ -120,6 +120,9 @@ interface SharedFilters {
   /** Nomes de Closer (nome_closer). Vazio = sem restrição. */
   closers: string[]
   setClosers: (c: string[]) => void
+  /** Tipo de R1 (Individual × LIVE). 'todos' = sem restrição. */
+  tipoR1: TipoR1Filtro
+  setTipoR1: (t: TipoR1Filtro) => void
 
   viewModes: ViewModes
   setSalesMode: (m: SalesMode) => void
@@ -173,6 +176,7 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
   const [subFontes, setSubFontes] = usePersisted('subFontes', isStringArray, [])
   const [sdrs, setSdrs] = usePersisted('sdrs', isStringArray, [])
   const [closers, setClosers] = usePersisted('closers', isStringArray, [])
+  const [tipoR1, setTipoR1] = usePersisted<TipoR1Filtro>('tipoR1', oneOf(TIPOS_R1_FILTRO), 'todos')
 
   const [salesMode, setSalesMode] = usePersisted<SalesMode>(
     'salesMode', oneOf(['deals', 'units'] as const), DEFAULT_VIEW_MODES.salesMode,
@@ -219,7 +223,8 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     setSubFontes([])
     setSdrs([])
     setClosers([])
-  }, [setOrigem, setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes, setSdrs, setClosers])
+    setTipoR1('todos')
+  }, [setOrigem, setBrandKeys, setPeriodModeRaw, setPeriodValuesRaw, setFontes, setSubFontes, setSdrs, setClosers, setTipoR1])
 
   const value = useMemo<SharedFilters>(() => ({
     origem, setOrigem,
@@ -231,12 +236,13 @@ export function SharedFiltersProvider({ children }: { children: ReactNode }) {
     subFontes, setSubFontes,
     sdrs, setSdrs,
     closers, setClosers,
+    tipoR1, setTipoR1,
     viewModes: { salesMode, funnelView, eventSource },
     setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   }), [
     origem, setOrigem, brandKeys, setBrandKeys, periodMode, setPeriodMode, periodValues, setPeriodValuesRaw,
-    ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes, sdrs, setSdrs, closers, setClosers,
+    ranges, range, setRangeDia, fontes, setFontes, subFontes, setSubFontes, sdrs, setSdrs, closers, setClosers, tipoR1, setTipoR1,
     salesMode, funnelView, eventSource, setSalesMode, setFunnelView, setEventSource,
     resetFiltros,
   ])

@@ -540,7 +540,7 @@ function ConversoesCard({ titulo, linhas, nota }: { titulo: string; linhas: Conv
 // ─── Página ────────────────────────────────────────────────────────────────
 
 export function PerformanceVendas() {
-  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, viewModes } = useSharedFilters()
+  const { origem, brandKeys, periodMode, periodValues, ranges, range, fontes, subFontes, sdrs, closers, tipoR1, viewModes } = useSharedFilters()
   // "MQL" no Inbound, "Lead" na Prospecção Ativa — ver mqlWord em metrics.ts.
   const mqlLbl = mqlWord(origem)
 
@@ -570,8 +570,8 @@ export function PerformanceVendas() {
   const { data: reunioesBase, loading: reunioesLoading, error: reunioesError } = useReunioesCloser()
 
   const scope = useMemo(
-    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers }),
-    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers],
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1 }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1],
   )
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
   // `ranges` é a união exata dos períodos selecionados — nunca `range`.
@@ -597,10 +597,10 @@ export function PerformanceVendas() {
 
   const opcoes = useMemo(
     () => funilFilterOptions({
-      rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers,
+      rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1,
       cohort: viewModes.funnelView === 'cohort', equipe,
     }),
-    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, viewModes.funnelView, equipe],
+    [rows, win, marcasParaEscopo, fontes, subFontes, sdrs, closers, tipoR1, viewModes.funnelView, equipe],
   )
   const marcasDisponiveis = useMemo(
     () => BRAND_LIST.filter(b => b.marca && opcoes.marcas.includes(b.marca)).map(b => b.key),

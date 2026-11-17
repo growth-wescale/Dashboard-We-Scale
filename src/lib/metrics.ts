@@ -27,7 +27,7 @@
 import { normalizeMarcaRaw } from '@/constants/brands'
 import { toLocalDate, toLocalYearMonth } from '@/lib/dateUtils'
 import { normalizeFonteMacro, normalizeSubFonte } from '@/lib/fonteMapping'
-import type { FunnelRow, OrigemComercial } from '@/lib/funnelTypes'
+import type { FunnelRow, OrigemComercial, TipoR1Filtro } from '@/lib/funnelTypes'
 
 /* ── Toggles ─────────────────────────────────────────────────────────────── */
 
@@ -711,11 +711,13 @@ export interface ScopeOptions {
   subFontes?: string[]
   sdrs?: string[]
   closers?: string[]
+  /** Tipo de R1. Omitido ou 'todos' = sem restrição; linha sem valor conta como 'Individual'. */
+  tipoR1?: TipoR1Filtro
 }
 
 /** Predicado de escopo reutilizável. Lista vazia = sem restrição. */
 export function buildScopeFilter(opts: ScopeOptions): (r: FunnelRow) => boolean {
-  const { origem, marcas = [], fontes = [], subFontes = [], sdrs = [], closers = [] } = opts
+  const { origem, marcas = [], fontes = [], subFontes = [], sdrs = [], closers = [], tipoR1 = 'todos' } = opts
   return (r: FunnelRow) => {
     // A view já entrega COALESCE(..., 'Inbound'); o fallback aqui é para a
     // linha nunca sumir dos dois lados do toggle se algum dia vier nula.
@@ -725,6 +727,7 @@ export function buildScopeFilter(opts: ScopeOptions): (r: FunnelRow) => boolean 
     if (subFontes.length && !subFontes.includes(normalizeSubFonte(r.utm_source, r.sub_fonte_crm))) return false
     if (sdrs.length && !sdrs.includes(r.nome_sdr ?? '')) return false
     if (closers.length && !closers.includes(r.nome_closer ?? '')) return false
+    if (tipoR1 !== 'todos' && (r.tipo_r1 ?? 'Individual') !== tipoR1) return false
     return true
   }
 }

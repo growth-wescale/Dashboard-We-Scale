@@ -107,3 +107,12 @@ select public.dash_sincronizar(true);
 --    ligações 09:00/11:00/14:00/16:30 e Whats manual 10:00. Ligar quando a regra da Kebabs ficar ativa:
 --      update cadencias set ativa = true where id = 50;
 ---------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------
+-- E) Ganho no Funil de teste não conta como nada (migration funil_teste_ganho_nao_conta)
+--    Deal com status Ganho num funil de dashboard_funil_teste_marca: status_atual = 'Encerrado (teste)',
+--    data_venda e valor_contrato nulos. Feito por replace no pg_get_viewdef (ver backup
+--    vw_funil_vendas_pre_ganho_teste_20261117 em _backup_viewdefs). Condição usada nas 3 colunas:
+--      (d.status_atual = 'Ganho' AND EXISTS (SELECT 1 FROM dashboard_funil_teste_marca ftg
+--                                           WHERE ftg.id_funil = d.id_funil))
+---------------------------------------------------------------------------------------------------

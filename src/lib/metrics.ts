@@ -245,7 +245,7 @@ export function resolveStage(label: string | null | undefined): StageKey | null 
  * `data_venda` sozinha não basta — deals perdidos depois de um ganho
  * revertido mantêm a data preenchida.
  */
-export function isSale(row: FunnelRow): boolean {
+export function isSale(row: Pick<FunnelRow, 'status_atual'>): boolean {
   return row.status_atual === 'Ganho'
 }
 
@@ -299,7 +299,7 @@ export function sumRevenue(
 /* ── Perdas ──────────────────────────────────────────────────────────────── */
 
 /** Só é perda se o estado atual é 'Perdido'. Cada ciclo carrega seu próprio desfecho. */
-export function isLoss(row: FunnelRow): boolean {
+export function isLoss(row: Pick<FunnelRow, 'status_atual'>): boolean {
   return row.status_atual === 'Perdido'
 }
 

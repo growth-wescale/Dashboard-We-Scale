@@ -76,3 +76,19 @@ describe('filtrarStageDeals com exceto (mini-gráficos)', () => {
     expect(filtrarStageDeals(deals, f).map(d => d.row.id_lead)).toEqual(['3'])
   })
 })
+
+describe('filtro Novo × Resgate', () => {
+  const mk = (id: string, ehResgate: boolean) => ({ row: { id_lead: id, ciclo: ehResgate ? 2 : 1, eh_resgate: ehResgate, marca: 'Inpot', nome_sdr: 'Sarah', nome_funil: 'SDR', fonte_macro: 'Inbound', nome_closer: null } as unknown as FunnelRow, dataEtapa: null }) as StageDeal
+  const deals = [mk('1', false), mk('2', true), mk('3', false)]
+  it('opções vêm dos próprios deals', () => {
+    expect(opcoesCruzadas(deals, EMPTY_STAGE_DEALS_FILTERS).tipo).toEqual(['Novo', 'Resgate'])
+    expect(opcoesCruzadas([mk('1', false)], EMPTY_STAGE_DEALS_FILTERS).tipo).toEqual(['Novo'])
+  })
+  it('Resgate deixa só os resgates', () => {
+    expect(filtrarStageDeals(deals, { ...EMPTY_STAGE_DEALS_FILTERS, tipo: ['Resgate'] }).map(d => d.row.id_lead)).toEqual(['2'])
+  })
+  it('reaberto no mesmo dia (ciclo 2, eh_resgate false) é Novo', () => {
+    const mesmoDia = { row: { ...mk('4', false).row, ciclo: 2 }, dataEtapa: null } as StageDeal
+    expect(filtrarStageDeals([mesmoDia], { ...EMPTY_STAGE_DEALS_FILTERS, tipo: ['Novo'] })).toHaveLength(1)
+  })
+})

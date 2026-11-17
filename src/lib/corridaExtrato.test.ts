@@ -169,11 +169,11 @@ describe('situação de um negócio no pop-up', () => {
 
 describe('negociação retomada no extrato', () => {
   it('fonte → peso explica a retomada e mostra a Fonte Macro do RD', () => {
-    const l = sdr({ ciclo: 2 })
+    const l = sdr({ ciclo: 2, resgate: true })
     expect(fatorFonte(l)).toEqual({ motivo: 'Negociação retomada (resgate) · no RD: Inbound', valor: '2 pts' })
     expect(contaTexto(l)).toBe('2 pts (negociação retomada) × 1,75 (Oral Unic) × 1,5 (agendou 0,4 dia após o MQL) = 5,25 pts')
   })
   it('retomada com Fonte Macro Resgate não repete a fonte', () => {
-    expect(fatorFonte(sdr({ ciclo: 2, fonte: 'Resgate' }))).toEqual({ motivo: 'Negociação retomada (resgate)', valor: '2 pts' })
+    expect(fatorFonte(sdr({ ciclo: 2, resgate: true, fonte: 'Resgate' }))).toEqual({ motivo: 'Negociação retomada (resgate)', valor: '2 pts' })
   })
 })

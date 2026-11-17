@@ -67,7 +67,7 @@ export async function fetchRrsCorrida(mesRef: string): Promise<RawRr[]> {
   const { inicio, fim } = limitesDoMes(mesRef)
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('id_lead, ciclo, nome_negociacao, nome_sdr, fonte_macro, marca, data_novo_mql, data_agendamento_reuniao_sql, data_reuniao_realizada')
+    .select('id_lead, ciclo, nome_negociacao, nome_sdr, fonte_macro, marca, data_novo_mql, data_agendamento_reuniao_sql, data_reuniao_realizada, eh_resgate')
     .gte('data_reuniao_realizada', inicio)
     .lte('data_reuniao_realizada', fim)
   if (error) throw new Error(error.message)
@@ -101,7 +101,7 @@ export async function fetchVendasCorrida(mesRef: string): Promise<RawVenda[]> {
   const { inicio, fim } = limitesDoMes(mesRef)
   const { data, error } = await supabaseVendas
     .from('vw_funil_vendas')
-    .select('id_lead, ciclo, nome_negociacao, nome_closer, fonte_macro, marca, quantidade_unidades, data_reuniao_realizada, data_venda')
+    .select('id_lead, ciclo, nome_negociacao, nome_closer, fonte_macro, marca, quantidade_unidades, data_reuniao_realizada, data_venda, eh_resgate')
     .eq('status_atual', 'Ganho')
     .gte('data_venda', inicio)
     .lte('data_venda', fim)

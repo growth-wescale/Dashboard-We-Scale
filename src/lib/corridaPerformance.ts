@@ -17,10 +17,12 @@ import { toLocalDate } from '@/lib/dateUtils'
  * `vw_funil_vendas`, o mesmo que o filtro de Fonte do dashboard usa).
  *   1 ponto:  Inbound · Indicação · Parceiro · inbound - Repasse · Sem Classificação (e vazio)
  *   2 pontos: todo o restante (Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado · …)
- * Negociação retomada (perdida e reaberta em outro dia = `ciclo > 1`) vale 2
+ * Negociação resgatada (perdida e reaberta num dia diferente do dia da perda =
+ * `eh_resgate` de `vw_funil_vendas`, regra em `src/lib/resgate.ts`) vale 2
  * pontos como Resgate, qualquer que seja a Fonte Macro: no RD quase nunca
  * trocam a fonte pra Resgate quando o SDR reabre a negociação (paliativo de
- * 03/11/2026, decisão do Junior; vale pras duas trilhas).
+ * 03/11/2026, decisão do Junior; vale pras duas trilhas; desde 17/11/2026 a
+ * reabertura no mesmo dia da perda não conta).
  * Se a pessoa fez mais de uma unidade no mesmo dia, todas as unidades desse
  * dia ganham +1,5×.
  *
@@ -99,14 +101,9 @@ export function pesoFonte(fonte: string | null | undefined): 1 | 2 {
   return FONTES_UM_PONTO.has(f) ? 1 : 2
 }
 
-/** Negociação retomada: perdida e reaberta em outro dia (`ciclo > 1` em `vw_funil_vendas`). */
-export function ehRetomada(ciclo: number | null | undefined): boolean {
-  return (ciclo ?? 1) > 1
-}
-
-/** Peso de volume da unidade: negociação retomada vale 2 (como Resgate); senão, pela Fonte Macro. */
-export function pesoDaUnidade(fonte: string | null | undefined, ciclo: number | null | undefined): 1 | 2 {
-  return ehRetomada(ciclo) ? 2 : pesoFonte(fonte)
+/** Peso de volume da unidade: negociação resgatada vale 2 (como Resgate); senão, pela Fonte Macro. */
+export function pesoDaUnidade(fonte: string | null | undefined, resgate: boolean): 1 | 2 {
+  return resgate ? 2 : pesoFonte(fonte)
 }
 
 /* ── Multiplicador de ticket por marca ─────────────────────────────────── */
@@ -217,6 +214,8 @@ interface NegocioDaUnidade {
   idLead?: string
   ciclo?: number
   negociacao?: string | null
+  /** Negociação resgatada (`ehResgate` da linha de `vw_funil_vendas`). Ausente = não. */
+  resgate?: boolean
 }
 
 /** 1 RR realizada no mês (trilha SDR). */
@@ -269,7 +268,7 @@ export interface Lancamento {
   unidadesNoDia: number
   /** 1,5 quando a pessoa fez mais de 1 unidade no dia; senão 1. */
   bonus: number
-  /** Negociação retomada (`ciclo > 1`): o peso é 2, como Resgate, qualquer que seja a fonte. */
+  /** Negociação resgatada (`eh_resgate`): o peso é 2, como Resgate, qualquer que seja a fonte. */
   retomada: boolean
   /** Peso de volume: 2 se retomada; senão pela Fonte Macro. */
   peso: 1 | 2
@@ -310,6 +309,7 @@ interface EntradaLancamento {
   idLead: string
   ciclo: number
   negociacao: string | null
+  resgate: boolean
   marca: string | null
   fonte: string | null
   data: string
@@ -347,8 +347,8 @@ function montarLancamentos(trilha: Trilha, entradas: EntradaLancamento[], nomes:
     const dia = dias[i]
     const unidadesNoDia = dia ? porDia.get(`${e.nome}|${dia}`) ?? e.unidades : e.unidades
     const bonus = dia && unidadesNoDia > 1 ? 1.5 : 1
-    const retomada = ehRetomada(e.ciclo)
-    const peso = pesoDaUnidade(e.fonte, e.ciclo)
+    const retomada = e.resgate
+    const peso = pesoDaUnidade(e.fonte, e.resgate)
     const ticket = ticketTierDe(e.marca)
     const leadtimeDias = difDias(e.inicioVelocidade, e.fimVelocidade)
     const velocidade = classificarVelocidade(leadtimeDias, tiers)
@@ -413,6 +413,7 @@ export function lancamentosSdr(rrs: RrUnidade[], nomes: readonly string[]): Lanc
       idLead: r.idLead ?? '',
       ciclo: r.ciclo ?? 1,
       negociacao: r.negociacao ?? null,
+      resgate: r.resgate ?? false,
       marca: r.marca,
       fonte: r.fonte,
       data: r.dataRr,
@@ -448,6 +449,7 @@ export function lancamentosCloser(vendas: VendaUnidade[], nomes: readonly string
       idLead: v.idLead ?? '',
       ciclo: v.ciclo ?? 1,
       negociacao: v.negociacao ?? null,
+      resgate: v.resgate ?? false,
       marca: v.marca,
       fonte: v.fonte,
       data: v.dataVenda,

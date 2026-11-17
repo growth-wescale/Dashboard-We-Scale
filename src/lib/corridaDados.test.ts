@@ -17,7 +17,7 @@ describe('separarRrs', () => {
     const { unidades, fora } = separarRrs([rr({ nome_sdr: '  sarah padilha ' })], ['Sarah Padilha'])
     expect(fora).toEqual([])
     expect(unidades).toEqual([{
-      nome: 'Sarah Padilha', idLead: 'd1', ciclo: 1, negociacao: 'Negócio', fonte: 'Inbound', marca: 'Oral Unic',
+      nome: 'Sarah Padilha', idLead: 'd1', ciclo: 1, negociacao: 'Negócio', resgate: false, fonte: 'Inbound', marca: 'Oral Unic',
       dataMql: '2026-10-01T12:00:00Z', dataAgendamento: '2026-10-02T12:00:00Z', dataRr: '2026-10-05T15:00:00Z',
     }])
   })
@@ -60,5 +60,12 @@ describe('limitesDoMes', () => {
     expect(limitesDoMes('2026-09-01')).toEqual({ inicio: '2026-09-01T00:00:00-03:00', fim: '2026-09-30T23:59:59.999-03:00' })
     expect(limitesDoMes('2026-02-01').fim).toBe('2026-02-28T23:59:59.999-03:00')
     expect(limitesDoMes('2026-12-01').fim).toBe('2026-12-31T23:59:59.999-03:00')
+  })
+})
+
+describe('resgate vindo da view', () => {
+  it('eh_resgate da linha vira resgate da unidade (RR e venda)', () => {
+    expect(separarRrs([rr({ ciclo: 2, eh_resgate: true })], ['Sarah Padilha']).unidades[0].resgate).toBe(true)
+    expect(separarRrs([rr({ ciclo: 2, eh_resgate: false })], ['Sarah Padilha']).unidades[0].resgate).toBe(false)
   })
 })

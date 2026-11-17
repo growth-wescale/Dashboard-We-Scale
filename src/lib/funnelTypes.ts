@@ -42,6 +42,14 @@ export interface FunnelRow {
   origem_comercial: OrigemComercial | null
   /** 'LIVE' ou 'Individual' — ver `TipoR1`. A view nunca devolve nulo. */
   tipo_r1?: TipoR1 | null
+  /**
+   * Resgate: negócio perdido e reaberto num dia (Brasília) diferente do dia da
+   * perda — `ciclo > 1` sem a reabertura no mesmo dia. Regra na view; ler por
+   * `ehResgate()` (`src/lib/resgate.ts`), nunca reimplementar.
+   */
+  eh_resgate?: boolean | null
+  /** Perda que fechou o ciclo anterior (só em `ciclo > 1`). */
+  data_perda_anterior?: string | null
   /** Etapa crua do RD; precisa passar por resolveStage() antes de contar. */
   etapa_funil: string | null
   /**

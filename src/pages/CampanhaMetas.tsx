@@ -680,7 +680,7 @@ function RegraFonteTicketCard() {
         <RegraBloco titulo="Fonte" subtitulo="peso pela Fonte Macro do deal">
           <RegraLinha rotulo="1 pt" valor="Inbound · Indicação · Parceiro · Repasse · sem classificação" />
           <RegraLinha rotulo="2 pts" valor="Prospecção Ativa · Resgate · Evento · Outro CRM · Franqueado" />
-          <RegraLinha rotulo="2 pts" valor="Negociação retomada (resgate), qualquer que seja a Fonte Macro" />
+          <RegraLinha rotulo="2 pts" valor="Negociação retomada (resgate) num dia diferente do dia da perda, qualquer que seja a Fonte Macro" />
         </RegraBloco>
 
         <RegraBloco titulo="Ticket" subtitulo="investimento do franqueado na marca">

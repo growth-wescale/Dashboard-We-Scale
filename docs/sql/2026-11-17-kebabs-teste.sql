@@ -116,3 +116,17 @@ select public.dash_sincronizar(true);
 --      (d.status_atual = 'Ganho' AND EXISTS (SELECT 1 FROM dashboard_funil_teste_marca ftg
 --                                           WHERE ftg.id_funil = d.id_funil))
 ---------------------------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------------------------
+-- F) 18/11: regra 63 da Kebabs (distribuicao_publicar_regra) em 'ativo' e cadência 50 ligada.
+--    campos_extra = { cf_* do RD Marketing : id do campo no CRM }, lista do Gabriel:
+--      cf_voce_ja_opera_delivery_hoje -> 6afdbb937d35e6001d07dd7d
+--      cf_como_e_a_cozinha_que_voce_opera_hoje -> 6afdbb957d35e6001d07dd88
+--      cf_qual_o_faturamento_mensal_da_sua_operacao_restaurante -> 6afdbb97a70c2700229ab3c1
+--      cf_qual_o_seu_papel_no_negocio -> 6afdbb98db8e4f001fee2bbb
+--      cf_o_investimento_inicial_e_a_partir_de_r_10_mil_voce_tem -> 6afdbb9caf3e93001de15a6d
+--      cf_quanto_voce_tem_de_capital_disponivel_hoje_r -> 6afdbb9e026451001fcdeb9b
+--      cf_tempo_abertura -> 699f374fdd9cf5001edbbf13
+--      cf_daqui_a_6_meses_com_o_kebabs_operando_o_que_precisa_te -> 6afdbb9fb5eae1001db4197d
+--      cf_qual_o_nome_ou_do_instagram_do_seu_delivery -> 6afdbba14778ae00222241c6
+---------------------------------------------------------------------------------------------------

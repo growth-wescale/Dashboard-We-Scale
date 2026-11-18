@@ -858,11 +858,11 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Teste Kebabs: falta a regra de distribuição.** Esperando o identificador da
-  conversão (Gabriel). Ao receber: publicar a regra (marca Kebabs, funil de teste, etapa Novo
-  MQL `6abf2318dca0200020ff065f`, sem barreira, `time_proprio` Cassiana 100%, responsável padrão
-  Junior `68d591d5d55b640018765f4d`, Fonte Macro Inbound, `reconversao_mesmo_sdr = false`) em
-  sombra, conferir, passar pra ativo e ligar a cadência 50
+- [ ] **Teste Kebabs: conferir o 1º lead real.** Regra 63 e cadência 50 ligadas em 18/11; os
+  `cf_*` do formulário vieram da lista do Gabriel e só são conferidos de verdade no 1º registro
+  (`distribuicao_atribuicao.payload` × campos no deal do RD). O formulário não tem cidade/estado:
+  o deal nasce sem Cidade (obrigatória), então qualquer PUT por API nesses deals leva 422. A
+  segmentação "Kebabs" que o Gabriel criou no RD Marketing não é usada pela distribuição
 - [ ] **Aposentar o paliativo do resgate da Corrida** (`ehRetomada`/`pesoDaUnidade` em
   `corridaPerformance.ts`, negociação reaberta = 2 pts) quando o projeto que muda o RD para Contato ×
   Negociação entrar em vigor: o resgate passa a nascer como negociação nova no mesmo contato, com Fonte
@@ -985,6 +985,15 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-18 — Kebabs ligada: regra de distribuição e cadência
+
+O Gabriel terminou a LP e a conversão `kebabs_multistep` (2 testes dele chegaram às 12h17 e
+12h28 e foram ignorados por falta de regra). **Regra 63** publicada em `ativo`: Funil de teste /
+Novo MQL, Marca "Kebabs", sem barreira, `time_proprio` Cassiana Lavall 100%, responsável
+padrão Junior, `reconversao_mesmo_sdr = false`, sem COF, nota ou tarefa, e os 9 campos do
+formulário em `campos_extra` (delivery, cozinha, faturamento, papel, investimento de R$ 10 mil,
+capital, tempo de abertura, "daqui a 6 meses" e Instagram). **Cadência 50 ligada.**
 
 ### 2026-11-17 (4) — Teste da marca Kebabs no Funil de teste (preparação)
 

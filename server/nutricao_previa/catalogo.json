@@ -1,0 +1,923 @@
+{
+  "fonte": "inventario-fluxos-rd-dashboard.xlsx",
+  "sha256": "9f6df16cfd341c070b71a3346b6bd1513f48d7251ee6c362f24f8db61fd89bfb",
+  "verificado": "2026-11-18T10:42:09-03:00",
+  "fluxos": [
+    {
+      "id": "e3bf039d-9b88-4273-a831-364c4412c867",
+      "nome": "[NUT26] Oral Unic | F1 | Novo MQL",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607968",
+        "23607969"
+      ]
+    },
+    {
+      "id": "71d9dad6-14c5-4623-bac8-66d2917d596c",
+      "nome": "[NUT26] Oral Unic | F2 | Fim de Cadência (nunca respondeu) · PRIORIDADE 1",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607970",
+        "23607971",
+        "23607974"
+      ]
+    },
+    {
+      "id": "2deccde7-84b7-4e0e-aebf-e2a42a97f4dc",
+      "nome": "[NUT26] Oral Unic | F3 | Comitê (5 dias)",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607985"
+      ]
+    },
+    {
+      "id": "6238b149-2448-4f9e-8468-2eaeaed81f90",
+      "nome": "[NUT26] Oral Unic | F3 | Conexão",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607979"
+      ]
+    },
+    {
+      "id": "daeb0cd2-f242-48e0-afe0-294e165a97b1",
+      "nome": "[NUT26] Oral Unic | F3 | Contato Efetivo",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607976"
+      ]
+    },
+    {
+      "id": "58fc074c-ccd1-42a2-91ea-f1238409c67b",
+      "nome": "[NUT26] Oral Unic | F3 | Diagnóstico (1 dia)",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607981"
+      ]
+    },
+    {
+      "id": "e97e0c1b-fc8a-4b1b-a83e-b8b399ca6eda",
+      "nome": "[NUT26] Oral Unic | F3 | Interesse Reunião",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607977"
+      ]
+    },
+    {
+      "id": "bac1a454-3203-43b8-89bf-c1808665f71c",
+      "nome": "[NUT26] Oral Unic | F3 | Negociação SAL (7 dias)",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607982"
+      ]
+    },
+    {
+      "id": "07e8ed1f-d224-4719-9d7d-74a8969efa96",
+      "nome": "[NUT26] Oral Unic | F3 | Oportunidade COF (7 dias)",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607984"
+      ]
+    },
+    {
+      "id": "8e92db51-bd55-4286-8a57-dca4c5ded637",
+      "nome": "[NUT26] Oral Unic | F3 | Pré Contrato (5 dias)",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607952"
+      ]
+    },
+    {
+      "id": "fb927ac1-e33c-4b2a-a5dd-850ef0beab26",
+      "nome": "[NUT26] Oral Unic | F3 | Reunião Agendada SQL",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607980"
+      ]
+    },
+    {
+      "id": "0d4fcb0c-6c7c-48e3-a3eb-16ecb337f59f",
+      "nome": "[NUT26] Oral Unic | F3 | Tentando Contato",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607975"
+      ]
+    },
+    {
+      "id": "105c5b68-a060-461b-b4a4-c8f4761deea1",
+      "nome": "[NUT26] Oral Unic | F4 | No Show",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607988"
+      ]
+    },
+    {
+      "id": "4ca90f5c-4a09-450c-a7ad-f7fed1ce8d2d",
+      "nome": "[NUT26] Oral Unic | F5 | Capital Descapitalizado · SDR ou Closer",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607999"
+      ]
+    },
+    {
+      "id": "ba709485-0c5d-473d-894b-201683394ac8",
+      "nome": "[NUT26] Oral Unic | F5 | Investidor sem Operador · SDR ou Closer",
+      "marca": "Oral Unic",
+      "status": "INATIVO",
+      "modelos": [
+        "23608012",
+        "23608014"
+      ]
+    },
+    {
+      "id": "45ba4942-2e6e-4c37-93b7-a34215a80cf4",
+      "nome": "[NUT26] Oral Unic | F5 | Momento Atual (até 6 meses) · Closer",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23608000",
+        "23608002"
+      ]
+    },
+    {
+      "id": "98e174eb-b057-483a-8c6c-dad165875f35",
+      "nome": "[NUT26] Oral Unic | F5 | Momento Atual (até 12 meses) · Closer",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23608003",
+        "23608004",
+        "23608005"
+      ]
+    },
+    {
+      "id": "996ae01b-6515-43d4-9798-80e6d92f84f6",
+      "nome": "[NUT26] Oral Unic | F5 | No-Show que não reagendou · SDR",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23608017",
+        "23608018"
+      ]
+    },
+    {
+      "id": "7195bedb-6bdc-4f82-a07b-9e2088a9564b",
+      "nome": "[NUT26] Oral Unic | F5 | Operador sem Capital · SDR ou Closer",
+      "marca": "Oral Unic",
+      "status": "INATIVO",
+      "modelos": [
+        "23608015",
+        "23608016"
+      ]
+    },
+    {
+      "id": "e49938bf-99dd-4ea0-a54d-b0d5ce5b419b",
+      "nome": "[NUT26] Oral Unic | F5 | Optou por Negócio Próprio · SDR ou Closer",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23608009"
+      ]
+    },
+    {
+      "id": "2d02b1ee-5b6e-4776-a277-bfd380aac62e",
+      "nome": "[NUT26] Oral Unic | F5 | Optou por Outro Investimento · Closer",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23608011"
+      ]
+    },
+    {
+      "id": "699b44c3-1bc3-406b-be1d-f22ff28928c3",
+      "nome": "[NUT26] Oral Unic | F5 | Sem Budget · SDR (pré-diagnóstico)",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23607998"
+      ]
+    },
+    {
+      "id": "a4225756-42de-46e3-893e-b62a44a95e90",
+      "nome": "[NUT26] Oral Unic | F5 | Sem Interesse / Sem Resposta (pós-contato) · SDR",
+      "marca": "Oral Unic",
+      "status": "ATIVO",
+      "modelos": [
+        "23608006",
+        "23608007"
+      ]
+    },
+    {
+      "id": "8153962e-35fe-4a25-b1fb-d693170eb601",
+      "nome": "[NUT26] Oral Unic | F6 | Newsletter de Entrada (base mensal)",
+      "marca": "Oral Unic",
+      "status": "INATIVO",
+      "modelos": [
+        "23607990",
+        "23607993",
+        "23607995",
+        "23607996"
+      ]
+    },
+    {
+      "id": "8f5ae5ca-d899-45f5-87f6-880e8d18747d",
+      "nome": "[NUT26] Lisô | F1 | Novo MQL",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608021",
+        "23608022"
+      ]
+    },
+    {
+      "id": "ead68312-643f-4422-95b5-16027235dfbc",
+      "nome": "[NUT26] Lisô | F2 | Fim de Cadência (nunca respondeu) · PRIORIDADE 1",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608023",
+        "23608024",
+        "23608025"
+      ]
+    },
+    {
+      "id": "27e1b634-6dfd-4db0-a618-47a0274ab323",
+      "nome": "[NUT26] Lisô | F3 | Comitê (5 dias)",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608036"
+      ]
+    },
+    {
+      "id": "e3aa30f7-6aeb-4385-9d2f-6613688d0676",
+      "nome": "[NUT26] Lisô | F3 | Conexão",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608031"
+      ]
+    },
+    {
+      "id": "1087095f-bb77-46df-b8c7-5bc924df6227",
+      "nome": "[NUT26] Lisô | F3 | Contato Efetivo",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608027"
+      ]
+    },
+    {
+      "id": "41b780df-1096-48d5-a4c2-068659699b39",
+      "nome": "[NUT26] Lisô | F3 | Diagnóstico (1 dia)",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608033"
+      ]
+    },
+    {
+      "id": "ec6e37aa-3249-401a-8f1e-3931f00e564f",
+      "nome": "[NUT26] Lisô | F3 | Interesse Reunião",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608029"
+      ]
+    },
+    {
+      "id": "453623c4-679a-4046-a00a-e5f396d7569d",
+      "nome": "[NUT26] Lisô | F3 | Negociação SAL (7 dias)",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608034"
+      ]
+    },
+    {
+      "id": "601395a5-637a-4d5c-bc9d-44632a9ca532",
+      "nome": "[NUT26] Lisô | F3 | Oportunidade COF (7 dias)",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608035"
+      ]
+    },
+    {
+      "id": "980ef0a6-6ec7-4301-938a-0b8234de9420",
+      "nome": "[NUT26] Lisô | F3 | Pré Contrato (5 dias)",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23607959"
+      ]
+    },
+    {
+      "id": "a8135c0d-97ad-4855-8b5a-01bb9987b698",
+      "nome": "[NUT26] Lisô | F3 | Reunião Agendada SQL",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608032"
+      ]
+    },
+    {
+      "id": "f09f6758-d490-4afd-b2a9-3fa23983cad5",
+      "nome": "[NUT26] Lisô | F3 | Tentando Contato",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608026"
+      ]
+    },
+    {
+      "id": "f9442ea6-7d8d-4939-be75-005cd26cd809",
+      "nome": "[NUT26] Lisô | F4 | No Show",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608037"
+      ]
+    },
+    {
+      "id": "16fa2bd6-af8f-4dcb-ac90-0d207a453ad1",
+      "nome": "[NUT26] Lisô | F5 | Capital Descapitalizado · SDR ou Closer",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608047"
+      ]
+    },
+    {
+      "id": "46f374cc-1ab7-4653-b69c-addeb701ae7e",
+      "nome": "[NUT26] Lisô | F5 | Investidor sem Operador · SDR ou Closer",
+      "marca": "Lisô Laser",
+      "status": "INATIVO",
+      "modelos": [
+        "23608060",
+        "23608061"
+      ]
+    },
+    {
+      "id": "5c46ec24-04f8-4b3a-8d2b-8733baf94eb4",
+      "nome": "[NUT26] Lisô | F5 | Momento Atual (até 6 meses) · Closer",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608050",
+        "23608051"
+      ]
+    },
+    {
+      "id": "3dd9f79a-4062-45a7-bdf2-347e6ec5fab9",
+      "nome": "[NUT26] Lisô | F5 | Momento Atual (até 12 meses) · Closer",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608052",
+        "23608053",
+        "23608055"
+      ]
+    },
+    {
+      "id": "57242c66-bbec-42a9-b95e-3021821d993c",
+      "nome": "[NUT26] Lisô | F5 | No-Show que não reagendou · SDR",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608065",
+        "23608066"
+      ]
+    },
+    {
+      "id": "e5faf476-3433-4416-92fa-70da9be55446",
+      "nome": "[NUT26] Lisô | F5 | Operador sem Capital · SDR ou Closer",
+      "marca": "Lisô Laser",
+      "status": "INATIVO",
+      "modelos": [
+        "23608062",
+        "23608063"
+      ]
+    },
+    {
+      "id": "48e135fd-8436-437f-a4e2-3b6f69c2ade7",
+      "nome": "[NUT26] Lisô | F5 | Optou por Negócio Próprio · SDR ou Closer",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608058"
+      ]
+    },
+    {
+      "id": "ab48a4d0-da02-4782-ac0e-db57d606df0d",
+      "nome": "[NUT26] Lisô | F5 | Optou por Outro Investimento · Closer",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608059"
+      ]
+    },
+    {
+      "id": "52ee439d-5d6c-49d9-bfdf-968780669ea3",
+      "nome": "[NUT26] Lisô | F5 | Sem Budget · SDR (pré-diagnóstico)",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608045"
+      ]
+    },
+    {
+      "id": "f277d89f-c037-4bbb-bec2-237a2286fa7d",
+      "nome": "[NUT26] Lisô | F5 | Sem Interesse / Sem Resposta (pós-contato) · SDR",
+      "marca": "Lisô Laser",
+      "status": "ATIVO",
+      "modelos": [
+        "23608056",
+        "23608057"
+      ]
+    },
+    {
+      "id": "f11e10b1-5cdb-4b8f-bf21-f55bf7fd0bcb",
+      "nome": "[NUT26] Lisô | F6 | Newsletter de Entrada (base mensal)",
+      "marca": "Lisô Laser",
+      "status": "INATIVO",
+      "modelos": [
+        "23608038",
+        "23608039",
+        "23608042",
+        "23608043"
+      ]
+    },
+    {
+      "id": "c96fd282-dc6c-4ae3-bcc5-fe8da0ffe95e",
+      "nome": "[NUT26] Viva | F1 | Novo MQL",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608067",
+        "23608068"
+      ]
+    },
+    {
+      "id": "cabe1640-00b0-4a42-bf02-9af78131d098",
+      "nome": "[NUT26] Viva | F2 | Fim de Cadência (nunca respondeu) · PRIORIDADE 1",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608069",
+        "23608071",
+        "23608072"
+      ]
+    },
+    {
+      "id": "d00575c0-ad58-40f6-9016-f32e76cc519c",
+      "nome": "[NUT26] Viva | F3 | Comitê (5 dias)",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608082"
+      ]
+    },
+    {
+      "id": "498fe720-0d9c-4bb5-94ba-cc470f632072",
+      "nome": "[NUT26] Viva | F3 | Conexão",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608077"
+      ]
+    },
+    {
+      "id": "caa3b00d-2169-4dc1-af17-ee75ad6de255",
+      "nome": "[NUT26] Viva | F3 | Contato Efetivo",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608074"
+      ]
+    },
+    {
+      "id": "60b9112a-868c-463c-a9d0-d499655e5649",
+      "nome": "[NUT26] Viva | F3 | Diagnóstico (1 dia)",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608079"
+      ]
+    },
+    {
+      "id": "0fa252c8-72a9-4be0-b844-6df7c5264001",
+      "nome": "[NUT26] Viva | F3 | Interesse Reunião",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608076"
+      ]
+    },
+    {
+      "id": "5bde9a3f-5a16-4b86-8e98-525761bc6ff2",
+      "nome": "[NUT26] Viva | F3 | Negociação SAL (7 dias)",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608080"
+      ]
+    },
+    {
+      "id": "3f282104-31bb-4539-8877-5b29cf6e78c2",
+      "nome": "[NUT26] Viva | F3 | Oportunidade COF (7 dias)",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608081"
+      ]
+    },
+    {
+      "id": "755df2c0-495b-4417-a93b-dca1bb3a3b45",
+      "nome": "[NUT26] Viva | F3 | Pré Contrato (5 dias)",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23607960"
+      ]
+    },
+    {
+      "id": "e2cd3a8a-5795-44b7-b1ff-616661b274ab",
+      "nome": "[NUT26] Viva | F3 | Reunião Agendada SQL",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608078"
+      ]
+    },
+    {
+      "id": "7b24aca1-a219-4125-827f-6c4a42dcffe9",
+      "nome": "[NUT26] Viva | F3 | Tentando Contato",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608073"
+      ]
+    },
+    {
+      "id": "fd3ab7af-1502-49fd-a23c-3a1d9489d251",
+      "nome": "[NUT26] Viva | F4 | No Show",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608083"
+      ]
+    },
+    {
+      "id": "9ab54c26-a728-4723-85bd-b3c0d43dae64",
+      "nome": "[NUT26] Viva | F5 | Capital Descapitalizado · SDR ou Closer",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608090"
+      ]
+    },
+    {
+      "id": "a882c955-8648-46dc-8589-1a4f87b49ecb",
+      "nome": "[NUT26] Viva | F5 | Investidor sem Operador · SDR ou Closer",
+      "marca": "Viva",
+      "status": "INATIVO",
+      "modelos": [
+        "23608101",
+        "23608102"
+      ]
+    },
+    {
+      "id": "40252870-5f8d-4e58-bac9-369d13bf7695",
+      "nome": "[NUT26] Viva | F5 | Momento Atual (até 6 meses) · Closer",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608091",
+        "23608092"
+      ]
+    },
+    {
+      "id": "e7387c7e-09c7-439f-966c-efe840f73f5a",
+      "nome": "[NUT26] Viva | F5 | Momento Atual (até 12 meses) · Closer",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608093",
+        "23608095",
+        "23608096"
+      ]
+    },
+    {
+      "id": "e6c2e906-d1cd-46fb-b9f9-977d12d7323b",
+      "nome": "[NUT26] Viva | F5 | No-Show que não reagendou · SDR",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608107",
+        "23608109"
+      ]
+    },
+    {
+      "id": "5a910739-bafd-4253-abbb-8aa09fe4f576",
+      "nome": "[NUT26] Viva | F5 | Operador sem Capital · SDR ou Closer",
+      "marca": "Viva",
+      "status": "INATIVO",
+      "modelos": [
+        "23608103",
+        "23608106"
+      ]
+    },
+    {
+      "id": "5447aba7-a4c5-41e5-8496-ea98488ce2b6",
+      "nome": "[NUT26] Viva | F5 | Optou por Negócio Próprio · SDR ou Closer",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608099"
+      ]
+    },
+    {
+      "id": "6c1c61d7-21e2-4292-8a6e-a7d16f14384e",
+      "nome": "[NUT26] Viva | F5 | Optou por Outro Investimento · Closer",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608100"
+      ]
+    },
+    {
+      "id": "801adbc5-c40b-4ff8-8525-4ef4f73b18b6",
+      "nome": "[NUT26] Viva | F5 | Sem Budget · SDR (pré-diagnóstico)",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608089"
+      ]
+    },
+    {
+      "id": "c6346786-433e-45f5-89f6-97959dd12748",
+      "nome": "[NUT26] Viva | F5 | Sem Interesse / Sem Resposta (pós-contato) · SDR",
+      "marca": "Viva",
+      "status": "ATIVO",
+      "modelos": [
+        "23608097",
+        "23608098"
+      ]
+    },
+    {
+      "id": "f0f892ce-8464-4bbb-88c7-a8d3e074da53",
+      "nome": "[NUT26] Viva | F6 | Newsletter de Entrada (base mensal)",
+      "marca": "Viva",
+      "status": "INATIVO",
+      "modelos": [
+        "23608084",
+        "23608086",
+        "23608087",
+        "23608088"
+      ]
+    },
+    {
+      "id": "b54c0794-b57a-4305-929a-cd3ca87a8708",
+      "nome": "[NUT26] Eletrovias | F1 | Novo MQL",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608111",
+        "23608113"
+      ]
+    },
+    {
+      "id": "bdb90b4d-2d16-4755-8cc1-410291840a53",
+      "nome": "[NUT26] Eletrovias | F2 | Fim de Cadência (nunca respondeu) · PRIORIDADE 1",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608114",
+        "23608115",
+        "23608116"
+      ]
+    },
+    {
+      "id": "f7d93637-f622-429c-9350-cd687f030672",
+      "nome": "[NUT26] Eletrovias | F3 | Comitê (5 dias)",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608127"
+      ]
+    },
+    {
+      "id": "3e0bf2f5-3552-41fa-a5b3-0468ffaf3da7",
+      "nome": "[NUT26] Eletrovias | F3 | Conexão",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608122"
+      ]
+    },
+    {
+      "id": "c3962108-265f-4991-a078-6d3521b0cb09",
+      "nome": "[NUT26] Eletrovias | F3 | Contato Efetivo",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608119"
+      ]
+    },
+    {
+      "id": "9201e120-b380-43f4-9711-5a254252a958",
+      "nome": "[NUT26] Eletrovias | F3 | Diagnóstico (1 dia)",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608124"
+      ]
+    },
+    {
+      "id": "80866f4b-1bbc-4881-ba42-943cbb5b0c31",
+      "nome": "[NUT26] Eletrovias | F3 | Interesse Reunião",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608121"
+      ]
+    },
+    {
+      "id": "bb6c8e1b-63cf-43a6-8715-ab2720ed4ba5",
+      "nome": "[NUT26] Eletrovias | F3 | Negociação SAL (7 dias)",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608125"
+      ]
+    },
+    {
+      "id": "08937545-9e43-44bc-8657-2ec91f981c9f",
+      "nome": "[NUT26] Eletrovias | F3 | Oportunidade COF (7 dias)",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608126"
+      ]
+    },
+    {
+      "id": "c6491e57-dedd-4d7d-bfe9-db93c819819e",
+      "nome": "[NUT26] Eletrovias | F3 | Pré Contrato (5 dias)",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23607963"
+      ]
+    },
+    {
+      "id": "ccf25efb-a75c-4b6e-a62f-e636a3bc753d",
+      "nome": "[NUT26] Eletrovias | F3 | Reunião Agendada SQL",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608123"
+      ]
+    },
+    {
+      "id": "2609539a-fee9-49e0-9996-cf1e8612f3ad",
+      "nome": "[NUT26] Eletrovias | F3 | Tentando Contato",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608117"
+      ]
+    },
+    {
+      "id": "064f783a-846a-4ef5-951f-c6689ef3ea6a",
+      "nome": "[NUT26] Eletrovias | F4 | No Show",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608129"
+      ]
+    },
+    {
+      "id": "88652884-3833-4d51-8868-7a0b114a1e2b",
+      "nome": "[NUT26] Eletrovias | F5 | Capital Descapitalizado · SDR ou Closer",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608135"
+      ]
+    },
+    {
+      "id": "93e6fe28-bf1b-42f8-95d7-8d59b3956c06",
+      "nome": "[NUT26] Eletrovias | F5 | Investidor sem Operador · SDR ou Closer",
+      "marca": "Eletrovias",
+      "status": "INATIVO",
+      "modelos": [
+        "23608146",
+        "23608147"
+      ]
+    },
+    {
+      "id": "7c200e96-6a6a-4c4a-bfeb-1f2e077c1dc1",
+      "nome": "[NUT26] Eletrovias | F5 | Momento Atual (até 6 meses) · Closer",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608136",
+        "23608137"
+      ]
+    },
+    {
+      "id": "68516cd4-c7d0-4736-930e-de7770480303",
+      "nome": "[NUT26] Eletrovias | F5 | Momento Atual (até 12 meses) · Closer",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608139",
+        "23608140",
+        "23608141"
+      ]
+    },
+    {
+      "id": "b35a3300-2d5e-45cd-b186-96bd8fdadace",
+      "nome": "[NUT26] Eletrovias | F5 | No-Show que não reagendou · SDR",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608151",
+        "23608152"
+      ]
+    },
+    {
+      "id": "8fd538e7-fcea-4f87-b9ea-aa82321e6ffa",
+      "nome": "[NUT26] Eletrovias | F5 | Operador sem Capital · SDR ou Closer",
+      "marca": "Eletrovias",
+      "status": "INATIVO",
+      "modelos": [
+        "23608149",
+        "23608150"
+      ]
+    },
+    {
+      "id": "5b91e91d-ef7d-4fff-ba2b-3d8fc2bd6bae",
+      "nome": "[NUT26] Eletrovias | F5 | Optou por Negócio Próprio · SDR ou Closer",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608144"
+      ]
+    },
+    {
+      "id": "f7a9a1dc-0652-4910-957f-5b72c0888ce9",
+      "nome": "[NUT26] Eletrovias | F5 | Optou por Outro Investimento · Closer",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608145"
+      ]
+    },
+    {
+      "id": "a30192bc-a763-4ed5-8043-9b9ae1d5e608",
+      "nome": "[NUT26] Eletrovias | F5 | Sem Budget · SDR (pré-diagnóstico)",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608134"
+      ]
+    },
+    {
+      "id": "b94d7c57-573a-497f-b458-c14d985afef0",
+      "nome": "[NUT26] Eletrovias | F5 | Sem Interesse / Sem Resposta (pós-contato) · SDR",
+      "marca": "Eletrovias",
+      "status": "ATIVO",
+      "modelos": [
+        "23608142",
+        "23608143"
+      ]
+    },
+    {
+      "id": "c17b08b0-a018-45f7-a9d4-8eabf8cdad4c",
+      "nome": "[NUT26] Eletrovias | F6 | Newsletter de Entrada (base mensal)",
+      "marca": "Eletrovias",
+      "status": "INATIVO",
+      "modelos": [
+        "23608130",
+        "23608131",
+        "23608132",
+        "23608133"
+      ]
+    }
+  ]
+}

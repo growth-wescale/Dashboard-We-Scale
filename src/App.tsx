@@ -1,3 +1,4 @@
+import { nutricaoPrevia } from '@/lib/nutricao'
 import { marketingMensalAtivo } from '@/lib/previaMensal'
 import { whatsappAtivo } from '@/lib/previaWhatsapp'
 import { CoberturaMensalPrevia } from '@/components/marketing/CoberturaMensalPrevia'
@@ -48,6 +49,7 @@ const VisaoGeral        = lazyWithRetry(() => import('@/pages/VisaoGeral').then(
 const SaudeDaMarca      = lazyWithRetry(() => import('@/pages/SaudeDaMarca').then(m => ({ default: m.SaudeDaMarca })))
 const Okrs              = lazyWithRetry(() => import('@/pages/Okrs').then(m => ({ default: m.Okrs })))
 const SopMarketing      = lazyWithRetry(() => import('@/pages/SopMarketing').then(m => ({ default: m.SopMarketing })))
+const Nutricao = lazyWithRetry(() => import('@/pages/Nutricao').then(m => ({ default: m.Nutricao })))
 const GastosWhatsapp    = lazyWithRetry(() => import('@/pages/GastosWhatsapp').then(m => ({ default: m.GastosWhatsapp })))
 const FunilVendas       = lazyWithRetry(() => import('@/pages/FunilVendas').then(m => ({ default: m.FunilVendas })))
 const PerformanceVendas = lazyWithRetry(() => import('@/pages/PerformanceVendas').then(m => ({ default: m.PerformanceVendas })))
@@ -90,6 +92,7 @@ function RoutedContent() {
           <Route path="/copa-b2b"      element={<Navigate to="/okrs" replace />} />
           <Route path="/sop-marketing" element={<SopMarketing />} />
           {whatsappAtivo && <Route path="/gastos-whatsapp" element={<GastosWhatsapp />} />}
+          {nutricaoPrevia && <Route path="/nutricao" element={<Nutricao />} />}
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
           <Route path="/metas"              element={<HubMetas />} />

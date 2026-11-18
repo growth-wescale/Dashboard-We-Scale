@@ -1,3 +1,4 @@
+import { nutricaoAtiva, nutricaoPrevia } from '@/lib/nutricao'
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, Activity, Trophy, PresentationIcon, Bell, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, TrendingUp, Swords, Play, Menu, Users } from 'lucide-react'
@@ -99,6 +100,7 @@ function podeRota(pode: (chave: string) => boolean, rota: string | undefined): b
 }
 
 function getActiveKey(pathname: string): string {
+  if (pathname === '/nutricao') return 'nutricao'
   if (pathname === '/gastos-whatsapp') return 'gastos-whatsapp'
   if (pathname.startsWith(ROTA_ACESSOS)) return 'acessos'
   if (pathname.startsWith('/marca')) return 'saude'
@@ -171,6 +173,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const itens: SidebarItem[] = []
     for (const item of NAV_ITEMS) {
       if (item.key === 'vendas') {
+        if (nutricaoAtiva && podeRota(pode, '/nutricao')) itens.push({ key: 'nutricao', label: nutricaoPrevia ? 'Nutrição · prévia' : 'Nutrição', icon: <MessageCircle size={16} /> })
         if (podeRota(pode, '/gastos-whatsapp')) itens.push({ key: 'gastos-whatsapp', label: 'Gastos de WhatsApp', icon: <MessageCircle size={16} /> })
         const subs = VENDAS_SUB.filter(s => podeRota(pode, `/${s.key}`))
         if (subs.length > 0) itens.push({ ...item, subItems: subs })
@@ -222,6 +225,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'saude') navigate('/marca')
     else if (key === 'okrs') navigate('/okrs')
     else if (key === 'sop') navigate('/sop-marketing')
+    else if (key === 'nutricao' && nutricaoAtiva) navigate('/nutricao')
     else if (key === 'gastos-whatsapp' && whatsappAtivo) navigate('/gastos-whatsapp')
     else if (key === 'vendas') {
       const primeira = VENDAS_SUB.find(s => podeRota(pode, `/${s.key}`))

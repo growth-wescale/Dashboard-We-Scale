@@ -1,0 +1,35 @@
+services:
+  nutricao-ouro:
+    image: ${NUTRICAO_IMAGE:?Informe a imagem Python homologada}
+    container_name: dashboard-nutricao-ouro
+    entrypoint: [python]
+    command: [-B, /app/nutricao_ouro/app.py]
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    pids_limit: 96
+    mem_limit: 256m
+    volumes:
+      - .:/app/nutricao_ouro:ro
+      - ../nutricao_previa:/app/nutricao_previa:ro
+      - ${NUTRICAO_CONFIG_DIR:?Informe o diretorio protegido}:/run/nutricao:ro
+    networks: [dashboard]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dashboard_default
+      - traefik.http.routers.nutricao-ouro.priority=110
+      - traefik.http.routers.nutricao-ouro.rule=Host(`dashboard.srv1816822.hstgr.cloud`) && PathPrefix(`/api/nutricao-ouro/`)
+      - traefik.http.routers.nutricao-ouro.entrypoints=websecure
+      - traefik.http.routers.nutricao-ouro.tls.certresolver=letsencrypt
+      - traefik.http.services.nutricao-ouro.loadbalancer.server.port=8080
+networks:
+  dashboard:
+    external: true
+    name: dashboard_default

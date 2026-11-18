@@ -28,6 +28,7 @@ jobs:
           VITE_OUTUBRO_OURO_ENABLED: 'true'
           VITE_MARKETING_MENSAL_OURO_ENABLED: 'true'
           VITE_WHATSAPP_OURO_ENABLED: 'true'
+          VITE_NUTRICAO_OURO_ENABLED: 'true'
           VITE_LISO_OURO_ENABLED: 'true'
           VITE_LEGACY_OURO_ENABLED: 'true'
           VITE_ORAL_UNIC_OURO_ENABLED: 'true'
@@ -72,3 +73,8 @@ jobs:
         run: |
           python3 -B -m unittest discover -s server/whatsapp_ouro
           python3 -B -m unittest discover -s server/whatsapp_previa
+
+      - name: Test Nutrition read gateway
+        run: |
+          python3 -B -m unittest discover -s server/nutricao_previa
+          python3 -B -m unittest discover -s server/nutricao_ouro

@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'marketing_mensal_p
 import preview as monthly
 
 monthly.LOCAL = 'http://127.0.0.1:4175'
+monthly.OLD.add('/api/nutricao-ouro/v1/resumo')
 
 
 def allowed(access):

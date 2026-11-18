@@ -58,9 +58,7 @@ def normalize(raw, catalog):
             'fluxos': catalog['fluxos'], 'medicoes': measures}
 
 
-def prepare(destination=DEFAULT_SNAPSHOT):
-    catalog = json.loads((HERE / 'catalogo.json').read_text())
-    key = Path(os.getenv('WESCALE_METABASE_KEY_FILE', Path.home()/'.config/wescale/metabase/api-key.txt')).read_text().strip()
+def fetch_snapshot(key, catalog):
     req = Request('https://metabase.wescale.com.br/api/dataset',
                   data=json.dumps({'database': 3, 'type': 'native', 'native': {'query': sql(catalog)}, 'parameters': []}).encode(),
                   headers={'Content-Type': 'application/json', 'X-API-Key': key})
@@ -72,7 +70,13 @@ def prepare(destination=DEFAULT_SNAPSHOT):
     if len(rows) != 1:
         raise ValueError('Contrato inválido')
     raw = rows[0][0]
-    snapshot = normalize(json.loads(raw) if isinstance(raw, str) else raw, catalog)
+    return normalize(json.loads(raw) if isinstance(raw, str) else raw, catalog)
+
+
+def prepare(destination=DEFAULT_SNAPSHOT):
+    catalog = json.loads((HERE / 'catalogo.json').read_text())
+    key = Path(os.getenv('WESCALE_METABASE_KEY_FILE', Path.home()/'.config/wescale/metabase/api-key.txt')).read_text().strip()
+    snapshot = fetch_snapshot(key, catalog)
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     temp = destination.with_suffix('.tmp')

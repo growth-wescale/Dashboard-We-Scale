@@ -1,4 +1,4 @@
-import { nutricaoPrevia } from '@/lib/nutricao'
+import { nutricaoAtiva } from '@/lib/nutricao'
 import { marketingMensalAtivo } from '@/lib/previaMensal'
 import { whatsappAtivo } from '@/lib/previaWhatsapp'
 import { CoberturaMensalPrevia } from '@/components/marketing/CoberturaMensalPrevia'
@@ -92,7 +92,7 @@ function RoutedContent() {
           <Route path="/copa-b2b"      element={<Navigate to="/okrs" replace />} />
           <Route path="/sop-marketing" element={<SopMarketing />} />
           {whatsappAtivo && <Route path="/gastos-whatsapp" element={<GastosWhatsapp />} />}
-          {nutricaoPrevia && <Route path="/nutricao" element={<Nutricao />} />}
+          {nutricaoAtiva && <Route path="/nutricao" element={<Nutricao />} />}
           <Route path="/funil-vendas"       element={<FunilVendas />} />
           <Route path="/performance-vendas" element={<PerformanceVendas />} />
           <Route path="/metas"              element={<HubMetas />} />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Mail, CheckCheck, MousePointerClick, Eye, RefreshCw } from 'lucide-react'
 import { useAcesso } from '@/contexts/AcessoContext'
 import { supabase } from '@/lib/supabase'
-import { nutricaoPrevia, filtrarNutricao, periodoNutricaoValido, somaNutricao, type DadosNutricao, type MedicaoNutricao, type MetricaNutricao } from '@/lib/nutricao'
+import { nutricaoPrevia, nutricaoAtiva, nutricaoResumo, filtrarNutricao, periodoNutricaoValido, somaNutricao, type DadosNutricao, type MedicaoNutricao, type MetricaNutricao } from '@/lib/nutricao'
 import './Nutricao.css'
 
 const numero = (v: number | null) => v == null ? '—' : v.toLocaleString('pt-BR')
@@ -75,7 +75,7 @@ function Resumo({ dados }: { dados: DadosNutricao }) {
 }
 
 export function Nutricao() {
-  const acesso = useAcesso(), autorizado = nutricaoPrevia && acesso.ativo && acesso.registrado && acesso.acessoTotal && !acesso.erro
+  const acesso = useAcesso(), autorizado = nutricaoAtiva && acesso.pode('aba.nutricao') && !acesso.erro
   const [dados, setDados] = useState<DadosNutricao | null>(null), [erro, setErro] = useState(false), [tentativa, tentar] = useState(0)
   useEffect(() => {
     setDados(null); setErro(false)
@@ -84,7 +84,7 @@ export function Nutricao() {
     ;(async () => {
       const token = (await supabase.auth.getSession()).data.session?.access_token
       if (!token) throw new Error('session')
-      const res = await fetch('/api/previa-nutricao/v1/resumo', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: '{}', signal: control.signal })
+      const res = await fetch(nutricaoResumo, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: '{}', signal: control.signal })
       if (!res.ok) throw new Error('source')
       const value: DadosNutricao = await res.json()
       if (value.versao !== 1 || !Array.isArray(value.fluxos) || !Array.isArray(value.medicoes) || !Array.isArray(value.dias)) throw new Error('contract')
@@ -92,10 +92,10 @@ export function Nutricao() {
     })().catch(() => { if (!control.signal.aborted) setErro(true) })
     return () => control.abort()
   }, [autorizado, tentativa])
-  if (!autorizado) return <div className="nut-page"><p>Esta prévia exige acesso total de Marketing.</p></div>
-  return <div className="nut-page"><header><div><span className="nut-eyebrow">MARKETING · PRÉVIA</span><h1>Nutrição</h1><p>Acompanhe os e-mails dos fluxos de nutrição por marca.</p></div><button onClick={() => tentar(v => v + 1)}><RefreshCw size={15} /> Recarregar</button></header>
+  if (!autorizado) return <div className="nut-page"><p>Sua conta não tem acesso à Nutrição.</p></div>
+  return <div className="nut-page"><header><div><span className="nut-eyebrow">{nutricaoPrevia ? 'MARKETING · PRÉVIA' : 'MARKETING'}</span><h1>Nutrição</h1><p>Acompanhe os e-mails dos fluxos de nutrição por marca.</p></div><button onClick={() => tentar(v => v + 1)}><RefreshCw size={15} /> Recarregar</button></header>
     {erro ? <p role="alert">Não foi possível ler os dados. Tente recarregar.</p> : !dados ? <p role="status">Carregando a nutrição…</p> : <>
-      <p className="nut-coverage">Dados até <strong>{dia(dados.fim)} (UTC)</strong> · Coleta em {horario(dados.coletado)} (Brasília). Prévia com fotografia da ouro.</p>
+      <p className="nut-coverage">Dados até <strong>{dia(dados.fim)} (UTC)</strong> · Coleta em {horario(dados.coletado)} (Brasília). {dados.modo === 'automatico' ? 'Leitura da ouro atualizada a cada hora.' : 'Prévia com fotografia da ouro.'}</p>
       <Resumo dados={dados} />
     </>}
   </div>

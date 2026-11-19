@@ -858,11 +858,10 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 8. Pendências conhecidas
 
-- [ ] **Teste Kebabs: conferir o 1º lead real.** Regra 63 e cadência 50 ligadas em 18/11; os
-  `cf_*` do formulário vieram da lista do Gabriel e só são conferidos de verdade no 1º registro
-  (`distribuicao_atribuicao.payload` × campos no deal do RD). O formulário não tem cidade/estado:
-  o deal nasce sem Cidade (obrigatória), então qualquer PUT por API nesses deals leva 422. A
-  segmentação "Kebabs" que o Gabriel criou no RD Marketing não é usada pela distribuição
+- [ ] **Teste Kebabs: segmentação "kebabs_multistep" no RD Marketing.** Deu deal duplicado em
+  19/11 (ver histórico). O fluxo foi desativado; se alguém criar outro fluxo de "Criar Negociação"
+  em cima dessa lista ou da conversão, todo lead da Kebabs volta a virar dois deals. O deal da
+  distribuição já nasce com Cidade/Estado (a LP pergunta), então PUT por API funciona
 - [ ] **Aposentar o paliativo do resgate da Corrida** (`ehRetomada`/`pesoDaUnidade` em
   `corridaPerformance.ts`, negociação reaberta = 2 pts) quando o projeto que muda o RD para Contato ×
   Negociação entrar em vigor: o resgate passa a nascer como negociação nova no mesmo contato, com Fonte
@@ -985,6 +984,24 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-19 — Kebabs: 3 campos que faltavam e deal duplicado no funil SDR
+
+Primeiros leads da LP (3 reais da campanha do Facebook + testes). A distribuição criou todos no
+Funil de teste com a Cassiana, e eles entraram na cadência 50. Dois problemas:
+
+- **3 campos não iam para o deal** (faturamento mensal, investimento inicial, "daqui a 6 meses"):
+  o perfil do lead (`payload.contact`, o que a `distribuir-lead` lê) usa o nome inteiro do campo,
+  e a lista do Gabriel tinha o nome cortado (é o nome que vai no evento do formulário). **Regra 65**
+  (Kebabs v2) com os nomes inteiros. Os 7 deals que já existiam foram preenchidos pela
+  `corrigir-deal-rd` (plano `_corrige_deal_20261119`). Conferido por GET nos 8 deals: todas as
+  respostas da LP iguais no CRM, contato com e-mail e telefone ligado.
+- **Deal duplicado no funil SDR com a Xayane.** O fluxo "kebabs_multistep" do RD Marketing
+  (criado em 18/11 12:24, gatilho = lista "kebabs_multistep") tinha a ação "Criar Negociação no
+  CRM", funil SDR, Novo MQL, distribuindo para a equipe "Kebabs" do CRM. Cada conversão virava dois
+  deals. Fluxo **desativado** a pedido do Junior; os 6 duplicados abertos (0 interações) perdidos
+  com "Duplicado" pela `perder-deals-rd` (plano `_perda_duplicado_kebabs_20261119`); 2 já estavam
+  perdidos. Esses deals seguem em `vw_funil_vendas` (marca Kebabs, funil SDR) como MQL perdido.
 
 ### 2026-11-18 — Kebabs ligada: regra de distribuição e cadência
 

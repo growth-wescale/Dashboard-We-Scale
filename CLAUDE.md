@@ -1001,7 +1001,10 @@ Funil de teste com a Cassiana, e eles entraram na cadência 50. Dois problemas:
   CRM", funil SDR, Novo MQL, distribuindo para a equipe "Kebabs" do CRM. Cada conversão virava dois
   deals. Fluxo **desativado** a pedido do Junior; os 6 duplicados abertos (0 interações) perdidos
   com "Duplicado" pela `perder-deals-rd` (plano `_perda_duplicado_kebabs_20261119`); 2 já estavam
-  perdidos. Esses deals seguem em `vw_funil_vendas` (marca Kebabs, funil SDR) como MQL perdido.
+  perdidos. Os 8 duplicados saíram do dashboard por `dashboard_deal_oculto` (lote
+  `Kebabs duplicado`), senão contavam como MQL da Kebabs no funil SDR. Os deals do Funil de teste
+  com nome/e-mail de teste ou e-mail `@wescale.com.br` já ficam fora pela regra de teste de
+  `vw_deal_eventos_ciclo`: no dashboard a Kebabs mostra só os leads reais.
 
 ### 2026-11-18 — Kebabs ligada: regra de distribuição e cadência
 

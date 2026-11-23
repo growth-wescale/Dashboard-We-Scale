@@ -1017,13 +1017,17 @@ Pedido do Junior depois de validar o Bloqueio de Leads em produção.
   `acesso_papeis_protege` não deixa renomear, nem pela tela. SQL para o SQL Editor do Marketing em
   `docs/sql/2026-11-23-acesso-visualizador.sql` (desliga o gatilho só durante o UPDATE e confere que
   o tipo não tem ação). Em 23/11 o tipo tinha 11 telas, nenhuma ação e 33 pessoas (alguém tirou as
-  ações às 11h25 do mesmo dia).
+  ações às 11h25 do mesmo dia). Rodado pelo Junior no mesmo dia. A descrição entrou com os acentos
+  quebrados porque o `pbcopy` sem locale UTF-8 converteu o texto; corrigida no SQL seguinte, que
+  escreve os acentos como `E'\u00f3'` (script só ASCII).
 - **"Validação Dashboard - Somente leitura"**: tipo criado em 17/09/2026 19h35 (Brasília) junto com a
   conta `validacao.dashboard@wescale.com.br` (conta 1 s depois, vínculo 2 s depois), sem
   `convidado_por`, ou seja, por script com a chave de serviço, não pelo convite da tela. 11 telas e
   nenhuma ação ("conferência dos indicadores"); último acesso 27/09/2026. Nada no repositório registra
-  quem criou; `acesso_papeis` não guarda autor. Fica para o Junior confirmar com o Gabriel e desativar
-  se ninguém usa.
+  quem criou; `acesso_papeis` não guarda autor. **Excluídos** a pedido do Junior no mesmo dia (a conta
+  em `auth.users`, com acesso e sessões, e o tipo): `docs/sql/2026-11-23-acesso-remove-validacao.sql`,
+  rodado por ele no SQL Editor; conferência deu 0 conta e 0 tipo. Se algum robô de QA do Gabriel usava
+  essa conta, ele para de entrar.
 
 ### 2026-11-23 — Bloqueio de Leads: e-mail por marca que não vira negociação
 

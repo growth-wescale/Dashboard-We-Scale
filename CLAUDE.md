@@ -253,15 +253,15 @@ sem filtro; formato legado `leads[]`, identificador em
   de `docs/sql/2026-10-16-distribuicao-leads.sql`. A função no Marketing foi publicada pelo
   painel (arquivo único `supabase/functions/caixa-reserva-leads/painel-arquivo-unico.ts`), com
   "Verify JWT" desligado: os conectores daqui não acessam o projeto de Marketing.
-- **Bloqueio de Leads** (desde 23/11/2026, aba própria `/bloqueio-leads`, permissão
-  `aba.bloqueio-leads`): e-mail na lista para a marca do formulário vira `bloqueado` em
+- **Bloqueio de Leads** (desde 23/11/2026, aba própria `/bloqueio-leads`; ver = `aba.bloqueio-leads`,
+  bloquear/mudar marcas/desbloquear = ação `acao.bloqueio-leads-editar`): e-mail na lista para a marca do formulário vira `bloqueado` em
   `distribuicao_atribuicao` (sem deal, sem COF, fora do rodízio). A checagem
   (`distribuicao_bloqueio_vigente`) vem logo depois de achar a regra e antes da trava de 10 min, que
   ignora conversões bloqueadas. **Só por e-mail** (telefone não, decisão do Junior), **por marca**
   (nome interno da regra; a tela mostra `marca_rd`). Estado em `distribuicao_bloqueio` (marcas vazio =
   desbloqueado, nunca apagado), histórico append-only em `distribuicao_bloqueio_log` (trigger barra
   UPDATE/DELETE/TRUNCATE). Escrita só por `distribuicao_bloqueio_salvar` via Edge Function
-  `gravar-bloqueio-lead` (sessão do Marketing + `tem_permissao('aba.bloqueio-leads')` + conta sem
+  `gravar-bloqueio-lead` (sessão do Marketing + `tem_permissao('acao.bloqueio-leads-editar')` + conta sem
   limite de marca em `minhas_permissoes()`; motivo obrigatório; autor = e-mail do login). A RPC
   recebe as marcas que a tela mostrava (`p_marcas_antes`) e recusa com 409 se o bloqueio mudou
   nesse meio-tempo. Leitura: `vw_distribuicao_bloqueios`, `vw_distribuicao_bloqueio_log` e a RPC
@@ -1003,6 +1003,27 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-23 (2) — Acessos: pessoas por tipo, ação "Bloquear leads" e "Visualizador"
+
+Pedido do Junior depois de validar o Bloqueio de Leads em produção.
+
+- **Ação "Bloquear leads"** (`acao.bloqueio-leads-editar`): a aba `aba.bloqueio-leads` passa a ser
+  só ver (lista e histórico); bloquear, mudar marcas e desbloquear exige a ação, na tela e na Edge
+  Function `gravar-bloqueio-lead` (v3). Administrador segue com tudo (acesso total).
+- **Tipos de acesso › Pessoas**: botão em cada tipo abre quem tem o tipo (situação, marcas, último
+  acesso) com a troca de tipo ali mesmo (mesma regra da aba Usuários, função `trocarPapel`).
+- **"Acesso total (legado)" → "Visualizador"**: é tipo padrão (`sistema`) e o gatilho
+  `acesso_papeis_protege` não deixa renomear, nem pela tela. SQL para o SQL Editor do Marketing em
+  `docs/sql/2026-11-23-acesso-visualizador.sql` (desliga o gatilho só durante o UPDATE e confere que
+  o tipo não tem ação). Em 23/11 o tipo tinha 11 telas, nenhuma ação e 33 pessoas (alguém tirou as
+  ações às 11h25 do mesmo dia).
+- **"Validação Dashboard - Somente leitura"**: tipo criado em 17/09/2026 19h35 (Brasília) junto com a
+  conta `validacao.dashboard@wescale.com.br` (conta 1 s depois, vínculo 2 s depois), sem
+  `convidado_por`, ou seja, por script com a chave de serviço, não pelo convite da tela. 11 telas e
+  nenhuma ação ("conferência dos indicadores"); último acesso 27/09/2026. Nada no repositório registra
+  quem criou; `acesso_papeis` não guarda autor. Fica para o Junior confirmar com o Gabriel e desativar
+  se ninguém usa.
 
 ### 2026-11-23 — Bloqueio de Leads: e-mail por marca que não vira negociação
 

@@ -55,9 +55,9 @@ perdido antes; em 13 o último motivo foi "Fora do perfil" ou "Dados inválidos"
 ## Escrita autenticada
 
 Edge Function `gravar-bloqueio-lead` (Expansão, `verify_jwt` desligado como `gravar-distribuicao`):
-valida a sessão no Supabase de Marketing, exige `tem_permissao('aba.bloqueio-leads')` e conta sem
+valida a sessão no Supabase de Marketing, exige `tem_permissao('acao.bloqueio-leads-editar')` e conta sem
 limite de marca (`minhas_permissoes()`, mesma regra do front) antes de chamar a RPC. Quem vê a aba
-pode bloquear e desbloquear.
+só vê; bloquear e desbloquear exige a ação "Bloquear leads" (`acao.bloqueio-leads-editar`, desde 23/11 (2)).
 
 ## Tela
 

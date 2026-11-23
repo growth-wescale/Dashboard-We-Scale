@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase' // sessão vive no Supabase de Marketi
 import type { AcaoBloqueio } from '@/lib/distribuicao/bloqueio'
 
 // Escrita da lista de bloqueio: tudo passa pela Edge Function gravar-bloqueio-lead (Expansão), que
-// valida a sessão e a permissão aba.bloqueio-leads no Marketing antes de chamar a RPC. A chave anon
+// valida a sessão e a ação acao.bloqueio-leads-editar no Marketing antes de chamar a RPC. A chave anon
 // nunca escreve nada.
 const GRAVAR_URL = `${import.meta.env.VITE_SUPABASE_VENDAS_URL}/functions/v1/gravar-bloqueio-lead`
 

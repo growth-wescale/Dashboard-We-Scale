@@ -22,8 +22,8 @@ export function lerEntrada(body: unknown): Entrada {
 /**
  * Mesma regra de `pode()` no front (src/lib/permissoes.ts), aplicada no servidor sobre o retorno de
  * minhas_permissoes() do Marketing: conta registrada e ativa, e quem é limitado a marcas não usa
- * esta aba (ela mexe em todas as marcas), a menos que tenha acesso total. A permissão da aba em si
- * vem de tem_permissao('aba.bloqueio-leads'), conferida à parte.
+ * esta aba (ela mexe em todas as marcas), a menos que tenha acesso total. A permissão de gravar em si
+ * vem de tem_permissao('acao.bloqueio-leads-editar'), conferida à parte.
  */
 export function acessoPermiteBloquear(minhas: unknown): boolean {
   if (!minhas || typeof minhas !== 'object') return false

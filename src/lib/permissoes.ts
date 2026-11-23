@@ -46,6 +46,8 @@ export const ABAS: readonly DefAba[] = [
 ]
 
 export const PERM_GERENCIAR_USUARIOS = 'acao.usuarios-gerenciar'
+/** Bloquear, mudar marcas e desbloquear na aba Bloqueio de Leads. Sem ela, quem tem a aba só vê. */
+export const PERM_BLOQUEIO_EDITAR = 'acao.bloqueio-leads-editar'
 
 export const ACOES: readonly DefAcao[] = [
   { chave: 'acao.metas-publicar', label: 'Publicar e ativar metas', descricao: 'Na Configuração das Metas: publicar uma versão nova e trocar a versão ativa do mês.' },
@@ -53,6 +55,7 @@ export const ACOES: readonly DefAcao[] = [
   { chave: 'acao.assistente-ia',  label: 'Usar o assistente IA',    descricao: 'Chat flutuante que responde com dados de todas as marcas.' },
   { chave: 'acao.repasse-editar', label: 'Alterar repasse das taxas', descricao: 'Na Configuração das Metas: publicar uma versão nova do quanto da taxa de franquia fica com a We Scale e quanto vai pra marca.' },
   { chave: 'acao.distribuicao-editar', label: 'Configurar distribuição de leads', descricao: 'Na aba Distribuição de Leads: publicar regras, barreira de MQL e disponibilidade dos SDRs.' },
+  { chave: PERM_BLOQUEIO_EDITAR, label: 'Bloquear leads', descricao: 'Na aba Bloqueio de Leads: bloquear e-mails, mudar as marcas bloqueadas e desbloquear. Sem esta ação, quem tem a tela Bloqueio de Leads só vê a lista e o histórico.' },
   { chave: PERM_GERENCIAR_USUARIOS, label: 'Gerenciar usuários e papéis', descricao: 'Convidar, desativar e dar qualquer acesso a qualquer pessoa. Na prática, é ser administrador.' },
 ]
 

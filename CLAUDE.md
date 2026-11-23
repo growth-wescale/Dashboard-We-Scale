@@ -32,7 +32,7 @@ Análise de Termos vive **dentro** de Saúde da Marca (aba "termos" por marca), 
 
 ### S&OP · lives da Comunidade Odonto Legacy
 
-A folha de Legacy usa os totais agregados de inscrições externas do Zoom em `comunidadeLegacy.ts`. A contagem de membros ativos tem fonte própria.
+A folha de Legacy preserva inscrições históricas até outubro em `comunidadeLegacy.ts`. Novembro usa presenças externas do Zoom em `presencasLivesLegacy.ts`, deduplicadas por e-mail por encontro e entre encontros, sem identificadores no cliente. A contagem de membros ativos tem fonte própria.
 
 ### Marketing · Gastos de WhatsApp
 
@@ -7127,3 +7127,10 @@ Recorte 01–17/11 UTC conciliado independentemente: 34 processados, 33 entregue
 ### 18/11/2026 — Nutrição: candidata à publicação autorizada
 
 Gateway isolado `nutricao_ouro`: SELECT fixo no Metabase/DB3 reutiliza o contrato validado da ouro; atualização a cada 3600s, retentativa 60s, expiração 7200s e troca atômica. Sessão e permissões revalidadas por pedido; nova chave `aba.nutricao` no catálogo, sem concessões automáticas a papéis. Frontend usa a rota definitiva com flag de build; modo local preservado. Não cria views, roles DW ou operações RD. Doze testes Python (contrato/acesso/cache), 1.236 testes frontend e build aprovados; resposta definitiva igual à fotografia validada. Publicação depende de PR/review e instalação exclusiva do serviço, sem reiniciar os demais.
+
+
+### 23/11/2026 — S&OP Legacy: presenças de novembro e 236 membros
+
+Prévia sobre `origin/main 28bdea4`. Comunidade informada por Gabriel:236 membros, corte23/11. Export `meetinglistdetails_2026_11_01_2026_11_23.csv` (SHA256 `a1f256ef40a86298acc43f22e9d0732253a7c19f4716485400abaae718fec7b6`):54 linhas, quatro sessões somente do anfitrião fora das lives,13 linhas da equipe excluídas nas três lives;37 entradas externas viram23 presenças (reconexões deduplicadas por e-mail).05/11:6;12/11:9;19/11:8.16 e-mails únicos, seis recorrentes; acumulados6/14/16. Internos anteriores/anfitrião e mais Thaís Brunelli/Rakeline confirmados por Gabriel nesta rodada. Sem união por nome quando e-mails diferem; sem taxa de presença sobre a base antiga de inscritos. Outubro preserva inscrições e192 membros.
+
+1.273 testes, build e lint sem erros; quadro real conferido em prévia isolada desktop/celular, sem overflow ou erro JS. Sem QA da folha autenticada inteira/PDF, sem publicação, RD, fatos DW ou Vendas. Código contém só coortes agregadas, sem nomes/e-mails de participantes. Entrega por PR; merge do usuário antes de deploy.

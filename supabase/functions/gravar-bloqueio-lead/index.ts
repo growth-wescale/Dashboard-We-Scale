@@ -1,8 +1,8 @@
 // supabase/functions/gravar-bloqueio-lead/index.ts
 // Único caminho de ESCRITA da lista de bloqueio de leads (aba Bloqueio de Leads). Mesmo molde de
 // gravar-distribuicao: valida a sessão do usuário no Supabase de Marketing (onde vive o login) e
-// exige a permissão `aba.bloqueio-leads` via tem_permissao — quem vê a aba pode bloquear e
-// desbloquear. Também confere minhas_permissoes(): conta ativa e sem limite de marca (mesma regra
+// exige a ação `acao.bloqueio-leads-editar` via tem_permissao (quem só tem a aba vê a lista, mas não
+// grava). Também confere minhas_permissoes(): conta ativa e sem limite de marca (mesma regra
 // de pode() no front). A regra fica no banco (distribuicao_bloqueio_salvar); o autor é o e-mail do login.
 // Spec: docs/superpowers/specs/2026-11-23-bloqueio-de-leads-design.md
 //
@@ -15,7 +15,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { acessoPermiteBloquear, lerEntrada } from './entrada.ts'
 
-const PERMISSAO = 'aba.bloqueio-leads'
+// Ação à parte da aba: quem só tem aba.bloqueio-leads vê a lista, mas não grava.
+const PERMISSAO = 'acao.bloqueio-leads-editar'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const { ok, email, pode } = await validarSessao(admin, token)
   if (!ok || !email) return respond({ error: 'sessão inválida' }, 401)
-  if (!pode) return respond({ error: 'Seu acesso não permite bloquear leads.' }, 403)
+  if (!pode) return respond({ error: 'Seu acesso permite ver a lista, mas não bloquear leads.' }, 403)
 
   let body: unknown
   try { body = await req.json() } catch { return respond({ error: 'JSON inválido' }, 400) }

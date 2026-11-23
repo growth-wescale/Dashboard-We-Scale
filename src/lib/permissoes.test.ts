@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ABAS, ACESSO_VAZIO, ACOES, parseMinhasPermissoes, pode, permissaoDaRota, primeiraRotaPermitida, restringirMarcas,
+  ABAS, ACESSO_VAZIO, ACOES, PERM_BLOQUEIO_EDITAR, parseMinhasPermissoes, pode, permissaoDaRota, primeiraRotaPermitida, restringirMarcas,
   type EstadoAcesso,
 } from './permissoes'
 
@@ -130,6 +130,17 @@ describe('Distribuição de Leads no catálogo', () => {
     expect(pode(sdr, 'aba.bloqueio-leads')).toBe(true)
     expect(pode({ ...sdr, permissoes: [] }, 'aba.bloqueio-leads')).toBe(false)
     expect(pode({ ...sdr, marcas: ['inpot'] }, 'aba.bloqueio-leads')).toBe(false)
+  })
+
+  it('bloquear é uma ação à parte: quem só tem a aba vê, quem tem a ação bloqueia', () => {
+    expect(PERM_BLOQUEIO_EDITAR).toBe('acao.bloqueio-leads-editar')
+    expect(ACOES.find(a => a.chave === PERM_BLOQUEIO_EDITAR)).toMatchObject({ label: 'Bloquear leads' })
+    const soVe: EstadoAcesso = { ...base, permissoes: ['aba.bloqueio-leads'] }
+    const bloqueia: EstadoAcesso = { ...base, permissoes: ['aba.bloqueio-leads', PERM_BLOQUEIO_EDITAR] }
+    expect(pode(soVe, PERM_BLOQUEIO_EDITAR)).toBe(false)
+    expect(pode(bloqueia, PERM_BLOQUEIO_EDITAR)).toBe(true)
+    expect(pode({ ...bloqueia, marcas: ['inpot'] }, PERM_BLOQUEIO_EDITAR)).toBe(false)
+    expect(pode({ ...base, acessoTotal: true }, PERM_BLOQUEIO_EDITAR)).toBe(true)
   })
 
   it('existe a ação acao.distribuicao-editar', () => {

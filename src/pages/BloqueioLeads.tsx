@@ -1,11 +1,13 @@
 // Aba Bloqueio de Leads (Vendas): e-mails que não viram negociação nas marcas escolhidas.
 // A conversão continua chegando do RD Marketing; a distribuição registra como "Bloqueado" e não
-// cria deal, não dispara COF e não conta no rodízio. Quem vê a aba (aba.bloqueio-leads) pode
-// bloquear, mudar as marcas e desbloquear; tudo fica no histórico (quem, quando, motivo).
+// cria deal, não dispara COF e não conta no rodízio. Quem vê a aba (aba.bloqueio-leads) vê a lista e
+// o histórico; bloquear, mudar as marcas e desbloquear exige a ação acao.bloqueio-leads-editar.
+// Tudo fica no histórico (quem, quando, motivo).
 // Spec: docs/superpowers/specs/2026-11-23-bloqueio-de-leads-design.md
 import { useMemo, useState } from 'react'
 import { PageTop } from '@/components/ui/PageTop'
 import { useAcesso } from '@/contexts/AcessoContext'
+import { PERM_BLOQUEIO_EDITAR } from '@/lib/permissoes'
 import { bannerStyle, cardStyle, inputStyle, primaryButtonStyle, sectionTitleStyle } from '@/components/metas/metasUi'
 import { botaoTexto, pill, td, th } from '@/components/distribuicao/ui'
 import { EditorBloqueio, type ModoEditor } from '@/components/bloqueio/EditorBloqueio'
@@ -22,7 +24,8 @@ const nf = new Intl.NumberFormat('pt-BR')
 export function BloqueioLeads() {
   const d = useBloqueios()
   const { pode } = useAcesso()
-  const podeEditar = pode('aba.bloqueio-leads')
+  // Ver a aba é aba.bloqueio-leads; bloquear, mudar marcas e desbloquear é a ação à parte.
+  const podeEditar = pode(PERM_BLOQUEIO_EDITAR)
   const [aviso, setAviso] = useState<Aviso>(null)
   const [editor, setEditor] = useState<{ modo: ModoEditor; email: string } | null>(null)
   const [historico, setHistorico] = useState<string | null>(null)
@@ -66,6 +69,11 @@ export function BloqueioLeads() {
       />
 
       {aviso && <div style={{ ...bannerStyle(aviso.tipo), cursor: 'pointer' }} onClick={() => setAviso(null)}>{aviso.texto}</div>}
+      {!podeEditar && (
+        <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
+          Seu acesso permite ver a lista e o histórico. Para bloquear ou desbloquear, um administrador precisa liberar a ação "Bloquear leads" no seu tipo de acesso.
+        </div>
+      )}
       {d.error && <div style={bannerStyle('erro')}>Erro ao carregar: {d.error}</div>}
 
       <section style={{ ...cardStyle, padding: '14px 18px' }}>

@@ -28,6 +28,18 @@ const STATUS_VISUAL: Record<StatusUsuario, { label: string; bg: string; fg: stri
   'sem-acesso': { label: 'Sem acesso',   bg: 'var(--ws-bg)',              fg: 'var(--ws-text-secondary)' },
 }
 
+/**
+ * Troca o tipo de acesso de uma pessoa. Administrador sempre vê todas as marcas, então ir pra um
+ * tipo com acesso total limpa o limite de marca. Usado na aba Usuários e na lista de pessoas de cada
+ * tipo (aba Tipos de acesso). Devolve a mensagem de erro, ou null.
+ */
+async function trocarPapel(u: UsuarioAcesso, papel: PapelAcesso): Promise<string | null> {
+  const marcas = papel.acessoTotal ? null : u.marcas
+  return u.papelId
+    ? await alterarAcessoUsuario(u.usuarioId, papel.id, marcas)
+    : (await chamarGerenciarUsuarios({ acao: 'definir_acesso', usuarioId: u.usuarioId, papelId: papel.id, marcas })).error
+}
+
 /** Nomes das telas que funcionam pra quem é limitado a marcas, na ordem do menu. */
 const TELAS_FILTRADAS_TEXTO = ABAS.filter(a => TELAS_COM_FILTRO_DE_MARCA.has(a.chave)).map(a => a.label).join(', ')
 
@@ -110,6 +122,8 @@ export function Acessos() {
       ) : (
         <AbaPapeis
           papeis={papeisQ.papeis}
+          usuarios={usuariosQ.usuarios}
+          meuId={session?.user.id ?? null}
           carregando={papeisQ.carregando}
           erro={papeisQ.erro}
           pessoasPorPapel={pessoasPorPapel}
@@ -164,11 +178,8 @@ function AbaUsuarios({ usuarios, papeis, pessoasPorPapel, carregando, erro, meuI
   async function mudarPapel(u: UsuarioAcesso, papelId: string) {
     const papel = papelPorId.get(papelId)
     if (!papel || papelId === u.papelId) return
-    const marcas = papel.acessoTotal ? null : u.marcas
     setOcupado(u.usuarioId)
-    const falha = u.papelId
-      ? await alterarAcessoUsuario(u.usuarioId, papelId, marcas)
-      : (await chamarGerenciarUsuarios({ acao: 'definir_acesso', usuarioId: u.usuarioId, papelId, marcas })).error
+    const falha = await trocarPapel(u, papel)
     setOcupado(null)
     if (falha) { onAviso({ tipo: 'erro', texto: falha }); return }
     onAviso({ tipo: 'sucesso', texto: `${u.email} agora tem o acesso "${papel.nome}".` })
@@ -531,8 +542,10 @@ function ModalConvite({ papeis, onFechar, onConvidado }: {
 }
 
 // ── Aba Tipos de acesso ──────────────────────────────────────────────────────
-function AbaPapeis({ papeis, carregando, erro, pessoasPorPapel, onAviso, onMudou }: {
+function AbaPapeis({ papeis, usuarios, meuId, carregando, erro, pessoasPorPapel, onAviso, onMudou }: {
   papeis: PapelAcesso[]
+  usuarios: UsuarioAcesso[]
+  meuId: string | null
   carregando: boolean
   erro: string | null
   pessoasPorPapel: Map<string, number>
@@ -540,6 +553,7 @@ function AbaPapeis({ papeis, carregando, erro, pessoasPorPapel, onAviso, onMudou
   onMudou: () => Promise<void>
 }) {
   const [editando, setEditando] = useState<PapelAcesso | 'novo' | null>(null)
+  const [vendoPessoas, setVendoPessoas] = useState<string | null>(null)
 
   if (erro) return <div style={{ ...bannerStyle('erro'), fontSize: 13 }}>{erro}</div>
   if (carregando) return <div style={{ padding: 24, fontSize: 13, color: 'var(--ws-text-secondary)' }}>Carregando…</div>
@@ -578,14 +592,31 @@ function AbaPapeis({ papeis, carregando, erro, pessoasPorPapel, onAviso, onMudou
                 <span style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>
                   {resumo(p)} · <strong style={{ color: 'var(--ws-text-primary)', fontWeight: 600 }}>{pessoas} {pessoas === 1 ? 'pessoa' : 'pessoas'}</strong>
                 </span>
-                <button onClick={() => setEditando(p)} style={botaoTexto('var(--ws-text-primary)')}>
-                  {p.acessoTotal ? 'Ver' : 'Editar'}
-                </button>
+                <span style={{ display: 'inline-flex', gap: 2 }}>
+                  <button onClick={() => setVendoPessoas(p.id)} disabled={pessoas === 0} title={pessoas === 0 ? 'Ninguém tem este tipo de acesso' : undefined}
+                    style={{ ...botaoTexto('var(--brand-accent)'), opacity: pessoas === 0 ? 0.4 : 1, cursor: pessoas === 0 ? 'default' : 'pointer' }}>
+                    Pessoas
+                  </button>
+                  <button onClick={() => setEditando(p)} style={botaoTexto('var(--ws-text-primary)')}>
+                    {p.acessoTotal ? 'Ver' : 'Editar'}
+                  </button>
+                </span>
               </div>
             </div>
           )
         })}
       </div>
+
+      {vendoPessoas && (
+        <ModalPessoasDoPapel
+          papel={papeis.find(p => p.id === vendoPessoas) ?? null}
+          papeis={papeis}
+          usuarios={usuarios}
+          meuId={meuId}
+          onFechar={() => setVendoPessoas(null)}
+          onMudou={onMudou}
+        />
+      )}
 
       {editando && (
         <EditorPapel
@@ -754,6 +785,88 @@ function EditorPapel({ papel, pessoas, onFechar, onSalvo }: {
             {salvando ? 'Salvando…' : 'Salvar'}
           </button>
         )}
+      </div>
+    </Modal>
+  )
+}
+
+// ── Pessoas de um tipo de acesso ─────────────────────────────────────────────
+/** Quem tem o tipo, com a troca de tipo ali mesmo. Quem é trocado sai da lista (o tipo mudou). */
+function ModalPessoasDoPapel({ papel, papeis, usuarios, meuId, onFechar, onMudou }: {
+  papel: PapelAcesso | null
+  papeis: PapelAcesso[]
+  usuarios: UsuarioAcesso[]
+  meuId: string | null
+  onFechar: () => void
+  onMudou: () => Promise<void>
+}) {
+  const [ocupado, setOcupado] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<Aviso>(null)
+  const papelPorId = useMemo(() => new Map(papeis.map(p => [p.id, p])), [papeis])
+  const pessoas = useMemo(
+    () => (papel ? ordenarUsuarios(usuarios.filter(u => u.papelId === papel.id), ORDEM_PADRAO, marcaLabel) : []),
+    [usuarios, papel],
+  )
+  if (!papel) return null
+
+  async function mudar(u: UsuarioAcesso, papelId: string) {
+    const novo = papelPorId.get(papelId)
+    if (!novo || papelId === u.papelId) return
+    setOcupado(u.usuarioId)
+    const falha = await trocarPapel(u, novo)
+    setOcupado(null)
+    if (falha) { setAviso({ tipo: 'erro', texto: falha }); return }
+    setAviso({ tipo: 'sucesso', texto: `${u.email} agora tem o acesso "${novo.nome}".` })
+    await onMudou()
+  }
+
+  return (
+    <Modal titulo={`Pessoas com "${papel.nome}"`} onFechar={onFechar} largura={820}>
+      <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ws-text-secondary)' }}>
+        {pessoas.length} {pessoas.length === 1 ? 'pessoa' : 'pessoas'}. Trocar o tipo aqui vale na hora, igual à aba Usuários; quem muda de tipo sai desta lista.
+      </p>
+      {aviso && <div role="status" style={{ ...bannerStyle(aviso.tipo), fontSize: 13, marginBottom: 12 }}>{aviso.texto}</div>}
+      <div className="rs-scroll-x">
+        <table style={{ width: '100%', minWidth: 680, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={th}>Pessoa</th><th style={th}>Situação</th><th style={th}>Marcas</th><th style={th}>Último acesso</th><th style={th}>Tipo de acesso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pessoas.map(u => {
+              const status = STATUS_VISUAL[statusDoUsuario(u)]
+              const eu = u.usuarioId === meuId
+              const trabalhando = ocupado === u.usuarioId
+              return (
+                <tr key={u.usuarioId} style={{ borderTop: '1px solid var(--ws-border)', opacity: trabalhando ? 0.55 : 1 }}>
+                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: 500, color: 'var(--ws-text-primary)' }}>{u.email}</span>
+                    {eu && <span style={{ ...pill('var(--ws-bg)', 'var(--ws-text-secondary)'), marginLeft: 8 }}>você</span>}
+                  </td>
+                  <td style={td}><span style={pill(status.bg, status.fg)}>{status.label}</span></td>
+                  <td style={{ ...td, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{resumoMarcas(u.marcas, marcaLabel)}</td>
+                  <td style={{ ...td, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{fmtUltimoAcesso(u.ultimoLogin)}</td>
+                  <td style={td}>
+                    <select
+                      value={u.papelId ?? ''}
+                      disabled={eu || trabalhando}
+                      title={eu ? 'Seu próprio acesso só pode ser mudado por outro administrador.' : undefined}
+                      onChange={e => { if (e.target.value) mudar(u, e.target.value) }}
+                      aria-label={`Tipo de acesso de ${u.email}`}
+                      style={selectStyle}
+                    >
+                      {papeis.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              )
+            })}
+            {pessoas.length === 0 && (
+              <tr><td colSpan={5} style={{ ...td, padding: 24, color: 'var(--ws-text-secondary)' }}>Ninguém tem mais este tipo de acesso.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </Modal>
   )

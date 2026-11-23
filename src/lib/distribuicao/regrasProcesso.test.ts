@@ -9,15 +9,20 @@ describe('etapasDoProcesso', () => {
       { chave: 'alerta_silencio_horas', valor: '4' },
     ])
     const texto = JSON.stringify(e)
-    expect(e[1].titulo).toBe('Bloqueio de reenvio (15 minutos)')
+    expect(e[2].titulo).toBe('Bloqueio de reenvio (15 minutos)')
     expect(texto).toContain('em menos de 15 minutos')
     expect(texto).toContain('repete até 1 vez.')
     expect(texto).toContain('há mais de 4 horas')
   })
   it('sem configuração cai nos padrões', () => {
     const e = etapasDoProcesso([])
-    expect(e[1].titulo).toBe('Bloqueio de reenvio (10 minutos)')
+    expect(e[2].titulo).toBe('Bloqueio de reenvio (10 minutos)')
     expect(JSON.stringify(e)).toContain('repete até 3 vezes')
+  })
+  it('o bloqueio por e-mail vem logo depois da chegada, antes do reenvio', () => {
+    const e = etapasDoProcesso([])
+    expect(e[1].titulo).toBe('E-mail na lista de bloqueio')
+    expect(e[1].itens.join(' ')).toContain('não vira deal, não dispara a COF e não conta no rodízio')
   })
   it('descreve a regra do lead com deal aberto', () => {
     const passo = etapasDoProcesso([]).find(p => p.titulo === 'Lead que já tem deal aberto')!

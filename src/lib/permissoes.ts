@@ -42,6 +42,7 @@ export const ABAS: readonly DefAba[] = [
   { chave: 'aba.campanha-metas',   label: 'Campanha de Metas',    rota: '/gp-setembro',        area: 'Vendas' },
   { chave: 'aba.metas',            label: 'Configuração das Metas', rota: '/metas',              area: 'Vendas' },
   { chave: 'aba.distribuicao',     label: 'Distribuição de Leads',  rota: '/distribuicao-leads', area: 'Vendas' },
+  { chave: 'aba.bloqueio-leads',   label: 'Bloqueio de Leads',      rota: '/bloqueio-leads',     area: 'Vendas' },
 ]
 
 export const PERM_GERENCIAR_USUARIOS = 'acao.usuarios-gerenciar'

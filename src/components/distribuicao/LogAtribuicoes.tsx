@@ -14,7 +14,7 @@ interface Props {
   onReprocessar: (id: number) => Promise<boolean>
 }
 
-const RESULTADOS: ResultadoAtribuicao[] = ['atribuido', 'simulado', 'barrado', 'duplicado', 'fallback', 'erro']
+const RESULTADOS: ResultadoAtribuicao[] = ['atribuido', 'simulado', 'barrado', 'duplicado', 'bloqueado', 'fallback', 'erro']
 const nf = new Intl.NumberFormat('pt-BR')
 
 function contadoresTexto(c: AtribuicaoRow['contadores']): string {

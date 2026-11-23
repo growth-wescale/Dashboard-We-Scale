@@ -25,6 +25,7 @@ export const RESULTADO_VISUAL: Record<ResultadoAtribuicao, { label: string; bg: 
   duplicado: { label: 'Duplicado',          bg: 'var(--ws-bg)',              fg: 'var(--ws-text-secondary)' },
   fallback:  { label: 'Responsável padrão', bg: 'var(--status-atencao-bg)',  fg: 'var(--status-atencao)' },
   erro:      { label: 'Erro',               bg: 'var(--status-risco-bg)',    fg: 'var(--status-risco)' },
+  bloqueado: { label: 'Bloqueado',          bg: 'var(--status-risco-bg)',    fg: 'var(--status-risco)' },
 }
 
 /** O que cada resultado do log quer dizer (legenda da tela). */
@@ -35,6 +36,7 @@ export const RESULTADO_AJUDA: Record<ResultadoAtribuicao, string> = {
   duplicado: 'O mesmo lead converteu de novo no mesmo formulário em menos de 10 minutos (reenvio). Ignorado pra não duplicar a negociação.',
   fallback:  'Passou na régua, mas nenhum SDR da marca estava disponível: a negociação foi para o responsável padrão (Brunno) e chegou aviso no Teams.',
   erro:      'Era pra criar a negociação, mas o RD recusou ou não respondeu. Fica pendente até alguém clicar em Reprocessar.',
+  bloqueado: 'O e-mail está na lista da aba Bloqueio de Leads para esta marca. Nenhuma negociação é criada, a COF não dispara e não conta no rodízio.',
 }
 
 export function fmtDataHora(iso: string | null | undefined): string {

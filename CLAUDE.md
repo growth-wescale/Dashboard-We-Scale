@@ -253,6 +253,20 @@ sem filtro; formato legado `leads[]`, identificador em
   de `docs/sql/2026-10-16-distribuicao-leads.sql`. A função no Marketing foi publicada pelo
   painel (arquivo único `supabase/functions/caixa-reserva-leads/painel-arquivo-unico.ts`), com
   "Verify JWT" desligado: os conectores daqui não acessam o projeto de Marketing.
+- **Bloqueio de Leads** (desde 23/11/2026, aba própria `/bloqueio-leads`, permissão
+  `aba.bloqueio-leads`): e-mail na lista para a marca do formulário vira `bloqueado` em
+  `distribuicao_atribuicao` (sem deal, sem COF, fora do rodízio). A checagem
+  (`distribuicao_bloqueio_vigente`) vem logo depois de achar a regra e antes da trava de 10 min, que
+  ignora conversões bloqueadas. **Só por e-mail** (telefone não, decisão do Junior), **por marca**
+  (nome interno da regra; a tela mostra `marca_rd`). Estado em `distribuicao_bloqueio` (marcas vazio =
+  desbloqueado, nunca apagado), histórico append-only em `distribuicao_bloqueio_log` (trigger barra
+  UPDATE/DELETE/TRUNCATE). Escrita só por `distribuicao_bloqueio_salvar` via Edge Function
+  `gravar-bloqueio-lead` (sessão do Marketing + `tem_permissao('aba.bloqueio-leads')`; motivo
+  obrigatório; autor = e-mail do login). Leitura: `vw_distribuicao_bloqueios`,
+  `vw_distribuicao_bloqueio_log`, `vw_distribuicao_lead_negocios`. O RD Marketing continua
+  registrando a conversão e mandando e-mail (para isso, desativar o lead lá). SQL e testes em
+  pg_temp: `docs/sql/2026-11-23-bloqueio-de-leads.sql`; spec
+  `docs/superpowers/specs/2026-11-23-bloqueio-de-leads-design.md`.
 
 ### Histórico da configuração das cadências (desde 27/10/2026)
 
@@ -578,6 +592,8 @@ src/lib/distribuicao/regras.ts  tipos das vw_distribuicao_* + textoBarreira/diff
 src/hooks/useDistribuicao.ts    lê vw_distribuicao_painel/_regras/_atribuicoes/_disponibilidade/_saude/_campos_vistos
 src/hooks/useGravarDistribuicao.ts  escrita via Edge Function gravar-distribuicao (publicar regra, disponibilidade, reprocessar)
 src/pages/DistribuicaoLeads.tsx + src/components/distribuicao/*  aba Distribuição de Leads (só Administrador)
+src/pages/BloqueioLeads.tsx + src/components/bloqueio/*  aba Bloqueio de Leads (aba.bloqueio-leads); lógica em src/lib/distribuicao/bloqueio.ts
+supabase/functions/gravar-bloqueio-lead/  escrita autenticada da lista de bloqueio
 supabase/functions/distribuir-lead/   webhook RD Marketing → RPCs → POST /deals (rd.ts tem os IDs de campo do CRM)
 supabase/functions/gravar-distribuicao/  escrita autenticada da configuração
 docs/sql/2026-10-16-distribuicao-leads.sql  todo o SQL aplicado (tabelas, RPCs, views) com os testes
@@ -984,6 +1000,34 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-23 — Bloqueio de Leads: e-mail por marca que não vira negociação
+
+Pedido do Junior a partir da Xay (SDR): um lead sem perfil (3 negócios na Inpot desde abril,
+todos perdidos por "Fora do perfil (ICP)") segue se cadastrando na LP e cada conversão vira negócio
+novo. O suporte do RD sugeriu filtrar a automação do RD Marketing por segmentação, mas desde 19/10
+quem cria o negócio é a nossa distribuição, alimentada por webhook sem filtro: o bloqueio tinha
+que morar aqui. Medido: dos 2.019 negócios criados pela distribuição desde 19/10, 68 eram de lead
+já perdido antes, 13 com último motivo "Fora do perfil" ou "Dados inválidos".
+
+**Decisões do Junior:** só por e-mail; marcas escolhidas no bloqueio e alteráveis depois; histórico
+de tudo (bloqueio, alteração, desbloqueio, quem, quando, motivo); aba própria liberável por tipo de
+acesso, começando só com o Administrador. Regras na seção 3 ("Bloqueio de Leads").
+
+**Banco** (`docs/sql/2026-11-23-bloqueio-de-leads.sql`): tabelas, RPC, consulta, 3 views, CHECK de
+`distribuicao_atribuicao.resultado` com `bloqueado` e patch por trechos em `distribuicao_processar`
+(md5 da definição viva conferido). Antes de aplicar, tudo rodou numa cópia em `pg_temp` (tabelas
+temporárias e cópia da função): 18 casos, inclusive bloqueado só numa marca, e-mail com maiúscula,
+desbloquear e converter em menos de 10 min, rebloqueio e log imutável. Depois de aplicar, as 3
+conversões reais seguintes passaram normalmente (atribuída, duplicada e barrada).
+
+**Tela** (`/bloqueio-leads`, menu Vendas): botão Bloquear e-mail (mostra onde o e-mail já apareceu,
+por marca), lista com marcas, desde quando, última alteração, tentativas barradas e negócios no RD,
+histórico geral e painel do lead com linha do tempo única (conversões desde 16/10, negócios no RD
+de qualquer época e ações de bloqueio). Na Distribuição de Leads: resultado "Bloqueado" na legenda
+e no filtro, e passo novo em "Como a distribuição funciona". Visto renderizado com dado real numa
+cópia de prévia sem login (1440 e 375 px). Nenhum e-mail foi bloqueado na entrega: o primeiro (o do
+pedido) fica para o Junior ou a Xay, para o autor no histórico ser quem bloqueou.
 
 ### 2026-11-19 — Kebabs: 3 campos que faltavam e deal duplicado no funil SDR
 

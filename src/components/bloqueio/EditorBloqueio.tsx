@@ -154,10 +154,16 @@ export function EditorBloqueio({ modo, emailInicial, marcas, existentes, onSalva
         </div>
 
         <div>
-          <label htmlFor="bloqueio-motivo" style={rotuloCampo}>Motivo (fica no histórico)</label>
-          <textarea id="bloqueio-motivo" rows={3} style={{ ...inputStyle, width: '100%', padding: '8px 10px', resize: 'vertical' }}
+          <label htmlFor="bloqueio-motivo" style={rotuloCampo}>
+            {acao === 'desbloqueio' ? 'Por que desbloquear?' : acao === 'alteracao' ? 'Por que mudar as marcas?' : 'Por que bloquear?'}{' '}
+            <span style={{ color: 'var(--status-risco)' }}>* obrigatório</span>
+          </label>
+          <textarea id="bloqueio-motivo" rows={4} required aria-required="true" style={{ ...inputStyle, width: '100%', padding: '8px 10px', resize: 'vertical', borderColor: motivo && !motivoOk ? 'var(--status-risco)' : undefined }}
             placeholder={acao === 'desbloqueio' ? 'Ex.: lead pediu retorno, agora tem capital' : 'Ex.: 3 negócios perdidos por fora do perfil, segue se cadastrando'}
             value={motivo} onChange={e => setMotivo(e.target.value)} />
+          <div style={{ fontSize: 12, color: motivoOk ? 'var(--ws-text-secondary)' : 'var(--status-risco)', marginTop: 4 }}>
+            {motivoOk ? 'Fica no histórico, com o seu e-mail de login e a data.' : 'Escreva o motivo (pelo menos 3 letras) para liberar o botão.'}
+          </div>
         </div>
 
         {erro && <div style={bannerStyle('erro')}>{erro}</div>}

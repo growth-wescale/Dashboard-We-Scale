@@ -123,6 +123,15 @@ describe('Distribuição de Leads no catálogo', () => {
     expect(ABAS.find(a => a.chave === 'aba.distribuicao')).toMatchObject({ label: 'Distribuição de Leads', area: 'Vendas' })
   })
 
+  it('a rota /bloqueio-leads exige aba.bloqueio-leads, liberável por tipo de acesso', () => {
+    expect(permissaoDaRota('/bloqueio-leads')).toBe('aba.bloqueio-leads')
+    expect(ABAS.find(a => a.chave === 'aba.bloqueio-leads')).toMatchObject({ label: 'Bloqueio de Leads', area: 'Vendas', rota: '/bloqueio-leads' })
+    const sdr: EstadoAcesso = { ...base, papel: 'SDR', permissoes: ['aba.bloqueio-leads'] }
+    expect(pode(sdr, 'aba.bloqueio-leads')).toBe(true)
+    expect(pode({ ...sdr, permissoes: [] }, 'aba.bloqueio-leads')).toBe(false)
+    expect(pode({ ...sdr, marcas: ['inpot'] }, 'aba.bloqueio-leads')).toBe(false)
+  })
+
   it('existe a ação acao.distribuicao-editar', () => {
     expect(ACOES.some(a => a.chave === 'acao.distribuicao-editar')).toBe(true)
   })

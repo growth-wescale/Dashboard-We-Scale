@@ -27,6 +27,13 @@ export function etapasDoProcesso(config: ConfigDistribuicao[]): EtapaProcesso[] 
       ],
     },
     {
+      titulo: 'E-mail na lista de bloqueio',
+      itens: [
+        'Se o e-mail está na lista da aba Bloqueio de Leads para a marca do formulário, a conversão fica como Bloqueado: não vira deal, não dispara a COF e não conta no rodízio.',
+        'O bloqueio vale só nas marcas escolhidas e só pelo e-mail. Desbloqueado, a próxima conversão segue o fluxo normal.',
+      ],
+    },
+    {
       titulo: `Bloqueio de reenvio (${plural(janela, 'minuto', 'minutos')})`,
       itens: [
         `Se o mesmo e-mail preencher o mesmo formulário da mesma marca de novo em menos de ${plural(janela, 'minuto', 'minutos')}, a conversão fica como Duplicado e não vira deal.`,

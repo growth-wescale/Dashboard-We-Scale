@@ -5,7 +5,7 @@ export type ModoRegra = 'desligado' | 'sombra' | 'ativo'
 export interface TarefaRegra { assunto: string; tipo?: string; horas?: number }
 
 export type FonteTime = 'versao_ativa' | 'versao_anterior' | 'time_proprio' | 'nenhum'
-export type ResultadoAtribuicao = 'atribuido' | 'barrado' | 'duplicado' | 'simulado' | 'fallback' | 'erro'
+export type ResultadoAtribuicao = 'atribuido' | 'barrado' | 'duplicado' | 'simulado' | 'fallback' | 'erro' | 'bloqueado'
 
 export interface PessoaPeso { nome: string; peso: number }
 
@@ -194,7 +194,7 @@ export function rotuloFonteTime(fonte: FonteTime | string | null | undefined): s
 
 export const ROTULO_RESULTADO: Record<ResultadoAtribuicao, string> = {
   atribuido: 'Atribuído', barrado: 'Barrado', duplicado: 'Duplicado', simulado: 'Simulado',
-  fallback: 'Responsável padrão', erro: 'Erro',
+  fallback: 'Responsável padrão', erro: 'Erro', bloqueado: 'Bloqueado',
 }
 
 export const ROTULO_MODO: Record<ModoRegra, string> = { desligado: 'Desligado', sombra: 'Sombra', ativo: 'Ativo' }

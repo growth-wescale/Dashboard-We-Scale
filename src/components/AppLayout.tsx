@@ -59,6 +59,7 @@ const VENDAS_SUB = [
   { key: 'gp-setembro',         label: 'Campanha de Metas' },
   { key: 'metas',               label: 'Configuração das Metas' },
   { key: 'distribuicao-leads',  label: 'Distribuição de Leads' },
+  { key: 'bloqueio-leads',      label: 'Bloqueio de Leads' },
 ]
 
 const NAV_ITEMS = [
@@ -106,7 +107,7 @@ function getActiveKey(pathname: string): string {
   if (pathname.startsWith('/marca')) return 'saude'
   if (pathname.startsWith('/okrs') || pathname.startsWith('/copa-b2b')) return 'okrs'
   if (pathname.startsWith('/sop-marketing')) return 'sop'
-  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/linha-do-tempo') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas') || pathname.startsWith('/distribuicao-leads') || pathname.startsWith('/relatorios')) return 'vendas'
+  if (pathname.startsWith('/funil-vendas') || pathname.startsWith('/performance-vendas') || pathname.startsWith('/analise-perda') || pathname.startsWith('/linha-do-tempo') || pathname.startsWith('/analise-objecoes') || pathname.startsWith('/gp-setembro') || pathname.startsWith('/metas') || pathname.startsWith('/distribuicao-leads') || pathname.startsWith('/bloqueio-leads') || pathname.startsWith('/relatorios')) return 'vendas'
   return 'geral'
 }
 
@@ -118,6 +119,7 @@ function getVendasActiveSub(pathname: string): string {
   if (pathname.startsWith('/performance-vendas')) return 'performance-vendas'
   if (pathname.startsWith('/metas'))              return 'metas'
   if (pathname.startsWith('/distribuicao-leads')) return 'distribuicao-leads'
+  if (pathname.startsWith('/bloqueio-leads'))     return 'bloqueio-leads'
   if (pathname.startsWith('/relatorios'))         return 'relatorios'
   return 'funil-vendas'
 }
@@ -244,6 +246,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     else if (key === 'gp-setembro') navigate('/gp-setembro')
     else if (key === 'metas') navigate('/metas')
     else if (key === 'distribuicao-leads') navigate('/distribuicao-leads')
+    else if (key === 'bloqueio-leads') navigate('/bloqueio-leads')
     else if (key === 'relatorios') navigate('/relatorios')
     else {
       setActiveBrand(key)

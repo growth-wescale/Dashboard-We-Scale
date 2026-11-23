@@ -2,16 +2,18 @@
 // Único caminho de ESCRITA da lista de bloqueio de leads (aba Bloqueio de Leads). Mesmo molde de
 // gravar-distribuicao: valida a sessão do usuário no Supabase de Marketing (onde vive o login) e
 // exige a permissão `aba.bloqueio-leads` via tem_permissao — quem vê a aba pode bloquear e
-// desbloquear. A regra fica no banco (distribuicao_bloqueio_salvar); o autor é o e-mail do login.
+// desbloquear. Também confere minhas_permissoes(): conta ativa e sem limite de marca (mesma regra
+// de pode() no front). A regra fica no banco (distribuicao_bloqueio_salvar); o autor é o e-mail do login.
 // Spec: docs/superpowers/specs/2026-11-23-bloqueio-de-leads-design.md
 //
-// POST { email, marcas: string[], motivo }  (Authorization: Bearer <access_token do Marketing>)
+// POST { email, marcas: string[], marcas_antes: string[], motivo }  (Authorization: Bearer <access_token do Marketing>)
 //   marcas = todas as marcas em que o e-mail fica bloqueado; [] = desbloquear.
+//   marcas_antes = o que a tela mostrava; se o bloqueio mudou nesse meio-tempo, o banco recusa.
 //   → 200 { ok, email, acao: 'bloqueio' | 'alteracao' | 'desbloqueio', marcas, log_id }
 //   → 400 { error } (validação do banco: e-mail inválido, marca desconhecida, motivo, nada mudou)
 // Publicada com verify_jwt desligado: o token é do Marketing, não deste projeto.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { lerEntrada } from './entrada.ts'
+import { acessoPermiteBloquear, lerEntrada } from './entrada.ts'
 
 const PERMISSAO = 'aba.bloqueio-leads'
 
@@ -42,8 +44,16 @@ async function validarSessao(
     headers: { Authorization: `Bearer ${token}`, apikey: marketingAnonKey as string, 'Content-Type': 'application/json' },
     body: JSON.stringify({ chave: PERMISSAO }),
   })
-  const pode = perm.ok && (await perm.json().catch(() => false)) === true
-  return { ok: true, email: user.email, pode }
+  const temPermissao = perm.ok && (await perm.json().catch(() => false)) === true
+
+  const minhas = await fetch(`${marketingUrl}/rest/v1/rpc/minhas_permissoes`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, apikey: marketingAnonKey as string, 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  // Falha ao conferir = sem acesso.
+  const semLimite = minhas.ok && acessoPermiteBloquear(await minhas.json().catch(() => null))
+  return { ok: true, email: user.email, pode: temPermissao && semLimite }
 }
 
 Deno.serve(async (req) => {
@@ -64,8 +74,9 @@ Deno.serve(async (req) => {
   if (!entrada.ok) return respond({ error: entrada.erro }, 400)
 
   const { data, error } = await admin.rpc('distribuicao_bloqueio_salvar', {
-    p_email: entrada.email, p_marcas: entrada.marcas, p_motivo: entrada.motivo, p_autor: email,
+    p_email: entrada.email, p_marcas: entrada.marcas, p_motivo: entrada.motivo, p_autor: email, p_marcas_antes: entrada.marcasAntes,
   })
-  if (error) return respond({ error: error.message }, 400)
+  // 409 quando o bloqueio mudou desde que a tela abriu (errcode 40001): a tela recarrega a lista.
+  if (error) return respond({ error: error.message }, error.code === '40001' ? 409 : 400)
   return respond({ ok: true, ...(data as Record<string, unknown>) }, 200)
 })

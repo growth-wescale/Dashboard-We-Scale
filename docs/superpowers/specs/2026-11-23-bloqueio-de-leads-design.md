@@ -43,18 +43,21 @@ perdido antes; em 13 o último motivo foi "Fora do perfil" ou "Dados inválidos"
   com marcas antes/depois, motivo, autor (e-mail do login) e horário.
 - Marca = `distribuicao_regra.marca` (nome interno; a tela mostra `marca_rd`, ex. Odonto Scale →
   Odonto Legacy).
-- `distribuicao_bloqueio_salvar(email, marcas, motivo, autor)`: única escrita; valida e-mail, marcas
-  conhecidas e motivo (obrigatório em toda ação); recusa "nada mudou". Só `service_role`.
+- `distribuicao_bloqueio_salvar(email, marcas, motivo, autor, marcas_antes)`: única escrita; valida
+  e-mail, marcas conhecidas e motivo (obrigatório em toda ação); recusa "nada mudou" e recusa (409) se
+  o bloqueio mudou desde que a tela abriu (`marcas_antes` ≠ atual). Só `service_role`.
 - `distribuicao_bloqueio_vigente(email, marca)`: usada por `distribuicao_processar`.
-- Leitura pela tela: `vw_distribuicao_bloqueios`, `vw_distribuicao_bloqueio_log`,
-  `vw_distribuicao_lead_negocios` (negócios do e-mail no RD CRM, de `deal_contatos` +
-  `deal_snapshot`) e a `vw_distribuicao_atribuicoes` que já existe (conversões desde 16/10).
+- Leitura pela tela: `vw_distribuicao_bloqueios`, `vw_distribuicao_bloqueio_log`, a RPC
+  `distribuicao_lead_negocios(email)` (negócios do e-mail no RD CRM, de `deal_contatos` +
+  `deal_snapshot`; RPC para a chave anon não baixar todos os contatos) e a
+  `vw_distribuicao_atribuicoes` que já existe (conversões desde 16/10).
 
 ## Escrita autenticada
 
 Edge Function `gravar-bloqueio-lead` (Expansão, `verify_jwt` desligado como `gravar-distribuicao`):
-valida a sessão no Supabase de Marketing e exige `tem_permissao('aba.bloqueio-leads')` antes de
-chamar a RPC. Quem vê a aba pode bloquear e desbloquear.
+valida a sessão no Supabase de Marketing, exige `tem_permissao('aba.bloqueio-leads')` e conta sem
+limite de marca (`minhas_permissoes()`, mesma regra do front) antes de chamar a RPC. Quem vê a aba
+pode bloquear e desbloquear.
 
 ## Tela
 

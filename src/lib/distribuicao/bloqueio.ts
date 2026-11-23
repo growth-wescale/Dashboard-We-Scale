@@ -1,5 +1,5 @@
 // Lógica pura da aba Bloqueio de Leads: tipos iguais às views do Supabase de Expansão
-// (vw_distribuicao_bloqueios, vw_distribuicao_bloqueio_log, vw_distribuicao_lead_negocios) e as
+// (vw_distribuicao_bloqueios, vw_distribuicao_bloqueio_log, RPC distribuicao_lead_negocios) e as
 // funções de texto/filtro/linha do tempo que a tela usa. Sem rede, sem React.
 // Spec: docs/superpowers/specs/2026-11-23-bloqueio-de-leads-design.md
 
@@ -41,7 +41,7 @@ export interface BloqueioLogRow {
   em: string
 }
 
-/** Linha de vw_distribuicao_lead_negocios: negócio do e-mail no RD CRM (espelho). `marca` é o valor do RD. */
+/** Linha da RPC distribuicao_lead_negocios: negócio do e-mail no RD CRM (espelho). `marca` é o valor do RD. */
 export interface NegocioLeadRow {
   email: string
   id_deal: string

@@ -261,11 +261,14 @@ sem filtro; formato legado `leads[]`, identificador em
   (nome interno da regra; a tela mostra `marca_rd`). Estado em `distribuicao_bloqueio` (marcas vazio =
   desbloqueado, nunca apagado), histórico append-only em `distribuicao_bloqueio_log` (trigger barra
   UPDATE/DELETE/TRUNCATE). Escrita só por `distribuicao_bloqueio_salvar` via Edge Function
-  `gravar-bloqueio-lead` (sessão do Marketing + `tem_permissao('aba.bloqueio-leads')`; motivo
-  obrigatório; autor = e-mail do login). Leitura: `vw_distribuicao_bloqueios`,
-  `vw_distribuicao_bloqueio_log`, `vw_distribuicao_lead_negocios`. O RD Marketing continua
-  registrando a conversão e mandando e-mail (para isso, desativar o lead lá). SQL e testes em
-  pg_temp: `docs/sql/2026-11-23-bloqueio-de-leads.sql`; spec
+  `gravar-bloqueio-lead` (sessão do Marketing + `tem_permissao('aba.bloqueio-leads')` + conta sem
+  limite de marca em `minhas_permissoes()`; motivo obrigatório; autor = e-mail do login). A RPC
+  recebe as marcas que a tela mostrava (`p_marcas_antes`) e recusa com 409 se o bloqueio mudou
+  nesse meio-tempo. Leitura: `vw_distribuicao_bloqueios`, `vw_distribuicao_bloqueio_log` e a RPC
+  `distribuicao_lead_negocios(email)` (RPC, não view: a anon não pode baixar todos os contatos do
+  CRM). O RD Marketing continua registrando a conversão e mandando e-mail (para isso, desativar o
+  lead lá). SQL e testes em pg_temp: `docs/sql/2026-11-23-bloqueio-de-leads.sql` e
+  `docs/sql/2026-11-23-bloqueio-de-leads-ajustes.sql`; spec
   `docs/superpowers/specs/2026-11-23-bloqueio-de-leads-design.md`.
 
 ### Histórico da configuração das cadências (desde 27/10/2026)
@@ -1020,6 +1023,15 @@ acesso, começando só com o Administrador. Regras na seção 3 ("Bloqueio de Le
 temporárias e cópia da função): 18 casos, inclusive bloqueado só numa marca, e-mail com maiúscula,
 desbloquear e converter em menos de 10 min, rebloqueio e log imutável. Depois de aplicar, as 3
 conversões reais seguintes passaram normalmente (atribuída, duplicada e barrada).
+
+**Revisão independente** antes do merge: (1) a `vw_distribuicao_lead_negocios` deixava a chave anon
+baixar todos os contatos do CRM; virou a RPC `distribuicao_lead_negocios(email)`; (2) duas pessoas
+salvando o mesmo e-mail com a tela desatualizada desfaziam a mudança uma da outra; a RPC agora confere
+as marcas que a tela mostrava; (3) a Edge Function passou a recusar conta limitada a marcas, como o
+front; (4) resposta atrasada da recarga e painel "onde apareceu" com dado de outro e-mail. Achado
+descartado: "motivo de perda vazio para a anon" (conferido com `set role anon`, vem preenchido). O
+conector recusou `DROP`: a view antiga e a versão de 4 parâmetros da RPC ficaram sem permissão para
+ninguém além do dono; apagar de vez é opcional (comandos no SQL de ajustes).
 
 **Tela** (`/bloqueio-leads`, menu Vendas): botão Bloquear e-mail (mostra onde o e-mail já apareceu,
 por marca), lista com marcas, desde quando, última alteração, tentativas barradas e negócios no RD,

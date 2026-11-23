@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabaseVendas } from '@/lib/supabaseVendas'
 import { marcasDoBloqueio, type BloqueioLogRow, type BloqueioRow, type MarcaBloqueio } from '@/lib/distribuicao/bloqueio'
 
@@ -39,8 +39,13 @@ export function useBloqueios() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Só a resposta da consulta mais recente entra: a recarga de 60 s não pode chegar depois da
+  // recarga feita após salvar e voltar a mostrar o estado antigo.
+  const seq = useRef(0)
   const refetch = useCallback(async () => {
+    const minha = ++seq.current
     const r = await buscar()
+    if (minha !== seq.current) return
     setError(r.error)
     if (!r.error) setDados(r.dados)
     setLoading(false)

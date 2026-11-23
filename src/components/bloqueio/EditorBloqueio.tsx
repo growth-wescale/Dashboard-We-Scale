@@ -58,6 +58,9 @@ export function EditorBloqueio({ modo, emailInicial, marcas, existentes, onSalva
     return () => clearTimeout(t)
   }, [email])
   const hist = useHistoricoLead(emailConsulta)
+  // Enquanto a consulta não é do e-mail que está no campo (espera da digitação ou carregando),
+  // não mostra nem usa o resultado: podia ser de outro lead.
+  const consultando = hist.loading || hist.email !== (emailValido(email) ? normalizarEmail(email) : null)
 
   const rotulo = useMemo(() => {
     const m = new Map(marcas.map(x => [x.marca, x.rotulo]))
@@ -81,7 +84,7 @@ export function EditorBloqueio({ modo, emailInicial, marcas, existentes, onSalva
     if (!pode) return
     setSalvando(true)
     setErro(null)
-    const e = await onSalvar({ email: normal, marcas: selecionadas, motivo: motivo.trim() })
+    const e = await onSalvar({ email: normal, marcas: selecionadas, marcasAntes: antes, motivo: motivo.trim() })
     setSalvando(false)
     if (e) setErro(e)
   }
@@ -111,7 +114,8 @@ export function EditorBloqueio({ modo, emailInicial, marcas, existentes, onSalva
 
         {valido && (
           <div style={{ background: 'var(--ws-bg)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 12, color: 'var(--ws-text-secondary)' }}>
-            {hist.loading ? 'Procurando este e-mail…'
+            {consultando ? 'Procurando este e-mail…'
+              : hist.error ? <span style={{ color: 'var(--status-risco)' }}>Não deu para consultar onde este e-mail apareceu: {hist.error}</span>
               : apareceu.length === 0 ? 'Nenhuma conversão (desde 16/10) nem negócio no RD com este e-mail.'
               : (
                 <>

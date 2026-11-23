@@ -29,7 +29,8 @@ export function useHistoricoLead(email: string | null) {
       supabaseVendas.from('vw_distribuicao_atribuicoes')
         .select('id, recebido_em, marca, resultado, motivo, nome_sdr, id_deal, lead_nome')
         .eq('lead_email', alvo).order('recebido_em', { ascending: false }).order('id', { ascending: false }).limit(500),
-      supabaseVendas.from('vw_distribuicao_lead_negocios').select('*').eq('email', alvo).order('id_deal').limit(200),
+      // RPC (não view): só responde a quem já sabe o e-mail; a chave anon não baixa a lista de contatos.
+      supabaseVendas.rpc('distribuicao_lead_negocios', { p_email: alvo }),
       supabaseVendas.from('vw_distribuicao_bloqueio_log').select('*').eq('email', alvo).order('em', { ascending: false }).order('id', { ascending: false }),
     ])
     if (ativo.current !== alvo) return // resposta de um e-mail anterior

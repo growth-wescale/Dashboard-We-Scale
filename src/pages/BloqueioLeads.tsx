@@ -41,7 +41,11 @@ export function BloqueioLeads() {
 
   async function salvar(input: SalvarBloqueioInput): Promise<string | null> {
     const r = await salvarBloqueio(input)
-    if (!r.ok) return r.error ?? 'não foi possível salvar'
+    if (!r.ok) {
+      // Bloqueio mudou desde que a tela abriu: recarrega a lista e o formulário passa a mostrar o atual.
+      if (r.conflito) await d.refetch()
+      return r.error ?? 'não foi possível salvar'
+    }
     const texto = r.acao === 'desbloqueio' ? `${input.email} desbloqueado.`
       : r.acao === 'alteracao' ? `Marcas de ${input.email} atualizadas: ${textoMarcas(input.marcas, todas, rotulo)}.`
       : `${input.email} bloqueado em ${textoMarcas(input.marcas, todas, rotulo)}.`
@@ -102,8 +106,14 @@ export function BloqueioLeads() {
                       : <span style={pill('var(--ws-bg)', 'var(--ws-text-secondary)')}>Desbloqueado</span>}
                   </td>
                   <td style={td}>
-                    <div>{fmtData(b.bloqueado_desde)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>{b.bloqueado_por ?? ''}</div>
+                    {b.bloqueado ? (
+                      <>
+                        <div>{fmtData(b.bloqueado_desde)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>{b.bloqueado_por ?? ''}</div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)' }}>—<div style={{ fontSize: 11 }}>último bloqueio {fmtData(b.bloqueado_desde)}</div></div>
+                    )}
                   </td>
                   <td style={{ ...td, whiteSpace: 'normal', minWidth: 200 }}>
                     <div>{fmtDataHoraAno(b.atualizado_em)} <span style={{ fontSize: 11, color: 'var(--ws-text-secondary)' }}>· {b.atualizado_por}</span></div>

@@ -1,4 +1,5 @@
 import { InscricoesLivesLegacy } from './InscricoesLivesLegacy'
+import { PresencasLivesLegacy } from './PresencasLivesLegacy'
 import './ComunidadeLegacyPanel.css'
 import { SERIE_LIVES_LEGACY, type ComunidadeLegacy } from '@/constants/comunidadeLegacy'
 
@@ -63,7 +64,7 @@ export function ComunidadeLegacyPanel({ data, accent, inicio, fim }: Props) {
         ))}
       </div>}
 
-      {exibirLives ? <InscricoesLivesLegacy inicio={inicio} fim={fim}/> : <>
+      {fim >= '2026-11-01' ? <PresencasLivesLegacy inicio={inicio} fim={fim}/> : exibirLives ? <InscricoesLivesLegacy inicio={inicio} fim={fim}/> : <>
       <div style={{ fontSize: 12, fontWeight: 600, color: PURPLE, marginTop: 4 }}>
         Qualidade · dentista × clínica
       </div>

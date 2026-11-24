@@ -3,7 +3,9 @@
 -- "em N reuniões · M de LIVE" ao lado do Diagnóstico (Visão Macro e
 -- Performance). Supabase de EXPANSÃO (cygxmduuwlwfbodfrlkr).
 --
--- Aplicado pela migration `vw_reuniao_live` em 24/11/2026.
+-- Aplicado pela migration `vw_reuniao_live` em 24/11/2026; ajuste da R1 de
+-- negócio LIVE pela migration `vw_reuniao_live_prefere_gravacao_em_grupo`
+-- (mesmo dia).
 -- Design: docs/superpowers/specs/2026-11-24-reunioes-live-design.md
 --
 -- O PROBLEMA
@@ -19,6 +21,13 @@
 -- (`deal_contatos`) está nos convidados (`attendees`), entre 14 dias antes do
 -- Diagnóstico e o Diagnóstico. A primeira, e não a última: com a última, um
 -- negócio movido para Diagnóstico depois da R2 caía na R2.
+--
+-- Exceção para negócio marcado LIVE: vale primeiro a gravação EM GRUPO
+-- (convidados de 2+ negócios, `convidados_com_negocio`), e só sem ela a
+-- primeira. Caso de origem (24/11): Rodrigo Cordova teve R1 individual com o
+-- Douglas em 16/11 (ficou sem Diagnóstico), foi para a LIVE de 24/11 e virou
+-- Diagnóstico depois dela; pela regra da primeira, a R1 individual do Douglas
+-- aparecia como LIVE. Só esse negócio mudou.
 --
 -- Uma gravação é SESSÃO DE LIVE quando é a R1 de pelo menos um negócio com
 -- `tipo_r1 = 'LIVE'`. Treinamento, live de marketing ou LIVE de R2 não somam
@@ -43,7 +52,11 @@ create or replace view public.vw_reuniao_live as
 -- e é caro) são calculadas UMA vez e só desde 15/10. Sem isso o Postgres embutia a
 -- view dentro do LATERAL e refazia por Diagnóstico (427 ms contra 122 ms em 24/11).
 with gravacoes as materialized (
-  select cr.call_id, cr.call_timestamp, cr.closer, r.attendees, r.title, r.url
+  select cr.call_id, cr.call_timestamp, cr.closer, r.attendees, r.title, r.url,
+         -- convidados (pessoas distintas) que são contato de algum negócio
+         (select count(distinct lower(btrim(a)))
+            from unnest(r.attendees) a
+           where exists (select 1 from deal_contatos dc where lower(dc.email) = lower(btrim(a)))) as convidados_com_negocio
   from vw_closer_reunioes cr
   join "DB_Reunioes_MeetRox" r on r.id = cr.call_id
   where cr.call_timestamp >= timestamptz '2026-10-15 00:00-03'
@@ -67,7 +80,7 @@ r1 as (
         from unnest(g.attendees) a
         join deal_contatos dc on lower(dc.email) = lower(btrim(a)) and dc.id_deal = d.id_lead
       )
-    order by g.call_timestamp, g.call_id
+    order by (d.tipo_r1 = 'LIVE' and g.convidados_com_negocio >= 2) desc, g.call_timestamp, g.call_id
     limit 1
   ) g on true
 ),
@@ -99,5 +112,5 @@ comment on view public.vw_reuniao_live is
 
 grant select on public.vw_reuniao_live to anon, authenticated;
 
--- Conferência (24/11/2026: 45 / 39 / 8)
+-- Conferência (24/11/2026, depois do ajuste: 45 / 40 / 8)
 -- select count(*), count(call_id), count(distinct call_id) from vw_reuniao_live where tipo_r1 = 'LIVE';

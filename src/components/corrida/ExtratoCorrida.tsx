@@ -19,6 +19,9 @@ import {
 } from '@/lib/corridaExtrato'
 import { LinkLinhaDoTempo } from '@/components/ui/dealDrawerShared'
 import { FotoPessoa } from '@/components/ui/FotoPessoa'
+import { GravacoesBotoes } from '@/components/ui/GravacoesDeal'
+import { useGravacoesDeal } from '@/hooks/useGravacoesDeal'
+import type { GravacaoDeal } from '@/lib/gravacoesDeal'
 
 /**
  * Extrato de pontos da Corrida de Performance (Campanha de Metas): cada RR
@@ -222,7 +225,11 @@ const th: React.CSSProperties = {
 }
 const td: React.CSSProperties = { padding: '10px 12px', verticalAlign: 'top', fontSize: 12.5 }
 
-function NegocioCelula({ idLead, negociacao, marca }: { idLead: string; negociacao: string | null; marca: string | null }) {
+function NegocioCelula({ idLead, negociacao, marca, gravacoes }: {
+  idLead: string; negociacao: string | null; marca: string | null
+  gravacoes: { porDeal: Map<string, GravacaoDeal[]>; pronto: boolean }
+}) {
+  const doNegocio = gravacoes.porDeal.get(idLead)
   return (
     <td style={{ ...td, overflowWrap: 'anywhere' }}>
       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', rowGap: 2 }}>
@@ -232,6 +239,9 @@ function NegocioCelula({ idLead, negociacao, marca }: { idLead: string; negociac
         </a>
         <LinkLinhaDoTempo idDeal={idLead} cor={ACCENT} />
       </div>
+      {gravacoes.pronto && !!doNegocio?.length && (
+        <div style={{ marginTop: 4 }}><GravacoesBotoes gravacoes={doNegocio} pronto accent={ACCENT} /></div>
+      )}
       <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', marginTop: 2 }}>{marcaLabel(marca) || 'sem marca'}</div>
     </td>
   )
@@ -254,6 +264,7 @@ function SecaoPessoa({ trilha, linha, lancamentos, visual }: {
   lancamentos: Lancamento[]
   visual?: { iniciais: string; cor: string }
 }) {
+  const gravacoes = useGravacoesDeal()
   return (
     <section className="rs-drawer-sec" style={{ padding: '18px 24px', borderBottom: '1px solid var(--ws-border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -310,7 +321,7 @@ function SecaoPessoa({ trilha, linha, lancamentos, visual }: {
                 return (
                   <tr key={`${l.idLead}::${l.ciclo}::${i}`} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)' }}>
                     <td style={{ ...td, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{diaCurto(l.data)}</td>
-                    <NegocioCelula idLead={l.idLead} negociacao={l.negociacao} marca={l.marca} />
+                    <NegocioCelula idLead={l.idLead} negociacao={l.negociacao} marca={l.marca} gravacoes={gravacoes} />
                     <FatorCelula fator={fatorFonte(l)} />
                     <FatorCelula fator={fatorBonus(l)} />
                     <FatorCelula fator={fatorTicket(l)} />
@@ -336,6 +347,7 @@ function SecaoFora({ trilha, fora, mes, cadastro }: {
   mes: string
   cadastro: readonly PessoaCadastro[]
 }) {
+  const gravacoes = useGravacoesDeal()
   return (
     <section className="rs-drawer-sec" style={{ padding: '18px 24px', borderBottom: '1px solid var(--ws-border)', background: '#FFFBEB' }}>
       <div style={{ fontSize: 15, fontWeight: 600, color: '#92400E' }}>Não pontuou</div>
@@ -364,7 +376,7 @@ function SecaoFora({ trilha, fora, mes, cadastro }: {
               {fora.map((f, i) => (
                 <tr key={`${f.idLead}::${f.ciclo}::${i}`} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--ws-border)' }}>
                   <td style={{ ...td, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{diaCurto(f.data)}</td>
-                  <NegocioCelula idLead={f.idLead} negociacao={f.negociacao} marca={f.marca} />
+                  <NegocioCelula idLead={f.idLead} negociacao={f.negociacao} marca={f.marca} gravacoes={gravacoes} />
                   <td style={{ ...td, whiteSpace: 'nowrap' }}>{f.nome ?? '(vazio)'}</td>
                   {trilha === 'closer' && <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>{f.unidades}</td>}
                   <td style={{ ...td, minWidth: 280, lineHeight: 1.45 }}>{motivoForaCorrida(trilha, f.nome, mes, cadastro)}</td>

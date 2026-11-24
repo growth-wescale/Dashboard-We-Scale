@@ -12,6 +12,22 @@ import { nf } from '@/lib/format'
 import { marcaLabel } from '@/constants/brands'
 import type { DiagDeLiveForaDoRecorte, Reuniao, ResumoReunioes } from '@/lib/reunioesLive'
 import { LinkLinhaDoTempo, StatusBadge, cell, fmtData } from './dealDrawerShared'
+import { useGravacoesDeal } from '@/hooks/useGravacoesDeal'
+import { COL_GRAVACOES, type GravacaoDeal } from '@/lib/gravacoesDeal'
+import { GravacoesBotoes } from './GravacoesDeal'
+import { GraficosReunioes } from './GraficosReunioes'
+import { useGraficosReunioes } from './useGraficosReunioes'
+
+/** Gravações do MeetRox por negócio, carregadas uma vez pelo pop-up. */
+interface Gravacoes { porDeal: Map<string, GravacaoDeal[]>; pronto: boolean }
+
+function CelulaGrav({ idDeal, gravacoes, accent }: { idDeal: string; gravacoes: Gravacoes; accent: string }) {
+  return (
+    <td style={tdStyle}>
+      <GravacoesBotoes gravacoes={gravacoes.porDeal.get(idDeal)} pronto={gravacoes.pronto} accent={accent} />
+    </td>
+  )
+}
 
 const thStyle = {
   padding: '8px 14px', textAlign: 'left' as const, fontWeight: 600, fontSize: 11,
@@ -66,7 +82,7 @@ function Chip({ children, tom = 'neutro' }: { children: React.ReactNode; tom?: '
   )
 }
 
-function LiveItem({ r, accent }: { r: Reuniao; accent: string }) {
+function LiveItem({ r, accent, gravacoes }: { r: Reuniao; accent: string; gravacoes: Gravacoes }) {
   const [aberto, setAberto] = useState(false)
   const estimada = r.tipo === 'live-estimada'
   const convidados = r.live?.convidadosExternos ?? null
@@ -110,11 +126,12 @@ function LiveItem({ r, accent }: { r: Reuniao; accent: string }) {
           )}
           <div className="rs-scroll-x">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr>{['Negociação', 'SDR', 'Status', 'Diagnóstico'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+              <thead><tr>{['Negociação', COL_GRAVACOES, 'SDR', 'Status', 'Diagnóstico'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
               <tbody>
                 {r.negocios.map(n => (
                   <tr key={`${n.row.id_lead}::${n.row.ciclo}`} style={{ borderBottom: '1px solid var(--ws-border)' }}>
                     <td style={tdStyle}><Negociacao row={n.row} accent={accent} /></td>
+                    <CelulaGrav idDeal={n.row.id_lead} gravacoes={gravacoes} accent={accent} />
                     <td style={tdStyle}>{cell(n.row.nome_sdr)}</td>
                     <td style={tdStyle}><StatusBadge status={n.row.status_atual} /></td>
                     <td style={{ ...tdStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtData(n.dataDiagnostico)}</td>
@@ -135,6 +152,8 @@ function motivoTexto(d: DiagDeLiveForaDoRecorte): string {
     : `LIVE conduzida por ${cell(d.closerLive)}`
 }
 
+const SEM_REUNIOES: Reuniao[] = []
+
 export function ReunioesDrawer({ open, onClose, resumo, subtitle, accent }: {
   open: boolean
   onClose: () => void
@@ -142,9 +161,11 @@ export function ReunioesDrawer({ open, onClose, resumo, subtitle, accent }: {
   subtitle: string
   accent: string
 }) {
+  const g = useGraficosReunioes(resumo?.reunioes ?? SEM_REUNIOES, accent, open ? subtitle : '')
+  const gravacoes = useGravacoesDeal(open)
   if (!open || !resumo) return null
-  const lives = resumo.reunioes.filter(r => r.tipo !== 'individual')
-  const individuais = resumo.reunioes.filter(r => r.tipo === 'individual')
+  const lives = g.filtradas.filter(r => r.tipo !== 'individual')
+  const individuais = g.filtradas.filter(r => r.tipo === 'individual')
   const { total, deLive, diagnosticos } = resumo
 
   return (
@@ -153,7 +174,7 @@ export function ReunioesDrawer({ open, onClose, resumo, subtitle, accent }: {
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, backdropFilter: 'blur(2px)',
       }} />
       <div className="rs-drawer" style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(900px, 96vw)',
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(980px, 96vw)',
         background: 'var(--ws-surface)', borderLeft: '1px solid var(--ws-border)',
         boxShadow: '-8px 0 40px rgba(0,0,0,.18)', zIndex: 1001,
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -177,23 +198,27 @@ export function ReunioesDrawer({ open, onClose, resumo, subtitle, accent }: {
         </div>
 
         <div style={{ overflow: 'auto', flex: 1, paddingBottom: 24 }}>
+          <GraficosReunioes g={g} total={resumo.reunioes.length} />
+
           {lives.length > 0 && (
             <Secao titulo={`LIVEs · ${nf(lives.length)}`}
               nota="Cada LIVE conta como 1 reunião. Convidados vêm do convite no MeetRox (não é lista de presença). Comparecimento = todos os negócios da LIVE que viraram Diagnóstico ÷ convidados, sem filtro; o número de Diagnósticos é só do recorte.">
-              {lives.map(r => <LiveItem key={r.chave} r={r} accent={accent} />)}
+              {lives.map(r => <LiveItem key={r.chave} r={r} accent={accent} gravacoes={gravacoes} />)}
             </Secao>
           )}
 
-          {resumo.diagsDeLiveForaDoRecorte.length > 0 && (
+          {/* Explica a diferença entre os números do cabeçalho; não é lista de reuniões, então some com filtro. */}
+          {!g.temFiltro && resumo.diagsDeLiveForaDoRecorte.length > 0 && (
             <Secao titulo={`Diagnósticos de LIVE que não contam aqui · ${nf(resumo.diagsDeLiveForaDoRecorte.length)}`}
               nota="Estão no número de Diagnósticos, mas a LIVE deles conta em outro período ou para outro Closer.">
               <div className="rs-scroll-x">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead><tr>{['Negociação', 'SDR', 'Diagnóstico', 'Por quê'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+                  <thead><tr>{['Negociação', COL_GRAVACOES, 'SDR', 'Diagnóstico', 'Por quê'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
                   <tbody>
                     {resumo.diagsDeLiveForaDoRecorte.map((d, i) => (
                       <tr key={`${d.row.id_lead}::${d.row.ciclo}::${i}`} style={{ borderBottom: '1px solid var(--ws-border)' }}>
                         <td style={tdStyle}><Negociacao row={d.row} accent={accent} /></td>
+                        <CelulaGrav idDeal={d.row.id_lead} gravacoes={gravacoes} accent={accent} />
                         <td style={tdStyle}>{cell(d.row.nome_sdr)}</td>
                         <td style={{ ...tdStyle, fontVariantNumeric: 'tabular-nums' }}>{fmtData(d.dataDiagnostico)}</td>
                         <td style={{ ...tdStyle, color: 'var(--ws-text-secondary)' }}>{motivoTexto(d)}</td>
@@ -209,13 +234,14 @@ export function ReunioesDrawer({ open, onClose, resumo, subtitle, accent }: {
             <Secao titulo={`R1 individuais · ${nf(individuais.length)}`} nota="Cada Diagnóstico de R1 individual conta como 1 reunião.">
               <div className="rs-scroll-x">
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead><tr>{['Negociação', 'Marca', 'SDR', 'Closer', 'Status', 'Diagnóstico'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+                  <thead><tr>{['Negociação', COL_GRAVACOES, 'Marca', 'SDR', 'Closer', 'Status', 'Diagnóstico'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
                   <tbody>
                     {individuais.map(r => {
                       const n = r.negocios[0]
                       return (
                         <tr key={r.chave} style={{ borderBottom: '1px solid var(--ws-border)' }}>
                           <td style={tdStyle}><Negociacao row={n.row} accent={accent} /></td>
+                          <CelulaGrav idDeal={n.row.id_lead} gravacoes={gravacoes} accent={accent} />
                           <td style={tdStyle}>{cell(marcaLabel(n.row.marca))}</td>
                           <td style={tdStyle}>{cell(n.row.nome_sdr)}</td>
                           <td style={tdStyle}>{cell(n.row.nome_closer)}</td>

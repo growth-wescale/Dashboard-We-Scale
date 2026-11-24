@@ -7,6 +7,9 @@ import { marcaLabel } from '@/constants/brands'
 import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, breakdownPorCategoria, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 import { useGraficosMarcaPessoa } from './useGraficosMarcaPessoa'
+import { useGravacoesDeal } from '@/hooks/useGravacoesDeal'
+import { COL_GRAVACOES } from '@/lib/gravacoesDeal'
+import { CelulaGravacoes } from './GravacoesDeal'
 import { GraficosMarcaPessoa } from './GraficosMarcaPessoa'
 
 interface RepeatedDealsDrawerProps {
@@ -28,6 +31,7 @@ const responsavelDe = (g: RepeatedDealGroup) => stageOwnerRole(g.stage) === 'clo
 export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, accent, multiStage = false }: RepeatedDealsDrawerProps) {
   const g = useGraficosMarcaPessoa(groups, marcaDe, responsavelDe, accent, open ? `${title}|${subtitle}` : '')
   const ordenados = useMemo(() => [...g.filtrados].sort((a, b) => b.vezes - a.vezes), [g.filtrados])
+  const { porDeal: gravacoes, pronto: gravacoesProntas } = useGravacoesDeal(open)
   const papeis = new Set(groups.map(x => stageOwnerRole(x.stage)))
   const tituloPessoa = papeis.size === 1 ? (papeis.has('closer') ? 'Por Closer' : 'Por SDR') : 'Por Responsável'
 
@@ -85,7 +89,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
                 {[
-                  'Negociação', ...(multiStage ? ['Etapa'] : []), 'Vezes', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Última repetição',
+                  'Negociação', COL_GRAVACOES, ...(multiStage ? ['Etapa'] : []), 'Vezes', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Última repetição',
                 ].map(h => (
                   <th key={h} style={{
                     padding: '10px 16px', textAlign: ['Unidades', 'Taxa de Franquia', ...COLS_LEADTIME].includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
@@ -98,7 +102,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
             <tbody>
               {ordenados.length === 0 ? (
                 <tr>
-                  <td colSpan={multiStage ? 14 : 13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={multiStage ? 16 : 15} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal repetido no recorte selecionado.
                   </td>
                 </tr>
@@ -118,6 +122,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
                     <LinkLinhaDoTempo idDeal={g.row.id_lead} cor={accent} />
                     <LinkPontosCorrida row={g.row} cor={accent} />
                   </td>
+                  <CelulaGravacoes gravacoes={gravacoes.get(g.row.id_lead)} pronto={gravacoesProntas} accent={accent} />
                   {multiStage && (
                     <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{STAGE_LABEL[g.stage]}</td>
                   )}
@@ -140,7 +145,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
             {ordenados.length > 0 && (() => {
               const t = totaisDeals(ordenados.map(g => g.row))
               return (
-                <LinhaTotal deals={t.deals} colSpanRotulo={multiStage ? 2 : 1} celulas={[
+                <LinhaTotal deals={t.deals} colSpanRotulo={multiStage ? 3 : 2} celulas={[
                   { valor: nf(repeticoesFiltradas) },
                   { valor: null }, { valor: null }, { valor: null }, { valor: null }, { valor: null },
                   { valor: nf(t.unidades), direita: true },

@@ -111,7 +111,8 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
 | `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
-| `vw_reuniao_live` | 1 linha por negócio/ciclo de LIVE (R1 em grupo) com Diagnóstico desde 01/11/2026, ligado à gravação do MeetRox que foi a R1 dele: a **primeira** gravação de Closer com o e-mail do negócio nos convidados, até 14 dias antes do Diagnóstico. A gravação só é sessão de LIVE se for a R1 de ≥1 negócio com `tipo_r1 = 'LIVE'` (o título não decide). `call_id` nulo = sem gravação. Base da linha "em N reuniões · M de LIVE". Fora do `dash_*`. Ver `docs/sql/2026-11-24-reuniao-live.sql` |
+| `vw_reuniao_live` | 1 linha por negócio/ciclo de LIVE (R1 em grupo) com Diagnóstico desde 01/11/2026, ligado à gravação do MeetRox que foi a R1 dele: a **primeira** gravação de Closer com o e-mail do negócio nos convidados, até 14 dias antes do Diagnóstico. Para negócio marcado LIVE, a primeira gravação **em grupo** (convidados de 2+ negócios) vem antes. A gravação só é sessão de LIVE se for a R1 de ≥1 negócio com `tipo_r1 = 'LIVE'` (o título não decide). `call_id` nulo = sem gravação. Base da linha "em N reuniões · M de LIVE". Fora do `dash_*`. Ver `docs/sql/2026-11-24-reuniao-live.sql` |
+| `vw_deal_gravacoes` | 1 linha por (negócio, gravação do MeetRox): só reunião de venda (o conjunto de `vw_closer_reunioes`), ligada pelo vínculo do MeetRox (`coalesce(id_deal, crm_deal_id)`) ou pelo e-mail do negócio nos convidados; `eh_live` = sessão de LIVE em `vw_reuniao_live`. Base da coluna "Gravações" dos pop-ups de deal. Ver `docs/sql/2026-11-24-deal-gravacoes.sql` |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 | `vw_repasse_taxa` | 1 linha por versão × marca do **repasse da taxa de franquia** (% que fica com a We Scale; o resto vai pra marca). Tabelas `repasse_taxa_versao`/`repasse_taxa_marca`, imutáveis. Ver regra "Repasse da taxa de franquia" na seção 4 |
 
@@ -603,6 +604,11 @@ src/lib/reunioesLive.ts          reuniões (sessões) ao lado do Diagnóstico: L
 src/hooks/useReuniaoLive.ts      lê vw_reuniao_live (fora do dash_*; `pronto` = carregou sem erro)
 src/components/ui/ReunioesLinha.tsx   "em N reuniões · M de LIVE" (degrau Diagnóstico da Visão Macro, cards de Diagnóstico da Performance)
 src/components/ui/ReunioesDrawer.tsx  pop-up das reuniões: LIVEs com negócios e comparecimento, Diagnósticos de LIVE fora do recorte, R1 individuais
+src/lib/reunioesGraficos.ts      gráficos do pop-up de Reuniões (rosca Individual × LIVE, marca, Closer, SDR) e o filtro deles (puro, testado)
+src/components/ui/GraficosReunioes.tsx + useGraficosReunioes.ts  faixa de gráficos do pop-up de Reuniões
+src/lib/gravacoesDeal.ts          gravações do MeetRox por negócio: agrupa, rótulo e dica dos botões (puro, testado)
+src/hooks/useGravacoesDeal.ts     lê vw_deal_gravacoes (só com o pop-up aberto)
+src/components/ui/GravacoesDeal.tsx  botões "R1/LIVE/…" e a célula da coluna "Gravações" dos pop-ups de deal (menos Análise de Perda)
 
 src/lib/distribuicao/regras.ts  tipos das vw_distribuicao_* + textoBarreira/diffRegra/desvios (puro, testado)
 src/hooks/useDistribuicao.ts    lê vw_distribuicao_painel/_regras/_atribuicoes/_disponibilidade/_saude/_campos_vistos
@@ -1016,6 +1022,44 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-24 (3) — Pop-up de Reuniões com gráficos; gravação do MeetRox em todo pop-up de deal
+
+Pedido do Junior, olhando o pop-up de Reuniões em produção.
+
+**Gráficos no topo do pop-up de Reuniões:** rosca Individual × LIVE (quantidade e
+%; LIVE estimada conta como LIVE), Por Marca, Por Closer e Por SDR. A unidade é a
+reunião: uma LIVE conta 1, e 1 para cada marca ou SDR que tem negócio nela (as
+barras de marca e SDR podem somar mais que o total, igual à coluna REUNIÕES da
+tabela de SDR). Clicar filtra a lista, estilo Excel, como nos outros pop-ups; a
+seção "Diagnósticos de LIVE que não contam aqui" some com filtro. Regras em
+`reunioesGraficos.ts` (testado).
+
+**Coluna "Gravações" em todo pop-up de deal** (etapa do funil, cards da
+Performance, Receita/Fechamentos/Vendas por fonte, Repetidos, Reuniões e extrato
+da Corrida), menos a Análise de Perda, como pedido: um botão por gravação ("R1",
+"R2", "LIVE", "Gravação" sem tipo), da mais antiga para a mais nova, que abre o
+MeetRox. View nova `vw_deal_gravacoes` (seção 3): só reunião de venda (o conjunto
+de `vw_closer_reunioes`), ligada ao negócio pelo vínculo do MeetRox ou pelo e-mail
+nos convidados. ~1,4 mil linhas, 0,26 s; o pop-up só busca quando abre. Em
+novembro, 50 das 62 R1 individuais do Consolidado têm a gravação; as outras 12 não
+têm gravação ligada (nem vínculo do MeetRox, nem o e-mail do lead nos convidados).
+
+**R1 de negócio LIVE** (`vw_reuniao_live`): vale primeiro a gravação em grupo
+(convidados de 2+ negócios), e só sem ela a primeira gravação. Rodrigo Cordova
+teve R1 individual com o Douglas em 16/11 (sem Diagnóstico), foi para a LIVE de
+24/11 e virou Diagnóstico depois dela; a R1 do Douglas aparecia como LIVE. Só esse
+negócio mudou. No mesmo dia o Junior corrigiu no RD o negócio da Odonto Legacy
+marcado LIVE por engano (`6afdea548c44a80022673efc`). Novembro até 24/11: 72
+reuniões, 10 de LIVE (eram 73 e 12). Sobram 2 LIVEs estimadas (negócio LIVE sem
+gravação): 18/11 (3 negócios, provável LIVE de 17/11 gravada como "Cancelado: LIVE:
+ELETROVIAS", que o MeetRox ligou a só 1 deles) e 23/11 (2, provável LIVE de 19/11
+à noite com o Diagnóstico movido depois do feriado). Estimar pela última LIVE
+gravada do mesmo Closer ficou para decisão do Junior.
+
+Junto: chave repetida ("Marca" duas vezes com o repasse) no cabeçalho do pop-up
+de Receita. Verificado: build + 1.306 testes (11 novos) + oxlint, e visto com dado
+real numa cópia com rota sem login (removida).
 
 ### 2026-11-24 (2) — Reuniões (sessões) ao lado do Diagnóstico: LIVE conta 1
 

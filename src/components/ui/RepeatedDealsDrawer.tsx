@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import { ExternalLink, X } from 'lucide-react'
-import { dealKey, STAGE_LABEL, type RepeatedDealGroup } from '@/lib/metrics'
+import { dealKey, STAGE_LABEL, stageOwnerRole, type RepeatedDealGroup } from '@/lib/metrics'
 import { nf, money } from '@/lib/format'
 import { rdDealUrl } from '@/lib/rd'
 import { marcaLabel } from '@/constants/brands'
 import { BarList, CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, StatusBadge, cell, fmtData, breakdownPorCategoria, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
+import { useGraficosMarcaPessoa } from './useGraficosMarcaPessoa'
+import { GraficosMarcaPessoa } from './GraficosMarcaPessoa'
 
 interface RepeatedDealsDrawerProps {
   open: boolean
@@ -18,15 +20,24 @@ interface RepeatedDealsDrawerProps {
   multiStage?: boolean
 }
 
+const marcaDe = (g: RepeatedDealGroup) => g.row.marca
+// Pessoa = dono da etapa repetida: SDR até a Reunião Agendada SQL, Closer do
+// Diagnóstico em diante (mesma regra do pop-up da etapa).
+const responsavelDe = (g: RepeatedDealGroup) => stageOwnerRole(g.stage) === 'closer' ? g.row.nome_closer : g.row.nome_sdr
+
 export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, accent, multiStage = false }: RepeatedDealsDrawerProps) {
-  const ordenados = useMemo(() => [...groups].sort((a, b) => b.vezes - a.vezes), [groups])
+  const g = useGraficosMarcaPessoa(groups, marcaDe, responsavelDe, accent, open ? `${title}|${subtitle}` : '')
+  const ordenados = useMemo(() => [...g.filtrados].sort((a, b) => b.vezes - a.vezes), [g.filtrados])
+  const papeis = new Set(groups.map(x => stageOwnerRole(x.stage)))
+  const tituloPessoa = papeis.size === 1 ? (papeis.has('closer') ? 'Por Closer' : 'Por SDR') : 'Por Responsável'
 
   const porEtapa = useMemo(
-    () => multiStage ? breakdownPorCategoria(groups, g => STAGE_LABEL[g.stage], () => accent) : [],
-    [groups, multiStage, accent],
+    () => multiStage ? breakdownPorCategoria(g.filtrados, x => STAGE_LABEL[x.stage], () => accent) : [],
+    [g.filtrados, multiStage, accent],
   )
 
-  const totalRepeticoes = useMemo(() => groups.reduce((s, g) => s + g.vezes, 0), [groups])
+  const totalRepeticoes = useMemo(() => groups.reduce((s, x) => s + x.vezes, 0), [groups])
+  const repeticoesFiltradas = useMemo(() => ordenados.reduce((s, x) => s + x.vezes, 0), [ordenados])
 
   if (!open) return null
 
@@ -65,13 +76,8 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
           </button>
         </div>
 
-        {multiStage && (
-          <div className="rs-drawer-sec" style={{
-            padding: '18px 24px', borderBottom: '1px solid var(--ws-border)', flexShrink: 0,
-          }}>
-            <BarList title="Por Etapa" rows={porEtapa} />
-          </div>
-        )}
+        <GraficosMarcaPessoa g={g} tituloPessoa={tituloPessoa} total={groups.length}
+          extra={multiStage ? <BarList title="Por Etapa" rows={porEtapa} /> : undefined} />
 
         {/* tabela */}
         <div style={{ overflow: 'auto', flex: 1 }}>
@@ -135,7 +141,7 @@ export function RepeatedDealsDrawer({ open, onClose, title, subtitle, groups, ac
               const t = totaisDeals(ordenados.map(g => g.row))
               return (
                 <LinhaTotal deals={t.deals} colSpanRotulo={multiStage ? 2 : 1} celulas={[
-                  { valor: nf(totalRepeticoes) },
+                  { valor: nf(repeticoesFiltradas) },
                   { valor: null }, { valor: null }, { valor: null }, { valor: null }, { valor: null },
                   { valor: nf(t.unidades), direita: true },
                   { valor: money(t.taxa), direita: true },

@@ -1004,6 +1004,29 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 
 ## 9. Histórico de mudanças
 
+### 2026-11-24 — Gráficos Por Marca e Por pessoa em todos os pop-ups de deals
+
+Pedido do Junior: todo pop-up de deals tem que ter os dois gráficos do topo
+(marca e pessoa), como o pop-up da etapa do funil. Faltavam em três:
+**Análise de Perda** (`PerdaDealsDrawer`, pessoa = "Por Responsável", quem
+estava com o negócio na etapa em que ele foi perdido, a mesma coluna da
+tabela), **Receita/Fechamentos/Vendas por fonte** (`SimpleDealsDrawer`, "Por
+Closer") e **Repetidos** (`RepeatedDealsDrawer`, dono da etapa repetida: "Por
+SDR" ou "Por Closer", "Por Responsável" quando o pop-up mistura etapas; o "Por
+Etapa" continua ao lado).
+
+Mesmo comportamento do `StageDealsPanel`: clicar numa barra filtra a tabela
+(clicar de novo tira, "Limpar filtro" zera), cada gráfico segue o filtro do
+outro, e quem saiu do time vira a barra "Ex-integrantes". A linha Total soma só
+o que está filtrado; o cabeçalho segue com o total do recorte. Reabrir o pop-up
+com outra lista zera o filtro. Código compartilhado:
+`useGraficosMarcaPessoa.ts` (filtro puro testado + hook) e
+`GraficosMarcaPessoa.tsx`. Fora do escopo: pop-up de reuniões do MeetRox
+(lista reuniões, não deals) e o extrato da Corrida.
+
+Verificado: build + 1.277 testes (4 novos) e visto renderizado com dado
+sintético numa página temporária (removida antes do commit).
+
 ### 2026-11-23 (2) — Acessos: pessoas por tipo, ação "Bloquear leads" e "Visualizador"
 
 Pedido do Junior depois de validar o Bloqueio de Leads em produção.

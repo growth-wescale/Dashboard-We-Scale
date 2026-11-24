@@ -21,7 +21,7 @@ import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
 import { useReuniaoLive } from '@/hooks/useReuniaoLive'
-import { resumirReunioes } from '@/lib/reunioesLive'
+import { mostrarReunioes, resumirReunioes } from '@/lib/reunioesLive'
 import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
 import { useRepasseTaxas } from '@/hooks/useRepasseTaxas'
@@ -945,7 +945,9 @@ export function FunilVendas() {
                     onStageClick={key => setClickedStage(key as StageKey)}
                     repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
                     noShow={noShow} noShowRepeated={noShowRepeated}
-                    rodapeEtapa={{ 'Diagnóstico': <ReunioesLinha resumo={resumoReunioes} pronto={livesProntas} onClick={() => setReunioesAberto(true)} /> }} />}
+                    rodapeEtapa={mostrarReunioes(resumoReunioes, livesProntas)
+                      ? { 'Diagnóstico': <ReunioesLinha resumo={resumoReunioes} pronto={livesProntas} onClick={() => setReunioesAberto(true)} /> }
+                      : undefined} />}
           </div>
         </SCard>
 

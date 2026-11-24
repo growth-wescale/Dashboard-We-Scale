@@ -192,3 +192,38 @@ describe('mostrarReunioes', () => {
     expect(mostrarReunioes(null, true)).toBe(false)
   })
 })
+
+describe('achados da revisão', () => {
+  it('Tipo de R1 = Individual: negócios Individual convidados na LIVE viram R1 individuais', () => {
+    const rows = ['a', 'b'].map(id => r({ id_lead: id, tipo_r1: 'Individual', nome_closer: 'Jéssica' }))
+    const lives = ['a', 'b'].map(id => ({ ...gravada(id, 1, '2026-11-09T22:00:00+00:00'), tipo_r1: 'Individual' }))
+    const res = resumir(rows, [ev('a', '2026-11-10'), ev('b', '2026-11-10')], lives)
+    expect(res.deLive).toBe(0)
+    expect(res.total).toBe(2)
+  })
+
+  it('piso: Diagnóstico antes de 01/11/2026 nunca entra em sessão de LIVE', () => {
+    const rows = [r({ id_lead: 'a', tipo_r1: 'LIVE', nome_closer: 'Jéssica' })]
+    const lives = [gravada('a', 1, '2026-11-09T22:00:00+00:00')]
+    const res = resumir(rows, [ev('a', '2026-10-20'), ev('a', '2026-11-10')], lives, out,
+      { ...DEFAULT_VIEW_MODES, eventSource: 'passages' })
+    expect(res.total).toBe(1)
+    expect(res.reunioes[0].tipo).toBe('individual')
+    expect(res.diagsDeLiveForaDoRecorte).toHaveLength(0)
+  })
+
+  it('comparecimento usa todos os negócios da LIVE, não só os do recorte', () => {
+    const rows = [
+      r({ id_lead: 'a', tipo_r1: 'LIVE', nome_sdr: 'Sarah Padilha', nome_closer: 'Jéssica' }),
+      r({ id_lead: 'b', tipo_r1: 'LIVE', nome_sdr: 'Cassiana Lavall', nome_closer: 'Jéssica' }),
+    ]
+    const lives = ['a', 'b'].map(id => gravada(id, 1, '2026-11-09T22:00:00+00:00'))
+    const soSarah = rows.filter(x => x.nome_sdr === 'Sarah Padilha')
+    const res = resumirReunioes({
+      eventos: [ev('a', '2026-11-10'), ev('b', '2026-11-10')], rows: soSarah, lives, win: nov,
+      modes: DEFAULT_VIEW_MODES, opts: { extra: noEscopoDoCiclo(soSarah) },
+    })
+    expect(res.reunioes[0].negocios).toHaveLength(1)
+    expect(res.reunioes[0].live?.diagnosticosTotal).toBe(2)
+  })
+})

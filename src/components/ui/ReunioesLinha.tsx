@@ -18,6 +18,8 @@ export function ReunioesLinha({ resumo, pronto, onClick }: {
     <button
       type="button"
       onClick={e => { e.stopPropagation(); onClick() }}
+      // O card em volta abre o pop-up dele com Enter/Espaço: a tecla não pode subir.
+      onKeyDown={e => e.stopPropagation()}
       title="Ver as reuniões — cada LIVE conta como uma reunião"
       style={{
         border: 'none', background: 'none', padding: 0, cursor: 'pointer',

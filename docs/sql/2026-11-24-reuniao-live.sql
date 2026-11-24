@@ -35,15 +35,18 @@
 -- Convidado não é presente: o MeetRox guarda a lista do convite.
 --
 -- Medido em 24/11/2026: 45 negócios LIVE com Diagnóstico em novembro, 39 em
--- 8 gravações (as 8 "LIVE: ELETROVIAS"), 6 sem gravação. ~0,2 s.
+-- 8 gravações (as 8 "LIVE: ELETROVIAS"), 6 sem gravação. ~0,12 s.
 -- ============================================================================
 
 create or replace view public.vw_reuniao_live as
-with gravacoes as (
-  select r.id as call_id, r.call_timestamp, r.attendees, r.title, r.url, cr.closer
-  from "DB_Reunioes_MeetRox" r
-  join vw_closer_reunioes cr on cr.call_id = r.id
-  where r.call_timestamp >= timestamptz '2026-10-15 00:00-03'
+-- `materialized`: as gravações (com o nome do Closer, que vem de vw_closer_reunioes
+-- e é caro) são calculadas UMA vez e só desde 15/10. Sem isso o Postgres embutia a
+-- view dentro do LATERAL e refazia por Diagnóstico (427 ms contra 122 ms em 24/11).
+with gravacoes as materialized (
+  select cr.call_id, cr.call_timestamp, cr.closer, r.attendees, r.title, r.url
+  from vw_closer_reunioes cr
+  join "DB_Reunioes_MeetRox" r on r.id = cr.call_id
+  where cr.call_timestamp >= timestamptz '2026-10-15 00:00-03'
 ),
 diag as (
   select v.id_lead, v.ciclo, v.tipo_r1, v.data_reuniao_realizada

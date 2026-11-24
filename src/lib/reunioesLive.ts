@@ -54,7 +54,11 @@ export interface Reuniao {
   /** `nome_sdr` distintos dos negócios ('' = sem SDR). */
   sdrs: string[]
   negocios: NegocioDaReuniao[]
-  live?: { callId: number; titulo: string | null; url: string | null; convidadosExternos: number | null }
+  live?: {
+    callId: number; titulo: string | null; url: string | null; convidadosExternos: number | null
+    /** Negócios da LIVE com Diagnóstico, sem nenhum filtro: base do comparecimento. */
+    diagnosticosTotal: number
+  }
 }
 
 /** Diagnóstico de LIVE no recorte cuja sessão não conta nele. */
@@ -108,16 +112,20 @@ export function resumirReunioes(args: {
   for (const l of lives) livePorChave.set(dealKey({ id_lead: l.id_deal, ciclo: l.ciclo }), l)
 
   const chaveDoEvento = (e: FunnelEventRow) => dealKey({ id_lead: e.id_deal, ciclo: e.ciclo })
-  const sessaoDoEvento = (e: FunnelEventRow) => {
+  /** Gravação de LIVE do evento — nunca antes do piso (a LIVE começou em nov/2026). */
+  const gravacaoDoEvento = (e: FunnelEventRow) => {
+    if ((toLocalDate(e.dia) ?? '') < PISO_LIVE) return null
     const l = livePorChave.get(chaveDoEvento(e))
     return l && l.call_id != null ? l : null
   }
+  const totalPorGravacao = new Map<number, number>()
+  for (const l of lives) if (l.call_id != null) totalPorGravacao.set(l.call_id, (totalPorGravacao.get(l.call_id) ?? 0) + 1)
 
   // ── Sessões de LIVE: membros vêm de todos os Diagnósticos do escopo, em
   //    qualquer data, pela regra de escopo SEM o filtro de Closer.
   const membros = new Map<number, { live: ReuniaoLiveRow; negocios: Map<string, NegocioDaReuniao> }>()
   for (const e of eventsInStage(eventos, 'Diagnóstico', JANELA_ABERTA, modes, args.optsSessao ?? opts)) {
-    const l = sessaoDoEvento(e)
+    const l = gravacaoDoEvento(e)
     const row = linhaPorChave.get(chaveDoEvento(e))
     if (!l || !row) continue
     const s = membros.get(l.call_id!) ?? { live: l, negocios: new Map() }
@@ -133,6 +141,17 @@ export function resumirReunioes(args: {
     return null
   }
 
+  // Só é sessão de LIVE se, no recorte, ≥1 negócio dela está marcado LIVE. Com
+  // "Tipo de R1 = Individual" não sobra nenhum, e os negócios Individual que
+  // estavam convidados voltam a contar como R1 individual.
+  for (const [callId, s] of membros) {
+    if (![...s.negocios.values()].some(n => n.row.tipo_r1 === 'LIVE')) membros.delete(callId)
+  }
+  const sessaoDoEvento = (e: FunnelEventRow) => {
+    const l = gravacaoDoEvento(e)
+    return l && membros.has(l.call_id!) ? l : null
+  }
+
   const reunioes: Reuniao[] = []
   for (const [callId, s] of membros) {
     if (motivoFora(s.live)) continue
@@ -140,7 +159,10 @@ export function resumirReunioes(args: {
     reunioes.push({
       chave: `live:${callId}`, tipo: 'live', data: s.live.call_timestamp ?? '', closer: s.live.closer,
       sdrs: distintos(negocios.map(n => n.row.nome_sdr ?? '')), negocios,
-      live: { callId, titulo: s.live.titulo, url: s.live.url, convidadosExternos: s.live.convidados_externos },
+      live: {
+        callId, titulo: s.live.titulo, url: s.live.url, convidadosExternos: s.live.convidados_externos,
+        diagnosticosTotal: totalPorGravacao.get(callId) ?? negocios.length,
+      },
     })
   }
 

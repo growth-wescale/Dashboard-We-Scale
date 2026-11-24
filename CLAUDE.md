@@ -1032,7 +1032,10 @@ período ou para outro Closer, e das R1 individuais. Design e decisões em
 (`deal_contatos`) nos convidados da gravação (`DB_Reunioes_MeetRox.attendees`). O
 título da gravação não decide: só conta gravação que foi a R1 de um negócio marcado
 LIVE, então treinamento, live de marketing ou LIVE de R2 não entram. Testado sem olhar
-o título: achou exatamente as 8 "LIVE: ELETROVIAS" de novembro. ~0,2 s.
+o título: achou exatamente as 8 "LIVE: ELETROVIAS" de novembro. ~0,12 s, com as
+gravações materializadas (sem isso o Postgres refazia `vw_closer_reunioes` por
+Diagnóstico, 0,43 s, e cresceria até o limite de 3 s do anon). Se a view estourar,
+a linha some sem aviso (`pronto` falso): medir de novo se a tela parar de mostrar.
 
 **Novembro/26 (até 24/11, Inbound, Consolidado):** 106 Diagnósticos em 72 reuniões, 11
 de LIVE (8 gravadas + 3 estimadas). Com "Tipo de R1 = Live": 45 Diagnósticos em 11
@@ -1041,7 +1044,7 @@ da Jéssica). 6 negócios LIVE sem gravação: 5 Eletrovias (leads que entraram 
 sem convite por e-mail; há uma gravação de 18/11 sem título nem convidados) e 1 Odonto
 Legacy marcado LIVE por engano.
 
-Verificado: build + 1.291 testes (14 novos), conferência da view no banco e visto
+Verificado: build + 1.295 testes (18 novos), conferência da view no banco e visto
 renderizado com dado real (rota de prévia sem login só numa cópia, removida).
 
 ### 2026-11-24 — Gráficos Por Marca e Por pessoa em todos os pop-ups de deals

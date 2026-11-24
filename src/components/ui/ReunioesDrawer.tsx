@@ -89,8 +89,8 @@ function LiveItem({ r, accent }: { r: Reuniao; accent: string }) {
           ? <Chip tom="aviso">estimada</Chip>
           : convidados != null && <Chip>{nf(convidados)} convidado{convidados !== 1 ? 's' : ''}</Chip>}
         <Chip>{nf(diags)} Diagnóstico{diags !== 1 ? 's' : ''}</Chip>
-        {!estimada && convidados != null && convidados > 0 && (
-          <Chip>{Math.round((diags / convidados) * 100)}% comparecimento</Chip>
+        {!estimada && convidados != null && convidados > 0 && r.live && (
+          <Chip>{Math.round((r.live.diagnosticosTotal / convidados) * 100)}% comparecimento</Chip>
         )}
       </button>
       {aberto && (
@@ -179,7 +179,7 @@ export function ReunioesDrawer({ open, onClose, resumo, subtitle, accent }: {
         <div style={{ overflow: 'auto', flex: 1, paddingBottom: 24 }}>
           {lives.length > 0 && (
             <Secao titulo={`LIVEs · ${nf(lives.length)}`}
-              nota="Cada LIVE conta como 1 reunião. Convidados vêm do convite no MeetRox (não é lista de presença); comparecimento = Diagnósticos ÷ convidados, só dos negócios no recorte.">
+              nota="Cada LIVE conta como 1 reunião. Convidados vêm do convite no MeetRox (não é lista de presença). Comparecimento = todos os negócios da LIVE que viraram Diagnóstico ÷ convidados, sem filtro; o número de Diagnósticos é só do recorte.">
               {lives.map(r => <LiveItem key={r.chave} r={r} accent={accent} />)}
             </Secao>
           )}

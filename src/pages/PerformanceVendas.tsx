@@ -32,7 +32,7 @@ import { metaDoRecorte } from '@/lib/metaRecorte'
 import { useRosterVendas } from '@/hooks/useRosterVendas'
 import { DICA_EX_INTEGRANTES, EX_INTEGRANTES, equipeAtiva } from '@/lib/equipe'
 import { useReunioesCloser } from '@/hooks/useReunioesCloser'
-import { filtrarReunioes } from '@/lib/reunioesCloser'
+import { filtrarReunioes, marcarLives } from '@/lib/reunioesCloser'
 import { buildSdrRows, buildCloserRows } from '@/lib/performanceRows'
 import type { SdrRow, CloserRow, GrupoLinha } from '@/lib/performanceRows'
 import { buildPersonMetaRows, buildPersonSimplesRows, buildPersonPeriodoRows, fracaoMetaMensal } from '@/lib/metaBreakdown'
@@ -602,12 +602,18 @@ export function PerformanceVendas() {
 
   // Reuniões do MeetRox (aba Closer): pela data da reunião, com os mesmos
   // filtros da barra — Closer = quem conduziu; marca/fonte/SDR do negócio.
+  // A LIVE (sessão em vw_reuniao_live) conta como R1, mesmo gravada sem tipo.
+  const { data: lives, pronto: livesProntas } = useReuniaoLive()
+  const sessoesLive = useMemo(
+    () => new Set(lives.flatMap(l => (l.call_id != null ? [l.call_id] : []))),
+    [lives],
+  )
   const reunioes = useMemo(
-    () => filtrarReunioes(reunioesBase, {
+    () => filtrarReunioes(marcarLives(reunioesBase, sessoesLive), {
       origem, marcas: marcasParaEscopo, consolidado: todasSelecionadas,
       fontes, subFontes, sdrs, closers, win, eventSource: viewModes.eventSource,
     }),
-    [reunioesBase, origem, marcasParaEscopo, todasSelecionadas, fontes, subFontes, sdrs, closers, win, viewModes.eventSource],
+    [reunioesBase, sessoesLive, origem, marcasParaEscopo, todasSelecionadas, fontes, subFontes, sdrs, closers, win, viewModes.eventSource],
   )
   const safra = useMemo(
     () => (viewModes.funnelView === 'cohort' ? cohortKeys(scoped, win) : null),
@@ -641,7 +647,6 @@ export function PerformanceVendas() {
   // Reuniões (sessões) ao lado do Diagnóstico: a LIVE da Eletrovias conta 1
   // reunião mesmo com vários Diagnósticos (ver resumirReunioes). A LIVE vale
   // para quem conduziu, então as sessões olham o recorte sem o filtro de Closer.
-  const { data: lives, pronto: livesProntas } = useReuniaoLive()
   const [reunioesAberto, setReunioesAberto] = useState(false)
   const scopeSemCloser = useMemo(
     () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, tipoR1 }),

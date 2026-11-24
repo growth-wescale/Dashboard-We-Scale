@@ -110,7 +110,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `dash_vendas` / `dash_etapas` | **cópias prontas** de `vw_funil_vendas` / `vw_funil_etapas_v2` que as abas de Vendas leem desde 03/11/2026: 1 linha por linha da view, com a `versao` em que mudou e lápide `removido`. Mantidas por `dash_sincronizar()` (pg_cron, a cada minuto); o navegador lê só pelas RPCs `dash_base`/`dash_mudancas`. Ver "Abas de Vendas ao vivo" |
 | `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
-| `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
+| `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer), onde a gravação que é sessão de LIVE conta como R1 (`marcarLives`, no cliente). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
 | `vw_reuniao_live` | 1 linha por negócio/ciclo de LIVE (R1 em grupo) com Diagnóstico desde 01/11/2026, ligado à gravação do MeetRox que foi a R1 dele: a **primeira** gravação de Closer com o e-mail do negócio nos convidados, até 14 dias antes do Diagnóstico. Para negócio marcado LIVE, a primeira gravação **em grupo** (convidados de 2+ negócios) vem antes. A gravação só é sessão de LIVE se for a R1 de ≥1 negócio com `tipo_r1 = 'LIVE'` (o título não decide). `call_id` nulo = sem gravação. Base da linha "em N reuniões · M de LIVE". Fora do `dash_*`. Ver `docs/sql/2026-11-24-reuniao-live.sql` |
 | `vw_deal_gravacoes` | 1 linha por (negócio, gravação do MeetRox): só reunião de venda (o conjunto de `vw_closer_reunioes`), ligada pelo vínculo do MeetRox (`coalesce(id_deal, crm_deal_id)`) ou pelo e-mail do negócio nos convidados; `eh_live` = sessão de LIVE em `vw_reuniao_live`. Base da coluna "Gravações" dos pop-ups de deal. Ver `docs/sql/2026-11-24-deal-gravacoes.sql` |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
@@ -599,7 +599,7 @@ src/components/ui/RepeatedDealsDrawer.tsx popup de repetidos — por etapa ou "t
 src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes de KPI — Receita, Fechamentos, Vendas por fonte
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
 src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
-src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação
+src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação; LIVE conta como R1, marcada
 src/lib/reunioesLive.ts          reuniões (sessões) ao lado do Diagnóstico: LIVE conta 1 (`resumirReunioes`, `mostrarReunioes`; puro, testado)
 src/hooks/useReuniaoLive.ts      lê vw_reuniao_live (fora do dash_*; `pronto` = carregou sem erro)
 src/components/ui/ReunioesLinha.tsx   "em N reuniões · M de LIVE" (degrau Diagnóstico da Visão Macro, cards de Diagnóstico da Performance)
@@ -1022,6 +1022,23 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-24 (4) — Reuniões no MeetRox: LIVE conta como R1
+
+Pedido do Junior. O bloco "Reuniões no MeetRox" (Performance › Closer) conta
+gravações pelo tipo de call, e 7 das 8 LIVEs de novembro foram gravadas sem tipo:
+caíam em "Sem tipo", fora do total, e a Jéssica aparecia com 21 R1 (abaixo do
+Douglas) tendo conduzido as 8 sessões. Agora a gravação que é sessão de LIVE em
+`vw_reuniao_live` (reconhecida pela regra da R1, nunca pelo título) conta como R1,
+marcada "LIVE": no card R1 ("· N de LIVE"), na célula R1 da tabela e no pop-up.
+Em "Deals únicos" a LIVE nunca é juntada com outra gravação do mesmo negócio.
+Feito no cliente (`marcarLives`, `reunioesCloser.ts`, testado), sem mexer em
+`vw_closer_reunioes`: `vw_reuniao_live` depende dela. A "Cancelado: LIVE" de 17/11
+segue sem tipo (não é sessão). Novembro até 24/11, Consolidado: R1 56 → 63
+(8 de LIVE), Jéssica 21 → 28, sem tipo 56 → 49, total 84 → 91.
+
+Verificado: build + 1.309 testes (3 novos) + oxlint, e visto com dado real numa
+cópia com rota sem login (removida).
 
 ### 2026-11-24 (3) — Pop-up de Reuniões com gráficos; gravação do MeetRox em todo pop-up de deal
 

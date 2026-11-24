@@ -49,9 +49,11 @@ function TipoTag({ tipo, forte }: { tipo: TipoReuniao; forte?: boolean }) {
 
 // ─── Cards por tipo ─────────────────────────────────────────────────────────
 
-function TipoCard({ tipo, quantidade, total, duracaoMedia, notaMedia, closers, onClick }: {
+function TipoCard({ tipo, quantidade, total, duracaoMedia, notaMedia, closers, live, onClick }: {
   tipo: TipoReuniao; quantidade: number; total: number
   duracaoMedia: number | null; notaMedia: number | null; closers: number
+  /** Quantas são LIVE (R1 em grupo). */
+  live: number
   onClick: () => void
 }) {
   const parte = total > 0 ? (quantidade / total) * 100 : 0
@@ -62,13 +64,19 @@ function TipoCard({ tipo, quantidade, total, duracaoMedia, notaMedia, closers, o
         <TipoTag tipo={tipo} forte />
         <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', lineHeight: 1.3 }}>{NOME_TIPO[tipo]}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px 8px', flexWrap: 'wrap' }}>
         <span style={{ fontFamily: 'var(--font-display, var(--font-body))', fontWeight: 600, fontSize: 28, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
           {nf(quantidade)}
         </span>
         <span style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
           {total > 0 ? `${pct(parte, 0)} do total` : ''}
         </span>
+        {live > 0 && (
+          <span title="LIVE (R1 em grupo) conta como R1, mesmo gravada sem tipo de call"
+            style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ws-text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+            · {nf(live)} de LIVE
+          </span>
+        )}
       </div>
       <div style={{ height: 6, borderRadius: 3, background: 'var(--ws-border)', overflow: 'hidden' }}
         title={`${tipo}: ${nf(quantidade)} de ${nf(total)} reuniões tipadas`}>
@@ -111,7 +119,11 @@ function MixBar({ linha }: { linha: LinhaReunioes }) {
 }
 
 /** Número da célula com fundo na cor do tipo, mais forte quanto maior na coluna. */
-function CelulaTipo({ n, max, cor, titulo, onClick }: { n: number; max: number; cor: string; titulo: string; onClick: () => void }) {
+function CelulaTipo({ n, max, cor, titulo, onClick, live = 0 }: {
+  n: number; max: number; cor: string; titulo: string; onClick: () => void
+  /** Quantas da célula são LIVE (só na coluna R1). */
+  live?: number
+}) {
   if (n === 0) {
     return <span style={{ textAlign: 'center', color: 'var(--ws-text-secondary)', opacity: .45 }}>–</span>
   }
@@ -121,9 +133,10 @@ function CelulaTipo({ n, max, cor, titulo, onClick }: { n: number; max: number; 
       justifySelf: 'center', minWidth: 42, padding: '4px 8px', borderRadius: 8, border: 'none', cursor: 'pointer',
       background: `color-mix(in srgb, ${cor} ${Math.round(14 + forca * 30)}%, transparent)`,
       color: 'var(--ws-text-primary)', fontWeight: 600, fontSize: 14, fontFamily: 'inherit',
-      fontVariantNumeric: 'tabular-nums',
+      fontVariantNumeric: 'tabular-nums', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2,
     }}>
       {nf(n)}
+      {live > 0 && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{nf(live)} LIVE</span>}
     </button>
   )
 }
@@ -186,7 +199,7 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, e
             {th('MIX R1 → R5', 'left')}
             {th('DURAÇÃO', 'right', 'Duração média das reuniões tipadas')}
             {th('NOTA IA', 'right', 'Nota média da IA do MeetRox: % dos critérios do scorecard atendidos')}
-            {th('SEM TIPO', 'right', 'Reuniões gravadas sem tipo de call no MeetRox (alinhamentos internos e reuniões de venda não classificadas). Não entram no total.')}
+            {th('SEM TIPO', 'right', 'Reuniões gravadas sem tipo de call no MeetRox (alinhamentos internos e reuniões de venda não classificadas). Não entram no total. A LIVE (R1 em grupo) conta como R1, não aqui.')}
           </div>
 
           {linhas.length === 0 && (
@@ -212,7 +225,8 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, e
                 </span>
                 {TIPOS_REUNIAO.map(t => (
                   <CelulaTipo key={t.tipo} n={l.porTipo[t.tipo]} max={maxPorTipo[t.tipo]} cor={t.cor}
-                    titulo={`Ver as reuniões ${t.tipo} · ${nome}`}
+                    live={t.tipo === 'R1' ? l.live : 0}
+                    titulo={`Ver as reuniões ${t.tipo} · ${nome}${t.tipo === 'R1' && l.live > 0 ? ` (${nf(l.live)} de LIVE)` : ''}`}
                     onClick={() => onAbrir({ titulo: `${t.tipo} · ${t.nome} — ${nome}`, reunioes: doTipo(t.tipo) })} />
                 ))}
                 <BotaoNumero n={l.total} forte titulo={`Ver as reuniões tipadas · ${nome}`}
@@ -234,11 +248,14 @@ function TabelaReunioes({ linhas, dim, accent, reunioes, onAbrir, resumoGeral, e
               <span />
               <span style={{ color: 'var(--ws-text-primary)' }}>Total</span>
               {resumoGeral.porTipo.map(t => (
-                <span key={t.tipo} style={{ textAlign: 'center' }}>{t.quantidade > 0 ? nf(t.quantidade) : '–'}</span>
+                <span key={t.tipo} style={{ textAlign: 'center', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                  {t.quantidade > 0 ? nf(t.quantidade) : '–'}
+                  {t.live > 0 && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{nf(t.live)} LIVE</span>}
+                </span>
               ))}
               <span style={{ textAlign: 'right' }}>{nf(resumoGeral.total)}</span>
               <MixBar linha={{
-                chave: null, total: resumoGeral.total, semTipo: resumoGeral.semTipo,
+                chave: null, total: resumoGeral.total, semTipo: resumoGeral.semTipo, live: 0,
                 porTipo: Object.fromEntries(resumoGeral.porTipo.map(t => [t.tipo, t.quantidade])) as Record<TipoReuniao, number>,
                 duracaoMedia: null, notaMedia: null,
               }} />
@@ -317,7 +334,15 @@ function ReunioesDrawer({ selecao, subtitulo, accent, onClose }: {
                     borderBottom: '1px solid var(--ws-border)',
                   }}>
                     <td style={{ ...td, color: 'var(--ws-text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{fmtDataHora(r.call_timestamp)}</td>
-                    <td style={td}>{r.tipo ? <TipoTag tipo={r.tipo} /> : <span style={{ color: 'var(--ws-text-secondary)' }}>Sem tipo</span>}</td>
+                    <td style={td}>
+                      {r.tipo ? <TipoTag tipo={r.tipo} /> : <span style={{ color: 'var(--ws-text-secondary)' }}>Sem tipo</span>}
+                      {r.eh_live && (
+                        <span title="R1 em grupo: conta como R1, mesmo gravada sem tipo de call" style={{
+                          marginLeft: 6, padding: '1px 7px', borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+                          background: 'var(--ws-bg)', color: 'var(--ws-text-secondary)',
+                        }}>LIVE</span>
+                      )}
+                    </td>
                     <td style={td}>{r.closer}</td>
                     <td style={{ ...td, whiteSpace: 'normal', minWidth: 260 }}>
                       <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
@@ -442,6 +467,7 @@ export function ReunioesMeetroxSection({ reunioes, loading, origem, subtitulo, a
 
         <p style={{ fontSize: 11, color: 'var(--ws-text-secondary)', margin: '10px 0 0', lineHeight: 1.5 }}>
           Fonte: MeetRox, sincronizado a cada 5 min. Conta pela data da reunião, e Closer é quem conduziu a gravação.
+          A LIVE (R1 em grupo) conta como R1, mesmo gravada sem tipo de call, e nunca é juntada com outra gravação em “Deals únicos”.
           Marca, fonte e SDR vêm do negócio do RD ligado à reunião — reunião sem negócio vinculado só aparece no Consolidado.
           Em “Deals únicos” o mesmo negócio conta uma vez por tipo no mês (some regravação de call que caiu); em “Passagens” toda gravação conta.
           Nota IA = % dos critérios do scorecard atendidos, segundo a IA do MeetRox.

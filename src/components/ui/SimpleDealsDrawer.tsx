@@ -16,6 +16,9 @@ import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, tot
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
 import { useGraficosMarcaPessoa } from './useGraficosMarcaPessoa'
 import { GraficosMarcaPessoa } from './GraficosMarcaPessoa'
+import { useGravacoesDeal } from '@/hooks/useGravacoesDeal'
+import { COL_GRAVACOES } from '@/lib/gravacoesDeal'
+import { CelulaGravacoes } from './GravacoesDeal'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -37,6 +40,7 @@ const closerDe = (r: FunnelRow) => r.nome_closer
 
 export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals: todos, accent, destacarFonte, repasse }: SimpleDealsDrawerProps) {
   const g = useGraficosMarcaPessoa(todos, marcaDe, closerDe, accent, open ? `${title}|${subtitle}` : '')
+  const { porDeal: gravacoes, pronto: gravacoesProntas } = useGravacoesDeal(open)
   if (!open) return null
   const deals = g.filtrados
   const colsRepasse = repasse ? ['We Scale', 'Marca'] : []
@@ -86,8 +90,9 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals: todos
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr style={{ background: 'var(--ws-bg)', position: 'sticky', top: 0, zIndex: 1 }}>
-                {['Negociação', 'Marca', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Valor', ...colsRepasse, ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data'].map(h => (
-                  <th key={h} style={{
+                {['Negociação', COL_GRAVACOES, 'Marca', 'Fonte', 'Unidades', 'Taxa de Franquia', 'Valor', ...colsRepasse, ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data'].map((h, i) => (
+                  // "Marca" aparece duas vezes com o repasse (marca do negócio e parte da marca).
+                  <th key={`${h}-${i}`} style={{
                     padding: '10px 16px', textAlign: direita.includes(h) ? 'right' : 'left', fontWeight: 600, fontSize: 11,
                     color: 'var(--ws-text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase',
                     borderBottom: '1px solid var(--ws-border)', whiteSpace: 'nowrap',
@@ -98,7 +103,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals: todos
             <tbody>
               {deals.length === 0 ? (
                 <tr>
-                  <td colSpan={10 + colsRepasse.length} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
+                  <td colSpan={12 + colsRepasse.length} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ws-text-secondary)' }}>
                     Nenhum deal no recorte selecionado.
                   </td>
                 </tr>
@@ -118,6 +123,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals: todos
                     <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                     <LinkPontosCorrida row={r} cor={accent} />
                   </td>
+                  <CelulaGravacoes gravacoes={gravacoes.get(r.id_lead)} pronto={gravacoesProntas} accent={accent} />
                   <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                   <td style={{
                     padding: '10px 16px', whiteSpace: 'nowrap',
@@ -155,7 +161,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals: todos
               ))}
             </tbody>
             {deals.length > 0 && (
-              <LinhaTotal deals={totais.deals} colSpanRotulo={3} celulas={[
+              <LinhaTotal deals={totais.deals} colSpanRotulo={4} celulas={[
                 { valor: nf(totais.unidades), direita: true },
                 { valor: money(totais.taxa), direita: true },
                 { valor: money(totais.contrato), direita: true },

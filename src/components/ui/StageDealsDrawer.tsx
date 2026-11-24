@@ -11,6 +11,9 @@ import { MultiSelect, labelStyle } from './MultiSelect'
 import { useStageDealsFilters, EMPTY_STAGE_DEALS_FILTERS, filtrarStageDeals } from './useStageDealsFilters'
 import type { StageDealsFilters } from './useStageDealsFilters'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
+import { useGravacoesDeal } from '@/hooks/useGravacoesDeal'
+import { COL_GRAVACOES } from '@/lib/gravacoesDeal'
+import { CelulaGravacoes } from './GravacoesDeal'
 
 /** Filtro com o nome em cima, igual à FilterBar — o botão do MultiSelect
  *  sozinho mostra só o resumo ("Todas"), que não diz qual campo é. */
@@ -45,6 +48,7 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   // Congela o "agora" no primeiro render — as colunas de tempo e a ordenação
   // não precisam mudar a cada re-render enquanto o drawer está na tela.
   const [agora] = useState(() => Date.now())
+  const { porDeal: gravacoes, pronto: gravacoesProntas } = useGravacoesDeal()
 
   const hasFilters = Object.values(filters).some(v => v.length > 0)
 
@@ -62,8 +66,8 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
   // entrada na etapa; nos modos Aging/Atual é hoje, ao lado do tempo parado só
   // nesta etapa.
   const headers = leadtimeCols
-    ? ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Parado na etapa', ...COLS_LEADTIME]
-    : ['Negociação', 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data na etapa']
+    ? ['Negociação', COL_GRAVACOES, 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, 'Parado na etapa', ...COLS_LEADTIME]
+    : ['Negociação', COL_GRAVACOES, 'Funil', 'Marca', 'Status', 'SDR', 'Closer', 'Fonte', 'Unidades', 'Taxa de Franquia', ...COLS_DATAS_DEAL, ...COLS_LEADTIME, 'Data na etapa']
   const alignRight = new Set<string>(['Unidades', 'Taxa de Franquia', ...COLS_LEADTIME, 'Parado na etapa'])
 
   // Sem corte por "Outros" (decisão do Junior, 22/09) — toda marca real do
@@ -206,6 +210,7 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
                   <LinkLinhaDoTempo idDeal={r.id_lead} cor={accent} />
                   <LinkPontosCorrida row={r} cor={accent} />
                 </td>
+                <CelulaGravacoes gravacoes={gravacoes.get(r.id_lead)} pronto={gravacoesProntas} accent={accent} />
                 <td style={{ padding: '10px 16px', color: 'var(--ws-text-secondary)', whiteSpace: 'nowrap' }}>{cell(r.nome_funil)}</td>
                 <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>{cell(marcaLabel(r.marca))}</td>
                 <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status_atual} /></td>
@@ -234,10 +239,10 @@ export function StageDealsPanel({ deals, stage, accent, f, leadtimeCols = false,
             ))}
           </tbody>
           {ordered.length > 0 && (
-            <LinhaTotal deals={totais.deals} colSpanRotulo={7} celulas={[
+            <LinhaTotal deals={totais.deals} colSpanRotulo={8} celulas={[
               { valor: nf(totais.unidades), direita: true },
               { valor: money(totais.taxa), direita: true },
-              ...headers.slice(9).map(() => ({ valor: null })),
+              ...headers.slice(10).map(() => ({ valor: null })),
             ]} />
           )}
         </table>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toWindow } from '@/lib/metrics'
 import {
-  agruparReunioes, chaveDaReuniao, filtrarReunioes, resumirReunioes,
+  agruparReunioes, chaveDaReuniao, filtrarReunioes, marcarLives, resumirReunioes,
   type FiltroReunioes, type ReuniaoRow,
 } from './reunioesCloser'
 
@@ -170,5 +170,37 @@ describe('resumirReunioes', () => {
     expect(r.porTipo[0]).toMatchObject({ tipo: 'R1', quantidade: 3, duracaoMedia: 50, closers: 2 })
     expect(r.porTipo[4]).toMatchObject({ tipo: 'R5', quantidade: 1, notaMedia: 1, closers: 1 })
     expect(r.porTipo[1]).toMatchObject({ tipo: 'R2', quantidade: 0, duracaoMedia: null, notaMedia: null, closers: 0 })
+  })
+})
+
+describe('LIVE conta como R1', () => {
+  it('marcarLives: sessão de LIVE vira R1 marcada, mesmo gravada sem tipo ou com outro tipo', () => {
+    const semTipo = reuniao({ tipo: null })
+    const comR2 = reuniao({ tipo: 'R2' })
+    const comum = reuniao({ tipo: null })
+    const out = marcarLives([semTipo, comR2, comum], new Set([semTipo.call_id, comR2.call_id]))
+    expect(out.map(r => [r.tipo, !!r.eh_live])).toEqual([['R1', true], ['R1', true], [null, false]])
+    expect(semTipo.tipo).toBeNull() // não altera a linha original (vem do cache)
+  })
+
+  it('Deals únicos: a LIVE nunca é deduplicada contra a R1 individual do mesmo negócio', () => {
+    const individual = reuniao({ id_deal: 'x', tipo: 'R1', call_timestamp: '2026-09-05T14:00:00+00:00' })
+    const live = reuniao({ id_deal: 'x', tipo: 'R1', eh_live: true, call_timestamp: '2026-09-10T22:00:00+00:00' })
+    expect(filtrarReunioes([individual, live], filtro({ eventSource: 'unique' }))).toHaveLength(2)
+  })
+
+  it('agrupar e resumir contam quantas R1 são LIVE', () => {
+    const rows = marcarLives([
+      reuniao({ closer: 'Jéssica', tipo: null }),
+      reuniao({ closer: 'Jéssica', tipo: 'R1' }),
+      reuniao({ closer: 'Douglas', tipo: 'R1' }),
+    ], new Set([seq - 2]))
+    const linhas = agruparReunioes(rows, 'closer')
+    const jessica = linhas.find(l => l.chave === 'Jéssica')!
+    expect([jessica.porTipo.R1, jessica.live, jessica.semTipo]).toEqual([2, 1, 0])
+    expect(linhas.find(l => l.chave === 'Douglas')!.live).toBe(0)
+    const r1 = resumirReunioes(rows).porTipo.find(t => t.tipo === 'R1')!
+    expect([r1.quantidade, r1.live]).toEqual([3, 1])
+    expect(resumirReunioes(rows).porTipo.find(t => t.tipo === 'R2')!.live).toBe(0)
   })
 })

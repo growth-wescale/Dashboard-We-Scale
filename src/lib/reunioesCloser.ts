@@ -63,6 +63,20 @@ export interface ReuniaoRow {
   sub_fonte_crm: string | null
   nome_sdr: string | null
   status_atual: string | null
+  /** Sessão de LIVE (R1 em grupo) — marcada no cliente por `marcarLives`. */
+  eh_live?: boolean
+}
+
+/**
+ * LIVE conta como R1 (decisão do Junior, 24/11/2026): a R1 em grupo da
+ * Eletrovias costuma ser gravada sem tipo de call ("Undefined") e caía em
+ * "Sem tipo", fora do total. A gravação que é sessão de LIVE em
+ * `vw_reuniao_live` (reconhecida por ser a R1 de negócio marcado LIVE, nunca
+ * pelo título) vira R1 com `eh_live`. Não altera as linhas originais (cache).
+ */
+export function marcarLives(rows: readonly ReuniaoRow[], sessoes: ReadonlySet<number>): ReuniaoRow[] {
+  if (sessoes.size === 0) return rows as ReuniaoRow[]
+  return rows.map(r => (sessoes.has(r.call_id) ? { ...r, tipo: 'R1', eh_live: true } : r))
 }
 
 export interface FiltroReunioes {
@@ -113,7 +127,8 @@ export function filtrarReunioes(rows: readonly ReuniaoRow[], f: FiltroReunioes):
   const ordenadas = [...dentro].sort((a, b) => a.call_timestamp.localeCompare(b.call_timestamp) || a.call_id - b.call_id)
   const vistos = new Set<string>()
   return ordenadas.filter(r => {
-    if (!r.id_deal || !r.tipo) return true
+    // A LIVE é uma sessão de vários negócios (o MeetRox liga a 1 só): nunca some.
+    if (!r.id_deal || !r.tipo || r.eh_live) return true
     const chave = `${r.id_deal}|${r.tipo}|${toLocalYearMonth(r.call_timestamp)}`
     if (vistos.has(chave)) return false
     vistos.add(chave)
@@ -136,6 +151,8 @@ export interface LinhaReunioes {
   /** Só as reuniões tipadas (R1–R5). */
   total: number
   semTipo: number
+  /** Quantas das R1 são LIVE. */
+  live: number
   /** Médias das reuniões tipadas. */
   duracaoMedia: number | null
   notaMedia: number | null
@@ -160,16 +177,17 @@ export function chaveDaReuniao(r: ReuniaoRow, dim: DimensaoReunioes, equipe?: Re
 export function agruparReunioes(
   rows: readonly ReuniaoRow[], dim: DimensaoReunioes, equipe?: ReadonlySet<string>,
 ): LinhaReunioes[] {
-  const grupos = new Map<string | null, { porTipo: ContagemPorTipo; semTipo: number; dur: number[]; nota: number[] }>()
+  const grupos = new Map<string | null, { porTipo: ContagemPorTipo; semTipo: number; live: number; dur: number[]; nota: number[] }>()
   for (const r of rows) {
     const chave = chaveDaReuniao(r, dim, equipe)
     let g = grupos.get(chave)
     if (!g) {
-      g = { porTipo: zeroPorTipo(), semTipo: 0, dur: [], nota: [] }
+      g = { porTipo: zeroPorTipo(), semTipo: 0, live: 0, dur: [], nota: [] }
       grupos.set(chave, g)
     }
     if (!r.tipo) { g.semTipo++; continue }
     g.porTipo[r.tipo]++
+    if (r.eh_live) g.live++
     if (r.duracao_min != null) g.dur.push(r.duracao_min)
     if (r.ai_score != null) g.nota.push(r.ai_score)
   }
@@ -178,6 +196,7 @@ export function agruparReunioes(
     porTipo: g.porTipo,
     total: TIPOS_REUNIAO.reduce((s, t) => s + g.porTipo[t.tipo], 0),
     semTipo: g.semTipo,
+    live: g.live,
     duracaoMedia: media(g.dur),
     notaMedia: media(g.nota),
   }))
@@ -197,6 +216,8 @@ export interface ResumoTipo {
   notaMedia: number | null
   /** Closers distintos que fizeram esse tipo no recorte. */
   closers: number
+  /** Quantas são LIVE (só R1). */
+  live: number
 }
 
 export interface ResumoReunioes {
@@ -218,6 +239,7 @@ export function resumirReunioes(rows: readonly ReuniaoRow[]): ResumoReunioes {
       duracaoMedia: media(doTipo.flatMap(r => (r.duracao_min != null ? [r.duracao_min] : []))),
       notaMedia: media(doTipo.flatMap(r => (r.ai_score != null ? [r.ai_score] : []))),
       closers: new Set(doTipo.map(r => r.closer)).size,
+      live: doTipo.filter(r => r.eh_live).length,
     }
   })
   const tipadas = rows.filter(r => r.tipo)

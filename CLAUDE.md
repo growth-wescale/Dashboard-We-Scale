@@ -111,6 +111,7 @@ RD Station CRM ──webhook──> processar_deal_evento() ──> deal_snapsho
 | `vw_deal_etapa_periodos` | entrada/saída por etapa. **Sem consumidor no dashboard desde 17/09/2026** — o modo Aging deixou de usá-la |
 | `vw_leadtime_stats` | percentis p25/p50/p75/p95 por etapa e marca. Idem: sem consumidor no dashboard |
 | `vw_closer_reunioes` | 1 linha por reunião gravada no MeetRox: tipo (R1–R5 ou sem tipo), Closer no padrão de nome do RD, duração, nota da IA, link da gravação + marca/origem/fonte/SDR do negócio vinculado (via `vw_funil_vendas`). Base do bloco "Reuniões no MeetRox" (Performance › Closer). Ver `docs/sql/2026-10-01-closer-reunioes-meetrox.sql` |
+| `vw_reuniao_live` | 1 linha por negócio/ciclo de LIVE (R1 em grupo) com Diagnóstico desde 01/11/2026, ligado à gravação do MeetRox que foi a R1 dele: a **primeira** gravação de Closer com o e-mail do negócio nos convidados, até 14 dias antes do Diagnóstico. A gravação só é sessão de LIVE se for a R1 de ≥1 negócio com `tipo_r1 = 'LIVE'` (o título não decide). `call_id` nulo = sem gravação. Base da linha "em N reuniões · M de LIVE". Fora do `dash_*`. Ver `docs/sql/2026-11-24-reuniao-live.sql` |
 | `vw_deal_origem_comercial` | 1 linha por deal: `Inbound` ou `Prospecção Ativa`. Agregado direto de `deal_eventos`, não passa pela cadeia cara de `vw_deal_ciclo`. `atribuicao_manual.origem_override` tem prioridade sobre a regra — ver seção "Inbound × Prospecção Ativa" |
 | `vw_repasse_taxa` | 1 linha por versão × marca do **repasse da taxa de franquia** (% que fica com a We Scale; o resto vai pra marca). Tabelas `repasse_taxa_versao`/`repasse_taxa_marca`, imutáveis. Ver regra "Repasse da taxa de franquia" na seção 4 |
 
@@ -124,7 +125,7 @@ novo.
 - `sub_fonte` / `utm_source` — origem de tráfego (meta, google, ig…). Dimensão **ortogonal** à fonte macro. `sub_fonte` da view é normalização do `utm_source` no banco, **não** o campo "Sub-Fonte" do RD, e o dashboard não a usa: ela diverge do cliente (ex.: põe `audience_network` em "Outros"). O dashboard normaliza `utm_source` no cliente (`normalizeSubFonte`, `fonteMapping.ts`) e, **quando `utm_source` é vazio**, cai no campo "Sub-Fonte" do RD CRM (`payload->>'Sub-Fonte'`), exposto como `sub_fonte_crm` em `vw_funil_vendas` — valor **cru** (nomes de lista/evento: "Feira de Franquias 2026", "Busca Orgânica", "SBC Repasse"), sem agrupar
 - `origem_comercial` — motor comercial do negócio: `Prospecção Ativa` se **qualquer** evento dele aconteceu nesse funil, `Inbound` caso contrário. **Não confundir com `fonte_macro`**, que tem um valor de mesmo nome mas é outra dimensão — ver seção "Inbound × Prospecção Ativa" abaixo
 - `quantidade_unidades` — quantidade de franquias do produto anexado ao deal no RD. Disponível em **qualquer** etapa/status (não só Ganho); **0 quando o deal não tem produto cadastrado ainda** — não confundir com `saleUnits()` (`metrics.ts`), que floora em 1 pro toggle de vendas e pra toda contagem de venda da Campanha de Metas — cards, Metas por Marca e Corrida (venda fechada sem produto ainda conta como 1 unidade vendida)
-- `tipo_r1` — tipo da R1 do negócio: `LIVE` (R1 em grupo, começou na Eletrovias em nov/2026) ou `Individual`. Vem do campo "Tipo de R1" do RD CRM (`6af3226d307c22002371c944`, obrigatório na Reunião Agendada SQL do Closer e nas etapas seguintes desde ~10/11/2026), lido em `payload->>'Tipo de R1'`. **Campo vazio, outras marcas e meses anteriores = `Individual`** (regra na view, decisão do Junior em 17/11). Grão é o deal (snapshot): vale para todos os ciclos dele
+- `tipo_r1` — tipo da R1 do negócio: `LIVE` (R1 em grupo, começou na Eletrovias em nov/2026) ou `Individual`. Vem do campo "Tipo de R1" do RD CRM (`6af3226d307c22002371c944`, obrigatório na Reunião Agendada SQL do Closer e nas etapas seguintes desde ~10/11/2026), lido em `payload->>'Tipo de R1'`. **Vale o que está no campo do RD: `LIVE` → LIVE, qualquer outra coisa (inclusive vazio) → `Individual`** (regra na view, 17/11). Não há trava de marca nem de data: negócio de outra marca marcado LIVE no RD vira LIVE (em 24/11, 1 da Odonto Legacy, provável erro de preenchimento). Grão é o deal (snapshot): vale para todos os ciclos dele
 - `ciclo` / `eh_reciclagem` / `eh_ciclo_atual` — um deal perdido e reciclado tem várias linhas
 - `eh_resgate` / `data_perda_anterior` — **resgate = negócio perdido e reaberto num dia (Brasília) diferente do dia da perda** (decisão do Junior em 17/11/2026): `ciclo > 1` e dia do início do ciclo (`data_criacao_negociacao`) posterior ao dia da perda que fechou o ciclo anterior (`data_perda_anterior`, lida de `vw_deal_ciclo_enriquecido`). Reabertura no mesmo dia da perda **não** é resgate, mesmo quando o banco abre ciclo novo (negócio perdido de novo em outro dia). Ciclo > 1 sem perda anterior conta como resgate. Fonte Macro "Resgate" de ciclo 1 não é resgate. No código, ler sempre por `ehResgate()` (`src/lib/resgate.ts`): pop-ups de deal (selo, leadtimes, filtro) e os 2 pts da Corrida usam a mesma função
 
@@ -536,6 +537,14 @@ no período. O nome continua na tabela de negócios dos pop-ups. Regra em
 que entrar no cadastro, senão cai em "Ex-integrantes". A Campanha de Metas não
 usa essa regra: lá o piloto é quem tem meta no mês.
 
+**Reunião ≠ Diagnóstico desde a LIVE (nov/2026).** O Diagnóstico segue contando
+pessoas; as reuniões (sessões) contam cada R1 individual como 1 e cada LIVE como 1
+(`resumirReunioes`, a partir dos MESMOS eventos de Diagnóstico do card). A LIVE conta
+no período em que aconteceu e, no filtro e na tabela de Closer, para quem a conduziu;
+na tabela de SDR, 1 para cada SDR que tinha negócio nela. Negócio LIVE sem gravação
+vira "LIVE estimada" (Closer + dia do Diagnóstico). A linha só aparece quando
+Reuniões ≠ Diagnósticos.
+
 **Período em curso termina hoje**, não no último dia. Senão o mês corrente
 compete com meses fechados e todo indicador parece em queda.
 
@@ -590,6 +599,10 @@ src/components/ui/SimpleDealsDrawer.tsx   popup leve (sem filtro) dos quadrantes
 src/components/ui/dealDrawerShared.tsx    BarList/topBreakdown/StatusBadge/cell/fmtData usados pelos popups acima
 src/components/ui/MetaRitmoCard.tsx       card de métrica com barra de ritmo + meta do dia
 src/components/ui/ReunioesMeetroxSection.tsx bloco "Reuniões no MeetRox" (Performance › Closer): cards R1–R5, tabela tipo × Closer/marca, popup com link da gravação
+src/lib/reunioesLive.ts          reuniões (sessões) ao lado do Diagnóstico: LIVE conta 1 (`resumirReunioes`, `mostrarReunioes`; puro, testado)
+src/hooks/useReuniaoLive.ts      lê vw_reuniao_live (fora do dash_*; `pronto` = carregou sem erro)
+src/components/ui/ReunioesLinha.tsx   "em N reuniões · M de LIVE" (degrau Diagnóstico da Visão Macro, cards de Diagnóstico da Performance)
+src/components/ui/ReunioesDrawer.tsx  pop-up das reuniões: LIVEs com negócios e comparecimento, Diagnósticos de LIVE fora do recorte, R1 individuais
 
 src/lib/distribuicao/regras.ts  tipos das vw_distribuicao_* + textoBarreira/diffRegra/desvios (puro, testado)
 src/hooks/useDistribuicao.ts    lê vw_distribuicao_painel/_regras/_atribuicoes/_disponibilidade/_saude/_campos_vistos
@@ -1003,6 +1016,33 @@ avisar). Cortes: celular ≤ 640px, compacto (celular + tablet em pé) ≤ 1023p
 ---
 
 ## 9. Histórico de mudanças
+
+### 2026-11-24 (2) — Reuniões (sessões) ao lado do Diagnóstico: LIVE conta 1
+
+Pedido do Junior: com a R1 em grupo da Eletrovias (LIVE), 1 reunião gera vários
+Diagnósticos, e o Brunno olhava as reuniões pelo Diagnóstico. O Diagnóstico ficou
+igual; ao lado dele entrou "em N reuniões · M de LIVE" (degrau Diagnóstico do funil da
+Visão Macro, modo Performance; rodapé dos dois cards de Diagnóstico da Performance;
+coluna REUNIÕES nas tabelas de SDR e Closer), com pop-up das LIVEs (convidados,
+Diagnósticos, % comparecimento, negócios), dos Diagnósticos de LIVE que contam em outro
+período ou para outro Closer, e das R1 individuais. Design e decisões em
+`docs/superpowers/specs/2026-11-24-reunioes-live-design.md`.
+
+**Como cruza:** view nova `vw_reuniao_live` (seção 3), pelo e-mail do negócio
+(`deal_contatos`) nos convidados da gravação (`DB_Reunioes_MeetRox.attendees`). O
+título da gravação não decide: só conta gravação que foi a R1 de um negócio marcado
+LIVE, então treinamento, live de marketing ou LIVE de R2 não entram. Testado sem olhar
+o título: achou exatamente as 8 "LIVE: ELETROVIAS" de novembro. ~0,2 s.
+
+**Novembro/26 (até 24/11, Inbound, Consolidado):** 106 Diagnósticos em 72 reuniões, 11
+de LIVE (8 gravadas + 3 estimadas). Com "Tipo de R1 = Live": 45 Diagnósticos em 11
+reuniões. Closer Jéssica 65 em 35; Douglas 26 em 23 (3 Diagnósticos dele vieram de LIVE
+da Jéssica). 6 negócios LIVE sem gravação: 5 Eletrovias (leads que entraram por link,
+sem convite por e-mail; há uma gravação de 18/11 sem título nem convidados) e 1 Odonto
+Legacy marcado LIVE por engano.
+
+Verificado: build + 1.291 testes (14 novos), conferência da view no banco e visto
+renderizado com dado real (rota de prévia sem login só numa cópia, removida).
 
 ### 2026-11-24 — Gráficos Por Marca e Por pessoa em todos os pop-ups de deals
 

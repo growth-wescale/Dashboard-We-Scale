@@ -12,12 +12,16 @@ import { FiltrosObrigatoriosAviso } from '@/components/ui/FiltrosObrigatoriosAvi
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { SimpleDealsDrawer } from '@/components/ui/SimpleDealsDrawer'
 import { RepeatedDealsDrawer } from '@/components/ui/RepeatedDealsDrawer'
+import { ReunioesDrawer } from '@/components/ui/ReunioesDrawer'
+import { ReunioesLinha } from '@/components/ui/ReunioesLinha'
 import { TrapFunnel } from '@/components/ui/TrapFunnel'
 import type { FunnelStage } from '@/components/ui/TrapFunnel'
 import { useDashboardNotice } from '@/hooks/useDashboardNotice'
 import { useMediaData } from '@/hooks/useMediaData'
 import { useFunilVendas } from '@/hooks/useFunilVendas'
 import { useFunilEventos } from '@/hooks/useFunilEventos'
+import { useReuniaoLive } from '@/hooks/useReuniaoLive'
+import { mostrarReunioes, resumirReunioes } from '@/lib/reunioesLive'
 import { useEquipeAtiva } from '@/hooks/useRosterVendas'
 import { useMetaResumo } from '@/hooks/useMetasPerformance'
 import { useRepasseTaxas } from '@/hooks/useRepasseTaxas'
@@ -337,6 +341,7 @@ export function FunilVendas() {
   const [clickedStage, setClickedStage] = useState<StageKey | null>(null)
   const [clickedRepeatStage, setClickedRepeatStage] = useState<StageKey | null>(null)
   const [totalRepeatsOpen, setTotalRepeatsOpen] = useState(false)
+  const [reunioesAberto, setReunioesAberto] = useState(false)
   const [popupKpi, setPopupKpi] = useState<'receita' | 'fechamentos' | 'fonte' | null>(null)
   const [dismissedNoticeId, setDismissedNoticeId] = useState<number | null>(null)
   const { notice } = useDashboardNotice()
@@ -426,6 +431,12 @@ export function FunilVendas() {
     () => buildScopeFilter({ origem, fontes, subFontes, sdrs, closers, tipoR1 }),
     [origem, fontes, subFontes, sdrs, closers, tipoR1],
   )
+  // Mesmo escopo, sem o filtro de Closer: a LIVE vale para quem a conduziu, não
+  // para o `nome_closer` dos negócios dela (ver resumirReunioes).
+  const scopeSemCloser = useMemo(
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, tipoR1 }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, tipoR1],
+  )
 
   // `ranges` é a união exata dos períodos selecionados (1 ou vários) — nunca
   // usar `range` (caixa delimitadora) aqui, senão multi-seleção não-contígua
@@ -460,6 +471,7 @@ export function FunilVendas() {
   const scoped = useMemo(() => rows.filter(scope), [rows, scope])
   /** Mesmo recorte, sem restrição de marca — usado só pra quebra por marca. */
   const scopedSemMarca = useMemo(() => rows.filter(scopeSemMarca), [rows, scopeSemMarca])
+  const scopedSemCloser = useMemo(() => rows.filter(scopeSemCloser), [rows, scopeSemCloser])
 
   // Opções dos filtros de Marca, Fonte e Sub-fonte: cada lista reflete os
   // DEMAIS filtros já ativos (origem já vem no fetch) + a janela de período,
@@ -511,6 +523,20 @@ export function FunilVendas() {
           }),
     }))
   }, [modo, scoped, eventos, win, viewModes, origem, etapasFunil])
+
+  // Reuniões (sessões) ao lado do Diagnóstico: a LIVE da Eletrovias conta 1
+  // reunião mesmo com vários Diagnósticos. Mesmos eventos e filtros do degrau.
+  const { data: lives, pronto: livesProntas } = useReuniaoLive()
+  const resumoReunioes = useMemo(() => {
+    if (modo !== 'performance') return null
+    const safra = viewModes.funnelView === 'cohort'
+    return resumirReunioes({
+      eventos, rows: scopedSemCloser, lives, win, modes: viewModes,
+      opts: { cohortIds: safra ? cohortKeys(scoped, win) : null, extra: noEscopoDoCiclo(scoped) },
+      optsSessao: { cohortIds: safra ? cohortKeys(scopedSemCloser, win) : null, extra: noEscopoDoCiclo(scopedSemCloser) },
+      closersFiltro: closers,
+    })
+  }, [modo, eventos, scoped, scopedSemCloser, lives, win, viewModes, closers])
 
   // Etapas na mesma sequência do funil Performance — só as que têm negócio parado.
   function ordenarPorMacroStages(porStageKey: Map<StageKey, EtapaLeadtimeAgg>): EtapaLeadtimeRow[] {
@@ -918,7 +944,10 @@ export function FunilVendas() {
                 : <TrapFunnel stages={funnel} invest={invest} accent={accent} dark={dark}
                     onStageClick={key => setClickedStage(key as StageKey)}
                     repeatedCounts={repeatedCounts} onRepeatClick={key => setClickedRepeatStage(key as StageKey)}
-                    noShow={noShow} noShowRepeated={noShowRepeated} />}
+                    noShow={noShow} noShowRepeated={noShowRepeated}
+                    rodapeEtapa={mostrarReunioes(resumoReunioes, livesProntas)
+                      ? { 'Diagnóstico': <ReunioesLinha resumo={resumoReunioes} pronto={livesProntas} onClick={() => setReunioesAberto(true)} /> }
+                      : undefined} />}
           </div>
         </SCard>
 
@@ -1002,6 +1031,14 @@ export function FunilVendas() {
         groups={allRepeatedGroups}
         accent={accent}
         multiStage
+      />
+
+      <ReunioesDrawer
+        open={reunioesAberto}
+        onClose={() => setReunioesAberto(false)}
+        resumo={resumoReunioes}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
+        accent={accent}
       />
 
       <SimpleDealsDrawer

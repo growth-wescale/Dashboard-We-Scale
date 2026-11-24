@@ -305,3 +305,36 @@ describe('a tabela fecha com o card', () => {
     expect(countSales(rows, win, modes)).toBe(1)
   })
 })
+
+describe('reuniões por pessoa (LIVE)', () => {
+  const rosterLive: MembroRoster[] = [
+    { nome: 'Sarah Padilha', cargo: 'SDR', foto: null, ativo: true },
+    { nome: 'Vanessa', cargo: 'SDR', foto: null, ativo: false },
+    { nome: 'Douglas', cargo: 'Closer', foto: null, ativo: true },
+    { nome: 'Jéssica', cargo: 'Closer', foto: null, ativo: true },
+  ]
+  const nov = toWindow(null, null, [{ from: '2026-11-01', to: '2026-11-30' }])
+
+  it('buildCloserRows cria a linha de quem só conduziu a LIVE (reunioes 1, rr 0)', () => {
+    const rows = [r({ nome_closer: 'Douglas', data_reuniao_realizada: '2026-11-10' })]
+    const linhas = buildCloserRows(rows, nov, [], rosterLive, 'deals', undefined, new Map([['Jéssica', 1], ['Douglas', 1]]))
+    const jessica = linhas.find(l => l.nome === 'Jéssica')!
+    expect(jessica.reunioes).toBe(1)
+    expect(jessica.rr).toBe(0)
+    expect(linhas.find(l => l.nome === 'Douglas')!.reunioes).toBe(1)
+  })
+
+  it('buildSdrRows soma reuniões de quem saiu em Ex-integrantes e de sem SDR em "Sem SDR"', () => {
+    const rows = [r({ nome_sdr: 'Sarah Padilha', data_reuniao_realizada: '2026-11-10' })]
+    const linhas = buildSdrRows(rows, nov, [], rosterLive, undefined, new Map([['Sarah Padilha', 2], ['Vanessa', 1], ['', 1]]))
+    expect(linhas.find(l => l.nome === 'Sarah Padilha')!.reunioes).toBe(2)
+    expect(linhas.find(l => l.grupo === 'ex-integrantes')!.reunioes).toBe(1)
+    expect(linhas.find(l => l.grupo === 'sem-responsavel')!.reunioes).toBe(1)
+  })
+
+  it('sem o mapa de reuniões, as linhas não ganham o campo', () => {
+    const rows = [r({ nome_sdr: 'Sarah Padilha', nome_closer: 'Douglas', data_reuniao_realizada: '2026-11-10' })]
+    expect(buildSdrRows(rows, nov, [], rosterLive).every(l => l.reunioes === undefined)).toBe(true)
+    expect(buildCloserRows(rows, nov, [], rosterLive).every(l => l.reunioes === undefined)).toBe(true)
+  })
+})

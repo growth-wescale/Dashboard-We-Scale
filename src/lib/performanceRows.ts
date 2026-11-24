@@ -15,6 +15,9 @@ export interface SdrRow {
    *  contagem do card "SQL → No-show" (`countStageEvents('No Show')`). */
   noShow: number
   metaSql: number
+  /** Reuniões (sessões): R1 individual conta 1, LIVE conta 1 por SDR que teve
+   *  negócio nela. Só existe quando a tela passa `reunioesPorPessoa`. */
+  reunioes?: number
   /** Meta de Diagnóstico (`meta_reuniao_realizada`) e de SAL (`meta_volume_sal`). */
   metaRr: number
   metaSal: number
@@ -28,6 +31,9 @@ export interface SdrRow {
 export interface CloserRow {
   nome: string
   rr: number; sal: number; cof: number
+  /** Reuniões (sessões) conduzidas: a LIVE conta 1 para quem conduziu. Só
+   *  existe quando a tela passa `reunioesPorPessoa`. */
+  reunioes?: number
   /** Vendas na janela — negócios, ou unidades quando `salesMode = 'units'`
    *  (mesma regra de `countSales`: `saleUnits`, piso 1 por deal). */
   ganhos: number; faturamento: number
@@ -109,9 +115,33 @@ function nomeDaLinha(chave: string, nome: string | undefined, sem: string): stri
   return chave === EX_KEY ? EX_INTEGRANTES : chave === SEM_KEY ? sem : nome!
 }
 
+/**
+ * Soma as reuniões (`resumirReunioes().porSdr/porCloser`, chave = nome cru,
+ * '' = sem responsável) na linha de cada pessoa, com a mesma classificação das
+ * outras colunas. Cria a linha de quem só tem reunião (Closer que conduziu a
+ * LIVE e cujos negócios estão no nome de outra pessoa).
+ */
+function somarReunioes<T extends { reunioes?: number }>(
+  reunioesPorPessoa: Map<string, number> | undefined,
+  bucket: Map<string, T>, nomeOriginal: Map<string, string>,
+  chave: (nome: string | undefined) => string, vazio: () => Omit<T, 'reunioes'>, sem: string,
+): void {
+  if (!reunioesPorPessoa) return
+  for (const cur of bucket.values()) cur.reunioes = 0
+  for (const [nomeCru, n] of reunioesPorPessoa) {
+    const nome = nomeCru.trim() || undefined
+    const normalized = chave(nome)
+    const cur = bucket.get(normalized) ?? ({ ...vazio(), reunioes: 0 } as T)
+    cur.reunioes = (cur.reunioes ?? 0) + n
+    bucket.set(normalized, cur)
+    if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nomeDaLinha(normalized, nome, sem))
+  }
+}
+
 export function buildSdrRows(
   rows: FunnelRow[], win: PeriodWindow, metas: MetaAgregada[], roster: MembroRoster[],
   contagem?: ContagemPorEvento,
+  reunioesPorPessoa?: Map<string, number>,
 ): SdrRow[] {
   const linhaDe = classificador(roster, ['SDR', 'SDR/Closer'])
   const ev = contagem && {
@@ -120,7 +150,7 @@ export function buildSdrRows(
     sal: eventosPorCiclo(contagem, 'SAL', win),
     noShow: eventosPorCiclo(contagem, 'No Show', win),
   }
-  const bucket = new Map<string, { mql: number; sql: number; rr: number; sal: number; noShow: number }>()
+  const bucket = new Map<string, { mql: number; sql: number; rr: number; sal: number; noShow: number; reunioes?: number }>()
   const nomeOriginal = new Map<string, string>()
 
   for (const r of rows) {
@@ -144,6 +174,8 @@ export function buildSdrRows(
     bucket.set(normalized, cur)
     if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nomeDaLinha(normalized, nome, SEM_RESPONSAVEL.sdr))
   }
+  somarReunioes(reunioesPorPessoa, bucket, nomeOriginal, linhaDe.chave,
+    () => ({ mql: 0, sql: 0, rr: 0, sal: 0, noShow: 0 }), SEM_RESPONSAVEL.sdr)
 
   const linhas = Array.from(bucket.entries()).map(([normalized, v]): SdrRow & { _chave: string } => {
     const grupo = grupoDaChave(normalized)
@@ -163,7 +195,7 @@ export function buildSdrRows(
       ...(grupo ? { grupo } : {}),
       _chave: normalized,
     }
-  }).filter(l => linhaDe.sempreVisivel(l._chave) || l.mql + l.sql + l.rr + l.sal + l.noShow + l.metaSql > 0)
+  }).filter(l => linhaDe.sempreVisivel(l._chave) || l.mql + l.sql + l.rr + l.sal + l.noShow + l.metaSql + (l.reunioes ?? 0) > 0)
     .map(({ _chave, ...l }) => l)
   return ordenarComGrupos(linhas, (a, b) => b.pctAting - a.pctAting || b.sql - a.sql)
 }
@@ -172,6 +204,7 @@ export function buildCloserRows(
   rows: FunnelRow[], win: PeriodWindow, metas: MetaAgregada[], roster: MembroRoster[],
   salesMode: SalesMode = 'deals',
   contagem?: ContagemPorEvento,
+  reunioesPorPessoa?: Map<string, number>,
 ): CloserRow[] {
   const linhaDe = classificador(roster, ['Closer', 'SDR/Closer'])
   const ev = contagem && {
@@ -179,7 +212,7 @@ export function buildCloserRows(
     sal: eventosPorCiclo(contagem, 'SAL', win),
     cof: eventosPorCiclo(contagem, 'Oportunidade COF', win),
   }
-  const bucket = new Map<string, { rr: number; sal: number; cof: number; ganhos: number; faturamento: number }>()
+  const bucket = new Map<string, { rr: number; sal: number; cof: number; ganhos: number; faturamento: number; reunioes?: number }>()
   const nomeOriginal = new Map<string, string>()
 
   for (const r of rows) {
@@ -209,6 +242,8 @@ export function buildCloserRows(
     bucket.set(normalized, cur)
     if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nomeDaLinha(normalized, nome, SEM_RESPONSAVEL.closer))
   }
+  somarReunioes(reunioesPorPessoa, bucket, nomeOriginal, linhaDe.chave,
+    () => ({ rr: 0, sal: 0, cof: 0, ganhos: 0, faturamento: 0 }), SEM_RESPONSAVEL.closer)
 
   const linhas = Array.from(bucket.entries()).map(([normalized, v]): CloserRow & { _chave: string } => {
     const grupo = grupoDaChave(normalized)
@@ -224,7 +259,7 @@ export function buildCloserRows(
       ...(grupo ? { grupo } : {}),
       _chave: normalized,
     }
-  }).filter(l => linhaDe.sempreVisivel(l._chave) || l.rr + l.sal + l.cof + l.ganhos + l.faturamento + l.metaFinanceira > 0)
+  }).filter(l => linhaDe.sempreVisivel(l._chave) || l.rr + l.sal + l.cof + l.ganhos + l.faturamento + l.metaFinanceira + (l.reunioes ?? 0) > 0)
     .map(({ _chave, ...l }) => l)
   return ordenarComGrupos(linhas, (a, b) => b.pctAting - a.pctAting || b.faturamento - a.faturamento)
 }

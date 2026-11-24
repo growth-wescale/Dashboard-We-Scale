@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resumirReunioes, type ReuniaoLiveRow } from '@/lib/reunioesLive'
+import { mostrarReunioes, resumirReunioes, type ReuniaoLiveRow } from '@/lib/reunioesLive'
 import { DEFAULT_VIEW_MODES, dealKey, noEscopoDoCiclo, toWindow, type FunnelEventRow, type ViewModes } from '@/lib/metrics'
 import type { FunnelRow } from '@/lib/funnelTypes'
 
@@ -180,5 +180,15 @@ describe('resumirReunioes', () => {
     expect(res.total).toBe(1)
     expect(res.porSdr.get('Sarah Padilha')).toBe(1)
     expect(res.porSdr.get('Cassiana Lavall')).toBe(1)
+  })
+})
+
+describe('mostrarReunioes', () => {
+  const base = { reunioes: [], deLive: 0, diagsDeLiveForaDoRecorte: [], porSdr: new Map(), porCloser: new Map() }
+  it('só mostra com a base da view carregada e números diferentes', () => {
+    expect(mostrarReunioes({ ...base, total: 5, diagnosticos: 8 }, true)).toBe(true)
+    expect(mostrarReunioes({ ...base, total: 5, diagnosticos: 5 }, true)).toBe(false)
+    expect(mostrarReunioes({ ...base, total: 5, diagnosticos: 8 }, false)).toBe(false)
+    expect(mostrarReunioes(null, true)).toBe(false)
   })
 })

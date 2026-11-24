@@ -17,6 +17,10 @@ import { MetaBreakdownDrawer } from '@/components/ui/MetaBreakdownDrawer'
 import { StageDealsDrawer } from '@/components/ui/StageDealsDrawer'
 import { TrapFunnel } from '@/components/ui/TrapFunnel'
 import { ReunioesMeetroxSection } from '@/components/ui/ReunioesMeetroxSection'
+import { ReunioesDrawer } from '@/components/ui/ReunioesDrawer'
+import { ReunioesLinha } from '@/components/ui/ReunioesLinha'
+import { useReuniaoLive } from '@/hooks/useReuniaoLive'
+import { mostrarReunioes, resumirReunioes } from '@/lib/reunioesLive'
 import type { FunnelStage } from '@/components/ui/TrapFunnel'
 import { SCard } from '@/components/ui/v2'
 import { useSharedFilters } from '@/contexts/SharedFiltersContext'
@@ -262,9 +266,14 @@ function DeltaNum({ val, meta, polaridade = 'maior' }: { val: number; meta: numb
 /** Meta inteira que a tabela mostra: mensal ou "até hoje" (MTD). */
 const metaVisao = (meta: number, fator: number) => metaInteira(meta * fator)
 
-function SdrTable({ rows, mqlLbl, fatorMeta, mtd }: { rows: SdrRow[]; mqlLbl: string; fatorMeta: number; mtd: boolean }) {
-  // # · Nome · MQL · [SQL Real/Meta/Δ] · [DIAG Real/Meta/Δ] · [SAL Real/Meta/Δ] · No Show · % SQL · MQL→SQL
-  const cols = '36px minmax(150px, 1fr) 56px 52px 52px 52px 52px 52px 52px 52px 52px 52px 64px 64px 72px'
+function SdrTable({ rows, mqlLbl, fatorMeta, mtd, totalReunioes }: {
+  rows: SdrRow[]; mqlLbl: string; fatorMeta: number; mtd: boolean
+  /** Total de reuniões do recorte (o do card). Nulo = sem a coluna REUNIÕES. */
+  totalReunioes: number | null
+}) {
+  // # · Nome · MQL · [SQL Real/Meta/Δ] · [DIAG Real/Meta/Δ] · (REUNIÕES) · [SAL Real/Meta/Δ] · No Show · % SQL · MQL→SQL
+  const comReunioes = totalReunioes != null
+  const cols = `36px minmax(150px, 1fr) 56px 52px 52px 52px 52px 52px 52px ${comReunioes ? '76px ' : ''}52px 52px 52px 64px 64px 72px`
   const grupo = { textAlign: 'center' as const, borderBottom: `2px solid ${SDR_ACCENT}`, paddingBottom: 3, fontWeight: 700, color: 'var(--ws-text-primary)' }
   const sub = { textAlign: 'right' as const }
   const metaLbl = mtd ? 'META*' : 'META'
@@ -284,11 +293,12 @@ function SdrTable({ rows, mqlLbl, fatorMeta, mtd }: { rows: SdrRow[]; mqlLbl: st
         PRÉ-VENDAS · EXECUTIVOS DE EXPANSÃO
       </div>
       <div className="rs-scroll-x">
-      <div style={{ padding: '6px 8px', minWidth: 1020 }}>
+      <div style={{ padding: '6px 8px', minWidth: comReunioes ? 1100 : 1020 }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols, columnGap: 6, padding: '10px 12px 2px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span /><span /><span />
           <span style={{ ...grupo, gridColumn: 'span 3' }}>SQL</span>
           <span style={{ ...grupo, gridColumn: 'span 3' }}>DIAGNÓSTICO</span>
+          {comReunioes && <span />}
           <span style={{ ...grupo, gridColumn: 'span 3' }}>SAL</span>
           <span /><span /><span />
         </div>
@@ -297,6 +307,7 @@ function SdrTable({ rows, mqlLbl, fatorMeta, mtd }: { rows: SdrRow[]; mqlLbl: st
           <span style={sub}>{mqlLbl}</span>
           <span style={sub}>REAL</span><span style={sub}>{metaLbl}</span><span style={sub}>Δ</span>
           <span style={sub}>REAL</span><span style={sub}>{metaLbl}</span><span style={sub}>Δ</span>
+          {comReunioes && <span style={sub} title="Reuniões: cada LIVE conta 1 para cada SDR que tinha negócio nela">REUNIÕES</span>}
           <span style={sub}>REAL</span><span style={sub}>{metaLbl}</span><span style={sub}>Δ</span>
           <span style={sub}>NO SHOW</span>
           <span style={sub}>% SQL</span>
@@ -325,6 +336,7 @@ function SdrTable({ rows, mqlLbl, fatorMeta, mtd }: { rows: SdrRow[]; mqlLbl: st
               <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.rr)}</span>
               {metaCel(mRr)}
               <DeltaNum val={r.rr} meta={mRr} />
+              {comReunioes && <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.reunioes ?? 0)}</span>}
               <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.sal)}</span>
               {metaCel(mSal)}
               <DeltaNum val={r.sal} meta={mSal} />
@@ -344,6 +356,7 @@ function SdrTable({ rows, mqlLbl, fatorMeta, mtd }: { rows: SdrRow[]; mqlLbl: st
             <span style={{ textAlign: 'right' }}>{nf(tot.rr)}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{tot.metaRr > 0 ? nf(tot.metaRr) : '—'}</span>
             <DeltaNum val={tot.rr} meta={tot.metaRr} />
+            {comReunioes && <span style={{ textAlign: 'right' }} title="Total de reuniões do recorte: a LIVE com negócio de mais de uma SDR conta 1 vez aqui">{nf(totalReunioes)}</span>}
             <span style={{ textAlign: 'right' }}>{nf(tot.sal)}</span>
             <span style={{ textAlign: 'right', color: 'var(--ws-text-secondary)' }}>{tot.metaSal > 0 ? nf(tot.metaSal) : '—'}</span>
             <DeltaNum val={tot.sal} meta={tot.metaSal} />
@@ -421,18 +434,23 @@ function ComparativoMtd({ titulo, itens, accent }: { titulo: string; itens: Item
   )
 }
 
-function CloserTable({ rows, unidades, fatorMeta, mtd }: { rows: CloserRow[]; unidades: boolean; fatorMeta: number; mtd: boolean }) {
-  const cols = '40px 1fr 70px 70px 70px 80px 120px 110px 70px 80px'
+function CloserTable({ rows, unidades, fatorMeta, mtd, comReunioes }: {
+  rows: CloserRow[]; unidades: boolean; fatorMeta: number; mtd: boolean
+  /** Mostra a coluna REUNIÕES (a LIVE conta 1 para quem conduziu). */
+  comReunioes: boolean
+}) {
+  const cols = `40px 1fr 70px ${comReunioes ? '84px ' : ''}70px 70px 80px 120px 110px 70px 80px`
   return (
     <SCard pad={0} style={{ overflow: 'hidden' }}>
       <div style={{ background: CLOSER_ACCENT, color: '#fff', textAlign: 'center', padding: '10px 16px', letterSpacing: '.06em', fontSize: 12, fontWeight: 600 }}>
         VENDAS · CLOSERS
       </div>
       <div className="rs-scroll-x">
-      <div style={{ padding: '6px 8px', minWidth: 860 }}>
+      <div style={{ padding: '6px 8px', minWidth: comReunioes ? 950 : 860 }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols, padding: '10px 12px', fontSize: 11, letterSpacing: '.06em', color: 'var(--ws-text-secondary)', fontWeight: 500, whiteSpace: 'nowrap' }}>
           <span>#</span><span>NOME</span>
           <span style={{ textAlign: 'right' }}>DIAG</span>
+          {comReunioes && <span style={{ textAlign: 'right' }} title="Reuniões conduzidas: cada LIVE conta 1">REUNIÕES</span>}
           <span style={{ textAlign: 'right' }}>SAL</span>
           <span style={{ textAlign: 'right' }}>COF</span>
           <span style={{ textAlign: 'right' }}>{unidades ? 'UNIDADES' : 'GANHOS'}</span>
@@ -453,6 +471,7 @@ function CloserTable({ rows, unidades, fatorMeta, mtd }: { rows: CloserRow[]; un
               </span>
             )}
             <span style={{ textAlign: 'right' }}>{nf(r.rr)}</span>
+            {comReunioes && <span style={{ textAlign: 'right' }}>{nf(r.reunioes ?? 0)}</span>}
             <span style={{ textAlign: 'right' }}>{nf(r.sal)}</span>
             <span style={{ textAlign: 'right' }}>{nf(r.cof)}</span>
             <span style={{ textAlign: 'right', fontWeight: 700 }}>{nf(r.ganhos)}</span>
@@ -619,6 +638,29 @@ export function PerformanceVendas() {
     [eventos, viewModes, evOpts],
   )
 
+  // Reuniões (sessões) ao lado do Diagnóstico: a LIVE da Eletrovias conta 1
+  // reunião mesmo com vários Diagnósticos (ver resumirReunioes). A LIVE vale
+  // para quem conduziu, então as sessões olham o recorte sem o filtro de Closer.
+  const { data: lives, pronto: livesProntas } = useReuniaoLive()
+  const [reunioesAberto, setReunioesAberto] = useState(false)
+  const scopeSemCloser = useMemo(
+    () => buildScopeFilter({ origem, marcas: marcasParaEscopo, fontes, subFontes, sdrs, tipoR1 }),
+    [origem, marcasParaEscopo, fontes, subFontes, sdrs, tipoR1],
+  )
+  const scopedSemCloser = useMemo(() => rows.filter(scopeSemCloser), [rows, scopeSemCloser])
+  const resumoReunioes = useMemo(() => resumirReunioes({
+    eventos, rows: scopedSemCloser, lives, win, modes: viewModes, opts: evOpts,
+    optsSessao: {
+      cohortIds: viewModes.funnelView === 'cohort' ? cohortKeys(scopedSemCloser, win) : null,
+      extra: noEscopoDoCiclo(scopedSemCloser),
+    },
+    closersFiltro: closers,
+  }), [eventos, scopedSemCloser, lives, win, viewModes, evOpts, closers])
+  const comReunioes = mostrarReunioes(resumoReunioes, livesProntas)
+  const linhaReunioes = comReunioes
+    ? <ReunioesLinha resumo={resumoReunioes} pronto={livesProntas} onClick={() => setReunioesAberto(true)} />
+    : undefined
+
   const strip = useMemo(() => ({
     mql: countStage(scoped, 'MQL', win, viewModes),
     // denominador por evento p/ casar com tentando/ce/sql, que também são countStageEvents
@@ -675,12 +717,14 @@ export function PerformanceVendas() {
   // contra um `win` que soma vários meses — sem isso o % de atingimento dispararia
   // (ex.: 1200%) e distorceria o rank. Vazio aqui = META/`%` renderiza "—".
   const sdrRows: SdrRow[] = useMemo(
-    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster, contagem),
-    [scoped, win, mesUnico, metasPessoa, roster, contagem],
+    () => buildSdrRows(scoped, win, mesUnico ? metasPessoa : [], roster, contagem,
+      comReunioes ? resumoReunioes.porSdr : undefined),
+    [scoped, win, mesUnico, metasPessoa, roster, contagem, comReunioes, resumoReunioes],
   )
   const closerRows: CloserRow[] = useMemo(
-    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode, contagem),
-    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode, contagem],
+    () => buildCloserRows(scoped, win, mesUnico ? metasPessoa : [], roster, viewModes.salesMode, contagem,
+      comReunioes ? resumoReunioes.porCloser : undefined),
+    [scoped, win, mesUnico, metasPessoa, roster, viewModes.salesMode, contagem, comReunioes, resumoReunioes],
   )
   // ── Visão MTD ────────────────────────────────────────────────────────────
   // "Mês inteiro": meta do mês cheia. "MTD": meta proporcional até o último dia
@@ -1066,7 +1110,7 @@ export function PerformanceVendas() {
             <MetaRitmoCard label="Diagnóstico" realizado={strip.rr}
               metaMensal={mesUnico ? metaTimeSel.metaReuniao : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
-              onClick={() => setCardAberto('sdr-rr')} />
+              onClick={() => setCardAberto('sdr-rr')} rodape={linhaReunioes} />
             <MetaRitmoCard label="SAL" realizado={strip.sal}
               metaMensal={mesUnico ? metaTimeSel.metaSal : 0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nfCeil} accent={SDR_ACCENT}
@@ -1093,7 +1137,8 @@ export function PerformanceVendas() {
               { label: 'No Show', atual: strip.noShow, anterior: stripAnt.noShow, fmt: nf, polaridade: 'menor' },
             ]} />
           )}
-          <SdrTable rows={sdrRows} mqlLbl={mqlLbl} fatorMeta={fatorMeta} mtd={visao === 'mtd'} />
+          <SdrTable rows={sdrRows} mqlLbl={mqlLbl} fatorMeta={fatorMeta} mtd={visao === 'mtd'}
+            totalReunioes={comReunioes ? resumoReunioes.total : null} />
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — topo do funil" linhas={convTopo} nota={notaConversaoTopo} />
@@ -1138,7 +1183,7 @@ export function PerformanceVendas() {
           <div className="rs-grid rs-cols-5 rs-stack-sm" style={{ '--rs-gap': '14px', margin: '12px 0 8px', opacity: loading ? 0.5 : 1, transition: 'opacity .2s' } as React.CSSProperties}>
             <MetaRitmoCard label="Diagnóstico" realizado={strip.rr} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
-              onClick={() => setCardAberto('closer-rr')} />
+              onClick={() => setCardAberto('closer-rr')} rodape={linhaReunioes} />
             <MetaRitmoCard label="SAL" realizado={strip.sal} metaMensal={0}
               mesKey={mesUnico ?? ''} fimJanela={fimJanela} formatter={nf} accent={CLOSER_ACCENT}
               onClick={() => setCardAberto('closer-sal')} />
@@ -1179,7 +1224,8 @@ export function PerformanceVendas() {
               { label: 'Receita gerada', atual: strip.receita, anterior: stripAnt.receita, fmt: moneyK },
             ]} />
           )}
-          <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} fatorMeta={fatorMeta} mtd={visao === 'mtd'} />
+          <CloserTable rows={closerRows} unidades={viewModes.salesMode === 'units'} fatorMeta={fatorMeta} mtd={visao === 'mtd'}
+            comReunioes={comReunioes} />
 
           <div style={{ marginTop: 14 }}>
             <ConversoesCard titulo="Conversões — fundo do funil" linhas={convFundo} nota={notaConversao} />
@@ -1237,6 +1283,14 @@ export function PerformanceVendas() {
         stageLabel={clickedCloserStage ? stageLabel(clickedCloserStage, origem) : ''}
         subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         deals={dealsDoCliqueCloser}
+        accent={CLOSER_ACCENT}
+      />
+
+      <ReunioesDrawer
+        open={reunioesAberto}
+        onClose={() => setReunioesAberto(false)}
+        resumo={resumoReunioes}
+        subtitle={`${scopeLabel} · ${subtitlePeriodo}`}
         accent={CLOSER_ACCENT}
       />
 

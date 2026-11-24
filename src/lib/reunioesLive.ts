@@ -200,3 +200,12 @@ export function resumirReunioes(args: {
 function distintos(xs: string[]): string[] {
   return [...new Set(xs)]
 }
+
+/**
+ * A linha "em N reuniões" (e a coluna REUNIÕES) só aparece quando há algo a
+ * explicar: números diferentes do Diagnóstico. Sem a base da view carregada,
+ * nunca — todo negócio LIVE viraria "LIVE estimada".
+ */
+export function mostrarReunioes(resumo: ResumoReunioes | null | undefined, pronto: boolean): boolean {
+  return pronto && !!resumo && resumo.total !== resumo.diagnosticos
+}

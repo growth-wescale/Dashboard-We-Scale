@@ -5,14 +5,14 @@
  * etapas) e Performance Detalhada (12 etapas).
  */
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Repeat, CornerDownRight } from 'lucide-react'
 import { useMediaQuery, MQ_CELULAR } from '@/hooks/useMediaQuery'
 import { money, nf } from '@/lib/format'
 
 export interface FunnelStage { key: string; label: string; value: number }
 
-export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick, noShow, noShowRepeated = 0 }: {
+export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeatedCounts, onRepeatClick, noShow, noShowRepeated = 0, rodapeEtapa }: {
   stages: FunnelStage[]; invest: number; accent: string; dark: string
   onStageClick?: (key: string) => void
   /** Repetidos por etapa — só preenchido em modo Passagens. */
@@ -21,6 +21,8 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
   /** Deals que agendaram e não apareceram — sai do fluxo aqui, não é etapa do funil. */
   noShow?: number
   noShowRepeated?: number
+  /** Conteúdo logo abaixo da barra de uma etapa (ex.: "em N reuniões" no Diagnóstico). */
+  rodapeEtapa?: Partial<Record<string, ReactNode>>
 }) {
   // Celular: largura mínima maior — a 30% de um card de ~300px o trapézio do
   // fundo fica com ~90px e o rótulo ("Oportunidade") não cabe.
@@ -96,6 +98,12 @@ export function TrapFunnel({ stages, invest, accent, dark, onStageClick, repeate
                 </div>
               )}
             </div>
+            {rodapeEtapa?.[s.key] && (
+              <div className="rs-trap-row" style={{ margin: '4px 0 2px' }}>
+                <div style={{ textAlign: 'center' }}>{rodapeEtapa[s.key]}</div>
+                <div />
+              </div>
+            )}
             {repeated > 0 && (
               <div className="rs-trap-row" style={{ margin: '4px 0 6px' }}>
                 <div style={{ textAlign: 'center' }}>

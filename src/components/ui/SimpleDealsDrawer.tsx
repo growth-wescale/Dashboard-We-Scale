@@ -1,6 +1,7 @@
 /**
  * Pop-up leve pros quadrantes de KPI (Receita, Fechamentos, Vendas por Fonte)
- * — só a lista de deals que compõem o número, sem filtros nem quebras. Os
+ * — a lista de deals que compõem o número, com os gráficos Por Marca e Por
+ * Closer no topo (clicáveis), sem a barra de filtros. Os
  * pop-ups do funil (StageDealsDrawer) têm mais contexto porque respondem
  * "quem está nessa etapa"; aqui a pergunta é só "quais deals são esses".
  */
@@ -13,6 +14,8 @@ import { marcaLabel } from '@/constants/brands'
 import { dividirVenda, pctWeScale, type VersaoRepasse } from '@/lib/repasse'
 import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
+import { useGraficosMarcaPessoa } from './useGraficosMarcaPessoa'
+import { GraficosMarcaPessoa } from './GraficosMarcaPessoa'
 
 interface SimpleDealsDrawerProps {
   open: boolean
@@ -27,8 +30,15 @@ interface SimpleDealsDrawerProps {
   repasse?: VersaoRepasse[]
 }
 
-export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accent, destacarFonte, repasse }: SimpleDealsDrawerProps) {
+const marcaDe = (r: FunnelRow) => r.marca
+// Os quadrantes que abrem este pop-up são de venda (Receita, Fechamentos,
+// Vendas por fonte): quem fecha é o Closer.
+const closerDe = (r: FunnelRow) => r.nome_closer
+
+export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals: todos, accent, destacarFonte, repasse }: SimpleDealsDrawerProps) {
+  const g = useGraficosMarcaPessoa(todos, marcaDe, closerDe, accent, open ? `${title}|${subtitle}` : '')
   if (!open) return null
+  const deals = g.filtrados
   const colsRepasse = repasse ? ['We Scale', 'Marca'] : []
   const direita = ['Valor', 'Unidades', 'Taxa de Franquia', ...COLS_LEADTIME, ...colsRepasse]
   const totais = totaisDeals(deals)
@@ -58,7 +68,7 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
               {title}
             </h2>
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
-              {deals.length} deal{deals.length !== 1 ? 's' : ''} · {subtitle}
+              {todos.length} deal{todos.length !== 1 ? 's' : ''} · {subtitle}
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -69,6 +79,8 @@ export function SimpleDealsDrawer({ open, onClose, title, subtitle, deals, accen
             <X size={20} />
           </button>
         </div>
+
+        <GraficosMarcaPessoa g={g} tituloPessoa="Por Closer" total={todos.length} />
 
         <div style={{ overflow: 'auto', flex: 1 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>

@@ -14,6 +14,8 @@ import { marcaLabel } from '@/constants/brands'
 import { CelulasDatasDeal, COLS_DATAS_DEAL, LinkLinhaDoTempo, cell, fmtData, totaisDeals, LinhaTotal, CelulasLeadtime, COLS_LEADTIME, SeloResgate } from './dealDrawerShared'
 import { currentStage, stageOwnerRole, STAGE_LABEL } from '@/lib/metrics'
 import { LinkPontosCorrida } from '@/components/corrida/PontosDoNegocio'
+import { useGraficosMarcaPessoa } from './useGraficosMarcaPessoa'
+import { GraficosMarcaPessoa } from './GraficosMarcaPessoa'
 
 interface PerdaDealsDrawerProps {
   open: boolean
@@ -34,8 +36,14 @@ function responsavelDe(r: FunnelRow): string | null {
   return r.nome_sdr ?? r.nome_closer
 }
 
-export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent }: PerdaDealsDrawerProps) {
+const marcaDe = (r: FunnelRow) => r.marca
+
+export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals: todos, accent }: PerdaDealsDrawerProps) {
+  // Pessoa = quem estava com o negócio na etapa em que ele foi perdido (a
+  // mesma coluna "Responsável" da tabela).
+  const g = useGraficosMarcaPessoa(todos, marcaDe, responsavelDe, accent, open ? `${title}|${subtitle}` : '')
   if (!open) return null
+  const deals = g.filtrados
 
   return (
     <>
@@ -59,7 +67,7 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
               {title}
             </h2>
             <div style={{ fontSize: 12, color: 'var(--ws-text-secondary)', marginTop: 3 }}>
-              {deals.length} deal{deals.length !== 1 ? 's' : ''} · {subtitle}
+              {todos.length} deal{todos.length !== 1 ? 's' : ''} · {subtitle}
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -70,6 +78,8 @@ export function PerdaDealsDrawer({ open, onClose, title, subtitle, deals, accent
             <X size={20} />
           </button>
         </div>
+
+        <GraficosMarcaPessoa g={g} tituloPessoa="Por Responsável" total={todos.length} />
 
         <div style={{ overflow: 'auto', flex: 1 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>

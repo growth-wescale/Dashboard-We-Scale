@@ -22,12 +22,13 @@ function RoscaTipo({ fatias, total, selecionados, onSelect }: {
   const apagada = (v: string) => temSelecao && !selecionados.includes(v)
 
   return (
-    <div style={{ flex: '1 1 230px', minWidth: 0 }}>
+    <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 11.5, color: 'var(--ws-text-secondary)', textTransform: 'uppercase', letterSpacing: '.03em', fontWeight: 600, marginBottom: 10, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <span>Individual × LIVE</span>
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>Total {nf(total)}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      {/* Rosca em cima e legenda embaixo: cabe numa coluna da grade, do tamanho das barras. */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img"
           aria-label={fatias.map(f => `${f.valor}: ${nf(f.count)} (${fmtPct(pct(f.count, total))})`).join(', ')}
           style={{ flexShrink: 0 }}>
@@ -51,7 +52,7 @@ function RoscaTipo({ fatias, total, selecionados, onSelect }: {
           <text x={size / 2} y={size / 2 - 2} textAnchor="middle" style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, fill: 'var(--ws-text-primary)' }}>{nf(total)}</text>
           <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ fontSize: 10.5, fill: 'var(--ws-text-secondary)' }}>{total === 1 ? 'reunião' : 'reuniões'}</text>
         </svg>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
           {fatias.map(f => {
             const marcada = selecionados.includes(f.valor)
             return (
@@ -80,9 +81,12 @@ function RoscaTipo({ fatias, total, selecionados, onSelect }: {
 /** Faixa de gráficos no topo do pop-up "Reuniões". */
 export function GraficosReunioes({ g, total }: { g: Graficos; total: number }) {
   return (
+    // Grade de colunas iguais: com 4 gráficos num pop-up de ~930px cabem os 4 na
+    // mesma linha; mais estreito, quebra em 2 ou 1 coluna sem esticar o último.
     <div className="rs-drawer-sec" style={{
       padding: '18px 24px', borderBottom: '1px solid var(--ws-border)',
-      display: 'flex', gap: 28, flexShrink: 0, flexWrap: 'wrap',
+      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(190px, 100%), 1fr))',
+      gap: 24, alignItems: 'start', flexShrink: 0,
     }}>
       <RoscaTipo fatias={g.rosca} total={g.totalRosca} selecionados={g.filtro.tipo} onSelect={v => g.alternar('tipo', v)} />
       <BarList title="Por Marca" rows={g.porMarca} total={g.totalMarca}
@@ -91,7 +95,7 @@ export function GraficosReunioes({ g, total }: { g: Graficos; total: number }) {
         selecionados={g.filtro.closer} onSelect={v => g.alternar('closer', v)} />
       <BarList title="Por SDR" rows={g.porSdr} total={g.totalSdr}
         selecionados={g.filtro.sdr} onSelect={v => g.alternar('sdr', v)} />
-      <div style={{ flexBasis: '100%', fontSize: 11.5, color: 'var(--ws-text-secondary)', marginTop: -12, lineHeight: 1.45 }}>
+      <div style={{ gridColumn: '1 / -1', fontSize: 11.5, color: 'var(--ws-text-secondary)', marginTop: -6, lineHeight: 1.45 }}>
         {g.temFiltro ? (
           <>
             Mostrando {nf(g.filtradas.length)} de {nf(total)} reuniões.{' '}

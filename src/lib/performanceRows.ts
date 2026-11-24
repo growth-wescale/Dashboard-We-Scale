@@ -124,14 +124,14 @@ function nomeDaLinha(chave: string, nome: string | undefined, sem: string): stri
 function somarReunioes<T extends { reunioes?: number }>(
   reunioesPorPessoa: Map<string, number> | undefined,
   bucket: Map<string, T>, nomeOriginal: Map<string, string>,
-  chave: (nome: string | undefined) => string, vazio: () => T, sem: string,
+  chave: (nome: string | undefined) => string, vazio: () => Omit<T, 'reunioes'>, sem: string,
 ): void {
   if (!reunioesPorPessoa) return
   for (const cur of bucket.values()) cur.reunioes = 0
   for (const [nomeCru, n] of reunioesPorPessoa) {
     const nome = nomeCru.trim() || undefined
     const normalized = chave(nome)
-    const cur = bucket.get(normalized) ?? { ...vazio(), reunioes: 0 }
+    const cur = bucket.get(normalized) ?? ({ ...vazio(), reunioes: 0 } as T)
     cur.reunioes = (cur.reunioes ?? 0) + n
     bucket.set(normalized, cur)
     if (!nomeOriginal.has(normalized)) nomeOriginal.set(normalized, nomeDaLinha(normalized, nome, sem))

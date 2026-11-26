@@ -38,6 +38,10 @@ A folha de Legacy preserva inscrições históricas até outubro em `comunidadeL
 
 A rota `/gastos-whatsapp` usa o gateway exclusivo de leitura em produção, com sessão de Marketing de acesso total. A página apresenta custo e mensagens por dia, totais por marca, consumo por conta e atribuição por finalidade. Os vínculos de outubro estão em `server/whatsapp_previa/eventos.sql`.
 
+### Marketing · Acompanhamento Meta
+
+A leitura de leads do mês em `missaoConsulta.ts` pagina de 500 em 500 até confirmar o término, com teto de 50.000 registros, contagem total quando disponível e rejeição de IDs repetidos ou resposta incompleta. O volume inclui contatos e captações; não equivale à quantidade de MQLs. Critérios dos indicadores, filtros, fontes e timeout permanecem inalterados.
+
 ### Fotos de Cassiana e Thaina — cobertura compartilhada (04/11/2026)
 
 `fotosVendedores.ts` centraliza os retratos aprovados de `Cassiana Lavall`
@@ -7261,3 +7265,9 @@ Gateway isolado `nutricao_ouro`: SELECT fixo no Metabase/DB3 reutiliza o contrat
 Prévia sobre `origin/main 28bdea4`. Comunidade informada por Gabriel:236 membros, corte23/11. Export `meetinglistdetails_2026_11_01_2026_11_23.csv` (SHA256 `a1f256ef40a86298acc43f22e9d0732253a7c19f4716485400abaae718fec7b6`):54 linhas, quatro sessões somente do anfitrião fora das lives,13 linhas da equipe excluídas nas três lives;37 entradas externas viram23 presenças (reconexões deduplicadas por e-mail).05/11:6;12/11:9;19/11:8.16 e-mails únicos, seis recorrentes; acumulados6/14/16. Internos anteriores/anfitrião e mais Thaís Brunelli/Rakeline confirmados por Gabriel nesta rodada. Sem união por nome quando e-mails diferem; sem taxa de presença sobre a base antiga de inscritos. Outubro preserva inscrições e192 membros.
 
 1.273 testes, build e lint sem erros; quadro real conferido em prévia isolada desktop/celular, sem overflow ou erro JS. Sem QA da folha autenticada inteira/PDF, sem publicação, RD, fatos DW ou Vendas. Código contém só coortes agregadas, sem nomes/e-mails de participantes. Entrega por PR; merge do usuário antes de deploy.
+
+### 26/11/2026 — Acompanhamento Meta: paginação completa, candidata em revisão
+
+Branch `codex/okrs-paginacao-completa`, base publicada `8dccda2`. A aba falhava em novembro ao atingir oito páginas (4.000 registros); a ouro retornava 4.728 linhas nas três frentes, das quais 1.154 negociações. A correção pagina até o término confirmado, sem aceitar totais parciais, e mantém os cálculos de MQL/Inbound, demais indicadores e consultas de Vendas.
+
+1.322 testes aprovados, build e lint sem erros. Cobertura de outubro/novembro com fixtures, limites, duplicação, truncamento, aborto e integração do cliente Supabase/adaptador mensal reais (uma leitura da ouro para dez páginas). Agregados de novembro consultados independentemente no Metabase; baseline de outubro capturado na produção autenticada. A comparação visual da prévia dos dois meses permanece pendente: login confirmado pelo usuário no navegador interno, mas ferramenta falha na inicialização por configuração do caminho do workspace. Não confundir os testes automatizados com QA autenticado. Evidência privada em `outputs/audits/okrs-paginacao-20261126.local/`. PR em rascunho até concluir essa conferência; sem publicação, RD, fatos DW ou Vendas alterados.

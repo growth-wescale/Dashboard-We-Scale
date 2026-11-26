@@ -4,13 +4,52 @@ import type { Lead } from './types'
 import { FRENTES_MISSAO, MARCAS_META_PERIODO_MISSAO, MESES_MISSAO, proximoDia, type DadosMissao, type VendaMissaoRow, type MetaMissaoRow, type EtapaMissaoRow, type MidiaMissaoRow } from './missaoMetas'
 
 // Proteções locais: nunca baixar toda a base nem repetir consulta em caso de erro.
-export const LIMITES_MISSAO = { vendas: 500, metas: 200, etapas: 500, paginaMidia: 500, paginasMidia: 8, paginasLeads: 8 } as const
+export const LIMITES_MISSAO = { vendas: 500, metas: 200, etapas: 500, paginaMidia: 500, paginasMidia: 8, paginaLeads: 500, leads: 50_000 } as const
 type Resposta = { data: unknown[] | null; error: { message: string } | null }
 function ler<T>(res: Resposta, nome: string, limite: number): T[] {
   if (res.error) throw new Error(`Não foi possível consultar ${nome}. Tente novamente mais tarde.`)
   if (!res.data) throw new Error(`Resposta vazia ao consultar ${nome}.`)
   if (res.data.length > limite) throw new Error(`Limite de leitura de ${nome} atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.`)
   return res.data as T[]
+}
+
+async function lerLeadsMissao(db: SupabaseClient, marcas: string[], mes: string, hoje: string, signal: AbortSignal) {
+  const leads: Lead[] = []
+  const ids = new Set<string>()
+  let total: number | undefined
+  const incompleta = () => new Error('A leitura de leads ficou incompleta ou mudou durante a consulta. Nenhum total parcial será exibido; atualize os dados para tentar novamente.')
+  const excedido = () => new Error('Limite de leitura de leads atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.')
+  // Mesmo teto do contrato mensal. Sem contagem informada, a linha adicional
+  // distingue exatamente 50 mil registros de uma resposta truncada nesse teto.
+  while (leads.length <= LIMITES_MISSAO.leads) {
+    signal.throwIfAborted()
+    const de = leads.length
+    const tamanho = Math.min(LIMITES_MISSAO.paginaLeads, LIMITES_MISSAO.leads + 1 - de)
+    const resposta = await db.from('leads')
+      .select('id,dia,marca,email,telefone,dados_extras', { count: 'exact' }).in('marca', marcas).gte('dia', mes).lte('dia', hoje)
+      .order('dia', { ascending: false }).order('id', { ascending: true })
+      .range(de, de + tamanho - 1).abortSignal(signal)
+    signal.throwIfAborted()
+    const lote = ler<Lead>(resposta, 'leads do mês', tamanho)
+    if (resposta.count != null) {
+      if (!Number.isSafeInteger(resposta.count) || resposta.count < 0) throw incompleta()
+      if (resposta.count > LIMITES_MISSAO.leads) throw excedido()
+      if (total !== undefined && total !== resposta.count) throw incompleta()
+      total = resposta.count
+    }
+    for (const row of lote) {
+      if (typeof row.id !== 'string' || !row.id || ids.has(row.id)) throw incompleta()
+      ids.add(row.id)
+      leads.push(row)
+    }
+    if (leads.length > LIMITES_MISSAO.leads) throw excedido()
+    if (total !== undefined && leads.length > total) throw incompleta()
+    if (lote.length < tamanho || leads.length === total) {
+      if (total !== undefined && leads.length !== total) throw incompleta()
+      return leads
+    }
+  }
+  throw excedido()
 }
 
 /** Uma requisição por vez. Nome do Closer somente nas metas, para paridade com Vendas; sem contatos ou SELECT *. */
@@ -52,21 +91,9 @@ export async function consultarMissao(vendasDb: SupabaseClient, marketingDb: Sup
       const metasMql = ler<{ marca: string; valor_meta: number }>(await marketingDb.from('metas')
         .select('marca,valor_meta').in('marca', marcas).eq('mes', mes).eq('metrica', 'mql')
         .limit(LIMITES_MISSAO.metas + 1).abortSignal(signal), 'metas de MQL do mês', LIMITES_MISSAO.metas)
-      const leads: Lead[] = []
-      for (let pagina = 0; pagina < LIMITES_MISSAO.paginasLeads; pagina++) {
-        signal.throwIfAborted()
-        const de = pagina * 500
-        const loteLeads = ler<Lead>(await marketingDb.from('leads')
-          .select('id,dia,marca,email,telefone,dados_extras').in('marca', marcas).gte('dia', mes).lte('dia', hoje)
-          .order('dia', { ascending: false }).order('id', { ascending: true })
-          .range(de, de + 499).abortSignal(signal), 'leads do mês', 500)
-        leads.push(...loteLeads)
-        if (loteLeads.length < 500) {
-          const inbound = await consultarInbound(vendasDb, leads, marcas, signal)
-          return { hoje, atualizadoEm: new Date().toISOString(), vendas, metas, etapas, midia, metasMql, leads, inbound }
-        }
-      }
-      throw new Error('Limite de leitura de leads atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.')
+      const leads = await lerLeadsMissao(marketingDb, marcas, mes, hoje, signal)
+      const inbound = await consultarInbound(vendasDb, leads, marcas, signal)
+      return { hoje, atualizadoEm: new Date().toISOString(), vendas, metas, etapas, midia, metasMql, leads, inbound }
     }
   }
   throw new Error('Limite de leitura da mídia atingido. Nenhum total parcial será exibido; solicite uma revisão da consulta.')

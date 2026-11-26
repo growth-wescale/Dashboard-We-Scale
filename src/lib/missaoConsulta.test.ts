@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import { consultarMissao } from './missaoConsulta'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { consultarMissao, LIMITES_MISSAO } from './missaoConsulta'
+import { captacaoMissao } from './missaoMetas'
+import { createEletroviasOuroFetch } from './eletroviasOuroFetch'
+import { linhaMensal, marcasMensais } from './previaMensal'
 
-function banco(resultados: Array<{ data: unknown[] | null; error: { message: string } | null }>) {
+function banco(resultados: Array<{ data: unknown[] | null; error: { message: string } | null; count?: number | null }>) {
   const calls: Array<{ table: string; filtros: Array<[string, unknown[]]> }> = []
   const client = { from(table: string) {
     const call = { table, filtros: [] as Array<[string, unknown[]]> }; calls.push(call)
@@ -94,11 +97,100 @@ describe('Consultas da Missão: recortes e limites obrigatórios', () => {
     expect(m.calls[2].filtros).toContainEqual(['lte', ['dia', '2026-10-07']])
     expect(m.calls[2].filtros).toContainEqual(['order', ['id', { ascending: true }]])
   })
-  it('recusa leads truncados e erros novos sem exibir totais parciais', async () => {
-    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), ...Array.from({ length: 8 }, () => ok(Array.from({ length: 500 }, () => ({}))))])
+  it('recusa leads acima do teto e erros novos sem exibir totais parciais', async () => {
+    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), { ...ok(), count: LIMITES_MISSAO.leads + 1 }])
     await expect(consultarMissao(v.client, m.client, '2026-10-07', signal())).rejects.toThrow('Limite de leitura de leads')
     const v2 = banco([ok(), ok(), ok()]), m2 = banco([ok(), { data: null, error: { message: 'falha' } }])
     await expect(consultarMissao(v2.client, m2.client, '2026-10-07', signal())).rejects.toThrow('metas de MQL')
     expect(m2.calls).toHaveLength(2)
+  })
+})
+
+describe('Paginação completa dos leads de Acompanhamento Meta', () => {
+  const contato = (i: number) => ({ id: `contato-${i}`, dia: '2026-11-26', marca: 'Eletrovias', email: null, telefone: null, dados_extras: { metric_grain: 'contact_only' } })
+  const negocio = (i: number) => ({ ...contato(i), id: `negocio-${i}`, dados_extras: {
+    metric_grain: 'crm_deal', origem_leitura: 'previa_mensal_ouro', conta_id: 'wescale_principal_crm', id_deal: `deal-${i}`, fonte_macro: i % 2 ? 'Inbound' : 'Outbound',
+  } })
+  function paginas(rows: unknown[], contar = true) {
+    return Array.from({ length: Math.floor(rows.length / 500) + 1 }, (_, i) => ({
+      ...ok(rows.slice(i * 500, i * 500 + 500)), ...(contar ? { count: rows.length } : {}),
+    }))
+  }
+  async function consultar(rows: unknown[], contar = true) {
+    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), ...paginas(rows, contar)])
+    const dados = await consultarMissao(v.client, m.client, '2026-11-26', signal())
+    return { dados, calls: m.calls.filter(c => c.table === 'leads') }
+  }
+  it('lê 4.728 registros em dez páginas sem transformar contatos em MQLs nem mudar Inbound', async () => {
+    const rows = [...Array.from({ length: 3574 }, (_, i) => contato(i)), ...Array.from({ length: 1154 }, (_, i) => negocio(i))]
+    const { dados, calls } = await consultar(rows)
+    expect(dados.leads).toEqual(rows)
+    expect(calls).toHaveLength(10)
+    expect(calls.at(-1)?.filtros).toContainEqual(['range', [4500, 4999]])
+    expect(captacaoMissao(dados, 'Eletrovias').mql).toBe(1154)
+    expect(dados.inbound?.Eletrovias).toEqual({ inbound: 577, semOrigem: 0 })
+  })
+  it.each([0, 500, 4000, 50_000])('aceita exatamente %i registros com término confirmado, mesmo sem count', async length => {
+    const rows = Array.from({ length }, (_, i) => contato(i))
+    const { dados, calls } = await consultar(rows, false)
+    expect(dados.leads).toHaveLength(length)
+    expect(calls).toHaveLength(length / 500 + 1)
+    if (length === 50_000) expect(calls.at(-1)?.filtros).toContainEqual(['range', [50_000, 50_000]])
+  })
+  it('usa a contagem completa para encerrar em uma página cheia sem solicitar outra', async () => {
+    const { calls } = await consultar(Array.from({ length: 4000 }, (_, i) => contato(i)))
+    expect(calls).toHaveLength(8)
+    expect(calls[0].filtros).toContainEqual(['select', ['id,dia,marca,email,telefone,dados_extras', { count: 'exact' }]])
+  })
+  it('pagina pelo cliente Supabase e adaptador mensal reais, com Content-Range e sem refazer a leitura da ouro', async () => {
+    const rows = Array.from({ length: 4728 }, (_, i) => negocio(i))
+    let leiturasLeads = 0
+    const adapter = createEletroviasOuroFetch({
+      origin: 'https://marketing.example', route: () => '/okrs', token: async () => 'sessao-teste',
+      marketingScope: { mensal: true, brands: marcasMensais, endpoint: '/api/marketing-mensal-ouro/v1/read', contract: 'marketing_mensal_v1', includes: linhaMensal },
+      fetch: async (_input, init) => {
+        const { dataset } = JSON.parse(String(init?.body))
+        if (dataset === 'leads') leiturasLeads++
+        return Response.json({ mode: 'ouro', contract: 'marketing_mensal_v1', rows: dataset === 'leads' ? rows : [], observed_at: null, warnings: [] })
+      },
+      referenceFetch: async () => Response.json([]),
+    })
+    const m = createClient('https://marketing.example', 'chave-publica-teste', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, global: { fetch: adapter },
+    })
+    const v = banco([ok(), ok(), ok()])
+    const dados = await consultarMissao(v.client, m, '2026-11-26', signal())
+    expect(dados.leads).toHaveLength(rows.length)
+    expect(new Set(dados.leads?.map(r => r.id)).size).toBe(rows.length)
+    expect(leiturasLeads).toBe(1)
+    expect(captacaoMissao(dados, 'Eletrovias').mql).toBe(rows.length)
+  })
+  it('recusa uma 50.001ª linha quando a origem não informa contagem', async () => {
+    const v = banco([ok(), ok(), ok()]), rows = Array.from({ length: 50_001 }, (_, i) => contato(i))
+    const m = banco([ok(), ok(), ...paginas(rows, false)])
+    await expect(consultarMissao(v.client, m.client, '2026-11-26', signal())).rejects.toThrow('Limite de leitura de leads')
+  })
+  it.each(['repetida', 'truncada', 'contagem alterada', 'falha'])('recusa página %s sem calcular total parcial', async problema => {
+    const primeira = Array.from({ length: 500 }, (_, i) => contato(i))
+    const segunda = problema === 'falha' ? { data: null, error: { message: 'falha' } }
+      : problema === 'repetida' ? { ...ok([primeira[0]]), count: 501 }
+        : problema === 'truncada' ? { ...ok(), count: 501 }
+          : { ...ok([contato(500)]), count: 502 }
+    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), { ...ok(primeira), count: 501 }, segunda])
+    await expect(consultarMissao(v.client, m.client, '2026-11-26', signal())).rejects.toThrow(problema === 'falha' ? 'consultar leads' : 'leitura de leads ficou incompleta')
+    expect(v.calls).toHaveLength(3)
+  })
+  it('preserva o recorte e os MQLs de outubro', async () => {
+    const rows = Array.from({ length: 501 }, (_, i) => ({ ...negocio(i), dia: '2026-10-31', dados_extras: {
+      ...negocio(i).dados_extras, origem_leitura: 'ouro_outubro_2026',
+    } }))
+    const v = banco([ok(), ok(), ok()]), m = banco([ok(), ok(), ...paginas(rows)])
+    const dados = await consultarMissao(v.client, m.client, '2026-10-31', signal())
+    expect(dados.leads).toEqual(rows)
+    for (const call of m.calls.filter(c => c.table === 'leads')) {
+      expect(call.filtros).toContainEqual(['gte', ['dia', '2026-10-01']])
+      expect(call.filtros).toContainEqual(['lte', ['dia', '2026-10-31']])
+    }
+    expect(captacaoMissao(dados, 'Eletrovias').mql).toBe(501)
   })
 })
